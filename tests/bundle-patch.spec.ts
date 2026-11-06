@@ -7,15 +7,15 @@ import { ROUTER_PRESET, WORKER_PRESET } from '../src/app/sessions.ts'
 
 interface Row { id?: string; name: string; disabled?: unknown; config?: Record<string, unknown> & { plugins?: Row[] } | Row[] }
 /** The patch as DSH reads it: Cordis's include plugin parses `!!js` scalars, and applies the inserts to an entry list. */
-async function patched(): Promise<Row[]> {
+async function patched(file = 'cordis.patch.yml', base: Row[] = []): Promise<Row[]> {
   const cordis = createRequire(createRequire(import.meta.url).resolve('@deepseek-ai/cordis/package.json'))
   const include = cordis.resolve('@deepseek-ai/cordis-plugin-include')
   const { entryListSchema, applyEntryPatches } = await import(include) as {
     entryListSchema: unknown; applyEntryPatches(data: Row[], patches: unknown[], warn: (message: string) => void): Row[] }
   const yaml = await import(createRequire(include).resolve('js-yaml')) as { load(text: string, options: { schema: unknown }): unknown }
-  const patches = yaml.load(readFileSync(join(import.meta.dirname, '..', 'cordis.patch.yml'), 'utf8'), { schema: entryListSchema }) as unknown[]
+  const patches = yaml.load(readFileSync(join(import.meta.dirname, '..', file), 'utf8'), { schema: entryListSchema }) as unknown[]
   const warnings: string[] = []
-  const rows = applyEntryPatches([], patches, message => { warnings.push(message) })
+  const rows = applyEntryPatches(base, patches, message => { warnings.push(message) })
   expect(warnings).toEqual([])
   return rows
 }
@@ -25,6 +25,17 @@ const flat = (rows: readonly Row[]): Row[] => rows.flatMap(row => [row, ...Array
 /** A preset the patch defines, by its id. */
 const presetOf = (rows: readonly Row[], id: string) => rows.map(row => row.config as { id?: string; order?: number; plugins: Row[] })
   .find(config => config?.id === id)!
+
+it('deploys the watchdog in a separate profile without the main plugin or Sources, with an empty assessment preset', async () => {
+  const rows = await patched('examples/watchdog.cordis.patch.yml', [
+    ...await patched(), { id: 'webserver', name: '@deepseek-ai/dsh-host-webserver', config: { host: '127.0.0.1', port: 3082 } },
+  ])
+  for (const id of ['dsh-superagent', 'dsh-superagent-github', 'dsh-superagent-feishu'])
+    expect(rows.find(row => row.id === id)!.disabled).toBe(true)
+  expect(rows.find(row => row.id === 'webserver')!.config).toMatchObject({ host: '127.0.0.1', port: 3083 })
+  expect(rows.find(row => row.id === 'dsh-superagent-watchdog')!.name).toBe('dsh-superagent/watchdog')
+  expect(presetOf(rows, 'dsh-superagent-watchdog').plugins).toEqual([])
+})
 
 it('defines the worker preset Executor Sessions run under, with a shell that moves long commands to the background', async () => {
   const rows = await patched()

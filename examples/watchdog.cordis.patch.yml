@@ -1,0 +1,35 @@
+# Dedicated Web-template Harness profile. Install the same bundle, then apply this profile patch.
+# Main agent runs separately on port 3082. This profile has neither Sources nor router/workers.
+- id: webserver
+  config:
+    host: 127.0.0.1
+    port: 3083
+- id: dsh-superagent
+  disabled: true
+- id: dsh-superagent-github
+  disabled: true
+- id: dsh-superagent-feishu
+  disabled: true
+- insert:
+    - id: dsh-superagent-watchdog-preset
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: dsh-superagent-watchdog
+        name: Superagent watchdog
+        description: Independent supervision only. No shell, filesystem, subagents, or task execution.
+        plugins: []
+    - id: dsh-superagent-watchdog
+      name: dsh-superagent/watchdog
+      config:
+        stateDir: <absolute independent watchdog state directory>
+        tokenFile: <absolute main superagent state directory>/watchdog.token
+        url: http://127.0.0.1:3082
+        pollMs: 30000
+        staleMs: 900000
+        reviewEveryMs: 3600000
+        retryMs: 300000
+        assessmentTimeoutMs: 90000
+        # Omit to inherit this independent profile's default model.
+        # model:
+        #   provider: <configured provider>
+        #   model: <model id>

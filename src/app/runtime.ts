@@ -46,6 +46,7 @@ import { sourceContextOf, type SourceContextDeps } from './source-context.ts'
 import type { ResourceHost } from './resources.ts'
 import { mainTools, type MainToolsHost } from './tools/main.ts'
 import { executorTools, type ExecutorToolsHost } from './tools/executor.ts'
+import { Supervision } from '../supervision/service.ts'
 
 // Source plugins interact with dsh-superagent exclusively through the `SourceHost` service interface.
 declare module '@deepseek-ai/cordis' { interface Context { orchestrator: SourceHost } }
@@ -70,6 +71,7 @@ export class Runtime extends Service implements SourceHost {
   readonly outbox: Outbox
   readonly engine: Engine
   readonly passes: Passes
+  readonly supervision: Supervision
   readonly ready: Promise<void>
   private readonly board = new HealthBoard()
   private readonly runtimeHealth = this.board.claim('runtime', { state: 'starting', detail: '' })
@@ -151,6 +153,8 @@ export class Runtime extends Service implements SourceHost {
             for (const message of pullEndNotices(ended, request, setup.deployment.repository)) outbox.send(message)
           }
         } })
+      this.supervision = new Supervision({ store, engine, stateDir: machine.stateDir,
+        configured: () => setup.configured() && !this.closing() && !this.lifetime.aborted, health: () => this.health })
       // Update the `evals` health entry on every pass if an evaluation failed as unavailable within the last hour.
       const evals = board.claim('evals', { state: 'ready', detail: 'No unavailable Eval in the last hour' })
       const evaluateDue = () => { engine.evaluateDue(); evals.set(evalsHealth(store)) }
@@ -220,6 +224,7 @@ export class Runtime extends Service implements SourceHost {
     const runtime = this
     const { store, sources, prompts, sessions, settings, engine, executor, health, machine, masterId, ready, sourceLinks, setup, passes } = this
     return { store, sources, prompts, sessions, settings, engine, executor, health, machine, masterId, ready, sourceLinks,
+      supervision: this.supervision,
       get deployment() { return setup.deployment },
       get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem },
       configured: () => setup.configured(), links: () => runtime.links(), ticketEnvironment: ticket => runtime.ticketEnvironment(ticket),

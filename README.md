@@ -34,6 +34,11 @@ Read the numbered documents in order; each builds only on the ones before it.
 
 `pnpm check` runs the typecheck, the tests and the build.
 
+This fork retains DeepSeek Harness and is implementing the article's broader architecture in integrated increments.
+The [implementation tracker](docs/IMPLEMENTATION.md) distinguishes working code from remaining work.
+The first increment adds [independent watchdog supervision](docs/009-supervision.md), with a separate Harness profile,
+durable incident history, semantic progress assessment, and bounded, fenced progress requests.
+
 ## License
 
 [MIT](LICENSE)

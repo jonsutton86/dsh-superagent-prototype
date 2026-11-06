@@ -6,6 +6,8 @@ import { z } from 'zod'
 import { THREAD_FILTERS, TICKET_FILTERS, type Api, type ApiResponse, type RouteParams } from './api.ts'
 import { sourceSkills } from './context.ts'
 import type { ModelCatalog } from '@deepseek-ai/dsh-api-session-controller/types'
+import type { Supervision } from '../supervision/service.ts'
+import { InterventionSchema } from '../supervision/protocol.ts'
 import { PromptConflict, SKILL_NAME, SKILL_PREFIX, TEAM_SECTIONS, builtInBase, builtInParts, defaultPrompts, savePrompts, type Prompts }
   from './prompts.ts'
 import { policyVersion } from '../policy.ts'
@@ -29,6 +31,7 @@ import { decisionList, search, threadDetail, threadList } from './views/threads.
 import { executorLoad, ticketDetail, ticketList } from './views/tickets.ts'
 
 export interface HttpHost {
+  readonly supervision?: Supervision
   readonly store: Store
   /** Feishu message links resolved since startup, used by search to match AppLink URLs. */
   readonly sourceLinks: Pick<TextCache, 'entries'>
@@ -236,6 +239,18 @@ export function registerHttp(ctx: Context, runtime: HttpHost): () => void {
       if (!url.pathname.startsWith('/orchestrator/api/')) { res.writeHead(404); res.end(); return }
       if (!sameOrigin(req, ctx.webServer.port)) { json(res, 403, { error: 'Same-origin management request required' }); return }
       try {
+        // Independent supervision must remain observable even while normal startup has not finished.
+        if (url.pathname === '/orchestrator/api/supervision' || url.pathname.startsWith('/orchestrator/api/supervision/')) {
+          const supervisor = runtime.supervision
+          if (!supervisor?.authorized(req.headers.authorization)) { json(res, 403, { error: 'Watchdog authentication required' }); return }
+          if (req.method === 'GET' && url.pathname === '/orchestrator/api/supervision') {
+            json(res, 200, supervisor.snapshot(offset.parse(url.searchParams.get('offset') ?? 0))); return
+          }
+          if (req.method === 'POST' && url.pathname === '/orchestrator/api/supervision/intervene') {
+            json(res, 200, supervisor.intervene(InterventionSchema.parse(await readBody(req, 4096)))); return
+          }
+          throw new RouteError(404, 'Unknown supervision operation')
+        }
         await runtime.ready
         const route = match(table, req.method ?? 'GET', url.pathname.slice('/orchestrator/api/'.length).split('/'))
         if (!route) throw new RouteError(404, 'Unknown operation')
