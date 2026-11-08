@@ -21,7 +21,8 @@ export interface RemoteEffectHooks {
 export class RemoteClient {
   private readonly url: string
   private credentialPin?: string
-  constructor(readonly connection: RemoteConnection, private readonly authorize?: (request: RpcInput) => void, private readonly effects?: RemoteEffectHooks) {
+  constructor(readonly connection: RemoteConnection, private readonly authorize?: (request: RpcInput) => void, private readonly effects?: RemoteEffectHooks,
+    private readonly credentialReader = () => readFileSync(connection.credentialFile, 'utf8').trim()) {
     const url = new URL(connection.url)
     if (url.username || url.password || url.pathname !== '/' || url.search || url.hash
       || !(url.protocol === 'https:' || (url.protocol === 'http:' && url.hostname === '127.0.0.1')))
@@ -31,7 +32,7 @@ export class RemoteClient {
   }
   /** A composed world cannot inherit a replacement grant merely because its credential file was overwritten. */
   bindGrant(grant: { id: string; epoch: number }): void {
-    const credential = readFileSync(this.connection.credentialFile, 'utf8').trim()
+    const credential = this.credentialReader()
     if (!credential.startsWith(`grant.${grant.id}.${grant.epoch}.`)) throw new RemoteError(409, 'grant_changed', 'Credential no longer matches this execution world')
     const pin = createHash('sha256').update(credential).digest('hex')
     if (this.credentialPin && this.credentialPin !== pin) throw new RemoteError(409, 'grant_changed', 'Execution world credential changed')
@@ -44,7 +45,7 @@ export class RemoteClient {
   }
   private async send<T>(request: RpcInput, signal?: AbortSignal): Promise<T> {
     this.authorize?.(request)
-    const credential = readFileSync(this.connection.credentialFile, 'utf8').trim()
+    const credential = this.credentialReader()
     if (credential.length < 32 || /\s/.test(credential)) throw new Error('Invalid execution credential file')
     if (this.credentialPin && this.credentialPin !== createHash('sha256').update(credential).digest('hex'))
       throw new RemoteError(409, 'grant_changed', 'Execution world credential changed; compose a new world')

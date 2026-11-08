@@ -126,11 +126,11 @@ before dispatching work. `executionMode: local` currently means general missions
 provider determines that execution is remote. Leaving the execution directory setting empty selects the grant root.
 
 Remote account CLIs, repository mode and host command shims are explicitly refused. Endpoint-owned credentials are integrated
-in `019-endpoint-credentials.md`; connector/command policy and service-specific acceptance are still needed before those
+in `019-endpoint-credentials.md`; operator enrollment/reconciliation and generated profiles follow in `020-endpoint-administration.md`. Connector/command policy and service-specific acceptance are still needed before those
 adapters can be enabled. One profile currently owns one grant shared by its tasks;
 task directories are not independent security principals. Durable command/file ownership, assignment/tool attribution and
 operator receipt controls are implemented in `018-execution-ownership.md`. Selecting different environments per action,
-operator endpoint enrollment/reconciliation, resource quotas, state ownership/failover and backup restoration remain open
+resource quotas, state ownership/failover and backup restoration remain open
 requirements of the full architecture.
 
 ## Qualification

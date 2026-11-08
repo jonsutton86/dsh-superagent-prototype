@@ -14,6 +14,7 @@ import type { Conversation, InboxFilter, InboxItem, InboxPage, InboxReplyInput, 
 import type { PlanIndex, PlanProposal, PlanVersion, ProposePlanInput, ReviewPlanInput, RequestPlanInput } from '../workspace/plan-model.ts'
 import type { EnvironmentList, EnvironmentView, EnrollEnvironmentInput, EnvironmentCommandInput } from '../environments/model.ts'
 import type { ExecutionReceiptPage } from '../remote/effects.ts'
+import type { EndpointCatalog, EndpointCommandInput, EndpointList, EndpointRegistration, OperatorCommand, RegisterEndpointInput, RemoteProfileView } from '../environments/endpoint-model.ts'
 
 export const TICKET_FILTERS = ['open', 'person', 'working', 'idle', 'ended'] as const
 export const THREAD_FILTERS = ['subscribed', 'evaluating', 'recent', 'all'] as const
@@ -25,6 +26,13 @@ interface Paged { offset?: number; limit?: number }
 type Delivery = 'injected' | 'pending'
 
 export interface Api {
+  'GET endpoints': { query?: { offset?: number }; response: EndpointList<EndpointRegistration> }
+  'POST endpoints': { body: RegisterEndpointInput; response: EndpointRegistration }
+  'GET endpoints/:id/catalog': { query?: { offset?: number }; response: EndpointCatalog }
+  'GET endpoints/:id/commands': { query?: { offset?: number }; response: EndpointList<OperatorCommand> }
+  'POST endpoints/:id/commands': { body: EndpointCommandInput; response: OperatorCommand }
+  'POST endpoints/:id/commands/:command/retry': { response: OperatorCommand }
+  'POST endpoints/:id/commands/:command/profile': { body: { port: number }; response: RemoteProfileView }
   'GET execution': { query?: Paged; response: ExecutionReceiptPage & { blocked: number } }
   'POST execution/refresh': { response: ExecutionReceiptPage & { blocked: number } }
   'POST execution/:effect/cancel': { body: { requestId: string }; response: ExecutionReceiptPage & { blocked: number } }

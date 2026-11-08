@@ -29,6 +29,9 @@ export type EffectOwner = z.infer<typeof EffectOwner>
 const ownership = { owner: EffectOwner.optional() }
 export const Rpc = z.discriminatedUnion('op', [
   z.object({ op: z.literal('identity') }).strict(),
+  z.object({ op: z.literal('grant.list'), offset: z.number().int().nonnegative().default(0) }).strict(),
+  z.object({ op: z.literal('grant.get'), id }).strict(),
+  z.object({ op: z.literal('operation.list'), offset: z.number().int().nonnegative().default(0) }).strict(),
   z.object({ op: z.literal('credential.list'), offset: z.number().int().nonnegative().default(0) }).strict(),
   z.object({ op: z.literal('credential.import'), ...request, id, revision: z.number().int().nonnegative(),
     file: z.string().regex(/^[a-zA-Z0-9_-][a-zA-Z0-9_.-]{0,99}$/), variable: z.string().regex(/^[A-Z][A-Z0-9_]{0,99}$/),
@@ -77,7 +80,7 @@ export interface GrantReceipt { grant: RemoteGrant; credential?: string }
 export interface RevocationReceipt { grantId: string; epoch: number; at: string; quiescent: boolean }
 export interface EndpointIdentity {
   protocol: 1; id: string; platform: string; confinement: string
-  capabilities: { filesystem: true; process: true; terminal: false; interactiveStdin: false; controlChannel: false; outputWindow: number; effectOwnership?: true; credentialBindings?: true }
+  capabilities: { filesystem: true; process: true; terminal: false; interactiveStdin: false; controlChannel: false; outputWindow: number; effectOwnership?: true; credentialBindings?: true; administration?: true }
 }
 export interface RemoteJob {
   id: string; grantId: string; epoch: number; revision: number; fingerprint: string

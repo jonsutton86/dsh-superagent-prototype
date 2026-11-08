@@ -18,10 +18,10 @@ not a claim that the prototype already ships every feature or that the article s
 | Speculative work | Inferred mandates, observe/auto, configurable rules | Durable budgets, expiry and promotion/publication gates |
 | Full duplex | Harness job/subagent services, `src/executor/background.ts`, `src/app/delivery.ts`, remote receipts, durable assignment/tool ownership, receipt-only restart recovery and operator cancellation | Broader long-running job, process-failure and cross-host acceptance |
 | Compute/state separation | SQLite Store; Harness session persistence service abstraction | Deployable persistent-state ownership and restore/failover integration |
-| Remote environments | Paired local/remote providers, authenticated leased grants, durable revocation, mission/Session binding, endpoint-owned versioned credentials, remote profile and artifact/restart qualification | Per-action environment selection, operator enrollment/reconciliation, quotas and cross-host acceptance |
+| Remote environments | Paired local/remote providers, authenticated leased grants, durable revocation, mission/Session binding, endpoint-owned versioned credentials, remote profile and artifact/restart qualification, operator enrollment/reconciliation and generated profiles | Per-action environment selection, managed runtime launch, quotas and cross-host acceptance |
 | Watchdog | Existing health and bounded transient executor retry; now `src/supervision/*` | Live-provider and process-level acceptance, incident UI/alerts, retention, richer progress evidence and separately authorized recovery policies |
 | Delivery | Reports and PR binding/closure; content-addressed artifacts and stale mission-review invalidation | Host-collected check evidence, Git/environment revision binding and external publication receipts |
-| Operator control | Existing web panel, settings, pause/retry/stop and local/remote environment status and revocation | Endpoint enrollment/reconciliation, supervision, budgets and evidence surfaces |
+| Operator control | Existing web panel, settings, pause/retry/stop and local/remote environment status and revocation, endpoint enrollment/reconciliation and private profile generation | Supervision, budgets and evidence surfaces |
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
@@ -70,20 +70,28 @@ verified ownership through an actual Harness restart on the final build. Code co
 `5ca3cbce579c0a96208ec1276eedefefb2cc11e6` passed
 [Linux run 42517702121](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42517702121) with 1,337 tests,
 typechecking and all builds, including native confinement, child/tool ownership, receipt APIs and command cancellation.
-The full architecture remains in progress; operator enrollment/reconciliation is next.
+The full architecture remains in progress; operator enrollment/reconciliation is integrated in the subsequent administration increment.
 
 The [endpoint credential increment](019-endpoint-credentials.md) adds administrator-only private-file import, immutable
 credential versions, explicit grant bindings, revocation/rotation fencing and command cancellation. Read-only credential
 mounts and a confined POSIX launcher keep injected values out of provider arguments and receipt metadata. The coordinator
 displays binding metadata; credentials remain an explicit capability available to code under that grant. The configured-model
 Harness qualification has used a synthetic bound credential, produced an artifact and preserved the world through restart.
-Endpoint enrollment UI, per-action environment/persona selection and the remaining article/product requirements stay open.
+Endpoint enrollment UI is integrated in the subsequent administration increment. Per-action environment/persona selection and the remaining article/product requirements stay open.
 
 Credential verification on 2026-11-08: local `pnpm check` passed 1,345 tests, typechecking and all builds, followed by a passing
 configured-model Harness credential/artifact/restart qualification on the final build. Code commit
 `18b2dc8c1f0409c5c6266daf35638590f1ea1a99` passed
 [Linux run 42519570124](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42519570124) with 1,347 tests,
 typechecking and all four builds. The native credential case exercised read-only mounts and cancellation on revocation.
+
+The [endpoint administration increment](020-endpoint-administration.md) adds pinned private-file administrator registration,
+metadata catalogs, durable operator request IDs, explicit retry/reconciliation, grant and credential forms, generation-safe
+grant credential publication and complete dedicated Harness profile generation. Lost-response replays cannot adopt later
+authority. The opt-in model qualification consumes the generated overlay without modifying it. Managed launch and per-action
+world/persona selection follow; the full article/product scope remains open. Local `pnpm check` passed 1,355 tests across
+79 files, typechecking and all four builds on 2026-11-08; the generated-profile configured-model qualification passed
+separately with credential use, artifact publication, execution attribution and coordinator restart.
 
 The [environment enrollment increment](015-execution-environments.md) implements local root proof, immutable task grant
 bindings, revocation, reauthorization, replacement and operator controls. Its generation is local authorization state;

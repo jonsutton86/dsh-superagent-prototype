@@ -78,7 +78,7 @@ export class RemoteEndpoint {
   }
   identity(): EndpointIdentity {
     return { protocol: 1, id: this.journal.id, platform: process.platform, confinement: this.host.isolation.name,
-      capabilities: { filesystem: true, process: true, terminal: false, interactiveStdin: false, controlChannel: false, outputWindow: MAX_WINDOW, effectOwnership: true,
+      capabilities: { filesystem: true, process: true, terminal: false, interactiveStdin: false, controlChannel: false, outputWindow: MAX_WINDOW, effectOwnership: true, administration: true,
         ...(this.host.commandHelper ? { credentialBindings: true as const } : {}) } }
   }
   private admin(principal: Principal): void { if (principal.role !== 'admin') throw new RemoteError(403, 'admin_required', 'Endpoint administration credential required') }
@@ -311,6 +311,12 @@ export class RemoteEndpoint {
     const request = Rpc.parse(input)
     switch (request.op) {
       case 'identity': return this.identity()
+      case 'grant.get': this.admin(principal); return this.journal.grant(request.id)
+      case 'grant.list': case 'operation.list': {
+        this.admin(principal)
+        const all = request.op === 'grant.list' ? this.journal.grants() : this.journal.operations()
+        return { items: all.slice(request.offset, request.offset + 100), nextOffset: request.offset + 100 < all.length ? request.offset + 100 : null }
+      }
       case 'credential.list': this.admin(principal); return this.credentials.list(request.offset)
       case 'credential.import': case 'credential.revoke': {
         this.admin(principal)

@@ -52,6 +52,7 @@ import { Workspace } from '../workspace/service.ts'
 import { Inbox } from '../workspace/inbox.ts'
 import { Library } from '../workspace/library.ts'
 import { Environments } from '../environments/service.ts'
+import { Endpoints } from '../environments/endpoints.ts'
 
 // Source plugins interact with dsh-superagent exclusively through the `SourceHost` service interface.
 declare module '@deepseek-ai/cordis' { interface Context { orchestrator: SourceHost } }
@@ -81,6 +82,7 @@ export class Runtime extends Service implements SourceHost {
   readonly inbox: Inbox
   readonly library: Library
   readonly environments: Environments
+  readonly endpoints: Endpoints
   readonly remoteWorkspace?: RemoteWorkspace
   readonly ready: Promise<void>
   private readonly board = new HealthBoard()
@@ -113,6 +115,9 @@ export class Runtime extends Service implements SourceHost {
       const remote = this.remoteWorkspace = world ? new RemoteWorkspace(world, ctx.fs, ctx.subprocess, this.lifetime) : undefined
       const environments = this.environments = new Environments({ store, filesystem: ctx.fs, subprocess: ctx.subprocess, lifetime: this.lifetime,
         remote, root: () => executionRoot(store.settings(), machine.stateDir, world?.grant.root), mode: () => machine.executionMode ?? 'repository', engine: () => runtime.engine })
+      this.endpoints = new Endpoints({ store, stateDir: machine.stateDir, lifetime: this.lifetime,
+        workerRoots: () => [...environments.list().items.filter(item => item.kind === 'local').flatMap(item => [item.root, item.configuredRoot]),
+          ...(!world ? [executionRoot(store.settings(), machine.stateDir)] : [])] })
       const library = this.library = new Library(store)
       const workspace = this.workspace = new Workspace(store, () => runtime.engine, () => !this.paused() && !this.closing(),
         id => library.evidenceRevision(id), ticket => environments.allows(ticket.execution?.environment))
@@ -262,7 +267,7 @@ export class Runtime extends Service implements SourceHost {
     const { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, ready, sourceLinks, setup, passes } = this
     return { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, ready, sourceLinks, remoteRoot: this.remoteWorkspace?.world.grant.root,
       get health() { return runtime.health }, remoteEffects: this.remoteWorkspace?.world,
-      supervision: this.supervision, workspace: this.workspace, library: this.library, inbox: this.inbox, environments: this.environments,
+      supervision: this.supervision, workspace: this.workspace, library: this.library, inbox: this.inbox, environments: this.environments, endpoints: this.endpoints,
       get deployment() { return setup.deployment },
       get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem },
       configured: () => setup.configured(), links: () => runtime.links(), ticketEnvironment: ticket => runtime.ticketEnvironment(ticket),
@@ -273,6 +278,7 @@ export class Runtime extends Service implements SourceHost {
   private async shutdown(): Promise<void> {
     this.closingFlag = true; const passes = this.passes.stop(); this.stopped.abort()
     try {
+      await this.endpoints.stop()
       this.assessor.stop()
       const ids = [this.masterId, ...this.store.tickets.list().map(ticket => workerSessionId(ticket.id))]
       const agents = ids.map(id => this.ctx.agents.get(id as SessionId)).filter((agent): agent is Agent => agent !== undefined)

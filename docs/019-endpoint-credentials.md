@@ -107,7 +107,7 @@ on remote profiles; those still require separate command/connector policies and 
 | `grant.change`, optional `credentials` | Explicitly authorize replacement bindings under a new grant epoch |
 
 The coordinator Environments page displays the bound IDs, variables, modes and pinned versions. It does not collect or
-reveal their values. Full endpoint enrollment/administration in the operator UI remains the next integration step.
+reveal their values. Endpoint enrollment/administration is integrated in the operator UI by the subsequent `020-endpoint-administration.md` increment.
 
 ## Acceptance
 

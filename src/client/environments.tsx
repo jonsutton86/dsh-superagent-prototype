@@ -1,40 +1,18 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import type { EnvironmentList, EnvironmentView } from '../environments/model.ts'
-import { ApiError, usePoll } from './api.ts'
+import { usePoll } from './api.ts'
 import { Button } from './controls.tsx'
 import { usePanel, usePanelData } from './provider.tsx'
-import { errorText } from './text.ts'
+import { useOperatorCommand } from './operator-command.ts'
+import { EndpointManagement } from './endpoints.tsx'
 import { When } from './widgets.tsx'
 import { ExecutionReceipts } from './execution-receipts.tsx'
-
-/** Preserve the submitted revision and request ID when a response is lost after a commit. */
-function useEnvironmentCommand(changed: () => void) {
-  const [busy, setBusy] = useState(false), [error, setError] = useState('')
-  const lock = useRef(false), pending = useRef<{ key: string; send: () => Promise<unknown> }>()
-  const execute = async () => {
-    if (lock.current) return
-    if (!pending.current) return
-    lock.current = true; setBusy(true); setError('')
-    try { await pending.current.send(); pending.current = undefined; changed() }
-    catch (failure) {
-      if (failure instanceof ApiError && failure.status >= 400 && failure.status < 500) pending.current = undefined
-      setError(errorText(failure))
-    } finally { lock.current = false; setBusy(false) }
-  }
-  const run = async (identity: unknown, send: (requestId: string) => Promise<unknown>) => {
-    if (lock.current) return
-    const key = JSON.stringify(identity)
-    if (pending.current?.key !== key) { const id = crypto.randomUUID(); pending.current = { key, send: () => send(id) } }
-    await execute()
-  }
-  return { busy, error, run, retry: pending.current ? execute : undefined }
-}
 
 /** Operator enrollment and grant controls for the current Harness execution world. */
 export function EnvironmentsPage() {
   const { call, t } = usePanel(), { reload: refreshState } = usePanelData()
   const { data, error, reload } = usePoll(() => call('GET environments'), [call])
-  const changed = () => { void reload(); void refreshState() }, command = useEnvironmentCommand(changed)
+  const changed = () => { void reload(); void refreshState() }, command = useOperatorCommand(changed)
   const enroll = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); if (!data) return
     const body = { name: String(new FormData(event.currentTarget).get('name') ?? ''), root: data.currentRoot, mode: data.currentMode }
@@ -55,12 +33,13 @@ export function EnvironmentsPage() {
       {data.items.map(record => <EnvironmentCard key={record.id} record={record} listing={data} changed={changed} />)}
       {data.currentKind === 'remote' && <ExecutionReceipts />}
     </>}
+    <EndpointManagement />
   </section>
 }
 
 function EnvironmentCard({ record, listing, changed }: { record: EnvironmentView; listing: EnvironmentList; changed: () => void }) {
   const { call, t } = usePanel(), [reason, setReason] = useState(''), [replace, setReplace] = useState(false)
-  const command = useEnvironmentCommand(changed)
+  const command = useOperatorCommand(changed)
   const verify = () => {
     const body = { name: record.name, root: listing.currentRoot, mode: listing.currentMode }
     void command.run({ verify: record.id }, requestId => call('POST environments', { body: { ...body, requestId } }))

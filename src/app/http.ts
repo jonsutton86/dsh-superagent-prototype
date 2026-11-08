@@ -37,11 +37,13 @@ import type { Environments } from '../environments/service.ts'
 import { EnvironmentError } from '../environments/model.ts'
 import { RemoteError } from '../remote/protocol.ts'
 import type { RemoteWorld } from '../remote/world.ts'
+import type { Endpoints } from '../environments/endpoints.ts'
 
 export interface HttpHost {
   readonly remoteRoot?: string
   readonly remoteEffects?: Pick<RemoteWorld, 'effects' | 'refreshEffects' | 'cancelEffect' | 'status'>
   readonly environments: Environments
+  readonly endpoints: Pick<Endpoints, 'list' | 'register' | 'catalog' | 'commands' | 'submit' | 'retry' | 'profile'>
   readonly inbox: Inbox
   readonly library: Library
   readonly workspace: Workspace
@@ -197,6 +199,13 @@ function routes(runtime: HttpHost): Routes {
     'POST tickets/:id/execution/refresh': ({ params }) => refreshReceipts(params.id),
     'POST tickets/:id/execution/:effect/cancel': async ({ params, body }) => cancelReceipt(params.id, params.effect, await body()),
     'GET environments': () => runtime.environments.list(),
+    'GET endpoints': ({ query }) => runtime.endpoints.list(query),
+    'POST endpoints': async ({ body }) => runtime.endpoints.register(await body()),
+    'GET endpoints/:id/catalog': ({ params, query }) => runtime.endpoints.catalog(params.id, query),
+    'GET endpoints/:id/commands': ({ params, query }) => runtime.endpoints.commands(params.id, query),
+    'POST endpoints/:id/commands': async ({ params, body }) => runtime.endpoints.submit(params.id, await body()),
+    'POST endpoints/:id/commands/:command/retry': ({ params }) => runtime.endpoints.retry(params.id, params.command),
+    'POST endpoints/:id/commands/:command/profile': async ({ params, body }) => runtime.endpoints.profile(params.id, params.command, await body()),
     'POST environments': async ({ body }) => runtime.environments.enroll(await body()),
     'PUT environments/:id': async ({ params, body }) => runtime.environments.update(params.id, await body()),
     'GET inbox': ({ query }) => runtime.inbox.list(query),

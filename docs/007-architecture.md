@@ -336,6 +336,12 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/app/runtime.ts` | The Runtime, the composition root, with its start and stop |
 | `src/environments/model.ts` | Local and remote environment enrollment, operator grant contracts and views |
 | `src/environments/service.ts` | Persistent grants, paired filesystem/process verification, execution binding, revocation and replacement |
+| `src/environments/endpoint-model.ts` | Operator endpoint registration, administration requests, metadata and profile contracts |
+| `src/environments/endpoints.ts` | Pinned administrator registry, durable original-ID commands, generation fencing and profile composition |
+| `src/environments/endpoint-files.ts` | Private owned credential reads, content pins and synced whole-file publication under the Runtime lock |
+| `src/environments/remote-profile.ts` | Dedicated Harness remote-world overlay with paired providers, permission boundary and isolated coordinator state |
+| `src/client/endpoints.tsx` | Endpoint registration, grant/credential administration, reconciliation, command recovery and inspectable profile UI |
+| `src/client/operator-command.ts` | Shared operator submission hook retaining payloads and IDs across ambiguous management responses |
 | `src/environments/remote-workspace.ts` | Bound remote provider verification and workspace preparation without host path interpretation |
 | `src/remote/protocol.ts`, `limits.ts` | Versioned endpoint RPC, grant generations, process/file receipts and bounded transport windows |
 | `src/remote/journal.ts` | Independent single-writer SQLite state, HMAC credentials, intent deduplication, output offsets and restart uncertainty |
@@ -500,6 +506,8 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/locales.spec.ts`, `tests/styles.spec.ts` | The copy in both languages, the stylesheet |
 | `tests/class-docs.spec.ts` | Every class in `src` has a JSDoc block before it |
 | `tests/docs.spec.ts` | Numbered documents link only to earlier ones, every local link resolves, no document has merge conflict markers, and this document's tables list every module and every test |
+| `tests/endpoints.spec.ts` | Real endpoint HTTP and Runtime administration, private-file validation, ambiguous/restarted requests, grant generation fencing and profile composition |
+| `tests/endpoints-ui.spec.tsx` | Rendered endpoint registration, lost submission recovery, durable original-ID retries and secret-free generated profile inspection |
 
 `tests/fixtures/` holds what several tests share: `host.ts`, a simulated DeepSeek Harness host; `filesystem.ts`, its real local filesystem seam; `panel-server.ts` and `panel.tsx`, the fake management API and the panel around a page; `deployment.ts`, a resolved deployment; `git.ts`, the environment of every git the tests start, which names no repository; and `async.ts`.
 

@@ -1,11 +1,12 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { createServer } from 'node:net'
-import { copyFile, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { appendFile, copyFile, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
 import { remoteFixture } from './fixtures/remote.ts'
-import type { EndpointCredential, GrantReceipt } from '../src/remote/protocol.ts'
+import { Store } from '../src/app/store.ts'
+import { Endpoints } from '../src/environments/endpoints.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { for (const dispose of cleanup.reverse()) await dispose(); cleanup.length = 0; vi.restoreAllMocks() })
@@ -18,37 +19,35 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1')('runs a real Harness wor
   // Synthetic service credential exercises endpoint binding; the operator's inference credential remains on the coordinator.
   const secret = randomUUID(), secretDigest = createHash('sha256').update(secret).digest('hex')
   await writeFile(join(h.endpoint.credentials.imports, 'qualification'), secret, { mode: 0o600 })
-  const binding = await h.admin.intent<EndpointCredential>({ op: 'credential.import', requestId: 'qualification-credential', id: 'qualification', revision: 0,
-    variable: 'SERVICE_API_KEY', mode: 'env', file: 'qualification', reason: 'Synthetic qualification credential' })
-  const enrolled = await h.admin.intent<GrantReceipt>({ op: 'grant.create', requestId: 'qualification-grant', owner: 'coordinator', workspace: 'credential-proof',
-    operations: ['fs.read', 'fs.write', 'process.spawn'], leaseMs: 300_000, credentials: [{ id: binding.id, version: binding.version }] })
-  const credentialFile = join(h.directory, 'qualification-grant.token'); await writeFile(credentialFile, enrolled.credential!, { mode: 0o600 })
+  const store = new Store(join(h.directory, 'operator.sqlite')), endpoints = new Endpoints({ store, stateDir: join(h.directory, 'operator'),
+    lifetime: new AbortController().signal, workerRoots: () => [] })
+  cleanup.push(async () => { await endpoints.stop(); store.close() })
+  const registration = await endpoints.register({ requestId: 'qualification-enrollment', endpointId: h.endpoint.journal.id,
+    url: h.url, name: 'Qualification endpoint', credentialFile: h.connection.credentialFile, revision: 0 })
+  const imported = await endpoints.submit(registration.id, { revision: registration.revision, request: {
+    op: 'credential.import', requestId: 'qualification-credential', id: 'qualification', revision: 0,
+    variable: 'SERVICE_API_KEY', mode: 'env', file: 'qualification', reason: 'Synthetic qualification credential' } })
+  expect(imported.phase).toBe('done')
+  const binding = imported.result!.credential!
+  const enrollment = await endpoints.submit(registration.id, { revision: registration.revision, request: {
+    op: 'grant.create', requestId: 'qualification-grant', owner: 'coordinator', workspace: 'credential-proof',
+    operations: ['fs.read', 'fs.write', 'process.spawn'], leaseMs: 300_000, credentials: [{ id: binding.id, version: binding.version }] } })
+  expect(enrollment.phase).toBe('done')
+  const enrolled = { grant: enrollment.result!.grant! }
   // On macOS this test qualifies Harness composition only. Native confinement is independently mandatory in Linux CI.
   if (!native) vi.spyOn(h.endpoint, 'identity').mockReturnValue({ ...h.endpoint.identity(), confinement: 'linux-bubblewrap' })
   const profile = `remote-qualification-${randomUUID().slice(0, 8)}`, directory = join(home, 'profiles', profile)
   await mkdir(directory, { mode: 0o700 })
   cleanup.push(() => rm(directory, { recursive: true, force: true }))
   for (const file of ['package.json', 'cordis.yml', 'cordis.patch.yml']) await copyFile(join(source, file), join(directory, file))
+  // Select the qualification model in this temporary base profile. The operator-generated overlay stays byte-for-byte unchanged.
+  await appendFile(join(directory, 'cordis.patch.yml'), '\n- id: agent-default-model\n  config:\n    provider: deepseek-official\n    model: deepseek-flash\n')
   await symlink(join(source, 'node_modules'), join(directory, 'node_modules'))
   const listener = createServer(); await new Promise<void>(resolve => listener.listen(0, '127.0.0.1', resolve))
   const port = (listener.address() as { port: number }).port
   await new Promise<void>(resolve => listener.close(() => resolve()))
-  const overlay = join(h.directory, 'remote-profile.json'), stateDir = join(h.directory, 'coordinator')
-  await writeFile(overlay, JSON.stringify([
-    { id: 'webserver', config: { host: '127.0.0.1', port } },
-    { id: 'agent-default-model', config: { provider: 'deepseek-official', model: 'deepseek-flash' } },
-    { id: 'dsh-superagent', config: { stateDir, executionMode: 'local' } },
-    { id: 'sandbox-policy', config: { mode: 'danger-full-access', workspaceRoot: enrolled.grant.root } },
-    { id: 'permission', config: { defaultPreset: 'danger-full-access', presets: {
-      'danger-full-access': { sandbox: 'danger-full-access', approval: 'never', name: 'Endpoint grant', description: 'Execution is bounded by the remote endpoint grant.' },
-    } } },
-    ...['fs-sandbox', 'subprocess', 'pwsh-sandbox', 'session-title-llm', 'dsh-superagent-worker-preset',
-      'dsh-superagent-router-preset', 'preset-standard', 'preset-ptc', 'preset-minimal', 'preset-cordis'].map(id => ({ id, disabled: true })),
-    { insert: [
-      { id: 'qualification-remote-world', name: 'dsh-superagent/remote-world', config: {
-        url: h.url, endpointId: h.endpoint.journal.id, credentialFile, stateDir: join(h.directory, 'world') } },
-    ] },
-  ], null, 2), { mode: 0o600 })
+  const generated = await endpoints.profile(registration.id, enrollment.id, { port })
+  const overlay = generated.patchFile
   let log = '', child: ChildProcess | undefined
   const stop = async () => {
     if (!child || child.exitCode !== null || child.signalCode !== null) return
