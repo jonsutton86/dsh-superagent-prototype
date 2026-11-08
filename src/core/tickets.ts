@@ -7,7 +7,7 @@ import type { Assignment, ChannelRef, Evaluation, Follow, Mandate, PolicyEffect,
 import type { AssessmentOutcome } from './ports.ts'
 import { EnginePart, type EngineOptions } from './part.ts'
 import type { Replies } from './replies.ts'
-import { canRetry } from './stage.ts'
+import { canRetry, hasPendingFollowup } from './stage.ts'
 
 const sameChannel = (a: ChannelRef, b: ChannelRef): boolean => JSON.stringify(a) === JSON.stringify(b)
 /** Whether an Input is a message no person wrote, such as CI's, a bot's, or the main Session's note. */
@@ -341,15 +341,18 @@ export class Tickets extends EnginePart {
    * the person's messages it decides that its worker did not read before its latest report or turn end, the report that
    * ends the ticket included (see `readBefore`), and neither acknowledged, answered nor handed back: one may have come while
    * the worker wrote the report that ends the ticket, or after its turn ended, and either way it can no longer hand it back.
+   * A human can also cancel a follow-up queued on an already-ended ticket; those explicitly cancelled inputs are not requeued.
    */
   end(ticketId: string, by: TicketEndBy, outcome: TicketOutcome, at = this.now(), reason?: string): void {
     const ticket = this.require(ticketId)
-    if (!liveTicket(ticket)) return
+    const cancelFollowup = by === 'human' && hasPendingFollowup(ticket)
+    if (!liveTicket(ticket) && !cancelFollowup) return
     const stopping = ticket.assignments.filter(assignment => assignment.state !== 'ended')
     const why = reason && reason !== outcome ? { reason } : {}
     const until = readUntil(ticket)
     const waiting = this.triggersOf(ticket, ticket.undelivered)
-    const left = this.untaken(ticket, ticket.inputs.flatMap(input => input.kind === 'trigger'
+    // A person's explicit cancellation of queued follow-ups must not dispatch those same messages to another worker.
+    const left = cancelFollowup ? [] : this.untaken(ticket, ticket.inputs.flatMap(input => input.kind === 'trigger'
       && (!readBefore(input, until) || ticket.undelivered.includes(input.id)) ? [input.id] : []))
     // An end dated earlier, such as a PR's merge, does not move the ticket's last change back.
     ticket.ended = { at, by, outcome, ...why }; ticket.undelivered = []; ticket.updatedAt = this.now()

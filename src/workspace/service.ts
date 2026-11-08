@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import { key, latestAssignment, ticketStage, canRetry, type Engine, type Policy, type Trigger } from '../core/index.ts'
+import { key, latestAssignment, ticketStage, canRetry, canStop, hasPendingFollowup, type Engine, type Policy, type Trigger } from '../core/index.ts'
 import type { Store } from '../app/store.ts'
 import type { SourceKind } from '../sources/kind.ts'
 import { workerSessionId } from '../executor/dsh.ts'
@@ -82,14 +82,15 @@ export class Workspace {
     let status: ActionView['status'] = !dependencies ? 'waiting' : accepted ? 'done' : changed ? 'outdated' : 'todo'
     if (!accepted && ticket) {
       const stage = ticketStage(ticket)
-      status = ticket.ended ? ['completed', 'merged'].includes(ticket.ended.outcome) ? 'review' : 'stopped'
+      const followup = hasPendingFollowup(ticket)
+      status = followup ? 'working' : ticket.ended ? ['completed', 'merged'].includes(ticket.ended.outcome) ? 'review' : 'stopped'
         : stage.stage === 'person' || stage.stage === 'idle' ? 'blocked' : 'working'
       if (ticket.ended && (changed || !dependencies)) status = 'outdated'
     }
     const assignment = ticket && latestAssignment(ticket)
     const result = { ...action, status, ...(ticket ? { ticket: { id: ticket.id, revision: revision!,
       ...(ticket.execution ? { sessionId: workerSessionId(ticket.id) } : {}),
-      summary: assignment?.report?.summary ?? '', retryable: canRetry(ticket), ended: !!ticket.ended } } : {}) }
+      summary: assignment?.report?.summary ?? '', retryable: canRetry(ticket), stoppable: canStop(ticket), ended: !!ticket.ended } } : {}) }
     memo.set(action.id, result)
     return result
   }
@@ -158,7 +159,7 @@ export class Workspace {
     const request = MissionCommand.parse(input)
     return this.command(request.requestId, { operation: 'status', id, ...request }, () => {
       const mission = this.editable(id, request.revision), view = this.get(id)
-      if (request.status !== 'active' && view.actions.some(action => action.ticket && !action.ticket.ended))
+      if (request.status !== 'active' && view.actions.some(action => action.ticket && (!action.ticket.ended || action.status === 'working')))
         throw new WorkspaceError(409, 'Stop or finish running actions before closing the mission.')
       if (request.status === 'completed' && (!view.actions.length || view.completed !== view.actions.length))
         throw new WorkspaceError(409, 'Review and complete every action before completing the mission.')
@@ -175,7 +176,7 @@ export class Workspace {
       const dependencies = action.dependsOn.every(id => this.viewAction(mission.actions.find(item => item.id === id)!, mission.actions).status === 'done')
       if (request.command === 'run') {
         if (!this.runnable()) throw new WorkspaceError(409, 'Configure execution and resume the executor before running an action.')
-        if (action.owner !== 'agent' || !dependencies || view.status === 'done' || view.status === 'review' || (view.ticket && !view.ticket.ended))
+        if (action.owner !== 'agent' || !dependencies || view.status === 'done' || view.status === 'review' || view.ticket?.stoppable)
           throw new WorkspaceError(409, 'This action cannot start yet.')
         const intent = `workspace:${id}:${actionId}:${action.runs.length}`
         const context = action.dependsOn.map(id => {
@@ -200,7 +201,10 @@ export class Workspace {
         action.accepted = { at: now(), note: request.text, ...(view.ticket ? { ticketRevision: view.ticket.revision } : {}) }
         action.dependencyRevision = this.dependencyRevision(action, mission.actions)
       } else {
-        if (!view.ticket || view.ticket.ended) throw new WorkspaceError(409, 'This action has no active execution.')
+        if (!view.ticket || (request.command !== 'steer' && (request.command === 'stop' ? !view.ticket.stoppable : view.ticket.ended)))
+          throw new WorkspaceError(409, 'This action has no active execution.')
+        if (request.command === 'steer' && this.store.tickets.get(view.ticket.id)?.ended?.by === 'human')
+          throw new WorkspaceError(409, 'This action was stopped. Run a new action to authorize further work.')
         if (request.command !== 'stop' && !this.authorized({ mission: id, action: actionId }))
           throw new WorkspaceError(409, 'The workspace source is disabled. Enable it before sending new work.')
         if (request.command === 'retry') {

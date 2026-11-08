@@ -39,6 +39,10 @@ checkout environment, so no live-provider or unattended production acceptance is
 
 ## Target architecture
 
+The [Inbox increment](013-inbox.md) adds durable read state, Harness conversation projections, atomic task creation and
+idempotent steering through existing mission authorization. Result follow-ups preserve the original mandate, explicit
+human stops remain holds, and pending follow-ups prevent acceptance of an outdated result.
+
 The [local execution increment](012-local-execution.md) removes mandatory GitHub setup for general missions, retaining
 the same Engine/Harness dispatch and durable results. A real isolated Harness process has passed startup and persisted
 mission/artifact state across a restart. With the operator's configured DeepSeek provider, one live Flash mission created

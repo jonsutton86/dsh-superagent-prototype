@@ -20,7 +20,7 @@ import { Commands } from '../infra/commands.ts'
 import type { Deployment, Machine } from '../deployment.ts'
 import { environmentOf, ticketEnvironment, type Variable } from './execution-environment.ts'
 import type { SetupProblem } from '../setup.ts'
-import { DshExecutor, sourceTrigger, triggerMessage, workerSessionId } from '../executor/dsh.ts'
+import { DshExecutor, sourceTrigger, triggerMessage, workerSessionId, ticketOfSession } from '../executor/dsh.ts'
 import { ticketCard } from './cards.ts'
 import { MasterAssessor } from './assessment.ts'
 import { KV } from '../kv.ts'
@@ -48,6 +48,7 @@ import { mainTools, type MainToolsHost } from './tools/main.ts'
 import { executorTools, type ExecutorToolsHost } from './tools/executor.ts'
 import { Supervision } from '../supervision/service.ts'
 import { Workspace } from '../workspace/service.ts'
+import { Inbox } from '../workspace/inbox.ts'
 import { Library } from '../workspace/library.ts'
 
 // Source plugins interact with dsh-superagent exclusively through the `SourceHost` service interface.
@@ -75,6 +76,7 @@ export class Runtime extends Service implements SourceHost {
   readonly passes: Passes
   readonly supervision: Supervision
   readonly workspace: Workspace
+  readonly inbox: Inbox
   readonly library: Library
   readonly ready: Promise<void>
   private readonly board = new HealthBoard()
@@ -105,6 +107,12 @@ export class Runtime extends Service implements SourceHost {
       const library = this.library = new Library(store)
       const workspace = this.workspace = new Workspace(store, () => runtime.engine, () => !this.paused() && !this.closing(),
         id => library.evidenceRevision(id))
+      const inbox = this.inbox = new Inbox(store, workspace, library,
+        async id => (await ctx.sessionController.inspect(id as SessionId, AbortSignal.any([this.lifetime, AbortSignal.timeout(15_000)]))).events)
+      this.disposers.push(ctx.on('session/event', (session, event) => {
+        const id = ticketOfSession(session.id)
+        if (id) inbox.record(id, event)
+      }))
       const setup = this.setup = new Setup({ context: ctx, machine, lifetime: this.lifetime, restart,
         incompatibleTickets: () => store.tickets.open().some(ticket => ticket.execution
           && (ticket.execution.mode ?? 'repository') !== (machine.executionMode ?? 'repository')) })
@@ -235,7 +243,7 @@ export class Runtime extends Service implements SourceHost {
     const runtime = this
     const { store, sources, prompts, sessions, settings, engine, executor, health, machine, masterId, ready, sourceLinks, setup, passes } = this
     return { store, sources, prompts, sessions, settings, engine, executor, health, machine, masterId, ready, sourceLinks,
-      supervision: this.supervision, workspace: this.workspace, library: this.library,
+      supervision: this.supervision, workspace: this.workspace, library: this.library, inbox: this.inbox,
       get deployment() { return setup.deployment },
       get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem },
       configured: () => setup.configured(), links: () => runtime.links(), ticketEnvironment: ticket => runtime.ticketEnvironment(ticket),

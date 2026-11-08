@@ -1,7 +1,7 @@
 /** Ticket detail page: stage and actions, Mandate details, undelivered/delivered Inputs, subscribed Threads, and Assignments. */
 import { useState, type ReactNode } from 'react'
 import { ApiError, usePoll, type TicketPageView } from './api.ts'
-import { DisclosureRow, Dot, Icon, Tag, type IconName } from './controls.tsx'
+import { Button, DisclosureRow, Dot, Icon, Tag, type IconName } from './controls.tsx'
 import { decisionMark, reportDot, ticketMark } from './marks.ts'
 import { usePanel } from './provider.tsx'
 import { settingsRoute } from './route.ts'
@@ -106,7 +106,7 @@ function MandateDetails({ ticket, actor }: { ticket: TicketPageView; actor: stri
 }
 
 export function TicketPage({ id }: { id: string }) {
-  const { t, call } = usePanel()
+  const { t, call, navigate } = usePanel()
   const { data, error, reload } = usePoll(() => call('GET tickets/:id', { id }), [id])
   const after = async (request: Promise<unknown>) => { await request; await reload() }
   if (!data) return <><PageHead
@@ -132,6 +132,7 @@ export function TicketPage({ id }: { id: string }) {
         message={t('retryConfirm', { title: data.title })}
         onConfirm={() => after(call('POST tickets/:id/retry', { id }))} />}
       {data.sessionId && <SessionButton variant="outline" sessionId={data.sessionId} />}
+      <Button variant="outline" onClick={() => navigate({ page: 'inbox', id })}>{t('inbox.conversation')}</Button>
     </PageHead>
     {error && <LoadState error={error} loading={false} />}
     <div className="dt-row-meta dt-status-line">

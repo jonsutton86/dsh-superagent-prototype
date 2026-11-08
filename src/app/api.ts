@@ -10,9 +10,11 @@ import type { DecisionListView, SearchView, ThreadDetailView, ThreadListView } f
 import type { TicketListView } from './views/tickets.ts'
 import type { ActionCommandInput, AddActionInput, CreateMissionInput, MissionCommandInput, MissionList, MissionView } from '../workspace/model.ts'
 import type { ArchiveRecordInput, CreateRecordInput, LibraryContent, LibraryEntry, LibraryList, LibraryQueryInput, LibraryRead } from '../workspace/library-model.ts'
+import type { Conversation, InboxFilter, InboxItem, InboxPage, InboxReplyInput, InboxStartInput } from '../workspace/inbox-model.ts'
 
 export const TICKET_FILTERS = ['open', 'person', 'working', 'idle', 'ended'] as const
 export const THREAD_FILTERS = ['subscribed', 'evaluating', 'recent', 'all'] as const
+export const INBOX_FILTERS = ['all', 'unread', 'questions', 'review', 'working'] as const
 export type TicketFilter = typeof TICKET_FILTERS[number]
 export type ThreadFilter = typeof THREAD_FILTERS[number]
 interface Paged { offset?: number; limit?: number }
@@ -20,6 +22,11 @@ interface Paged { offset?: number; limit?: number }
 type Delivery = 'injected' | 'pending'
 
 export interface Api {
+  'GET inbox': { query?: Paged & { filter?: InboxFilter; q?: string }; response: InboxPage }
+  'POST inbox': { body: InboxStartInput; response: InboxItem }
+  'GET inbox/:id': { query?: { before?: string; limit?: number }; response: Conversation }
+  'POST inbox/:id/read': { body: { revision: string }; response: { marked: boolean; unread: boolean } }
+  'POST inbox/:id/reply': { body: InboxReplyInput; response: InboxItem }
   'GET library': { query?: LibraryQueryInput; response: LibraryList }
   'POST library': { body: CreateRecordInput; response: LibraryEntry }
   'GET library/:id': { query?: Paged; response: LibraryRead }

@@ -10,6 +10,7 @@ import { GLOSSARY, GLOSSARY_VALUES, en, zh, type DshSuperagentKey } from './loca
 import { OverviewPage } from './overview.tsx'
 import { MissionsPage } from './missions.tsx'
 import { LibraryPage } from './library.tsx'
+import { InboxPage } from './inbox.tsx'
 import { PanelProvider, usePanel, usePanelData } from './provider.tsx'
 import { HOME, TABS, initialLocation, lastSettingsGroup, remember, routeLabel, settingsRoute, type Location, type Route,
   type Tab } from './route.ts'
@@ -148,6 +149,7 @@ function Pages({ route, openTab, deploymentForm }: { route: Route; openTab: (tab
   const waiting = error ? <p className="dt-error" role="alert">{error.message}</p> : <p className="dt-hint">{t('loading')}</p>
   const page = (() => {
     switch (route.page) {
+      case 'inbox': return <InboxPage key={route.id ?? 'list'} id={route.id} filter={route.query?.filter} />
       case 'library': return <LibraryPage key={`${route.id ?? 'list'}:${route.query?.scope ?? ''}`} id={route.id} scope={route.query?.scope} />
       case 'missions': return <MissionsPage key={route.id ?? 'list'} id={route.id} />
       case 'overview': return <OverviewPage />

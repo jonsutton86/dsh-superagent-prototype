@@ -101,7 +101,7 @@ function MissionDetail({ id }: { id: string }) {
           <Button onClick={() => setAdding(!adding)}>{t(adding ? 'cancel' : 'mission.addAction')}</Button>
           <Button disabled={command.busy || !mission.actions.length || mission.completed !== mission.actions.length}
             onClick={() => changeStatus('completed')}>{t('mission.finish')}</Button>
-          <Button disabled={command.busy || mission.actions.some(action => action.ticket && !action.ticket.ended)}
+          <Button disabled={command.busy || mission.actions.some(action => action.ticket?.stoppable)}
             onClick={() => changeStatus('archived')}>{t('mission.archive')}</Button>
         </> : <Button disabled={command.busy} onClick={() => changeStatus('active')}>{t('mission.reopen')}</Button>}
       </div>
@@ -140,8 +140,9 @@ function Action({ action, mission, busy, runnable, act }: { action: ActionView; 
       {mutable && action.owner === 'agent' && ['todo', 'stopped', 'outdated'].includes(action.status) &&
         <Button variant="primary" disabled={busy || !runnable} onClick={() => act(action, 'run')}>{t('mission.run')}</Button>}
       {ticket && <Button onClick={() => navigate({ page: 'execution', id: ticket.id })}>{t('mission.execution')}</Button>}
+      {ticket && <Button onClick={() => navigate({ page: 'inbox', id: ticket.id })}>{t('inbox.conversation')}</Button>}
       {ticket?.sessionId && <Button onClick={() => { void openSession(ticket.sessionId!).catch(failure => notify(errorText(failure))) }}>{t('mission.chat')}</Button>}
-      {mutable && ticket && !ticket.ended && <>
+      {mutable && ticket?.stoppable && <>
         {ticket.retryable && <Button disabled={busy || !runnable} onClick={() => act(action, 'retry')}>{t('mission.retry')}</Button>}
         <Button disabled={busy} onClick={() => act(action, 'stop')}>{t('stop')}</Button>
       </>}

@@ -32,8 +32,10 @@ import { executorLoad, ticketDetail, ticketList } from './views/tickets.ts'
 import type { Workspace } from '../workspace/service.ts'
 import { WorkspaceError } from '../workspace/model.ts'
 import type { Library } from '../workspace/library.ts'
+import type { Inbox } from '../workspace/inbox.ts'
 
 export interface HttpHost {
+  readonly inbox: Inbox
   readonly library: Library
   readonly workspace: Workspace
   readonly supervision?: Supervision
@@ -162,6 +164,11 @@ function routes(runtime: HttpHost): Routes {
   const ticket = (id: string) => { if (!store.tickets.get(id)) throw new RouteError(404, 'Ticket not found'); return id }
   const promptBody = (input: { body: (maxBytes?: number) => Promise<unknown> }) => input.body(4 * runtime.machine.promptMaxChars.get() + 4096)
   return {
+    'GET inbox': ({ query }) => runtime.inbox.list(query),
+    'POST inbox': async ({ body }) => runtime.inbox.start(await body()),
+    'GET inbox/:id': ({ params, query }) => runtime.inbox.conversation(params.id, query),
+    'POST inbox/:id/read': async ({ params, body }) => runtime.inbox.read(params.id, await body()),
+    'POST inbox/:id/reply': async ({ params, body }) => runtime.inbox.reply(params.id, await body()),
     'GET library': ({ query }) => runtime.library.list(query),
     'POST library': async ({ body }) => runtime.library.publish(await body(1024 * 1024)),
     'GET library/:id': ({ params, query }) => runtime.library.read(params.id, query),

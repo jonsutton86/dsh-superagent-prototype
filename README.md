@@ -44,6 +44,8 @@ human/agent actions, dependencies, actual Harness dispatch, steering, and review
 publication tools. The workspace ledger distinguishes these increments from the remaining full product and live deployment requirements.
 The [local execution profile](docs/012-local-execution.md) runs general missions without mandatory GitHub setup, using
 the same Engine, Harness Sessions, library, and completion review.
+The [Inbox](docs/013-inbox.md) brings conversations, unread updates, questions and review into one view. Start a task,
+send a follow-up, and open its mission or artifacts while keeping the same durable execution path.
 The [implementation tracker](docs/IMPLEMENTATION.md) distinguishes working code from remaining work.
 The first increment adds [independent watchdog supervision](docs/009-supervision.md), with a separate Harness profile,
 durable incident history, semantic progress assessment, and bounded, fenced progress requests.

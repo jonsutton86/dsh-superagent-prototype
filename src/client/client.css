@@ -430,3 +430,20 @@ a.dt-btn, a.dt-btn:hover { text-decoration: none; }
 .dt-library-provenance dt { font-weight: 600; margin-top: 8px; }
 .dt-library-provenance dd { margin: 4px 0; }
 .dt-library-provenance code { display: block; font-size: 12px; }
+
+.dt-inbox { display: grid; gap: 16px; min-width: 0; }
+.dt-inbox-list, .dt-inbox-messages { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.dt-inbox-item { display: grid; gap: 8px; width: 100%; text-align: left; padding: 16px; border: 1px solid var(--dsw-alias-border-l3); border-radius: 12px; color: inherit; background: transparent; cursor: pointer; }
+.dt-inbox-item[data-unread="true"] { border-left: 3px solid var(--dsw-alias-brand-primary); }
+.dt-inbox-item:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+.dt-inbox-item-head { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.dt-inbox-item-meta { display: flex; flex-wrap: wrap; gap: 8px; color: var(--dsw-alias-label-caption); font-size: 12px; }
+.dt-inbox-preview { overflow-wrap: anywhere; white-space: pre-wrap; color: var(--dsw-alias-label-secondary); }
+.dt-inbox-composer, .dt-inbox-composer label, .dt-inbox-search label { display: grid; gap: 8px; }
+.dt-inbox-composer textarea { width: 100%; box-sizing: border-box; resize: vertical; min-height: 90px; padding: 12px; border: 1px solid var(--dsw-alias-border-l3); border-radius: 8px; color: inherit; background: transparent; font: inherit; }
+.dt-inbox-search { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; }
+.dt-inbox-search input { padding: 8px; border: 1px solid var(--dsw-alias-border-l3); border-radius: 6px; color: inherit; background: transparent; font: inherit; }
+.dt-inbox-message { border: 1px solid var(--dsw-alias-border-l3); border-radius: 12px; padding: 16px; min-width: 0; overflow-wrap: anywhere; }
+.dt-inbox-message-person { margin-left: min(8%, 48px); }
+.dt-inbox-message-status, .dt-inbox-message-context { border-style: dashed; }
+.dt-inbox-question { border-left: 3px solid var(--dsw-alias-state-warn-primary); padding: 12px 16px; overflow-wrap: anywhere; }

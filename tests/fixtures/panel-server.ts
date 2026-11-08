@@ -292,6 +292,11 @@ const SourceSave = z.object({ enabled: z.boolean(), config: z.unknown() })
 
 const ROUTES: { [K in keyof Api]: Route<K> } = {
   'GET missions': { query: ['offset', 'limit'], answer: () => ({ items: [], nextOffset: null }) },
+  'GET inbox': { query: ['offset', 'limit', 'filter', 'q'], answer: () => ({ items: [], nextOffset: null, unread: 0, questions: 0, review: 0 }) },
+  'POST inbox': { body: true, answer: () => refuse(409, 'Use the runtime fixture to start work') },
+  'GET inbox/:id': { query: ['before', 'limit'], answer: () => refuse(404, 'Conversation not found') },
+  'POST inbox/:id/read': { body: true, answer: () => refuse(404, 'Conversation not found') },
+  'POST inbox/:id/reply': { body: true, answer: () => refuse(404, 'Conversation not found') },
   'GET library': { query: ['q', 'kind', 'scope', 'offset', 'limit', 'includeInactive'], answer: () => ({ items: [], nextOffset: null }) },
   'GET library/:id': { query: ['offset', 'limit'], answer: () => refuse(404, 'Library record not found') },
   'GET library/:id/content': { answer: () => refuse(404, 'Library record not found') },

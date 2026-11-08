@@ -29,7 +29,7 @@ export interface Mission {
 export interface MissionEvent { id: number; at: string; kind: string; actionId?: string; text: string }
 export interface ActionView extends MissionAction {
   status: 'todo' | 'waiting' | 'working' | 'blocked' | 'review' | 'stopped' | 'done' | 'outdated'
-  ticket?: { id: string; revision: string; sessionId?: string; summary: string; retryable: boolean; ended: boolean }
+  ticket?: { id: string; revision: string; sessionId?: string; summary: string; retryable: boolean; stoppable: boolean; ended: boolean }
 }
 export interface MissionView extends Omit<Mission, 'actions'> {
   actions: ActionView[]; events: MissionEvent[]; completed: number; needsReview: boolean

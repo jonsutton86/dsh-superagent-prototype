@@ -50,7 +50,7 @@ refer to the same environment. Remote access requires authentication; do not exp
 | Persistent missions | `workspace/service.ts`, SQLite mission/event/command tables, Missions panel, dependency acceptance invalidation | Editable/versioned plans, planner proposals, revisions, multi-workspace ownership |
 | Action execution | Operator dispatch into Engine/Harness; local and repository modes; unit/DOM flows and one actual DeepSeek Flash mission | Broader provider/tool acceptance, per-action workspace/persona bindings and guided onboarding |
 | Human participation and completion | Human actions, reviewed dependencies; acceptance bound to ticket, library evidence and direct provenance state | Host-collected check evidence bound to Git/environment revisions; rejected results and revisions |
-| Conversations and steering | Harness conversations, mission links, human follow-ups, stop/retry, attempt history | Unified inbox, unread/question indicators and cross-workspace navigation |
+| Conversations and steering | Unified inbox, durable read receipts, question/review filters, visible Harness text, atomic task creation, idempotent replies and mission/artifact links | Cross-workspace enrollment, large-history indexing/retention, attachments and richer conversation tooling |
 | Shared memory and recall | Immutable scoped capsules, typed/hash-bound provenance, FTS search, source freshness/conflict flags, worker tools and library UI | Host-enforced total recall budgets, transitive freshness, measured recall quality, import connectors and multi-workspace ownership |
 | Artifact library | Content-addressed publication, search/previews/download, mission/session links, archival and immutable revision history | Large/streamed files, matched-environment imports and directory sync, retention, host verification and external delivery receipts |
 | Personas and skills | Harness subagents/tools and prompt configuration | Versioned personas, model preferences, tool scopes, management UI and per-action assignment |
@@ -59,7 +59,7 @@ refer to the same environment. Remote access requires authentication; do not exp
 | Models and connectors | Harness configuration, optional GitHub/Feishu, local profile without accounts, filesystem/process matching | Workspace enrollment, connector scope and explicit local/cloud data flow |
 | Voice | None | Optional input/output adapters, interruption, local/cloud modes and text fallback |
 | Supervision and recovery | Watchdog foundation in `009-supervision.md` | Incident UI, live failure tests, restore/failover and remote reconciliation from article tracker |
-| Whole-product qualification | Deterministic unit, API/DOM flows, actual Harness restart, one live local model/tool mission | Browser/desktop layout, broader provider acceptance, backup/restore drills, accessibility and packaging |
+| Whole-product qualification | Deterministic unit, API/DOM flows, actual Harness restarts, live local model/tool and inbox question/follow-up missions | Browser/desktop layout, broader provider acceptance, backup/restore drills, accessibility and packaging |
 
 ## Missions increment
 
@@ -115,12 +115,25 @@ sum/mean values, created and checked a local JSON file, published its exact byte
 file/content/hash check passed, then explicit API review accepted the action and completed the mission. See
 `012-local-execution.md` for the artifact hash and qualification limits. Browser/desktop acceptance remains outstanding.
 
+2026-11-08, inbox increment: `pnpm check` passed TypeScript, all 69 test files / 1,267 tests, and server/client builds.
+Eleven tests were added for atomic task creation, exact read receipts, question/reply flow, ambiguous-response replay,
+visible text projection, history paging, result follow-ups and cancellation while paused. The latter remains stoppable
+through both mission and execution controls, cannot be accepted or archived while queued, and never resumes or reroutes
+after explicit cancellation. Existing live-ticket handback behavior is unchanged.
+
+The actual DeepSeek worker asked a format question, received its answer through the inbox, computed a JSON summary and
+published it. A follow-up resumed the same ticket and produced a second artifact with a `supersedes` link. Independent
+file/content/hash checks passed before explicit acceptance and mission completion. A real Harness restart preserved all
+eight projected messages, read state, mission acceptance, artifact bytes/hash and both reply replay receipts; no additional
+assignment was created. See `013-inbox.md` for the qualification evidence and remaining projection limits. Browser and
+desktop acceptance remain outstanding.
+
 ## Next implementation order
 
 The durable memory/artifact increment is described in `011-library.md`; its application-level scope boundary does not
 replace the article's isolated execution environments. It uses the existing SQLite database and Harness tool registration.
 
-1. Integrated workspace shell and conversation inbox; richer imports, large-file support and recall budgets over the library.
+1. Versioned mission plans and planner proposals; workspace enrollment, richer imports, large-file support and recall budgets.
 2. Persona/skill management, durable schedules, budgeted reflection proposals and usage reporting.
 3. Article requirements: remote execution, recall, speculation, verification, recovery; optional voice.
 4. Actual model/tool user flows, process restarts, restore drills and browser/desktop acceptance. Record supported provider/OS

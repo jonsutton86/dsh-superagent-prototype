@@ -76,3 +76,28 @@ it('creates, delegates, reviews and completes a mission through rendered forms a
   await vi.waitFor(() => expect(text()).toContain('Reopen mission'))
   expect(host.runtime.workspace.get(route.id!).status).toBe('completed')
 })
+
+it('offers Stop for a completed ticket with a queued follow-up while archival remains disabled', async () => {
+  host = await startRuntime(undefined, { executionMode: 'local', noAccounts: true })
+  const item = host.runtime.inbox.start({ requestId: 'queued-ui', text: 'Write a brief' })
+  await host.runtime.idle()
+  await host.runTool(item.sessionId!, 'orchestrator_report', { state: 'ready', summary: 'Brief ready' })
+  await host.api('POST', 'executor/pause', { paused: true })
+  host.runtime.inbox.reply(item.id, { requestId: 'queued-ui-followup', revision: host.runtime.inbox.item(item.id).revision, text: 'Revise the brief' })
+  vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+    const response = await host!.api(init?.method ?? 'GET', String(url).replace('/orchestrator/api/', ''),
+      init?.body ? JSON.parse(String(init.body)) : undefined)
+    return new Response(JSON.stringify(response.body), { status: response.status, headers: { 'content-type': 'application/json' } })
+  })
+  container = document.createElement('div'); document.body.append(container); root = createRoot(container)
+  await act(async () => root!.render(<PanelProvider t={translator(en)} navigate={() => {}}>
+    <MissionsPage id={item.mission!.id} /></PanelProvider>))
+  const button = (label: string) => [...container!.querySelectorAll('button')].find(item => item.textContent === label)
+  await vi.waitFor(() => expect(button('Stop')).toBeTruthy())
+  expect(button('Archive')?.disabled).toBe(true)
+  expect(button('Accept result')).toBeUndefined()
+  await act(async () => { button('Stop')!.click() })
+  await vi.waitFor(() => expect(button('Archive')?.disabled).toBe(false))
+  expect(button('Stop')).toBeUndefined()
+  expect(host.runtime.inbox.item(item.id)).toMatchObject({ status: 'stopped', canReply: false })
+})
