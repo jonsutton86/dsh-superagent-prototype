@@ -16,7 +16,7 @@ export interface RemoteConnection { url: string; endpointId: string; credentialF
 export class RemoteClient {
   private readonly url: string
   private credentialPin?: string
-  constructor(readonly connection: RemoteConnection) {
+  constructor(readonly connection: RemoteConnection, private readonly authorize?: (request: RpcInput) => void) {
     const url = new URL(connection.url)
     if (url.username || url.password || url.pathname !== '/' || url.search || url.hash
       || !(url.protocol === 'https:' || (url.protocol === 'http:' && url.hostname === '127.0.0.1')))
@@ -33,6 +33,7 @@ export class RemoteClient {
     this.credentialPin = pin
   }
   async call<T>(request: RpcInput, signal?: AbortSignal): Promise<T> {
+    this.authorize?.(request)
     const credential = readFileSync(this.connection.credentialFile, 'utf8').trim()
     if (credential.length < 32 || /\s/.test(credential)) throw new Error('Invalid execution credential file')
     if (this.credentialPin && this.credentialPin !== createHash('sha256').update(credential).digest('hex'))

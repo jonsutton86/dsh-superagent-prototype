@@ -21,6 +21,7 @@ export const Rpc = z.discriminatedUnion('op', [
     operations: z.array(Operations).min(1).max(4), leaseMs }).strict(),
   z.object({ op: z.literal('grant.change'), ...request, id, revision, enabled: z.boolean(), leaseMs, reason: z.string().trim().min(1).max(2000) }).strict(),
   z.object({ op: z.literal('grant.renew'), ...request, revision, leaseMs }).strict(),
+  z.object({ op: z.literal('grant.revoke'), ...request, reason: z.string().trim().min(1).max(2000) }).strict(),
   z.object({ op: z.literal('grant.status') }).strict(),
   z.object({ op: z.literal('job.spawn'), ...request, revision, argv: z.array(z.string().max(MAX_TEXT).refine(value => !value.includes('\0'))).min(1).max(256),
     cwd: path, stdin: z.string().max(MAX_TEXT).optional(), graceMs: z.number().int().min(1).max(30_000),
@@ -53,6 +54,8 @@ export interface RemoteGrant {
   rootIdentity: string
 }
 export interface GrantReceipt { grant: RemoteGrant; credential?: string }
+/** Acknowledges removal of this credential's authority; process/file quiescence is a separate observation. */
+export interface RevocationReceipt { grantId: string; epoch: number; at: string; quiescent: boolean }
 export interface EndpointIdentity {
   protocol: 1; id: string; platform: string; confinement: string
   capabilities: { filesystem: true; process: true; terminal: false; interactiveStdin: false; controlChannel: false; outputWindow: number }

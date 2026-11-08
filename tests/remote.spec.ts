@@ -17,7 +17,9 @@ import { RemoteSubprocess } from '../src/remote/subprocess.ts'
 import { RemoteJournal } from '../src/remote/journal.ts'
 import { confinedFilesystem } from '../src/remote/filesystem-runner.ts'
 import { BubblewrapIsolation, type ExecutionIsolation } from '../src/remote/isolation.ts'
-import type { GrantReceipt, RemoteJob, RemoteOperation, OutputWindow, RpcInput } from '../src/remote/protocol.ts'
+import type { GrantReceipt, RemoteJob, RemoteOperation, OutputWindow, RpcInput, RevocationReceipt } from '../src/remote/protocol.ts'
+import { RemoteWorld } from '../src/remote/world.ts'
+import { apply as composeWorld } from '../src/remote/provider-plugin.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { for (const stop of cleanup.reverse()) await stop(); cleanup.length = 0; vi.restoreAllMocks() })
@@ -305,6 +307,153 @@ it('keeps an existing world fenced when a replacement credential is installed at
   expect(h.endpoint.journal.jobs()).toHaveLength(0)
 })
 
+it('lets a grant revoke only its own generation, replays the acknowledgement, and separately observes process quiescence', async () => {
+  const h = await fixture(), job = await h.client.intent<RemoteJob>(h.spawn('printf started; sleep 20'))
+  await vi.waitFor(() => expect(h.endpoint.journal.output(job.id, 'stdout', 0, 100).totalBytes).toBe(7))
+  const request = { op: 'grant.revoke' as const, requestId: 'self-revoke', reason: 'Operator stopped this execution world' }
+  h.lose()
+  const receipt = await h.client.intent<RevocationReceipt>(request)
+  expect(receipt).toMatchObject({ grantId: h.enrolled.grant.id, epoch: 1 })
+  expect(receipt).not.toHaveProperty('credential')
+  expect(h.endpoint.journal.grant(h.enrolled.grant.id)).toMatchObject({ enabled: false, epoch: 2, revision: 2 })
+  await h.settled(job.id)
+  expect(await h.client.intent(request)).toEqual({ ...receipt, quiescent: true })
+  await expect(h.client.intent({ ...request, reason: 'Different payload' })).rejects.toMatchObject({ code: 'request_conflict' })
+  await expect(h.client.call(h.spawn('touch forbidden'))).rejects.toMatchObject({ code: 'grant_unavailable' })
+  await expect(h.admin.intent({ ...request, requestId: 'admin-is-not-grant' })).rejects.toMatchObject({ code: 'grant_required' })
+  const replacement = await h.admin.intent<GrantReceipt>({ op: 'grant.change', requestId: 'new-generation', id: h.enrolled.grant.id,
+    revision: 2, enabled: true, leaseMs: 300000, reason: 'Separately authorized replacement' })
+  await h.client.intent(request)
+  await h.client.intent({ ...request, requestId: 'old-token-stop-again' })
+  expect(h.endpoint.journal.grant(h.enrolled.grant.id)).toEqual(replacement.grant)
+})
+
+/** The HTTP lifecycle tests isolate composition from namespace qualification, which has its separate native Linux test. */
+async function persistentWorld(h: Awaited<ReturnType<typeof fixture>>, native = false) {
+  if (!native) vi.spyOn(h.endpoint, 'identity').mockReturnValue({ ...h.endpoint.identity(), confinement: 'linux-bubblewrap' })
+  const config = { ...h.client.connection, stateDir: join(h.directory, 'coordinator-world') }
+  const ctx = new Context()
+  cleanup.push(() => ctx.fiber.dispose())
+  await composeWorld(ctx, config)
+  return { world: ctx.superagentRemoteWorld, ctx, config }
+}
+
+it('composes paired providers with persistent authority and refuses replacement credentials after restart', async () => {
+  const h = await fixture(), { world, ctx, config } = await persistentWorld(h)
+  const before = world.status()
+  expect(before).toMatchObject({ ready: true, phase: 'active', grantId: h.enrolled.grant.id, epoch: 1 })
+  const target = await ctx.fs.resolve('persistent.txt')
+  await ctx.fs.writeText(target, 'paired world', { kind: 'createIfAbsent' })
+  const handle = ctx.subprocess.spawn({ argv: ['/bin/sh', '-c', 'cat persistent.txt'], cwd: world.grant.root, graceMs: 100,
+    stdio: { stdin: 'ignore', stdout: { maxBytes: 1024 }, stderr: { maxBytes: 1024 } } })
+  expect((await handle.done).exitCode).toBe(0)
+  expect(handle.collected.stdout!.readFrom(0).text).toBe('paired world')
+  expect(() => new RemoteWorld(config)).toThrow()
+  await ctx.fiber.dispose()
+  const resumed = new RemoteWorld(config); cleanup.push(() => resumed.close()); await resumed.start()
+  expect(resumed.status().binding).toBe(before.binding)
+  await resumed.close()
+  const replacement = await h.admin.intent<GrantReceipt>({ op: 'grant.change', requestId: 'world-replacement', id: h.enrolled.grant.id,
+    revision: h.endpoint.journal.grant(h.enrolled.grant.id).revision, enabled: true, leaseMs: 300000, reason: 'New authority' })
+  await writeFile(config.credentialFile, replacement.credential!)
+  const wrong = new RemoteWorld(config); cleanup.push(() => wrong.close())
+  await expect(wrong.start()).rejects.toMatchObject({ code: 'grant_changed' })
+  expect(h.endpoint.journal.grant(h.enrolled.grant.id)).toEqual(replacement.grant)
+})
+
+it('persists local revocation before offline RPC and replays it on restart without renewing authority', async () => {
+  const h = await fixture(), { world, ctx, config } = await persistentWorld(h)
+  const target = await ctx.fs.resolve('refused.txt')
+  h.offline(true)
+  const revoke = world.revoke('durable-stop', 'Operator revoked while endpoint was offline')
+  expect(world.status()).toMatchObject({ ready: false, phase: 'revoking', revocation: { acknowledged: false, quiescent: false } })
+  await expect(ctx.fs.writeText(target, 'must not write')).rejects.toMatchObject({ code: 'world_unavailable' })
+  await expect(revoke).rejects.toBeInstanceOf(RemoteUncertain)
+  await ctx.fiber.dispose(); h.offline(false)
+  const revision = h.endpoint.journal.grant(h.enrolled.grant.id).revision
+  const resumed = new RemoteWorld(config); cleanup.push(() => resumed.close()); await resumed.start()
+  expect(resumed.status()).toMatchObject({ ready: false, phase: 'revoked', revocation: { requestId: 'durable-stop', acknowledged: true, quiescent: true } })
+  expect(h.endpoint.journal.grant(h.enrolled.grant.id)).toMatchObject({ enabled: false, revision: revision + 1 })
+  expect(await resumed.revoke('durable-stop', 'Operator revoked while endpoint was offline')).toMatchObject({ phase: 'revoked' })
+  await expect(resumed.revoke('another-stop', 'New request')).rejects.toMatchObject({ code: 'revocation_pending' })
+  await expect(readFile(join(h.enrolled.grant.root, 'refused.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
+})
+
+it('recovers an acknowledged endpoint revocation whose response and local acknowledgement were lost', async () => {
+  const h = await fixture(), { world, ctx, config } = await persistentWorld(h)
+  const rpc = h.endpoint.rpc.bind(h.endpoint)
+  vi.spyOn(h.endpoint, 'rpc').mockImplementation(async (principal, request) => {
+    const result = await rpc(principal, request)
+    if ((request as RpcInput).op === 'grant.revoke') throw new Error('Lost response after revocation commit')
+    return result
+  })
+  await expect(world.revoke('lost-stop', 'Persist this intent')).rejects.toBeInstanceOf(RemoteUncertain)
+  expect(world.status().phase).toBe('revoking')
+  expect(h.endpoint.journal.grant(h.enrolled.grant.id).enabled).toBe(false)
+  await ctx.fiber.dispose(); vi.mocked(h.endpoint.rpc).mockRestore()
+  const resumed = new RemoteWorld(config); cleanup.push(() => resumed.close()); await resumed.start()
+  expect(resumed.status()).toMatchObject({ phase: 'revoked', ready: false, revocation: { acknowledged: true } })
+  expect(h.endpoint.journal.grant(h.enrolled.grant.id).epoch).toBe(2)
+})
+
+it('closes admission synchronously during a renewal race and never renews after the durable stop', async () => {
+  const h = await fixture(), { world } = await persistentWorld(h)
+  const grant = h.endpoint.journal.grant(h.enrolled.grant.id); grant.leaseUntil = Date.now() + 30_000; h.endpoint.journal.saveGrant(grant)
+  const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>(), rpc = h.endpoint.rpc.bind(h.endpoint)
+  let renewals = 0
+  vi.spyOn(h.endpoint, 'rpc').mockImplementation(async (principal, request) => {
+    const result = await rpc(principal, request)
+    if ((request as RpcInput).op === 'grant.renew') { renewals++; entered.resolve(); await release.promise }
+    return result
+  })
+  const renewing = world.refresh(); await entered.promise
+  const revoked = world.revoke('racing-stop', 'Stop during lease renewal')
+  expect(world.status().ready).toBe(false)
+  release.resolve(); await renewing; await revoked; await world.refresh()
+  expect(renewals).toBe(1)
+  expect(world.status()).toMatchObject({ ready: false, phase: 'revoked' })
+  expect(h.endpoint.journal.grant(h.enrolled.grant.id)).toMatchObject({ epoch: 2, enabled: false })
+})
+
+it('keeps unknown effects distinct from revocation acknowledgement until operator reconciliation', async () => {
+  const h = await fixture(), { world } = await persistentWorld(h)
+  const job = await h.client.intent<RemoteJob>(h.spawn('true')); await h.settled(job.id)
+  const unknown = h.endpoint.journal.job(job.id); unknown.phase = 'unknown'; unknown.quiescent = null; h.endpoint.journal.saveJob(unknown)
+  h.endpoint.journal.saveOperation({ id: 'uncertain-file', grantId: h.enrolled.grant.id, epoch: 1, fingerprint: 'test',
+    kind: 'fs.write', phase: 'unknown', at: new Date().toISOString() })
+  expect(await world.revoke('uncertain-stop', 'Stop an uncertain world')).toMatchObject({ ready: false, phase: 'revoked',
+    revocation: { acknowledged: true, quiescent: false } })
+  await h.admin.intent({ op: 'job.reconcile', requestId: 'confirm-stopped', id: job.id, quiescent: true, note: 'Test operator independently confirmed process exit' })
+  await world.refresh()
+  expect(world.status().revocation?.quiescent).toBe(false)
+  await h.admin.intent({ op: 'operation.reconcile', requestId: 'confirm-file', id: 'uncertain-file', note: 'Test operator independently checked filesystem effect' })
+  await world.refresh()
+  expect(world.status().revocation?.quiescent).toBe(true)
+})
+
+it('refuses coordinator state or credentials inside the remote workspace', async () => {
+  const h = await fixture(), { ctx, config } = await persistentWorld(h)
+  await ctx.fiber.dispose()
+  const unsafe = new RemoteWorld({ ...config, stateDir: join(h.enrolled.grant.root, 'private-control') }); cleanup.push(() => unsafe.close())
+  await expect(unsafe.start()).rejects.toThrow('outside the granted workspace')
+  const credentialFile = join(h.enrolled.grant.root, 'unsafe.token')
+  await writeFile(credentialFile, h.enrolled.credential!)
+  const credentials = new RemoteWorld({ ...config, credentialFile }); cleanup.push(() => credentials.close())
+  await expect(credentials.start()).rejects.toThrow('outside the granted workspace')
+})
+
+it('refuses a different endpoint binding and fences an externally revoked world without accepting new authority', async () => {
+  const h = await fixture(), { world, ctx, config } = await persistentWorld(h)
+  await h.admin.intent({ op: 'grant.change', requestId: 'external-stop', id: h.enrolled.grant.id,
+    revision: h.endpoint.journal.grant(h.enrolled.grant.id).revision, enabled: false, leaseMs: 300000, reason: 'Endpoint operator stop' })
+  await world.refresh()
+  expect(world.status()).toMatchObject({ ready: false, epoch: 1 })
+  await expect(ctx.fs.resolve('cannot-resume')).rejects.toMatchObject({ code: 'world_unavailable' })
+  await ctx.fiber.dispose()
+  const wrong = new RemoteWorld({ ...config, endpointId: 'another-endpoint' }); cleanup.push(() => wrong.close())
+  await expect(wrong.start()).rejects.toMatchObject({ code: 'world_changed' })
+})
+
 it.runIf(process.platform !== 'linux')('refuses an unconfined production endpoint on unsupported hosts', async () => {
   const h = await fixture()
   expect(() => new BubblewrapIsolation(h.ctx.subprocess)).toThrow('Linux with bubblewrap')
@@ -325,13 +474,14 @@ it('refuses readiness when a purported confined runner can still see endpoint co
 
 it.runIf(process.env.DSH_REMOTE_ISOLATION === '1')('qualifies native Linux filesystem and process confinement using the built helper', async () => {
   const h = await fixture({ native: true })
-  const target = await h.remoteFs.resolve('native.txt')
-  await h.remoteFs.writeText(target, 'same world', { kind: 'createIfAbsent' })
+  const { world, ctx, config } = await persistentWorld(h, true)
+  const target = await ctx.fs.resolve('native.txt')
+  await ctx.fs.writeText(target, 'same world', { kind: 'createIfAbsent' })
   const control = join(h.directory, 'control', 'admin.token')
   const code = `const fs=require('fs'); if(fs.existsSync(${JSON.stringify(control)}))process.exit(9);if(process.env.HARNESS_ISOLATION_MARKER)process.exit(10);process.stdout.write(fs.readFileSync('native.txt'));fs.writeFileSync('produced','confined');fetch(${JSON.stringify(h.url)},{signal:AbortSignal.timeout(1000)}).then(()=>process.exit(11),()=>{})`
   vi.stubEnv('HARNESS_ISOLATION_MARKER', 'must-not-enter-worker')
   try {
-    const handle = h.remoteProcess.spawn({ argv: [process.execPath, '-e', code], cwd: h.enrolled.grant.root, graceMs: 1000,
+    const handle = ctx.subprocess.spawn({ argv: [process.execPath, '-e', code], cwd: h.enrolled.grant.root, graceMs: 1000,
       stdio: { stdin: 'ignore', stdout: { maxBytes: 1024 }, stderr: { maxBytes: 1024 } } })
     expect((await handle.done).exitCode).toBe(0); expect(await handle.waitForExit()).toBe(true)
     expect(handle.collected.stdout!.readFrom(0).text).toBe('same world')
@@ -348,5 +498,10 @@ it.runIf(process.env.DSH_REMOTE_ISOLATION === '1')('qualifies native Linux files
     await vi.waitFor(() => expect(h.endpoint.journal.job(job.id).quiescent).toBe(true))
     await new Promise(resolve => setTimeout(resolve, 1700)); h.offline(false)
     await expect(readFile(join(h.enrolled.grant.root, 'escaped'))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await world.revoke('native-world-stop', 'Persist native execution stop')).toMatchObject({ ready: false, phase: 'revoked',
+      revocation: { acknowledged: true, quiescent: true } })
+    await ctx.fiber.dispose()
+    const resumed = new RemoteWorld(config); cleanup.push(() => resumed.close()); await resumed.start()
+    expect(resumed.status()).toMatchObject({ ready: false, phase: 'revoked', revocation: { acknowledged: true, quiescent: true } })
   } finally { vi.unstubAllEnvs() }
 }, 20_000)

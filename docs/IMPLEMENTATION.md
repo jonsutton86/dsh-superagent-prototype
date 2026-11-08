@@ -46,6 +46,11 @@ the full suite also passed with native Linux confinement and detached-child canc
 selection, operator endpoint enrollment/reconciliation, endpoint credential bindings and coordinator ownership remain open.
 This is an execution foundation, not completion of the distributed architecture.
 
+The remote provider now also persists its exact authority binding and local revocation intent. A changed credential cannot
+silently transfer new authority across a restart. Self-revocation needs only the current grant, replays the same request after
+disconnects, and reports endpoint acknowledgement separately from process/file quiescence. Integrating that binding into
+mission/Session ownership and the complete Harness execution profile remains the next remote execution requirement.
+
 The [environment enrollment increment](015-execution-environments.md) implements local root proof, immutable task grant
 bindings, revocation, reauthorization, replacement and operator controls. Its generation is local authorization state;
 authenticated remote transports and distributed leases remain required below.

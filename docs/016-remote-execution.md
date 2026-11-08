@@ -14,9 +14,10 @@ execution and filesystem RPC run inside bubblewrap. There is no production uncon
 `dsh-superagent/remote-world` supplies both `FileSystem` and `SubprocessRuntime` in one dedicated Harness execution-world
 scope. Remove that scope's local providers; installing a remote shell alone does not create a remote world. Do not replace
 the coordinator's global services or mount this into an ordinary worker scope that cannot override those services. This
-plugin requires a pinned endpoint identity, a grant credential file outside worker workspaces and `fs.read`/`process.spawn`.
-It renews the same grant generation at startup and once per minute for a maximum five-minute lease. Revocation or lease
-expiry cannot be undone by renewal. Loss of the coordinator eventually stops endpoint work through lease expiry.
+plugin requires a pinned endpoint identity, a grant credential file, a persistent private coordinator `stateDir`, and
+`fs.read`/`process.spawn`. State and credentials must be outside worker workspaces. It checks the same grant generation once
+per minute and renews an eligible active lease when less than four minutes remain, for at most five minutes. Revocation or
+lease expiry cannot be undone by renewal. Loss of the coordinator eventually stops endpoint work through lease expiry.
 
 `dsh-superagent/remote-client` exports the host administration client and typed protocol. It is not a worker tool. Endpoint
 identity is a persistent UUID; credentials are bearer secrets protected by TLS/tunnel, not certificate pins. The endpoint
@@ -24,7 +25,36 @@ creates a private administration token and HMAC signing key in its control direc
 grants or reconcile unknown effects. Each grant credential binds its ID and authorization epoch. Old credentials can inspect
 their own old receipts and cancel their own old commands, but cannot submit work or obtain replacement credentials.
 Composed providers pin their credential: overwriting its file cannot transfer a replacement generation's authority into an
-existing world. Compose a new world with the newly authorized grant instead.
+existing world. The coordinator also persists its endpoint, grant generation, root identity, owner and capabilities across
+process restarts. A replacement credential cannot silently renew or resume that persisted world.
+
+## Persistent world lifecycle
+
+The plugin exposes `ctx.superagentRemoteWorld` to trusted host code. `status()` returns its binding fingerprint, readiness,
+last checked lease and revocation state, without credentials. `revoke(requestId, reason)` records local denial in a locked,
+FULL-synchronous SQLite journal before contacting the endpoint. Both providers refuse new execution and file access as soon
+as that denial commits. Receipt observations and cancellation remain available. The private execution client cannot renew
+or change grants; only the host lifecycle service manages that authority.
+
+The new `grant.revoke` RPC permits a credential to revoke its own generation without an administrator secret. It is
+monotonic: an obsolete credential cannot revoke a replacement generation or retrieve its credential. Replaying the same
+request ID returns the acknowledgement and a fresh quiescence observation. Acknowledgement means authority was removed;
+`quiescent: false` means a process range or filesystem effect still needs observation or independent operator reconciliation.
+It does not mean that work has safely finished.
+
+If the connection fails, the world remains locally denied with its original revocation request saved. Startup replays that
+request before considering any lease renewal. A response lost after endpoint commit is recovered with the same request ID.
+A renewal already sent before local denial may finish, but no later renewal is admitted; the endpoint's five-minute maximum
+lease still bounds authority if revocation cannot be delivered. Closing a provider does not erase its binding or denial.
+There is deliberately no local re-enable operation: new authority requires a separately composed world with separate Session
+ownership. Do not delete the journal to make old Sessions inherit new credentials.
+
+This service is a prerequisite for mission integration, not its completion. Mission and Session records still need to store
+and enforce the binding fingerprint. Inspection of Harness's agent loop and working-directory services confirmed that their
+provider context is fixed at composition; an ordinary agent preset cannot replace the whole execution world. A complete
+remote profile must also avoid the Session controller's host-side directory creation, prepare workspaces through the remote
+providers, keep coordinator account probes local, and bind child Sessions to the same authority. Those paths are not yet
+enabled by the operator mission UI. No host filesystem fallback is introduced by this lifecycle service.
 
 The control directory, workspace parent and system runtime mounts must be disjoint. Every grant pins a canonical workspace
 and its device/inode/birth identity. Production workers see read-only system runtime directories, a minimal `/etc`, their own
@@ -117,8 +147,9 @@ const receipt = await admin.intent({
 writeFileSync('/private/coordinator/mission-one.token', receipt.credential, { flag: 'wx', mode: 0o600 })
 ```
 
-Configure the paired provider with the same URL/UUID and `credentialFile: /private/coordinator/mission-one.token` in its
-dedicated world. This is a developer composition API; it is not yet a supported remote mission deployment recipe.
+Configure the paired provider with the same URL/UUID, `credentialFile: /private/coordinator/mission-one.token` and
+`stateDir: /private/coordinator/worlds/mission-one` in its dedicated world. Preserve that directory across restarts and keep
+client and endpoint builds aligned. This is a developer composition API; it is not yet a supported remote mission deployment recipe.
 For administration use `job.list`, `job.get`, `job.output`, `job.cancel`, `grant.change`, `job.reconcile` and
 `operation.reconcile`. Preserve request IDs across uncertain responses. Inspect the endpoint and effects independently before
 attesting quiescence; a model statement is insufficient. Revocation increments the epoch, so reauthorization requires installing
@@ -126,11 +157,18 @@ the replacement credential and composing a new world. Never copy endpoint contro
 
 ## Verification and outstanding acceptance
 
+Persistent-world increment, local verification on 2026-11-08: `pnpm check` passed typechecking, 74 test files / 1,323 tests
+and all builds; one native Linux test was skipped on macOS. Built remote entry points imported successfully. The native
+case now additionally exercises the composed persistent-world providers and a revoked-world restart. Its Linux result
+must be recorded separately from the earlier transport qualification below.
+
 `tests/remote.spec.ts` exercises real Harness local providers and real HTTP. Its test-only passthrough confinement is injected
 directly and is unavailable through the production plugin. Tests cover paired file/process visibility, lost acknowledgements,
 conflicting guards, binary replacement, UTF-8 cursor boundaries, reconnects, backpressure cancellation, offline revocation,
 lease expiry with a child process, stale credential fencing, replaced roots, pre-dispatch revocation, restart uncertainty and
-operator reconciliation. These establish transport and lifecycle behavior, not Linux namespace isolation.
+operator reconciliation. Persistent-world cases additionally cover credential replacement after restart, a competing writer,
+offline durable revocation, lost acknowledgement after commit, a renewal/revocation race, and process/file uncertainty.
+These establish transport and lifecycle behavior, not Linux namespace isolation.
 
 The `Remote execution qualification` GitHub Actions workflow builds the helper and enables the native gate on Ubuntu 22.04
 with Node 24 installed in the mounted runtime. It runs the full suite with `DSH_REMOTE_ISOLATION=1`; its native test also checks

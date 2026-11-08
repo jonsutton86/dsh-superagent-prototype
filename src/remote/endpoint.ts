@@ -143,6 +143,29 @@ export class RemoteEndpoint {
       this.cancelGeneration(grant.id, epoch)
     }
   }
+  /** A grant may remove only its own generation's authority, including after expiry; it cannot affect a replacement. */
+  private revoke(principal: Principal, request: Extract<RpcRequest, { op: 'grant.revoke' }>) {
+    if (principal.role !== 'grant') throw new RemoteError(403, 'grant_required', 'Workspace grant required')
+    const digest = fingerprint({ principal, request })
+    let receipt = this.journal.receipt<{ grantId: string; epoch: number; at: string }>(request.requestId, digest)
+    if (!receipt) {
+      const grant = this.journal.grant(principal.id), at = timestamp()
+      receipt = { grantId: principal.id, epoch: principal.epoch, at }
+      this.journal.atomic(() => {
+        if (grant.epoch === principal.epoch) {
+          grant.enabled = false; grant.epoch++; grant.revision++; grant.updatedAt = at
+          this.journal.saveGrant(grant)
+        }
+        this.journal.remember(request.requestId, digest, receipt)
+        this.journal.audit({ grant: principal.id, epoch: principal.epoch, action: request.op, reason: request.reason })
+      })
+    }
+    this.cancelGeneration(principal.id, principal.epoch)
+    const own = (value: { grantId: string; epoch: number }) => value.grantId === principal.id && value.epoch === principal.epoch
+    const quiescent = !this.journal.jobs().some(job => own(job) && !job.quiescent)
+      && !this.journal.operations().some(operation => own(operation) && (operation.phase === 'started' || operation.phase === 'unknown' && !operation.reconciled))
+    return { ...receipt, quiescent }
+  }
   private cancelGeneration(id: string, epoch: number): void {
     this.grants.get(`${id}:${epoch}`)?.abort(new Error('Execution grant no longer authorizes work'))
     for (const job of this.journal.jobs()) if (job.grantId === id && job.epoch === epoch && !job.quiescent) this.cancel(job)
@@ -255,6 +278,7 @@ export class RemoteEndpoint {
       case 'identity': return this.identity()
       case 'grant.create': return this.enroll(principal, request)
       case 'grant.change': case 'grant.renew': return this.change(principal, request)
+      case 'grant.revoke': return this.revoke(principal, request)
       case 'grant.status': {
         if (principal.role !== 'grant') throw new RemoteError(403, 'grant_required', 'Workspace grant required')
         const grant = this.journal.grant(principal.id)

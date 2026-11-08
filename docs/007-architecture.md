@@ -341,6 +341,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/remote/endpoint.ts`, `http.ts` | Authenticated execution admission, lease expiry, process supervision, mutation serialization and browser-request refusal |
 | `src/remote/isolation.ts`, `filesystem-runner.ts`, `fs-worker.ts` | Linux bubblewrap process worlds and standalone confined filesystem operations |
 | `src/remote/client.ts`, `admin.ts` | Pinned host-side RPC, same-ID retry, reconnect observation and explicit uncertain outcomes |
+| `src/remote/world.ts`, `world-journal.ts` | Persistent execution-world authority binding, serialized lease maintenance, durable self-revocation and independent quiescence observations |
 | `src/remote/filesystem.ts`, `subprocess.ts` | Paired Harness filesystem/process services, scoped targets, guarded writes, stream cursors and independent exit observation |
 | `src/remote/endpoint-plugin.ts`, `provider-plugin.ts` | Dedicated endpoint and execution-world Harness composition; bounded lease renewal |
 | `src/app/setup.ts` | Setup, and `setupChanged`, whether a save changes a field setup reads |
