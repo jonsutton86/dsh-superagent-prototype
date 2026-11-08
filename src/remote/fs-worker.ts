@@ -1,7 +1,7 @@
 /** One bounded filesystem RPC executed INSIDE the same bubblewrap world as worker commands. No endpoint credentials enter this process. */
 import { createHash, randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
-import { realpath, stat, lstat, readdir, open, writeFile, rename, unlink, link, type FileHandle } from 'node:fs/promises'
+import { realpath, readlink, stat, lstat, readdir, open, writeFile, rename, unlink, link, type FileHandle } from 'node:fs/promises'
 import { dirname, resolve, relative, isAbsolute, join } from 'node:path'
 import type { FsTarget, FsInfo, FsPathInfo, FsWriteOutcome, FsEditOutcome } from '@deepseek-ai/dsh-fs'
 import type { RpcRequest } from './protocol.ts'
@@ -14,10 +14,19 @@ class FileFailure extends Error {
 }
 const fail = (code: string, message: string): never => { throw new FileFailure(code, message) }
 const contains = (root: string, path: string) => { const value = relative(root, path); return !isAbsolute(value) && value !== '..' && !value.startsWith('../') }
-async function canonical(path: string): Promise<string> {
+async function canonical(path: string, links = 0): Promise<string> {
   try { return await realpath(path) }
-  catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; const parent = dirname(path); if (parent === path) throw error;
-    return join(await canonical(parent), path.slice(parent.length)) }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    // A missing target can still have a symlink directory entry. Follow that entry before resolving an absent leaf.
+    const entry = await lstat(path).catch(error => { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; return undefined })
+    if (entry?.isSymbolicLink()) {
+      if (links >= 40) return fail('FS_IO_ERROR', 'Too many symbolic links')
+      return canonical(resolve(dirname(path), await readlink(path)), links + 1)
+    }
+    const parent = dirname(path); if (parent === path) throw error
+    return join(await canonical(parent, links), path.slice(parent.length))
+  }
 }
 async function metadata(path: string, follow = true): Promise<(FsInfo | FsPathInfo) | null> {
   try {

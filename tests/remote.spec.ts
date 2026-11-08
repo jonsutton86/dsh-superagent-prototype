@@ -145,6 +145,8 @@ it('refuses traversal and symlink escape for read, write and process working dir
   await symlink(join(h.directory, 'control'), join(h.enrolled.grant.root, 'escape'))
   await expect(h.remoteFs.resolve('../secret')).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
   await expect(h.remoteFs.resolve('escape/admin.token')).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
+  await symlink(join(h.directory, 'absent-target'), join(h.enrolled.grant.root, 'dangling'))
+  await expect(h.remoteFs.resolve('dangling')).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
   await expect(h.client.intent({ op: 'fs.write', requestId: 'escape', path: join(h.enrolled.grant.root, 'escape/change'), content: 'bad' })).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
   const job = await h.client.intent<RemoteJob>(h.spawn('touch bad', { cwd: join(h.enrolled.grant.root, 'escape') }))
   expect((await h.settled(job.id)).error).toContain('outside')
