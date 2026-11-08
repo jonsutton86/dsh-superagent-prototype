@@ -12,7 +12,7 @@ const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { for (const dispose of cleanup.reverse()) await dispose(); cleanup.length = 0; vi.restoreAllMocks() })
 
 /** Opt-in qualification against the operator's installed Harness and configured model; never copies or prints credential values. */
-it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1')('runs a persona-bound real Harness worker on the remote mission profile', async () => {
+it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'managed'] as const)('runs persona-bound real Harness work through %s execution worlds', async mode => {
   const cli = process.env.DSH_QUALIFICATION_CLI!, home = process.env.DSH_QUALIFICATION_HOME!, source = process.env.DSH_QUALIFICATION_PROFILE!
   if (!cli || !home || !source) throw new Error('Supply the qualification CLI, DSH home and source profile paths')
   const native = process.env.DSH_REMOTE_ISOLATION === '1', h = await remoteFixture(cleanup, { native })
@@ -46,8 +46,14 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1')('runs a persona-bound re
   const listener = createServer(); await new Promise<void>(resolve => listener.listen(0, '127.0.0.1', resolve))
   const port = (listener.address() as { port: number }).port
   await new Promise<void>(resolve => listener.close(() => resolve()))
-  const generated = await endpoints.profile(registration.id, enrollment.id, { port })
-  const overlay = generated.patchFile
+  let overlay: string
+  if (mode === 'dedicated') overlay = (await endpoints.profile(registration.id, enrollment.id, { port })).patchFile
+  else {
+    overlay = join(directory, 'managed-worlds.json')
+    await writeFile(overlay, JSON.stringify([{ id: 'webserver', config: { host: '127.0.0.1', port } },
+      { id: 'dsh-superagent', config: { stateDir: join(h.directory, 'coordinator'), executionMode: 'local' } },
+      { id: 'session-title-llm', disabled: true }]))
+  }
   let log = '', child: ChildProcess | undefined
   const stop = async () => {
     if (!child || child.exitCode !== null || child.signalCode !== null) return
@@ -67,15 +73,33 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1')('runs a persona-bound re
     const response = await fetch(`http://127.0.0.1:${port}/orchestrator/api/${path}`, { method,
       headers: { 'x-orchestrator-request': '1', 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(5000) })
     const value = await response.json() as any
-    if (!response.ok) throw new Error(`HTTP ${response.status}: ${JSON.stringify(value)}`)
+    if (!response.ok) throw new Error(`HTTP ${response.status} at ${method} ${path}: ${JSON.stringify(value)}`)
     return value
   }
   const ready = async () => vi.waitFor(async () => {
     if (child?.exitCode !== null && child?.exitCode !== undefined) throw new Error('Harness exited during startup')
-    expect((await api('state')).environment.ready).toBe(true)
+    const state = await api('state')
+    expect(state.environment.ready).toBe(true)
+    expect(state.health.runtime.state, state.health.runtime.detail).toBe('ready')
   }, { timeout: 40_000, interval: 250 })
   try {
     start(); await ready()
+    let managed: any, alternate: any
+    if (mode === 'managed') {
+      await api('endpoints', { requestId: 'managed-enrollment', endpointId: h.endpoint.journal.id, url: h.url,
+        credentialFile: h.connection.credentialFile, revision: 0, name: 'Managed endpoint' })
+      for (const [workspace, credentials] of [['managed-a', [{ id: binding.id, version: binding.version }]], ['managed-b', []]] as const) {
+        const command = await api(`endpoints/${h.endpoint.journal.id}/commands`, { revision: 1, request: { op: 'grant.create', requestId: workspace,
+          owner: 'coordinator', workspace, operations: ['fs.read', 'fs.write', 'process.spawn'], leaseMs: 300_000, credentials } })
+        expect(command.phase).toBe('done')
+        const activated = await api('worlds', { requestId: `activate-${workspace}`, endpointId: h.endpoint.journal.id, commandId: command.id, name: workspace })
+        expect(activated.ready, activated.problem).toBe(true)
+        if (workspace === 'managed-a') { managed = activated; enrolled.grant = command.result.grant }
+        else alternate = activated
+      }
+      await stop(); start(); await ready()
+      for (const value of (await api('worlds')).items) expect(value.ready, value.problem ?? 'World did not prepare after restart').toBe(true)
+    }
     const proof = `persona-proof-${randomUUID()}`
     const definition = { name: 'Qualification researcher', description: 'Proves pinned persona instructions and embedded skills',
       instructions: 'Before performing the mission, load your persona evidence skill using the skill tool. Follow its output instructions. Do not guess the proof value.',
@@ -84,33 +108,63 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1')('runs a persona-bound re
     const persona = await api('personas', { requestId: 'persona-proof-create', definition })
     let mission = await api('missions', { requestId: 'remote-live-mission', title: 'Remote Harness proof', objective: 'Prove persona-bound execution', acceptance: 'The artifact follows the persona skill and the service credential check passes' })
     mission = await api(`missions/${mission.id}/actions`, { requestId: 'remote-live-action', revision: mission.revision, title: 'Produce proof', owner: 'agent',
-      persona: { id: persona.id, version: 1 }, instructions: `In your assigned directory, use bash to verify that the SHA256 of the endpoint-provided SERVICE_API_KEY equals ${secretDigest}, without printing the credential itself. Only after that check succeeds, create result.txt following your persona instructions. Read it back, publish that exact content as an artifact with workspace_publish, then report ready. Do not use external services or background work. If any tool fails, immediately report failed with the exact error and end the turn; do not attempt to repair the execution environment.` })
+      persona: { id: persona.id, version: 1 }, ...(managed ? { environment: managed.id } : {}), instructions: `In your assigned directory, use bash to verify that the SHA256 of the endpoint-provided SERVICE_API_KEY equals ${secretDigest}, without printing the credential itself. Only after that check succeeds, create result.txt following your persona instructions. Read it back, publish that exact content as an artifact with workspace_publish, then report ready. Do not use external services or background work. If any tool fails, immediately report failed with the exact error and end the turn; do not attempt to repair the execution environment.` })
     const request = { requestId: 'remote-live-proof', revision: mission.revision, command: 'run' }
     const runPath = `missions/${mission.id}/actions/${mission.actions[0].id}`
     const running = await api(runPath, request), task = { id: running.actions[0].runs[0] }
+    let otherTask: string | undefined
+    const otherProof = `independent-${randomUUID()}`
+    if (alternate) {
+      let next = await api(`missions/${mission.id}`)
+      next = await api(`missions/${mission.id}/actions`, { requestId: 'other-action', revision: next.revision, title: 'Independent proof', owner: 'agent', environment: alternate.id,
+        instructions: `Delegate this check to exactly one subagent using the subagent tool: in your assigned working directory, use one bash call to confirm SERVICE_API_KEY is unset or empty without printing it, then write exactly ${otherProof} to result.txt with no newline and return a brief completion message. Wait for the child to finish, read result.txt yourself, publish that exact content with workspace_publish and report ready. This is a small qualification: do not add todo lists, extra checks or other work. No external services; report failed immediately if a tool fails.` })
+      const other = next.actions.at(-1)
+      next = await api(`missions/${mission.id}/actions/${other.id}`, { requestId: 'other-run', revision: next.revision, command: 'run' })
+      otherTask = next.actions.at(-1).runs[0]
+    }
     const deadline = Date.now() + 120_000
     for (;;) {
       const view = await api(`inbox/${task.id}`)
       if (view.item.status === 'blocked') throw new Error(`Remote worker blocked: ${view.item.preview}`)
-      if (view.item.status === 'review') { expect(view.artifacts).toHaveLength(1); break }
+      if (view.item.status === 'review') { expect(view.artifacts.length).toBeGreaterThan(0); break }
       if (Date.now() > deadline) throw new Error(`Remote worker did not finish: ${view.item.status}`)
       await new Promise(resolve => setTimeout(resolve, 1000))
     }
-    const ticket = await api(`tickets/${task.id}`), conversation = await api(`inbox/${task.id}`), artifact = await api(`library/${conversation.artifacts[0].id}`)
+    const ticket = await api(`tickets/${task.id}`), conversation = await api(`inbox/${task.id}`)
+    // Inbox includes mission-wide evidence, so concurrent actions may publish before this read. Match trusted task provenance.
+    const artifacts = await Promise.all(conversation.artifacts.map((item: { id: string }) => api(`library/${item.id}`)))
+    const artifact = artifacts.find(item => item.provenance.ticketId === task.id && item.content === proof)
     expect(ticket.executionEnvironment.world).toMatch(/^[a-f0-9]{64}$/)
+    if (managed) expect(ticket.executionEnvironment.world).toBe(managed.id)
     expect(ticket.executionPersona).toMatchObject({ id: persona.id, version: 1, digest: persona.digest, definition })
     expect(await readFile(join(ticket.directory, 'result.txt'), 'utf8')).toBe(proof)
-    expect(artifact.content).toBe(proof)
+    expect(artifact?.content).toBe(proof)
     const command = h.endpoint.journal.jobs().find(job => job.request.cwd === ticket.directory && job.request.argv[0] === 'bash'
       && job.request.argv.some(arg => arg.includes('result.txt')) && job.outcome?.exitCode === 0)
     expect(command?.request.owner).toMatchObject({ kind: 'assignment', ticketId: task.id,
       assignmentId: ticket.assignments.at(-1).id, sessionId: ticket.sessionId, tool: 'bash' })
     expect(command?.credentials).toEqual(enrolled.grant.credentials)
     expect(h.endpoint.journal.jobs().some(job => job.request.cwd === ticket.directory
-      && job.request.argv.some(arg => arg.includes('SERVICE_API_KEY')) && job.outcome?.exitCode === 0)).toBe(true)
+      && job.request.argv.some(arg => arg.includes('SERVICE_API_KEY')) && job.outcome?.exitCode === 0), 'credential check receipt').toBe(true)
     expect(JSON.stringify(h.endpoint.journal.jobs())).not.toContain(secret)
     const receipts = await api(`tickets/${task.id}/execution`)
     expect(receipts.items.find((item: { id: string }) => item.id === command!.id)).toMatchObject({ owner: command!.request.owner, quiescent: true })
+    if (otherTask) {
+      await vi.waitFor(async () => expect((await api(`inbox/${otherTask}`)).item.status).toBe('review'), { timeout: 120_000, interval: 1000 })
+      const other = await api(`tickets/${otherTask}`)
+      expect(other.executionEnvironment.world).toBe(alternate.id)
+      expect(other.directory).not.toBe(ticket.directory)
+      expect(await readFile(join(other.directory, 'result.txt'), 'utf8')).toBe(otherProof)
+      const evidence = await api(`inbox/${otherTask}`)
+      const published = await Promise.all(evidence.artifacts.map((item: { id: string }) => api(`library/${item.id}`)))
+      expect(published.some(item => item.provenance.ticketId === otherTask && item.content === otherProof)).toBe(true)
+      expect(h.endpoint.journal.jobs().some(job => job.request.owner?.kind === 'assignment' && job.request.owner.ticketId === otherTask
+        && job.request.owner.sessionId !== other.sessionId && job.request.owner.tool === 'bash' && job.outcome?.exitCode === 0), 'delegated child command receipt').toBe(true)
+      const revoked = await api(`worlds/${managed.id}/revoke`, { requestId: 'revoke-managed-a', revision: managed.revision, reason: 'Independent world lifecycle qualification' })
+      expect(revoked.status.revocation).toMatchObject({ acknowledged: true, quiescent: true })
+      const available = (await api('worlds')).items.find((item: any) => item.id === alternate.id)
+      expect(available.ready, available.problem).toBe(true)
+    }
     const updated = await api(`personas/${persona.id}`, { requestId: 'persona-proof-update', revision: 1,
       definition: { ...definition, instructions: 'A future run uses this version.' } }, 'PUT')
     await api(`personas/${persona.id}/archive`, { requestId: 'persona-proof-archive', revision: updated.revision, archived: true, reason: 'Qualification finished; preserve original execution' })
@@ -121,8 +175,34 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1')('runs a persona-bound re
     expect((await api(`tickets/${task.id}`)).assignments).toHaveLength(1)
     expect((await api(`tickets/${task.id}/execution`)).items.find((item: { id: string }) => item.id === command!.id)).toMatchObject({
       owner: command!.request.owner, quiescent: true })
+    if (otherTask) {
+      expect((await api('worlds')).items.find((item: any) => item.id === alternate.id).ready).toBe(true)
+      expect((await api('worlds')).items.find((item: any) => item.id === managed.id)).toMatchObject({ enabled: false, ready: false })
+      expect((await api(`tickets/${otherTask}`)).executionEnvironment.world).toBe(alternate.id)
+      const current = await api(`missions/${mission.id}`), action = current.actions.at(-1)
+      await api(`missions/${mission.id}/actions/${action.id}`, { requestId: 'resume-other-world', revision: current.revision, command: 'steer',
+        text: `Read result.txt and verify it contains exactly ${otherProof}. Then use bash to replace it with exactly ${otherProof}-resumed, with no newline, publish that exact content as a new artifact, and report ready. Report failed immediately if a tool fails.` })
+      await vi.waitFor(async () => {
+        const resumed = await api(`tickets/${otherTask}`)
+        expect(resumed.assignments).toHaveLength(2)
+        expect((await api(`inbox/${otherTask}`)).item.status).toBe('review')
+        expect(await readFile(join(resumed.directory, 'result.txt'), 'utf8')).toBe(`${otherProof}-resumed`)
+        expect(resumed.executionEnvironment.world).toBe(alternate.id)
+      }, { timeout: 120_000, interval: 1000 })
+    }
   } catch (error) {
+    const diagnostics: unknown[] = []
+    try {
+      diagnostics.push({ worlds: (await api('worlds')).items })
+      const inbox = await api('inbox')
+      for (const item of inbox.items) {
+        const conversation = await api(`inbox/${item.id}`)
+        diagnostics.push({ id: item.id, status: item.status, messages: conversation.messages.filter((message: any) => message.role === 'agent' || message.role === 'status')
+          .map((message: any) => String(message.text).replaceAll(secret, '[redacted]').slice(-2000)).slice(-6) })
+      }
+      diagnostics.push({ jobs: h.endpoint.journal.jobs().map(job => ({ owner: job.request.owner, program: job.request.argv[0], outcome: job.outcome })) })
+    } catch { /* The process may have exited before read-only diagnostics. */ }
     const redacted = log.split('\n').filter(line => !/api.?key|authorization|secret|credential|token/i.test(line)).slice(-65).join('\n')
-    throw new Error(`${String(error)}\nHarness qualification log (sensitive lines omitted):\n${redacted}`)
+    throw new Error(`${String(error)}\nHarness qualification log (sensitive lines omitted):\n${redacted}\nQualification status: ${JSON.stringify(diagnostics)}`, { cause: error })
   }
-}, 190_000)
+}, 300_000)

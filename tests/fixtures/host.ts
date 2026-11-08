@@ -139,7 +139,7 @@ export function subagentRuntime(agents: Map<string, FakeAgent>) {
 }
 
 /** @param seed - writes to the database before the Runtime opens it, such as records an earlier version stored. */
-export async function startRuntime(seed?: (store: Store) => void, options: { executionMode?: 'local' | 'repository'; noAccounts?: boolean;
+export async function startRuntime(seed?: (store: Store) => void, options: { executionMode?: 'local' | 'repository'; noAccounts?: boolean; managed?: boolean;
   remote?: { world: RemoteWorld; filesystem: FileSystem; subprocess: SubprocessRuntime } } = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'orchestrator-host-'))
   const AGENT = join(directory, 'agent-gh'), BOT = join(directory, 'lark-bot')
@@ -252,6 +252,7 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
   const jobs = jobRegistry(id => agents.get(id))
   const subagents = subagentRuntime(agents)
   const presets = new Map<string, { id: string; plugins: unknown[] }>()
+  const mounted = new WeakMap<Context, string>()
   const registry = Object.assign(agents, { create: vi.fn(async (options: CreateAgentOptions) => {
     await createAgent({ sessionId: options.sessionId, workspaceId: options.meta?.cwd, agentPreset: options.meta?.agentPreset })
     const agent = agents.get(options.sessionId) as unknown as Agent
@@ -262,12 +263,18 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
   const services = { fs: options.remote?.filesystem ?? filesystem, agents: registry, llm: { resolveCallConfig: vi.fn(async (value: unknown) => value) }, sessionController: controller,
     sessionPersistence: persistence, workspaceRegistry: { create: async (cwd: string) => ({ id: cwd }) }, permissionPresets: { set: () => {} },
     subprocess: options.remote?.subprocess ?? subprocess, webServer,
-    ...(options.remote ? { superagentRemoteWorld: options.remote.world,
+    ...(options.remote ? { superagentRemoteWorld: options.remote.world } : {}),
+    ...(options.remote || options.managed ? {
       agentDefaultModel: { currentSelection: () => ({ provider: 'test', model: 'test' }) },
       sandboxPolicy: { resolve: () => ({ mode: 'danger-full-access' }) },
       sessionProjections: { stateOf: () => ({ pending: null }) },
       agentPresets: { register: async (definition: { id: string; plugins: unknown[] }) => { presets.set(definition.id, definition); return async () => { presets.delete(definition.id) } },
-        resolve: async (id: string) => { if (!presets.has(id)) throw new Error('Preset unavailable'); return { id } }, mount: async () => {} } } : {}),
+        resolve: async (id: string) => { if (!presets.has(id)) throw new Error('Preset unavailable'); return { id } },
+        mount: async (scope: Context, id: string) => { mounted.set(scope, id) },
+        serviceFor: (agent: Agent, name: string) => {
+          const binding = mounted.get(agent.ctx)?.split('-').at(-1), member = binding && runtime.worlds.lookup(binding)
+          return member ? name === 'fs' ? member.filesystem : name === 'subprocess' ? member.subprocess : undefined : undefined
+        } } } : {}),
     jobs: jobs.service, subagents: subagents.service }
   const ctx = new Context()
   for (const [name, service] of Object.entries(services)) ctx.reflect.provide(name, service)

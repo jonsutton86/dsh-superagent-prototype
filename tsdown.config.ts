@@ -8,7 +8,7 @@ const raw = { name: 'raw',
     : undefined }
 export default defineConfig([
   { entry: { index: 'src/index.ts', 'github-watch': 'src/sources/github.ts', 'feishu-watch': 'src/sources/feishu.ts', watchdog: 'src/supervision/plugin.ts',
-    'remote-endpoint': 'src/remote/endpoint-plugin.ts', 'remote-world': 'src/remote/provider-plugin.ts', 'remote-client': 'src/remote/admin.ts' },
+    'remote-endpoint': 'src/remote/endpoint-plugin.ts', 'remote-world': 'src/remote/provider-plugin.ts', 'remote-client': 'src/remote/admin.ts', 'scoped-world': 'src/remote/scoped-plugin.ts' },
     outDir: 'lib', format: 'esm', fixedExtension: false, platform: 'node', target: 'es2024', dts: true, clean: true, deps: { neverBundle: [/^@deepseek-ai\//, 'zod', 'proper-lockfile'] } },
   { entry: { client: 'src/client/index.tsx' }, outDir: 'lib', format: 'cjs', platform: 'browser', dts: false, clean: false, plugins: [raw],
     deps: { neverBundle: ['react', 'react/jsx-runtime', 'react-dom'] },

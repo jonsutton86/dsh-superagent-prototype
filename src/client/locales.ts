@@ -6,6 +6,20 @@ import { SETUP_PROBLEMS } from '../setup.ts'
 import { HEALTH_TEXT } from '../sources/host.ts'
 
 const TEXT = {
+  'world.title': ['托管执行环境池', 'Managed execution pool'],
+  'world.intro': ['在同一协调器中管理多个端点授权。任务保留其选定的环境与授权代次。', 'Manage multiple endpoint grants under one coordinator. Tasks retain their selected environment and grant generation.'],
+  'world.name': ['执行环境名称', 'Execution world name'],
+  'world.activate': ['在此协调器中激活', 'Activate in this coordinator'],
+  'world.activateHint': ['激活会维持该授权租约并启用任务选择。请勿同时运行使用同一授权状态目录的独立配置。', 'Activation maintains the grant lease and enables action selection. A dedicated profile using the same grant state directory must be stopped first.'],
+  'world.select': ['执行环境', 'Execution environment'],
+  'world.default': ['使用协调器的默认环境', 'Use the coordinator default environment'],
+  'world.pinHint': ['选择会固定到此授权代次。现有执行不会迁移到其他环境。', 'Selection pins this grant generation. Existing executions do not migrate to another environment.'],
+  'world.ready': ['可供任务使用', 'Ready for actions'],
+  'world.unavailable': ['环境不可用', 'World unavailable'],
+  'world.refresh': ['重试或刷新原环境', 'Retry or refresh original world'],
+  'world.revoke': ['撤销此执行环境', 'Revoke this execution world'],
+  'world.revokeHint': ['撤销会停止绑定任务并请求端点取消相关操作。此代次不能重新启用。', 'Revocation stops bound tasks and requests endpoint cancellation. This generation cannot be re-enabled.'],
+  'world.revocationPending': ['尚未确认远程操作完全停止。', 'Remote quiescence is not yet confirmed.'],
   'tab.personas': ['角色', 'Personas'],
   'persona.intro': ['创建具有版本记录的角色，将指令、模型偏好、工具能力和技能固定到任务执行中。', 'Create versioned personas that bind instructions, model preferences, tool capabilities and skills to task executions.'],
   'persona.new': ['新建角色', 'New persona'],

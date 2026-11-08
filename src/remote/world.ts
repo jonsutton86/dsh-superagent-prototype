@@ -27,13 +27,14 @@ export class RemoteWorld {
   private closed = false
   private timer?: ReturnType<typeof setInterval>
   private maintaining?: Promise<void>
-  constructor(private readonly config: RemoteWorldConfig) {
+  constructor(private readonly config: RemoteWorldConfig, private readonly expected?: { grant: RemoteGrant; credentialReader: () => string }) {
     if (!isAbsolute(config.stateDir) || !isAbsolute(config.credentialFile)) throw new Error('Remote world state and credential paths must be absolute')
     this.control = new RemoteClient({ ...config, lifetime: this.signal }, undefined, {
       prepare: request => request,
       observed: (request, value) => this.journal.effects.observed(request, value),
       failed: (request, error, ambiguous) => this.journal.effects.failed(request, error, ambiguous),
-    })
+    }, expected?.credentialReader)
+    if (expected) this.control.bindGrant(expected.grant)
     this.journal = new WorldJournal(config.stateDir, error => {
       this.problem = error.message; this.lifetime.abort(error)
     })
@@ -49,6 +50,8 @@ export class RemoteWorld {
   async start(): Promise<void> {
     if (this.record || this.closed) throw new Error('Remote world cannot be started twice')
     const stored = this.journal.read()
+    if (stored && this.expected && worldBinding(stored.endpointId, stored.grant) !== worldBinding(this.config.endpointId, this.expected.grant))
+      throw new RemoteError(409, 'world_changed', 'The persisted world differs from the explicitly activated grant')
     if (stored) {
       if (stored.endpointId !== this.config.endpointId) throw new RemoteError(409, 'world_changed', 'Execution endpoint differs from the persisted world binding')
       this.control.bindGrant(stored.grant)
@@ -57,6 +60,8 @@ export class RemoteWorld {
     if (identity.protocol !== 1 || identity.confinement !== 'linux-bubblewrap') throw new Error('Remote world requires the supported confined endpoint protocol')
     if (!identity.capabilities.effectOwnership) throw new Error('Remote world requires endpoint effect-ownership receipts; update the endpoint first')
     const current = await this.control.call<{ grant: RemoteGrant; authorized: boolean }>({ op: 'grant.status' })
+    if (this.expected && (!stored || current.authorized) && worldBinding(this.config.endpointId, current.grant) !== worldBinding(this.config.endpointId, this.expected.grant))
+      throw new RemoteError(409, 'world_changed', 'The endpoint grant differs from the explicitly activated authority')
     if (current.grant.credentials?.length && !identity.capabilities.credentialBindings)
       throw new Error('Remote world requires endpoint credential-binding support; update the endpoint first')
     const root = stored?.grant.root ?? current.grant.root, state = realpathSync(this.config.stateDir)
@@ -115,7 +120,7 @@ export class RemoteWorld {
       prepare: request => this.journal.effects.prepare(request, { world: this.status().binding, grantId: this.record!.grant.id, epoch: this.record!.grant.epoch }),
       observed: (request, value) => this.journal.effects.observed(request, value),
       failed: (request, error, ambiguous) => this.journal.effects.failed(request, error, ambiguous),
-    })
+    }, this.expected?.credentialReader)
     client.bindGrant(this.record.grant)
     return client
   }

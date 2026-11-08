@@ -3,10 +3,17 @@ import type { Planning } from '../../workspace/plans.ts'
 import { ProposePlan } from '../../workspace/plan-model.ts'
 import { tool, type Tool } from './tool.ts'
 import type { Personas } from '../../personas/service.ts'
+import type { WorldPool } from '../../environments/pool.ts'
 
 /** Workers can read their mission and submit candidates; only the operator API approves a plan. */
-export function planningTools(plans: Planning, ticketId: string, personas?: Pick<Personas, 'list'>): Tool[] {
+export function planningTools(plans: Planning, ticketId: string, personas?: Pick<Personas, 'list'>, worlds?: Pick<WorldPool, 'list'>): Tool[] {
   return [
+    ...worlds ? [tool({ name: 'workspace_environments', description: 'List explicitly activated execution worlds for a candidate mission plan. Reference the exact id in an agent action environment field. Operator review and dispatch are required; this cannot change your own world or activate new authority.',
+      schema: z.object({ offset: z.number().int().nonnegative().default(0) }).strict(), execute: async args => {
+        plans.workerMission(ticketId)
+        const page = worlds.list(args)
+        return { ...page, items: page.items.map(({ id, name, epoch, ready, enabled }) => ({ id, name, epoch, ready, enabled })) }
+      } })] : [],
     ...personas ? [tool({ name: 'workspace_personas', description: 'List available versioned personas for a candidate mission plan. Use an exact id/version reference; only operator review and dispatch can apply it. This does not change your own persona.',
       schema: z.object({ q: z.string().max(160).default(''), offset: z.number().int().nonnegative().default(0) }).strict(), execute: async args => {
         plans.workerMission(ticketId)

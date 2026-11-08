@@ -4,8 +4,9 @@ import { apply } from '../src/index.ts'
 
 // Stub Runtime to capture the resolved Machine settings and restart callback.
 const runtimes = vi.hoisted(() => [] as { machine: Machine; restart: () => void }[])
+const initialization = vi.hoisted(() => ({ pending: undefined as Promise<void> | undefined }))
 vi.mock('../src/app/runtime.ts', () => ({ Runtime: class {
-  ready = Promise.resolve()
+  ready = initialization.pending ?? Promise.resolve()
   constructor(_ctx: unknown, readonly machine: Machine, readonly restart: () => void) { runtimes.push(this) }
   configured() { return true }
   async stop() {}
@@ -59,4 +60,17 @@ it('refuses keys of the previous configuration before registering anything', asy
   await expect(apply(ctx as never, Config({ stateDir: '/srv/state', github: { cli: 'gh' } } as never))).rejects.toThrow('github (now on the GitHub Source)')
   expect(ctx.on).not.toHaveBeenCalled()
   expect(ctx.inject).not.toHaveBeenCalled()
+})
+
+it('lets the Host Loader settle while runtime restoration is pending and reports later initialization failures', async () => {
+  const { ctx } = context()
+  let fail!: (error: Error) => void
+  initialization.pending = new Promise<void>((_, reject) => { fail = reject })
+  try {
+    await apply(ctx as never, Config({ stateDir: '/srv/state' }))
+    expect(ctx.logger.info).not.toHaveBeenCalled()
+    fail(new Error('Restoration failed'))
+    await vi.waitFor(() => expect(ctx.logger.error).toHaveBeenCalledWith('dsh-superagent initialization failed: %s', 'Error: Restoration failed'))
+    expect(ctx.effect).toHaveBeenCalledTimes(1)
+  } finally { initialization.pending = undefined }
 })

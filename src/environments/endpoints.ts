@@ -11,6 +11,9 @@ import { ADMIN_ACTIONS, CredentialMetadata, EndpointCommand, EndpointPage, Endpo
   type OperatorCommand, type RemoteProfileView } from './endpoint-model.ts'
 import { credentialDigest, privateCredential, privateDirectory, privateFile } from './endpoint-files.ts'
 import { remoteProfile } from './remote-profile.ts'
+import type { RemoteWorldConfig } from '../remote/world.ts'
+
+export interface EndpointWorld { config: RemoteWorldConfig; grant: RemoteGrant; credentialPin: string }
 
 interface Registration extends EndpointRegistration { credentialPin: string }
 interface Command extends OperatorCommand { fingerprint: string; registration: Registration; expectedEpoch?: number; previousGrant?: RemoteGrant; credentialPin?: string }
@@ -209,6 +212,15 @@ export class Endpoints {
   async profile(id: string, commandId: string, input: unknown): Promise<RemoteProfileView> {
     const { port } = EndpointProfile.parse(input)
     return this.serial(async () => {
+      const { config, grant } = await this.worldConnection(id, commandId)
+      const directory = dirname(config.stateDir), patch = remoteProfile({ ...config, directory, grant, port }), patchFile = join(directory, `profile-${port}.json`)
+      privateFile(patchFile, JSON.stringify(patch, null, 2))
+      return { endpointId: id, grantId: grant.id, epoch: grant.epoch, leaseUntil: grant.leaseUntil, port, patchFile, patch }
+    })
+  }
+  /** Trusted activation material only; callers must never return the credential digest or private configuration through an agent tool. */
+  world(id: string, commandId: string): Promise<EndpointWorld> { return this.serial(() => this.worldConnection(id, commandId)) }
+  private async worldConnection(id: string, commandId: string): Promise<EndpointWorld> {
       const command = this.findCommand(id, commandId), grant = command?.result?.grant
       if (!command || command.phase !== 'done' || !grant?.enabled || !command.credentialPin)
         throw new EnvironmentError(409, 'A confirmed enabled grant generation is required to compose a profile')
@@ -222,10 +234,8 @@ export class Endpoints {
         throw new EnvironmentError(409, 'This grant and endpoint must support the paired Harness execution world and its credential bindings')
       const directory = this.directory(command, grant), credentialFile = join(directory, 'grant.token')
       privateCredential(credentialFile, command.credentialPin)
-      const patch = remoteProfile({ ...command.registration, endpointId: id, directory, grant, credentialFile, port }), patchFile = join(directory, `profile-${port}.json`)
-      privateFile(patchFile, JSON.stringify(patch, null, 2))
-      return { endpointId: id, grantId: grant.id, epoch: grant.epoch, leaseUntil: current.leaseUntil, port, patchFile, patch }
-    })
+      return { config: { url: command.registration.url, endpointId: id, credentialFile, stateDir: join(directory, 'world') },
+        grant: current, credentialPin: command.credentialPin }
   }
   /** Drain administrative writes before Runtime closes its SQLite connection. In-flight requests remain recoverable. */
   async stop(): Promise<void> { this.stopped.abort(); await this.queue }

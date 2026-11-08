@@ -20,8 +20,11 @@ export async function apply(ctx: Context, config: DeploymentConfig): Promise<voi
   }
   const runtime = new Runtime(ctx, machine, restart)
   ctx.effect(() => async () => { await runtime.stop() })
-  await runtime.ready
-  ctx.logger.info(runtime.configured() ? 'dsh-superagent ready; the Superagent sidebar entry opens the management panel' : `dsh-superagent is waiting for setup: ${runtime.setupProblem?.detail ?? ''}`)
+  // Preset restoration may wait for the Host Loader tree to settle. Do not hold this row's activation open while it waits
+  // for that same tree. SourceHost.ready and Runtime's admission gate retain the actual initialization boundary.
+  void runtime.ready.then(() => {
+    ctx.logger.info(runtime.configured() ? 'dsh-superagent ready; the Superagent sidebar entry opens the management panel' : `dsh-superagent is waiting for setup: ${runtime.setupProblem?.detail ?? ''}`)
+  }, (error: unknown) => { ctx.logger.error('dsh-superagent initialization failed: %s', String(error)) })
 }
 export type { Deployment, DeploymentConfig } from './deployment.ts'
 export * from './core/index.ts'

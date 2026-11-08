@@ -7,6 +7,7 @@ import { errorText } from './text.ts'
 import { MissionPlans } from './plans.tsx'
 import { PersonaSelector } from './personas.tsx'
 import type { PersonaRef } from '../personas/model.ts'
+import { WorldSelector } from './worlds.tsx'
 
 /** Retain a request ID after an ambiguous response; identical retries cannot duplicate an execution. */
 function useCommand(done: (mission: MissionView) => void) {
@@ -69,13 +70,14 @@ function MissionDetail({ id }: { id: string }) {
   const { data: polled, error, reload } = usePoll(() => call('GET missions/:id', { id }), [call, id])
   const [saved, setSaved] = useState<MissionView>(), [adding, setAdding] = useState(false)
   const [owner, setOwner] = useState<'agent' | 'person'>('agent'), [persona, setPersona] = useState<PersonaRef>()
+  const [environment, setEnvironment] = useState<string>()
   const mission = saved && (!polled || saved.revision > polled.revision) ? saved : polled
   const command = useCommand(value => { setSaved(value); setAdding(false); void reload() })
   const add = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); if (!mission) return
     const fields = new FormData(event.currentTarget)
     const body = { revision: mission.revision, title: String(fields.get('title')), instructions: String(fields.get('instructions')),
-      owner, dependsOn: fields.getAll('dependency').map(String), ...(owner === 'agent' && persona ? { persona } : {}) }
+      owner, dependsOn: fields.getAll('dependency').map(String), ...(owner === 'agent' && persona ? { persona } : {}), ...(owner === 'agent' && environment ? { environment } : {}) }
     void command.run({ id, body }, requestId => call('POST missions/:id/actions', { id, body: { ...body, requestId } }))
   }
   const changeStatus = (status: MissionView['status']) => {
@@ -116,6 +118,7 @@ function MissionDetail({ id }: { id: string }) {
         <label>{t('mission.owner')}<select name="owner" value={owner} onChange={event => setOwner(event.target.value as 'agent' | 'person')}><option value="agent">{t('mission.agent')}</option>
           <option value="person">{t('mission.person')}</option></select></label>
         {owner === 'agent' && <PersonaSelector value={persona} change={setPersona} />}
+        {owner === 'agent' && <WorldSelector value={environment} change={setEnvironment} />}
         {!!mission.actions.length && <fieldset><legend>{t('mission.dependencies')}</legend>{mission.actions.map(action =>
           <label className="dt-mission-check" key={action.id}><input type="checkbox" name="dependency" value={action.id} />{action.title}</label>)}</fieldset>}
         <Button type="submit" variant="primary" disabled={command.busy}>{t('mission.addAction')}</Button>
@@ -140,6 +143,7 @@ function Action({ action, mission, busy, runnable, act }: { action: ActionView; 
       <span className={`dt-mission-status dt-mission-status-${action.status}`}>{t(`mission.${action.status}`)}</span></div>
     <p className="dt-mission-prose">{action.instructions}</p>
     {action.persona && <p className="dt-hint">{t('persona.select')}: <code>{action.persona.id}</code> · {t('persona.version', { version: action.persona.version })}</p>}
+    {action.environment && <p className="dt-hint">{t('world.select')}: <code>{action.environment}</code></p>}
     {!!dependencies.length && <p className="dt-hint">{t('mission.after', { actions: dependencies.join(', ') })}</p>}
     {ticket?.summary && <blockquote className="dt-mission-prose">{ticket.summary}</blockquote>}
     {action.status === 'done' && <p className="dt-mission-prose">{action.accepted?.note}</p>}

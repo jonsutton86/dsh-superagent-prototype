@@ -13,7 +13,7 @@ import type {} from '@deepseek-ai/dsh-subprocess'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { lockSync } from 'proper-lockfile'
-import { Engine, key, reasonText, type EngineForSettings, type ReceiveResult, type Ticket, type Trigger } from '../core/index.ts'
+import { Engine, canStop, key, reasonText, type EngineForSettings, type ReceiveResult, type Ticket, type Trigger } from '../core/index.ts'
 import { allowedSender, settingsPolicy } from '../policy.ts'
 import { SourceRegistry } from '../sources/registry.ts'
 import { Commands } from '../infra/commands.ts'
@@ -55,6 +55,7 @@ import { Environments } from '../environments/service.ts'
 import { Endpoints } from '../environments/endpoints.ts'
 import { Personas } from '../personas/service.ts'
 import { resolveRoleModel } from './role-models.ts'
+import { WorldPool } from '../environments/pool.ts'
 
 // Source plugins interact with dsh-superagent exclusively through the `SourceHost` service interface.
 declare module '@deepseek-ai/cordis' { interface Context { orchestrator: SourceHost } }
@@ -86,6 +87,7 @@ export class Runtime extends Service implements SourceHost {
   readonly environments: Environments
   readonly endpoints: Endpoints
   readonly personas: Personas
+  readonly worlds: WorldPool
   readonly remoteWorkspace?: RemoteWorkspace
   readonly ready: Promise<void>
   private readonly board = new HealthBoard()
@@ -97,6 +99,7 @@ export class Runtime extends Service implements SourceHost {
   private readonly disposers: (() => void)[] = []
   private releaseLock?: () => Promise<void>
   private closingFlag = false
+  private initialized = false
   private stopping?: Promise<void>
   private readonly sourceDeps: SourceContextDeps
   private readonly toolHost: MainToolsHost & ExecutorToolsHost
@@ -117,14 +120,16 @@ export class Runtime extends Service implements SourceHost {
       const world = remoteWorld(ctx)
       const remote = this.remoteWorkspace = world ? new RemoteWorkspace(world, ctx.fs, ctx.subprocess, this.lifetime) : undefined
       const environments = this.environments = new Environments({ store, filesystem: ctx.fs, subprocess: ctx.subprocess, lifetime: this.lifetime,
-        remote, root: () => executionRoot(store.settings(), machine.stateDir, world?.grant.root), mode: () => machine.executionMode ?? 'repository', engine: () => runtime.engine })
+        remote, worlds: () => runtime.worlds, root: () => executionRoot(store.settings(), machine.stateDir, world?.grant.root), mode: () => machine.executionMode ?? 'repository', engine: () => runtime.engine })
       this.endpoints = new Endpoints({ store, stateDir: machine.stateDir, lifetime: this.lifetime,
         workerRoots: () => [...environments.list().items.filter(item => item.kind === 'local').flatMap(item => [item.root, item.configuredRoot]),
           ...(!world ? [executionRoot(store.settings(), machine.stateDir)] : [])] })
+      this.worlds = new WorldPool(ctx, { store, endpoints: this.endpoints, lifetime: this.lifetime, report,
+        revoked: binding => { for (const ticket of store.tickets.open()) if (ticket.execution?.environment?.environmentId === binding && canStop(ticket)) runtime.engine.stopTicket(ticket.id, 'Managed execution world revoked by the operator') } })
       const library = this.library = new Library(store)
       const personas = this.personas = new Personas(store, async model => { await resolveRoleModel(ctx, model) })
       const workspace = this.workspace = new Workspace(store, () => runtime.engine, () => !this.paused() && !this.closing(),
-        id => library.evidenceRevision(id), ticket => environments.allows(ticket.execution?.environment), reference => personas.snapshot(reference))
+        id => library.evidenceRevision(id), ticket => environments.allows(ticket.execution?.environment), reference => personas.snapshot(reference), reference => environments.select(reference))
       const inbox = this.inbox = new Inbox(store, workspace, library,
         async id => (await ctx.sessionController.inspect(id as SessionId, AbortSignal.any([this.lifetime, AbortSignal.timeout(15_000)]))).events)
       this.disposers.push(ctx.on('session/event', (session, event) => {
@@ -158,7 +163,7 @@ export class Runtime extends Service implements SourceHost {
         promptVersion: id => this.sessions.promptVersion(id), mayRead: (id, revision) => this.sessions.mayRead(id, revision),
         feishuPageSize: () => feishuSettings(sources).readPageSize, sourceLink: link }
       const sessions = this.sessions = new Sessions({ context: ctx, store, prompts, effects, health: board.claim('models'), masterId,
-        lifetime: this.lifetime, remote, personas, environmentAllowed: ticket => environments.allows(ticket.execution?.environment),
+        lifetime: this.lifetime, remote, worlds: this.worlds, personas, environmentAllowed: ticket => environments.allows(ticket.execution?.environment),
         closing: () => this.closing(), environment,
         tools: (agent, ticket) => ticket ? executorTools(this.toolHost, ticket) : mainTools(this.toolHost, agent) })
       const policyChanged: EngineForSettings['policyChanged'] = (from, to, effects) => { this.engine.policyChanged(from, to, effects) }
@@ -200,11 +205,14 @@ export class Runtime extends Service implements SourceHost {
       this.sourceDeps = { store, engine, outbox, commands, sources, get ready() { return runtime.ready },
         get deployment() { return setup.deployment }, configured: () => setup.configured(),
         get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem }, receive: trigger => passes.receive(trigger) }
-      this.toolHost = { context: ctx, engine, store, prompts, sessions, settings: this.settings, assessor, resources, library, planning: workspace.plans, personas,
+      this.toolHost = { context: ctx, engine, store, prompts, sessions, settings: this.settings, assessor, resources, library, planning: workspace.plans, personas, worlds: this.worlds,
         get github() { return runtime.context({ kind: 'github', health: ['github'] }) },
         requestPass: () => { passes.request() }, sendReplies: () => outbox.sent(),
         quietly: run => { this.quiet++; try { return run() } finally { this.quiet-- } } }
-      this.ready = this.initialize()
+      this.ready = this.initialize().catch(error => {
+        if (!this.closing()) this.runtimeHealth.set({ state: 'error', detail: `Initialization failed: ${String(error)}`, at: now() })
+        throw error
+      })
     } catch (error) {
       // Release the database and state lock if initialization fails so an in-process restart can reacquire them.
       try { opened?.close() } finally { release() }
@@ -243,7 +251,7 @@ export class Runtime extends Service implements SourceHost {
   sendReplies(): Promise<void> { return this.outbox.sent() }
   private closing(): boolean { return this.closingFlag }
   /** Hold evaluation, dispatch, and outbound delivery while paused or awaiting setup; sources still record incoming triggers. */
-  private paused(): boolean { return !this.setup.configured() || !this.environments.ready() || this.store.settings().paused }
+  private paused(): boolean { return !this.initialized || !this.setup.configured() || !this.environments.ready() || this.store.settings().paused }
   private async initialize(): Promise<void> {
     // Register management HTTP routes before setup completes so operators can fix setup problems in the UI.
     this.disposers.push(registerHttp(this.ctx, this.httpHost()))
@@ -252,6 +260,8 @@ export class Runtime extends Service implements SourceHost {
       return
     }
     await this.environments.initialize().catch(error => this.ctx.logger.warn('Execution environment enrollment: %s', String(error)))
+    await this.worlds.initialize()
+    if (this.closing()) return
     if (this.remoteWorkspace && !this.environments.ready()) {
       this.runtimeHealth.set({ state: 'paused', detail: 'Remote execution environment requires authorization or enrollment', at: now() }); return
     }
@@ -261,6 +271,7 @@ export class Runtime extends Service implements SourceHost {
     for (const id of this.settings.syncable()) await this.settings.sync(id).catch(() => { /* sync() records its failure in health. */ })
     // If stop() was called while awaiting setup, session creation, or policy sync, do not start background loops.
     if (this.closing()) return
+    this.initialized = true
     this.executor.resume()
     this.passes.start()
     this.effects.start()
@@ -271,7 +282,7 @@ export class Runtime extends Service implements SourceHost {
     const { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, ready, sourceLinks, setup, passes } = this
     return { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, ready, sourceLinks, remoteRoot: this.remoteWorkspace?.world.grant.root,
       get health() { return runtime.health }, remoteEffects: this.remoteWorkspace?.world,
-      supervision: this.supervision, workspace: this.workspace, library: this.library, inbox: this.inbox, environments: this.environments, endpoints: this.endpoints, personas: this.personas,
+      supervision: this.supervision, workspace: this.workspace, library: this.library, inbox: this.inbox, environments: this.environments, endpoints: this.endpoints, personas: this.personas, worlds: this.worlds,
       get deployment() { return setup.deployment },
       get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem },
       configured: () => setup.configured(), links: () => runtime.links(), ticketEnvironment: ticket => runtime.ticketEnvironment(ticket),
@@ -292,6 +303,7 @@ export class Runtime extends Service implements SourceHost {
       await this.executor.shutdown()
       this.executor.dispose()
       this.sessions.dispose()
+      await this.worlds.stop()
       for (const dispose of this.disposers.reverse()) dispose()
       await this.ctx.sessionPersistence.flush()
     } finally {

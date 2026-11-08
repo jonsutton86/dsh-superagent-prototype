@@ -6,12 +6,13 @@ import { errorText } from './text.ts'
 import { Hint, Section, SessionButton, When } from './widgets.tsx'
 
 /** Read durable remote receipts and cancel their original command IDs, including while execution admission is closed. */
-export function ExecutionReceipts({ ticketId }: { ticketId?: string }) {
+export function ExecutionReceipts({ ticketId, worldId }: { ticketId?: string; worldId?: string }) {
   const { call, t, navigate } = usePanel(), [offset, setOffset] = useState(0), [busy, setBusy] = useState(false), [problem, setProblem] = useState('')
   const locked = useRef(false), cancellations = useRef(new Map<string, string>())
   const { data, error, reload } = usePoll(() => ticketId
     ? call('GET tickets/:id/execution', { id: ticketId, query: { offset, limit: 20 } })
-    : call('GET execution', { query: { offset, limit: 20 } }), [call, ticketId, offset])
+    : worldId ? call('GET worlds/:id/execution', { id: worldId, query: { offset, limit: 20 } })
+      : call('GET execution', { query: { offset, limit: 20 } }), [call, ticketId, worldId, offset])
   const run = async (operation: () => Promise<unknown>) => {
     if (locked.current) return
     locked.current = true; setBusy(true); setProblem('')
@@ -19,12 +20,14 @@ export function ExecutionReceipts({ ticketId }: { ticketId?: string }) {
     catch (failure) { setProblem(errorText(failure)) }
     finally { locked.current = false; setBusy(false) }
   }
-  const refresh = () => run(() => ticketId ? call('POST tickets/:id/execution/refresh', { id: ticketId }) : call('POST execution/refresh'))
+  const refresh = () => run(() => ticketId ? call('POST tickets/:id/execution/refresh', { id: ticketId })
+    : worldId ? call('POST worlds/:id/execution/refresh', { id: worldId }) : call('POST execution/refresh'))
   const cancel = (effect: string) => run(async () => {
     const requestId = cancellations.current.get(effect) ?? crypto.randomUUID()
     cancellations.current.set(effect, requestId)
     try {
       if (ticketId) await call('POST tickets/:id/execution/:effect/cancel', { id: ticketId, effect, body: { requestId } })
+      else if (worldId) await call('POST worlds/:id/execution/:effect/cancel', { id: worldId, effect, body: { requestId } })
       else await call('POST execution/:effect/cancel', { effect, body: { requestId } })
       cancellations.current.delete(effect)
     } catch (failure) {

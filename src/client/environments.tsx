@@ -5,6 +5,7 @@ import { Button } from './controls.tsx'
 import { usePanel, usePanelData } from './provider.tsx'
 import { useOperatorCommand } from './operator-command.ts'
 import { EndpointManagement } from './endpoints.tsx'
+import { WorldPoolPanel } from './worlds.tsx'
 import { When } from './widgets.tsx'
 import { ExecutionReceipts } from './execution-receipts.tsx'
 
@@ -34,6 +35,7 @@ export function EnvironmentsPage() {
       {data.currentKind === 'remote' && <ExecutionReceipts />}
     </>}
     <EndpointManagement />
+    <WorldPoolPanel />
   </section>
 }
 

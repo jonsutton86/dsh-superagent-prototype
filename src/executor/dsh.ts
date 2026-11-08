@@ -247,9 +247,13 @@ export class DshExecutor implements Executor {
   }
   /** Populates a newly accepted ticket's `execution` attributes (worktree name, workspace directory, and assignment text). */
   prepare(ticket: Ticket, outcome: Extract<AssessmentOutcome, { kind: 'accept' }>): Ticket {
-    const execution = { ...ticketExecution(ticket, outcome, this.host.store.settings(), this.host.machine.stateDir, this.host.remote?.world.grant.root),
+    const selected = ticket.mandate.actor.source === 'workspace' ? sourceTrigger(this.host, ticket)?.meta.environment : undefined
+    if (selected && (typeof selected !== 'string' || !this.host.environments)) throw new PrepareFailed('Invalid managed execution world selection')
+    const remote = selected ? this.host.environments!.select(selected as string) : this.host.remote
+    const execution = { ...ticketExecution(ticket, outcome, this.host.store.settings(), this.host.machine.stateDir, remote?.world.grant.root),
       ...(this.host.machine.executionMode === 'local' ? { mode: 'local' as const } : {}) }
-    const environment = this.host.environments?.bind(execution)
+    if (selected) execution.directory = join(remote!.world.grant.root, execution.name)
+    const environment = this.host.environments?.bind(execution, selected as string | undefined)
     const reference = ticket.mandate.actor.source === 'workspace' ? sourceTrigger(this.host, ticket)?.meta.persona : undefined
     if (reference && !this.host.personas) throw new PrepareFailed('Persona registry is unavailable')
     const persona = reference ? this.host.personas!.snapshot(reference) : undefined
@@ -264,9 +268,10 @@ export class DshExecutor implements Executor {
    */
   private async prepareDirectory(ticket: Ticket): Promise<void> {
     const directory = ticket.execution?.directory ?? ''
-    if (this.host.remote) {
+    const remote = this.remoteFor(ticket)
+    if (remote) {
       if (ticket.execution?.mode !== 'local') throw new PrepareFailed('Remote repository execution requires endpoint credential bindings')
-      await this.host.remote.mkdir(directory)
+      await remote.mkdir(directory)
       return
     }
     await mkdir(dirname(directory), { recursive: true })
@@ -445,9 +450,11 @@ export class DshExecutor implements Executor {
     })
   }
   private relay({ id, text }: { id: string; text: string }): void { this.host.sessions.relay(id, text) }
+  private remoteFor(ticket: Ticket): RemoteWorkspace | undefined { return this.host.environments ? this.host.environments.remoteFor(ticket) : this.host.remote }
   private async launch(ticket: Ticket, assignment: Assignment): Promise<void> {
-    if (!this.host.remote) return this.launchOwned(ticket, assignment)
-    return this.host.remote.world.withOwner({ kind: 'assignment', ticketId: ticket.id, assignmentId: assignment.id,
+    const remote = this.remoteFor(ticket)
+    if (!remote) return this.launchOwned(ticket, assignment)
+    return remote.world.withOwner({ kind: 'assignment', ticketId: ticket.id, assignmentId: assignment.id,
       sessionId: workerSessionId(ticket.id), callId: `prepare:${assignment.id}`, tool: 'workspace-prepare' }, () => {
       const current = this.host.store.tickets.get(ticket.id)
       if (this.host.closing() || !current || !liveTicket(current) || latestAssignment(current)?.id !== assignment.id)
@@ -463,6 +470,7 @@ export class DshExecutor implements Executor {
       return !!stored && liveTicket(stored) && latestAssignment(stored)?.id === assignment.id
     }
     const source = sourceTrigger(this.host, ticket)
+    const remote = this.remoteFor(ticket)
     const workspace = ticket.execution?.directory ?? ''
     if ((ticket.execution?.mode ?? 'repository') !== (this.host.machine.executionMode ?? 'repository'))
       throw new PrepareFailed('Ticket execution mode differs from this profile')
@@ -473,12 +481,12 @@ export class DshExecutor implements Executor {
     }
     if (!current()) return
     // Prepare the workspace directory once; an existing directory counts as already prepared, including worktrees created before `prepare` commands existed.
-    if (!await (this.host.remote ? this.host.remote.exists(workspace) : stat(workspace).then(() => true, () => false))) {
+    if (!await (remote ? remote.exists(workspace) : stat(workspace).then(() => true, () => false))) {
       await this.prepareDirectory(ticket)
       if (!current()) return
     }
     if (this.host.environments) await this.host.environments.validate(ticket).catch((error: unknown) => { throw new PrepareFailed(String(error)) })
-    if (ticket.execution?.mode === 'local') await (this.host.remote ? this.host.remote.verify(workspace)
+    if (ticket.execution?.mode === 'local') await (remote ? remote.verify(workspace)
       : verifyLocalWorkspace(workspace, this.host.context.subprocess, this.host.lifetime, this.host.context.fs))
       .catch((error: unknown) => { throw new PrepareFailed(`Local task directory is unavailable: ${String(error)}`) })
     if (!current()) return

@@ -339,6 +339,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/core/index.ts` | The core's exports |
 | `src/app/runtime.ts` | The Runtime, the composition root, with its start and stop |
 | `src/environments/model.ts` | Local and remote environment enrollment, operator grant contracts and views |
+| `src/environments/pool-model.ts`, `pool.ts` | Durable managed-world authority, independent lifecycle, exact scoped-provider checks and bounded catalogs |
 | `src/environments/service.ts` | Persistent grants, paired filesystem/process verification, execution binding, revocation and replacement |
 | `src/environments/endpoint-model.ts` | Operator endpoint registration, administration requests, metadata and profile contracts |
 | `src/environments/endpoints.ts` | Pinned administrator registry, durable original-ID commands, generation fencing and profile composition |
@@ -423,6 +424,8 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/client/index.tsx` | The client plugin entry: the sidebar entry, the main panel and the page in DeepSeek Harness's Plugin Manager |
 | `src/client/app.tsx` | The panel: header, search, glossary, tabs and the page of the current route |
 | `src/client/environments.tsx` | Environment enrollment, proof status, revocation, reauthorization and replacement controls |
+| `src/client/worlds.tsx` | Managed-world activation, lifecycle, receipts and exact-generation action selectors |
+| `src/remote/scoped-plugin.ts` | Harness preset-owned paired providers borrowing one managed execution world |
 | `src/client/provider.tsx` | What every page reads from its host: copy, calls, navigation, notices, the state poll, and `restart`, which reads the state quickly while dsh-superagent restarts |
 | `src/client/api.ts` | Calls and polls of the management API, typed by `src/app/api.ts`, and the Decision filters of the Eval status |
 | `src/client/route.ts` | The tabs, the settings groups, the typed routes that `parseRoute` reads, and the route memory with the settings group opened last |
@@ -453,6 +456,8 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/core-engine.spec.ts` | Domain rules on in-memory repositories: receiving, Eval, fan-out, resume and stop, interrupted Assignments, the pause, Policy changes, reports and outcomes, attaching, replies, failed deliveries and dismissed problems |
 | `tests/environments.spec.ts` | Runtime/API enrollment, persistent grants, paired-provider proof, races, revocation, replacement and legacy task binding |
 | `tests/environments-ui.spec.tsx` | Rendered enrollment/recovery and exact mutation retry after response loss and polling |
+| `tests/world-pool.spec.ts` | Independent paired worlds, per-action dispatch, revocation/recovery, credential fencing and revoked receipts |
+| `tests/worlds-ui.spec.tsx` | Lost activation/revocation replies, preserved revisions, exact-generation selection and receipt routing |
 | `tests/stage.spec.ts` | The Ticket stages, row by row |
 | `tests/supervision.spec.ts` | Real HTTP transport, token authentication, stale commands, transactional receipts and existing worker delivery integration |
 | `tests/library.spec.ts` | Library restart/replay, atomic rollback, scoping, provenance, integrity, freshness, review invalidation and Runtime/API integration |

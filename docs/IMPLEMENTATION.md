@@ -18,12 +18,21 @@ not a claim that the prototype already ships every feature or that the article s
 | Speculative work | Inferred mandates, observe/auto, configurable rules | Durable budgets, expiry and promotion/publication gates |
 | Full duplex | Harness job/subagent services, `src/executor/background.ts`, `src/app/delivery.ts`, remote receipts, durable assignment/tool ownership, receipt-only restart recovery and operator cancellation | Broader long-running job, process-failure and cross-host acceptance |
 | Compute/state separation | SQLite Store; Harness session persistence service abstraction | Deployable persistent-state ownership and restore/failover integration |
-| Remote environments | Paired local/remote providers, authenticated leased grants, durable revocation, mission/Session binding, endpoint-owned versioned credentials, remote profile and artifact/restart qualification, operator enrollment/reconciliation and generated profiles | Per-action environment selection, managed runtime launch, quotas and cross-host acceptance |
+| Remote environments | Paired local/remote providers, authenticated leased grants, durable revocation, mission/Session binding, endpoint-owned versioned credentials, remote profile and artifact/restart qualification, operator enrollment/reconciliation, generated profiles, managed world pool and exact per-action selection | Managed endpoint/machine launch, remote repository workflows, quotas and cross-host acceptance |
 | Watchdog | Existing health and bounded transient executor retry; now `src/supervision/*` | Live-provider and process-level acceptance, incident UI/alerts, retention, richer progress evidence and separately authorized recovery policies |
 | Delivery | Reports and PR binding/closure; content-addressed artifacts and stale mission-review invalidation | Host-collected check evidence, Git/environment revision binding and external publication receipts |
 | Operator control | Existing web panel, settings, pause/retry/stop and local/remote environment status and revocation, endpoint enrollment/reconciliation and private profile generation | Supervision, budgets and evidence surfaces |
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
+
+## Implemented increment: managed execution worlds
+
+[022 Managed worlds](022-managed-worlds.md) adds independently activated remote worlds under one personal/local coordinator,
+exact per-action environment selection, paired Harness preset scopes and world-specific lifecycle and execution receipts.
+The coordinator preserves its own providers; an unavailable world cannot fall back to another world or local execution.
+Revocation closes only the selected world's admission and keeps original-ID recovery and receipt inspection across restart.
+The increment retains DeepSeek Harness and the existing Engine, Store and remote endpoint. Managed machine launch, remote
+repository workflows, distributed state ownership/failover, quotas and full product acceptance remain open.
 
 ## Implemented increment: versioned execution personas
 
@@ -31,8 +40,8 @@ No new runtime, orchestration database, or workflow framework is assumed. Work i
 and embedded skills. Mission actions and reviewed plan proposals select exact versions; execution snapshots and resumed
 worker descendants retain those versions after later edits or archival. Persona updates do not grant additional environment
 authority. The panel supports creation, editing, exact historical reads, restoration as a new version, archival and per-action
-selection. This completes the initial persona management path; multiple active execution worlds and per-action environment
-selection still require a managed runtime registry and correctly scoped paired providers on creation and resume.
+selection. The subsequent managed-world increment supplies the registry and paired provider scopes for exact per-action
+environment selection; persona policy still does not replace execution-world authority.
 
 Qualification on 2026-11-08: 1,366 local tests, 1,368 Linux tests, typechecking and all four builds passed. Exact code commit
 `2610c3e69b3f0b0776c484ec2a133ba4cc2d7674` passed

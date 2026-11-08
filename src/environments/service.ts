@@ -7,6 +7,7 @@ import { canStop, key, type Engine, type Execution, type Mandate, type Policy, t
 import type { Store } from '../app/store.ts'
 import { verifyLocalWorkspace } from '../infra/environment.ts'
 import type { RemoteWorkspace } from './remote-workspace.ts'
+import type { WorldPool } from './pool.ts'
 import { EnrollEnvironment, EnvironmentCommand, EnvironmentError, type EnvironmentList, type EnvironmentRecord,
   type EnvironmentView, type ExecutionGrant } from './model.ts'
 
@@ -14,6 +15,7 @@ export interface EnvironmentHost {
   store: Store; filesystem: FileSystem; subprocess: SubprocessRuntime; lifetime: AbortSignal
   root(): string; mode(): 'local' | 'repository'; engine(): Pick<Engine, 'stopTicket'>
   remote?: RemoteWorkspace
+  worlds?(): WorldPool
 }
 const stamp = () => new Date().toISOString()
 const marker = (record: Pick<EnvironmentRecord, 'root' | 'id'>) => join(record.root, `.dsh-environment-${record.id}`)
@@ -71,6 +73,7 @@ export class Environments {
     return { items, currentRoot: resolve(this.host.root()), currentMode: this.host.mode(), currentKind: this.host.remote ? 'remote' : 'local', needsEnrollment: !items.some(record => record.current) }
   }
   ready(): boolean {
+    if (this.host.worlds?.().ready()) return true
     if (this.host.remote && !this.host.remote.world.status().ready) return false
     return this.records().some(record => this.current(record) && record.enabled && this.checked.get(record.id)?.verifiedAt && !this.checked.get(record.id)?.problem)
   }
@@ -164,6 +167,11 @@ export class Environments {
     }
   }
   allows(grant: ExecutionGrant | undefined): boolean {
+    if (grant?.world && grant.environmentId === grant.world) {
+      try { const record = this.host.worlds?.().get(grant.world)
+        return !!record?.ready && record.revision === grant.revision && record.epoch === grant.epoch && this.host.mode() === 'local'
+      } catch { return false }
+    }
     if (!grant) return !this.host.remote // Legacy local work must never be adopted by a remote profile.
     const record = this.records().find(record => record.id === grant.environmentId)
     return !!record?.enabled && !record.retired && record.revision === grant.revision && record.epoch === grant.epoch && record.mode === this.host.mode()
@@ -173,7 +181,27 @@ export class Environments {
   policy(base: Policy): Policy {
     return { ...base, revalidate: (mandate: Mandate) => this.allows(mandate.environment) && base.revalidate(mandate) }
   }
-  bind(execution: Execution): ExecutionGrant {
+  select(binding: string): RemoteWorkspace {
+    if (this.host.mode() !== 'local') throw new EnvironmentError(409, 'Managed worlds require the personal/local execution profile')
+    const world = this.host.worlds?.().require(binding)
+    if (!world) throw new EnvironmentError(409, 'Managed execution world is unavailable')
+    return world.workspace
+  }
+  remoteFor(ticket: Ticket): RemoteWorkspace | undefined {
+    const grant = ticket.execution?.environment
+    if (grant?.world && grant.environmentId === grant.world) {
+      const member = this.host.worlds?.().lookup(grant.world)
+      if (!member) throw new EnvironmentError(409, 'The assigned execution world is unavailable; it cannot fall back to local execution')
+      return member.workspace
+    }
+    return this.host.remote
+  }
+  bind(execution: Execution, binding?: string): ExecutionGrant {
+    if (binding) {
+      const remote = this.select(binding), record = this.host.worlds!().get(binding)
+      if (resolve(dirname(execution.directory)) !== remote.world.grant.root) throw new EnvironmentError(409, 'Task directory is outside the selected execution world')
+      return { environmentId: binding, revision: record.revision, epoch: record.epoch, world: binding }
+    }
     const record = this.records().find(record => this.current(record))
     if (!record?.enabled || !this.checked.get(record.id)?.verifiedAt || this.checked.get(record.id)?.problem
       || this.host.remote && !this.host.remote.world.status().ready)
@@ -195,6 +223,16 @@ export class Environments {
   async validate(ticket: Ticket): Promise<void> {
     const execution = ticket.execution!, grant = execution.environment
     if (!grant || !this.allows(grant)) throw new EnvironmentError(409, 'The execution grant is unavailable or revoked. Authorize a new run under the current environment.')
+    if (grant.environmentId === grant.world) {
+      const remote = this.select(grant.world), root = remote.world.grant.root
+      await remote.verify(root)
+      if (await remote.canonical(dirname(execution.directory)) !== root || basename(execution.directory) !== execution.name)
+        throw new EnvironmentError(409, 'The task directory no longer matches its selected execution world')
+      if (await remote.exists(execution.directory) && await remote.canonical(execution.directory) !== join(root, execution.name))
+        throw new EnvironmentError(409, 'The task directory resolves outside its assigned location')
+      if (!this.allows(grant)) throw new EnvironmentError(409, 'The managed execution world was revoked during verification')
+      return
+    }
     const record = this.require(grant.environmentId)
     await this.probe(record)
     const canonical = (path: string) => record.kind === 'remote' ? this.host.remote!.canonical(path) : realpath(path)

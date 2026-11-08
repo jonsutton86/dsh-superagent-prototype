@@ -19,6 +19,7 @@
     "./watchdog": "./lib/watchdog.js",
     "./remote-endpoint": "./lib/remote-endpoint.js",
     "./remote-world": "./lib/remote-world.js",
+    "./scoped-world": "./lib/scoped-world.js",
     "./remote-client": "./lib/remote-client.js",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json"

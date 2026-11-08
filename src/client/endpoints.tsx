@@ -6,6 +6,7 @@ import { Button } from './controls.tsx'
 import { usePanel } from './provider.tsx'
 import { useOperatorCommand } from './operator-command.ts'
 import { When } from './widgets.tsx'
+import { ActivateWorldForm } from './worlds.tsx'
 
 type Action = EndpointAction extends infer A ? A extends EndpointAction ? Omit<A, 'requestId'> : never : never
 type Submit = (action: Action) => void
@@ -178,6 +179,7 @@ function AdministrationReceipt({ record, endpoint, changed }: { record: Operator
       <label>{t('endpoint.port')}<input type="number" name="port" defaultValue={3084} required min={1024} max={65535} /></label>
       <Button type="submit" disabled={command.busy}>{t('endpoint.profile')}</Button>
     </form>}
+    {record.phase === 'done' && record.result?.grant?.enabled && <ActivateWorldForm endpointId={endpoint} commandId={record.id} name={record.result.grant.workspace} />}
     <CommandError command={command} />
     {profile && <div role="status"><p>{t('endpoint.profileHint')}</p><p><code>{profile.patchFile}</code></p>
       <p>{t('endpoint.profileStart')}</p><pre>{`dsh --profile YOUR_DEDICATED_PROFILE --patch '${profile.patchFile.replaceAll("'", "'\\''")}' --no-open`}</pre>

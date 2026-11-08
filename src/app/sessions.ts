@@ -25,6 +25,7 @@ import { KV } from '../kv.ts'
 import type { RegisterTool, Tool } from './tools/tool.ts'
 import type { Personas } from '../personas/service.ts'
 import { bindPersona, personaDenial } from '../personas/runtime.ts'
+import type { WorldPool } from '../environments/pool.ts'
 
 /** Host dependencies used by `Sessions`. */
 export interface SessionsHost {
@@ -38,6 +39,7 @@ export interface SessionsHost {
   readonly masterId: string
   readonly lifetime: AbortSignal
   readonly remote?: RemoteWorkspace
+  readonly worlds?: WorldPool
   readonly personas?: Pick<Personas, 'verify'>
   environmentAllowed?(ticket: Ticket): boolean
   closing(): boolean
@@ -51,7 +53,7 @@ export interface SessionsHost {
  * What Sessions registered for an agent it decorated: the releases of its prompt section, tools and skill scope, the scope
  * its skills are registered in, and the skills of one prompt revision; for a worker's subagent, only its tool limits.
  */
-interface SessionBinding { disposers: (() => void)[]; scope?: Context; skills?: { revision: number; dispose: () => void }; subagent?: true }
+interface SessionBinding { disposers: (() => void)[]; scope?: Context; skills?: { revision: number; dispose: () => void }; subagent?: true; remote?: boolean }
 
 /** The agent presets Executor Sessions and the main Session are created with, which the bundle's patch defines. */
 export const WORKER_PRESET = 'dsh-superagent-worker', ROUTER_PRESET = 'dsh-superagent-router'
@@ -137,7 +139,9 @@ export class Sessions {
     ctx.inject(['agentPresets'], child => {
       child.on('agent-preset/selected', (sessionId, preset) => {
         const ticketId = ticketOfSession(sessionId), agent = ctx.agents.get(sessionId as SessionId)
-        const ours = sessionId === this.host.masterId ? this.preset('orchestrator') : ticketId && this.host.store.tickets.get(ticketId) ? this.preset('worker') : undefined
+        const remote = this.remoteFor(sessionId, agent)
+        if ((remotePresetBinding(agent?.session.header?.agentPreset) || this.host.store.tickets.get(ticketId ?? '')?.execution?.environment?.world) && !remote) return
+        const ours = sessionId === this.host.masterId ? this.preset('orchestrator') : ticketId && this.host.store.tickets.get(ticketId) ? this.preset('worker', remote) : undefined
         if (!ours || preset === ours || !agent) return
         const presets = child.get('agentPresets') as { select(agent: Agent, preset: string): Promise<string> }
         presets.select(agent, ours).catch(() => {})
@@ -152,12 +156,15 @@ export class Sessions {
     const ctx = this.ctx
     const ticketId = ticketOfSession(id), ticket = ticketId ? this.host.store.tickets.get(ticketId) : undefined
     const persona = this.pinPersona(id, ticket)
-    const binding = this.host.remote?.world.status().binding ?? 'local'
+    const remote = this.remoteFor(id), presets = this.presetsFor(remote)
+    const desired = ticket?.execution?.environment?.world
+    if (desired && !remote) throw new Error('The Session execution world is unavailable; local fallback is forbidden')
+    const binding = remote?.world.status().binding ?? 'local'
     const saved = this.host.store.get(KV.sessions.world(id))
     if (saved && saved !== binding) throw new Error('Session belongs to another execution world; authorize a new Session')
-    if (this.host.remote) {
-      this.host.remote.assertPair()
-      await this.remotePresets!.prepare()
+    if (remote) {
+      remote.assertPair()
+      await presets!.prepare()
       try {
         const existing = await ctx.sessionController.inspect(id as SessionId, this.host.lifetime)
         if (remotePresetBinding(existing.meta.agentPreset) !== binding || existing.meta.cwd !== cwd)
@@ -169,12 +176,12 @@ export class Sessions {
     this.host.store.set(KV.sessions.world(id), binding)
     let result = await ctx.sessionController.resolveAgent(id as SessionId)
     if ('error' in result && result.error.code === 'session/not-found') {
-      if (this.host.remote) {
-        const handle = await ctx.agents.create({ sessionId: id as SessionId, meta: { cwd, agentPreset: this.preset(role) }, signal: this.host.lifetime,
+      if (remote) {
+        const handle = await ctx.agents.create({ sessionId: id as SessionId, meta: { cwd, agentPreset: this.preset(role, remote) }, signal: this.host.lifetime,
           setup: async (scope, agent) => {
             installPersistedModelSelection(ctx, agent)
-            await this.remotePresets!.mount(scope, role === 'worker' ? 'worker' : 'router')
-            return { commit: () => { this.host.remote!.assertPair() } }
+            await presets!.mount(scope, role === 'worker' ? 'worker' : 'router')
+            return { commit: () => { remote.assertPair(); if (this.host.worlds?.lookup(binding)) this.host.worlds.assertMounted(agent, binding) } }
           } })
         result = { agent: handle.agent }
       } else {
@@ -193,8 +200,19 @@ export class Sessions {
     await ctx.sessionController.rename({ sessionId: id as SessionId, title })
     return result.agent
   }
-  private preset(role: 'orchestrator' | 'worker'): string {
-    return this.remotePresets?.id(role === 'orchestrator' ? 'router' : 'worker') ?? (role === 'orchestrator' ? ROUTER_PRESET : WORKER_PRESET)
+  private remoteFor(id: string, agent?: Agent): RemoteWorkspace | undefined {
+    if (id === this.host.masterId) return this.host.remote
+    const ticketId = ticketOfSession(id), ticket = ticketId && this.host.store.tickets.get(ticketId)
+    const saved = this.host.store.get(KV.sessions.world(id))
+    const binding = (ticket && ticket.execution?.environment?.world) || remotePresetBinding(agent?.session.header?.agentPreset) || (saved !== 'local' ? saved : undefined)
+    if (!binding || binding === this.host.remote?.world.status().binding) return this.host.remote
+    return this.host.worlds?.lookup(binding)?.workspace
+  }
+  private presetsFor(remote?: RemoteWorkspace): RemotePresets | undefined {
+    return remote && (remote === this.host.remote ? this.remotePresets : this.host.worlds?.lookup(remote.world.status().binding)?.presets)
+  }
+  private preset(role: 'orchestrator' | 'worker', remote = this.host.remote): string {
+    return this.presetsFor(remote)?.id(role === 'orchestrator' ? 'router' : 'worker') ?? (role === 'orchestrator' ? ROUTER_PRESET : WORKER_PRESET)
   }
   /** Returns whether `sessionId` already holds the message delivered under `requestId`, or `false` if the session does not exist. */
   async holds(sessionId: string, requestId: string): Promise<boolean> {
@@ -284,7 +302,7 @@ export class Sessions {
     const master = agent.id === host.masterId
     const ticket = master ? undefined : this.ticketOf(agent)
     if (!master && !ticket) { await this.limitSubagent(agent); return }
-    const binding: SessionBinding = { disposers: [] }
+    const binding: SessionBinding = { disposers: [], remote: !!this.remoteFor(agent.id, agent) }
     this.bindings.set(agent, binding)
     this.retryHealth.restore(agent.id, agent.session.snapshotEvents())
     if (agent.status === 'idle') this.retryHealth.clear(agent.id)
@@ -367,7 +385,8 @@ export class Sessions {
     const store = this.host.store
     const parent = scopeParentOf(agent)
     const persona = store.tickets.get(ticketId)?.execution?.persona
-    const allow = WORK_TOOLS.filter(name => agent.ctx.tools.get(name, parent) && (!persona || !personaDenial(persona, name)))
+    const remote = this.remoteFor(agent.id, agent)
+    const allow = WORK_TOOLS.filter(name => !(remote && name === 'pwsh') && agent.ctx.tools.get(name, parent) && (!persona || !personaDenial(persona, name)))
     return [agent.ctx.tools.restrict({ allow }), agent.ctx.tools.guard(() => {
       const current = store.tickets.get(ticketId)
       if (!current || !liveTicket(current)) return 'Ticket ended; new work needs a new authorized ticket'
@@ -377,16 +396,19 @@ export class Sessions {
     })]
   }
   private assertSavedWorld(id: string): void {
-    const saved = this.host.store.get(KV.sessions.world(id)), current = this.host.remote?.world.status().binding ?? 'local'
+    const saved = this.host.store.get(KV.sessions.world(id)), current = this.remoteFor(id)?.world.status().binding ?? 'local'
     if (saved && saved !== current) throw new Error('Session belongs to another execution world')
   }
   private worldProblem(agent: Agent): string | undefined {
-    const recorded = remotePresetBinding(agent.session.header?.agentPreset), remote = this.host.remote
+    const recorded = remotePresetBinding(agent.session.header?.agentPreset), remote = this.remoteFor(agent.id, agent)
     const saved = this.host.store.get(KV.sessions.world(agent.id))
     if (recorded !== remote?.world.status().binding || saved && saved !== (remote?.world.status().binding ?? 'local'))
       return 'Session belongs to another execution world'
     if (remote && !remote.world.status().ready) return 'Remote execution authority is unavailable or revoked'
     if (remote) {
+      if (recorded && this.host.worlds?.lookup(recorded)) {
+        try { this.host.worlds.assertMounted(agent, recorded) } catch (error) { return String(error) }
+      }
       if (agent.id !== this.host.masterId) {
         const owner = this.ticketOf(agent)?.id ?? this.remoteOwners.get(agent)
         const ticket = owner && this.host.store.tickets.get(owner)
@@ -404,12 +426,14 @@ export class Sessions {
     if (this.guardedWorlds.has(agent)) return
     this.guardedWorlds.add(agent)
     const saved = this.host.store.get(KV.sessions.world(agent.id))
-    if (!this.host.remote && !remotePresetBinding(agent.session.header?.agentPreset) && (!saved || saved === 'local')) return
-    agent.ctx.effect(() => agent.ctx.tools.guard(() => this.worldProblem(agent)))
+    const remote = this.remoteFor(agent.id, agent)
+    if (!remote && !remotePresetBinding(agent.session.header?.agentPreset) && (!saved || saved === 'local')) return
+    agent.ctx.effect(() => agent.ctx.tools.guard(execution => execution.name === 'pwsh' ? 'This remote execution world does not provide PowerShell' : this.worldProblem(agent)))
     agent.ctx.effect(() => agent.ctx.systemPrompt.section({ name: 'dsh-superagent-execution-world', order: -10000, interpolate: false,
       text: () => { const problem = this.worldProblem(agent); if (problem) throw new Error(problem); return '' } }))
-    if (this.host.remote) agent.ctx.on('tools/execute', (execution, next) => {
-      const world = this.host.remote!.world, ticketId = this.ticketOf(agent)?.id ?? this.remoteOwners.get(agent)
+    agent.ctx.on('tools/execute', (execution, next) => {
+      const problem = this.worldProblem(agent); if (problem) throw new Error(problem)
+      const world = this.remoteFor(agent.id, agent)!.world, ticketId = this.ticketOf(agent)?.id ?? this.remoteOwners.get(agent)
       const ticket = ticketId ? this.host.store.tickets.get(ticketId) : undefined, assignment = ticket?.assignments.at(-1)
       const authorize = () => {
         const problem = this.worldProblem(agent)
@@ -430,16 +454,17 @@ export class Sessions {
    */
   private async limitSubagent(agent: Agent): Promise<void> {
     let parent = agent.session.header.parentSession
-    if (this.host.remote) {
+    const remote = this.remoteFor(agent.id, agent)
+    if (remote) {
       for (let depth = 0; parent !== undefined && depth < 8; depth++) {
         let header = this.ctx.agents.get(parent)?.session.header
         try { header ??= (await this.ctx.sessionController.inspect(parent, this.host.lifetime)).meta }
         catch { return }
-        if (!header || remotePresetBinding(header.agentPreset) !== this.host.remote.world.status().binding) return
+        if (!header || remotePresetBinding(header.agentPreset) !== remote.world.status().binding) return
         const ticketId = ticketOfSession(parent), ticket = ticketId && this.host.store.tickets.get(ticketId)
         if (ticket && header.cwd === ticket.execution?.directory) {
           this.remoteOwners.set(agent, ticket.id)
-          const binding: SessionBinding = { disposers: this.workOnly(agent, ticket.id), subagent: true }
+          const binding: SessionBinding = { disposers: this.workOnly(agent, ticket.id), subagent: true, remote: true }
           this.bindings.set(agent, binding); this.bindRemoteSearch(agent, binding); await this.decoratePersona(agent, ticket, binding); return
         }
         parent = header.parentSession
@@ -470,11 +495,13 @@ export class Sessions {
     this.bindings.set(agent, binding); await this.decoratePersona(agent, ticket, binding)
   }
   private bindRemoteSearch(agent: Agent, binding: SessionBinding): void {
-    if (!this.host.remote) return
+    const remote = this.remoteFor(agent.id, agent)
+    if (!remote) return
     const ticketId = this.ticketOf(agent)?.id ?? this.remoteOwners.get(agent), persona = ticketId ? this.host.store.tickets.get(ticketId)?.execution?.persona : undefined
     if (persona && personaDenial(persona, 'grep')) return
     const register = this.registerTool(agent, binding)
-    for (const tool of remoteSearchTools(agent.session.header.cwd!, this.host.remote, this.ctx.subprocess))
+    const subprocess = this.host.worlds?.lookup(remote.world.status().binding)?.subprocess ?? this.ctx.subprocess
+    for (const tool of remoteSearchTools(agent.session.header.cwd!, remote, subprocess))
       register(tool.name, tool.description, tool.schema, tool.execute)
   }
   /** Register the skills of a prompt version in the agent's skill scope, in place of an earlier version's. */
@@ -488,7 +515,7 @@ export class Sessions {
       const body = version.config.skills[name] ?? ''
       const description = bundled?.description ?? (body.replace(/\s+/g, ' ').slice(0, 120) || 'Custom dsh-superagent operational skill.')
       disposers.push(scope.skills.register({ name: `${SKILL_PREFIX}${name}`, description, content, source: 'runtime',
-        ...(bundled && !this.host.remote ? { resourceBase: { kind: 'directory' as const, path: dirname(bundled.path) } } : {}) }))
+        ...(bundled && !binding.remote ? { resourceBase: { kind: 'directory' as const, path: dirname(bundled.path) } } : {}) }))
     }
     binding.skills = { revision: version.revision, dispose: () => { disposers.forEach(dispose => dispose()) } }
   }

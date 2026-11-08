@@ -5,6 +5,7 @@ import { posix } from 'node:path'
 type Role = 'worker' | 'router' | 'child'
 type Plugin = { id: string; name: string; config?: Record<string, unknown> | Plugin[]; group?: boolean; isolate?: Record<string, boolean> }
 interface Presets {
+  serviceFor?: (agent: unknown, name: string) => unknown
   register(definition: { id: string; name: string; description: string; plugins: Plugin[] }): Promise<() => Promise<void>>
   resolve(id: string): Promise<{ id: string; broken?: string }>
   mount(ctx: Context, id: string): Promise<unknown>
@@ -17,11 +18,13 @@ const plugin = (id: string, config?: Record<string, unknown>): Plugin => ({ id, 
 /** Authority-specific Harness presets persist the world identity in the immutable Session header, including child Sessions. */
 export class RemotePresets {
   private prepared?: Promise<void>
-  constructor(private readonly ctx: Context, private readonly world: RemoteWorld) {}
+  private readonly disposers: (() => Promise<void>)[] = []
+  constructor(private readonly ctx: Context, private readonly world: RemoteWorld, private readonly scoped = false) {}
   id(role: Role): string { return `${prefix}${role}-${this.world.status().binding}` }
   private registry(): Presets {
     const registry = this.ctx.get('agentPresets') as Presets | undefined
     if (!registry) throw new Error('Remote mission profiles require the Harness agent preset registry')
+    if (this.scoped && typeof registry.serviceFor !== 'function') throw new Error('Managed execution worlds require Harness scoped preset service inspection (qualified with 0.2.1-rc.3)')
     return registry
   }
   prepare(): Promise<void> {
@@ -29,15 +32,19 @@ export class RemotePresets {
       const registry = this.registry()
       for (const role of ['child', 'worker', 'router'] as const) {
         const dispose = await registry.register({ id: this.id(role), name: `Remote ${role}`, description: 'Managed by the bound dsh-superagent execution world.',
-          plugins: this.plugins(role) })
-        this.ctx.effect(() => dispose)
+          plugins: this.scoped ? [{ id: 'execution-world', name: 'cordis:group', group: true, isolate: { fs: true, subprocess: true },
+            config: [{ id: 'paired-providers', name: 'dsh-superagent/scoped-world', config: { binding: this.world.status().binding } }, ...this.plugins(role)] }]
+            : this.plugins(role) })
+        const release = this.ctx.effect(() => dispose)
+        this.disposers.push(async () => { await release() })
       }
       for (const role of ['child', 'worker', 'router'] as const) {
         const preset = await registry.resolve(this.id(role))
         if (preset.broken) throw new Error(`Remote ${role} preset is unavailable: ${preset.broken}`)
       }
-    })()
+    })().catch(async error => { await this.dispose(); throw error })
   }
+  async dispose(): Promise<void> { await Promise.all(this.disposers.splice(0).reverse().map(dispose => dispose())); this.prepared = undefined }
   async mount(ctx: Context, role: Role): Promise<void> { await this.prepare(); await this.registry().mount(ctx, this.id(role)) }
   private plugins(role: Role): Plugin[] {
     const compaction: Plugin = { id: 'compaction', name: 'cordis:group', group: true, isolate: { compaction: true, toolResultPruner: true },

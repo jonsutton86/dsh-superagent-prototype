@@ -39,6 +39,7 @@ import { RemoteError } from '../remote/protocol.ts'
 import type { RemoteWorld } from '../remote/world.ts'
 import type { Endpoints } from '../environments/endpoints.ts'
 import type { Personas } from '../personas/service.ts'
+import type { WorldPool } from '../environments/pool.ts'
 
 export interface HttpHost {
   readonly remoteRoot?: string
@@ -46,6 +47,7 @@ export interface HttpHost {
   readonly environments: Environments
   readonly endpoints: Pick<Endpoints, 'list' | 'register' | 'catalog' | 'commands' | 'submit' | 'retry' | 'profile'>
   readonly personas: Pick<Personas, 'list' | 'get' | 'version' | 'create' | 'update' | 'archive'>
+  readonly worlds: Pick<WorldPool, 'list' | 'activate' | 'refresh' | 'revoke' | 'lookup'>
   readonly inbox: Inbox
   readonly library: Library
   readonly workspace: Workspace
@@ -175,22 +177,23 @@ const SaveRequest = z.object({ value: z.unknown(), revision: z.number().int().no
 function routes(runtime: HttpHost): Routes {
   const { store } = runtime
   const ticket = (id: string) => { if (!store.tickets.get(id)) throw new RouteError(404, 'Ticket not found'); return id }
-  const execution = (id?: string) => {
-    const world = runtime.remoteEffects
+  const execution = (id?: string, binding?: string) => {
     if (id !== undefined) ticket(id)
+    const selected = binding ?? (id ? store.tickets.get(id)?.execution?.environment?.world : undefined)
+    const world = selected ? runtime.worlds.lookup(selected)?.world ?? (runtime.remoteEffects?.status().binding === selected ? runtime.remoteEffects : undefined) : runtime.remoteEffects
     if (!world || id !== undefined && store.tickets.get(id)?.execution?.environment?.world !== world.status().binding)
       throw new RemoteError(409, 'world_mismatch', 'This task is not bound to the current remote execution world')
     return world
   }
-  const receiptPage = (id: string | undefined, query: Record<string, string> = {}) => {
-    const world = execution(id)
+  const receiptPage = (id: string | undefined, query: Record<string, string> = {}, binding?: string) => {
+    const world = execution(id, binding)
     return { ...world.effects(id, offset.parse(query.offset), limit(20, 100).parse(query.limit)), blocked: world.status().effectsBlocked }
   }
-  const refreshReceipts = async (id?: string) => { await execution(id).refreshEffects(); return receiptPage(id) }
-  const cancelReceipt = async (id: string | undefined, effect: string, body: unknown) => {
+  const refreshReceipts = async (id?: string, binding?: string) => { await execution(id, binding).refreshEffects(); return receiptPage(id, {}, binding) }
+  const cancelReceipt = async (id: string | undefined, effect: string, body: unknown, binding?: string) => {
     const request = z.object({ requestId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/) }).strict().parse(body)
-    await execution(id).cancelEffect(id, effect, request.requestId)
-    return receiptPage(id)
+    await execution(id, binding).cancelEffect(id, effect, request.requestId)
+    return receiptPage(id, {}, binding)
   }
   const promptBody = (input: { body: (maxBytes?: number) => Promise<unknown> }) => input.body(4 * runtime.machine.promptMaxChars.get() + 4096)
   return {
@@ -201,6 +204,13 @@ function routes(runtime: HttpHost): Routes {
     'POST tickets/:id/execution/refresh': ({ params }) => refreshReceipts(params.id),
     'POST tickets/:id/execution/:effect/cancel': async ({ params, body }) => cancelReceipt(params.id, params.effect, await body()),
     'GET environments': () => runtime.environments.list(),
+    'GET worlds': ({ query }) => runtime.worlds.list(query),
+    'GET worlds/:id/execution': ({ params, query }) => receiptPage(undefined, query, params.id),
+    'POST worlds/:id/execution/refresh': ({ params }) => refreshReceipts(undefined, params.id),
+    'POST worlds/:id/execution/:effect/cancel': async ({ params, body }) => cancelReceipt(undefined, params.effect, await body(), params.id),
+    'POST worlds': async ({ body }) => runtime.worlds.activate(await body()),
+    'POST worlds/:id/refresh': ({ params }) => runtime.worlds.refresh(params.id),
+    'POST worlds/:id/revoke': async ({ params, body }) => runtime.worlds.revoke(params.id, await body()),
     'GET personas': ({ query }) => runtime.personas.list(query),
     'GET personas/:id': ({ params }) => runtime.personas.get(params.id),
     'GET personas/:id/versions/:version': ({ params }) => runtime.personas.version(params.id, z.coerce.number().int().positive().parse(params.version)),

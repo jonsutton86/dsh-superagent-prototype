@@ -15,6 +15,7 @@ import type { PlanIndex, PlanProposal, PlanVersion, ProposePlanInput, ReviewPlan
 import type { EnvironmentList, EnvironmentView, EnrollEnvironmentInput, EnvironmentCommandInput } from '../environments/model.ts'
 import type { ExecutionReceiptPage } from '../remote/effects.ts'
 import type { ArchivePersonaInput, CreatePersonaInput, PersonaList, PersonaRecord, PersonaVersion, SavePersonaInput } from '../personas/model.ts'
+import type { ActivateWorldInput, RevokeWorldInput, WorldList, WorldView } from '../environments/pool-model.ts'
 import type { EndpointCatalog, EndpointCommandInput, EndpointList, EndpointRegistration, OperatorCommand, RegisterEndpointInput, RemoteProfileView } from '../environments/endpoint-model.ts'
 
 export const TICKET_FILTERS = ['open', 'person', 'working', 'idle', 'ended'] as const
@@ -28,6 +29,13 @@ type Delivery = 'injected' | 'pending'
 
 export interface Api {
   'GET personas': { query?: { offset?: number; q?: string; active?: 'true' | 'false' }; response: PersonaList }
+  'GET worlds': { query?: { offset?: number }; response: WorldList }
+  'GET worlds/:id/execution': { query?: Paged; response: ExecutionReceiptPage & { blocked: number } }
+  'POST worlds/:id/execution/refresh': { response: ExecutionReceiptPage & { blocked: number } }
+  'POST worlds/:id/execution/:effect/cancel': { body: { requestId: string }; response: ExecutionReceiptPage & { blocked: number } }
+  'POST worlds': { body: ActivateWorldInput; response: WorldView }
+  'POST worlds/:id/refresh': { response: WorldView }
+  'POST worlds/:id/revoke': { body: RevokeWorldInput; response: WorldView }
   'GET personas/:id': { response: PersonaRecord }
   'GET personas/:id/versions/:version': { response: PersonaVersion }
   'POST personas': { body: CreatePersonaInput; response: PersonaRecord }
