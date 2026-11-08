@@ -5,6 +5,7 @@ import { Button } from './controls.tsx'
 import { usePanel, usePanelData } from './provider.tsx'
 import { errorText } from './text.ts'
 import { When } from './widgets.tsx'
+import { ExecutionReceipts } from './execution-receipts.tsx'
 
 /** Preserve the submitted revision and request ID when a response is lost after a commit. */
 function useEnvironmentCommand(changed: () => void) {
@@ -52,6 +53,7 @@ export function EnvironmentsPage() {
         <Button type="submit" disabled={command.busy}>{t('environment.enroll')}</Button>
       </form>}
       {data.items.map(record => <EnvironmentCard key={record.id} record={record} listing={data} changed={changed} />)}
+      {data.currentKind === 'remote' && <ExecutionReceipts />}
     </>}
   </section>
 }

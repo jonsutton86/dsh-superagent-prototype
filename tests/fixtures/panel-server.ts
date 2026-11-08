@@ -291,6 +291,12 @@ const ticketOf = (id: string) =>
 const SourceSave = z.object({ enabled: z.boolean(), config: z.unknown() })
 
 const ROUTES: { [K in keyof Api]: Route<K> } = {
+  'GET execution': { query: ['offset', 'limit'], answer: () => ({ items: [], total: 0, nextOffset: null, blocked: 0 }) },
+  'POST execution/refresh': { answer: () => refuse(409, 'Remote world fixture not configured') },
+  'POST execution/:effect/cancel': { body: true, answer: () => refuse(409, 'Remote world fixture not configured') },
+  'GET tickets/:id/execution': { query: ['offset', 'limit'], answer: () => ({ items: [], total: 0, nextOffset: null, blocked: 0 }) },
+  'POST tickets/:id/execution/refresh': { answer: () => refuse(409, 'Remote world fixture not configured') },
+  'POST tickets/:id/execution/:effect/cancel': { body: true, answer: () => refuse(409, 'Remote world fixture not configured') },
   'GET missions': { query: ['offset', 'limit'], answer: () => ({ items: [], nextOffset: null }) },
   'GET environments': { answer: () => ({ items: [], currentRoot: '/work', currentMode: 'local', needsEnrollment: true }) },
   'POST environments': { body: true, answer: () => refuse(409, 'Environment fixture not configured') },

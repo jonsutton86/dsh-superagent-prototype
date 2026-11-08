@@ -9,6 +9,7 @@ import { join } from 'node:path'
 import { vi, type Mock } from 'vitest'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import type { Agent, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
+import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { FileSystem } from '@deepseek-ai/dsh-fs'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import { ApiSessionNotFound } from '@deepseek-ai/dsh-api-session-controller'
@@ -289,10 +290,18 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
   const relays = (sessionId: string) => deliveries.mock.calls.map(([call]) => call).filter(call => call.sessionId === sessionId)
     .map(call => JSON.parse(call.text) as Record<string, unknown>)
   const candidates = () => relays(runtime.masterId).filter(item => item.kind === 'candidate').map(item => item.trigger_id)
+  const withTool = async <T>(sessionId: string, name: string, operation: () => Promise<T>): Promise<T> => {
+    const agent = ctx.agents.get(sessionId as never)!
+    return await agent.ctx.waterfall(scopeTarget(agent.ctx.tools, agent), 'tools/execute', {
+      callId: `fixture-${name}`, rootCallId: `fixture-${name}`, name, arguments: {}, agent, signal: new AbortController().signal,
+    } as never, async () => await operation() as never) as unknown as T
+  }
   const runTool = async (sessionId: string, name: string, args: unknown) => {
     const tool = tools.get(sessionId)?.get(name)
     if (!tool) throw new Error(`Tool ${name} is not registered for ${sessionId}`)
-    return await tool.execute(args, { signal: new AbortController().signal }) as Record<string, unknown>
+    const signal = new AbortController().signal
+    if (!options.remote) return await tool.execute(args, { signal }) as Record<string, unknown>
+    return withTool(sessionId, name, async () => await tool.execute(args, { signal }) as Record<string, unknown>)
   }
   /** Route one decision with the main Session's orchestrator_route, answering its result; a refused one throws its reason. */
   async function route(item: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -320,7 +329,7 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
   const step = (sessionId: string) => { steps.get(sessionId)!() }
   /** A step of the worker claims what waits for it, and is cut off before the Session took it. */
   const claim = (sessionId: string) => { claims.get(sessionId)!() }
-  return { runtime, ctx, directory, agents, tools, deliveries, relays, candidates, runTool, route, acceptedTicket, api, controller, subprocess, hooks, resolveDefault, stop,
+  return { runtime, ctx, directory, agents, tools, deliveries, relays, candidates, runTool, withTool, route, acceptedTicket, api, controller, subprocess, hooks, resolveDefault, stop,
     jobs, subagents, step, claim, presets }
 }
 export type Host = Awaited<ReturnType<typeof startRuntime>>

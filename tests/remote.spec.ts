@@ -465,11 +465,14 @@ async function remoteMission(native: boolean) {
   const selection = vi.spyOn(policy, 'resolve').mockReturnValue({ mode: 'read-only' })
   expect(refusals(restoredChild)).toContain('This profile uses endpoint grant confinement; select its Endpoint grant permissions before running tools')
   selection.mockRestore()
-  const result = host.ctx.subprocess.spawn({ argv: ['/bin/sh', '-c', "printf 'remote result' > result.txt"], cwd: ticket.execution!.directory, graceMs: 100,
+  const result = await host.withTool(restoredChild.id, 'bash', async () => host.ctx.subprocess.spawn({ argv: ['/bin/sh', '-c', "printf 'remote result' > result.txt"], cwd: ticket.execution!.directory, graceMs: 100,
     env: { DSH_HOME: '/private/coordinator', DSH_PROFILE_DIR: '/private/profile', DSH_WEB_URL: 'http://127.0.0.1:3082', DSH_UNUSED: undefined,
       DSH_SESSION_ID: id, DSH_PROFILE: 'remote-mission', DSH_SHELL: '1' },
-    stdio: { stdin: 'ignore', stdout: { maxBytes: 1024 }, stderr: { maxBytes: 1024 } } })
+    stdio: { stdin: 'ignore', stdout: { maxBytes: 1024 }, stderr: { maxBytes: 1024 } } }))
   expect((await result.done).exitCode).toBe(0)
+  expect(h.endpoint.journal.jobs().at(-1)!.request.owner).toMatchObject({ kind: 'assignment', ticketId,
+    assignmentId: ticket.assignments.at(-1)!.id, sessionId: restoredChild.id, callId: 'fixture-bash', tool: 'bash' })
+  expect(p.world.effects(ticketId).items.some(item => item.owner.kind === 'assignment' && item.owner.tool === 'workspace-prepare')).toBe(true)
   const submitted = h.endpoint.journal.jobs().at(-1)!.request.env
   expect(submitted).toMatchObject({ DSH_SESSION_ID: id }); expect(submitted).not.toHaveProperty('DSH_HOME'); expect(submitted).not.toHaveProperty('DSH_PROFILE_DIR')
   expect(submitted).not.toHaveProperty('DSH_WEB_URL'); expect(submitted).not.toHaveProperty('DSH_UNUSED')
@@ -479,9 +482,22 @@ async function remoteMission(native: boolean) {
   await expect(host.runTool(id, 'glob', { pattern: '*', path: h.directory })).rejects.toThrow('outside the granted workspace')
   expect(await host.runTool(id, 'grep', { pattern: 'no-match-here' })).toMatchObject({ matches: [], truncated: false })
   const artifact = await host.runTool(id, 'workspace_publish', { requestId: randomUUID(), kind: 'artifact', title: 'Remote result', summary: 'Stored result', content }) as unknown as LibraryEntry
+  const receipts = await host.api('GET', `tickets/${ticketId}/execution?limit=1`)
+  expect(receipts.status).toBe(200); expect(receipts.body).toMatchObject({ items: [expect.objectContaining({ quiescent: true })], nextOffset: 1, blocked: 0 })
+  expect((await host.api('GET', 'execution')).status).toBe(200)
+  expect((await host.api('GET', 'tickets/missing/execution')).status).toBe(404)
+  const long = await host.withTool(id, 'bash', async () => host.ctx.subprocess.spawn({ argv: ['/bin/sh', '-c', 'sleep 30'],
+    cwd: ticket.execution!.directory, graceMs: 100, stdio: { stdin: 'ignore', stdout: { maxBytes: 128 }, stderr: { maxBytes: 128 } } }))
+  await vi.waitFor(() => expect(h.endpoint.journal.jobs().some(job => job.request.argv.includes('sleep 30'))).toBe(true))
+  const runningId = h.endpoint.journal.jobs().find(job => job.request.argv.includes('sleep 30'))!.id
   await host.runTool(id, 'orchestrator_report', { state: 'ready', summary: 'Remote result is ready for review' })
   expect(host.runtime.library.read(artifact.id).content).toBe('remote result')
   expect(host.runtime.workspace.get(mission.id).actions[0]!.status).toBe('review')
+  await expect(host.withTool(id, 'bash', async () => {})).rejects.toThrow('Ticket ended')
+  expect((await host.api('POST', `tickets/${ticketId}/execution/${runningId}/cancel`, { requestId: 'operator-stop' })).status).toBe(200)
+  await long.done
+  expect((await host.api('POST', `tickets/${ticketId}/execution/refresh`)).status).toBe(200)
+  expect(p.world.effects(ticketId).items.find(item => item.id === runningId)?.quiescent).toBe(true)
   const wrong = host.runtime.store.get(KV.sessions.world(id))!
   host.runtime.store.set(KV.sessions.world(id), 'another-world')
   await expect(host.runtime.sessions.ensure(id, ticket.execution!.directory, ticket.title, 'worker')).rejects.toThrow('another execution world')

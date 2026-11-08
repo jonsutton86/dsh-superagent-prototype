@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { lockSync } from 'proper-lockfile'
 import { fingerprint } from './journal.ts'
 import { RemoteError, type RemoteGrant, type RevocationReceipt } from './protocol.ts'
+import { ExecutionEffects } from './effects.ts'
 
 export interface WorldRecord {
   endpointId: string; grant: RemoteGrant; phase: 'active' | 'revoking' | 'revoked'
@@ -16,6 +17,7 @@ export const worldBinding = (endpointId: string, grant: RemoteGrant): string => 
 
 /** Single-writer coordinator journal: immutable world binding and a revocation intent committed before network I/O. */
 export class WorldJournal {
+  readonly effects: ExecutionEffects
   private readonly db: DatabaseSync
   private readonly release: () => void
   private closed = false
@@ -28,6 +30,7 @@ export class WorldJournal {
       chmodSync(join(directory, 'world.sqlite'), 0o600)
       this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
         CREATE TABLE IF NOT EXISTS execution_world (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL);`)
+      this.effects = new ExecutionEffects(this.db)
     } catch (error) { opened?.close(); this.release(); throw error }
   }
   read(): WorldRecord | undefined {
@@ -64,5 +67,5 @@ export class WorldJournal {
   private write(record: WorldRecord): void {
     this.db.prepare('INSERT INTO execution_world VALUES (1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value').run(JSON.stringify(record))
   }
-  close(): void { if (this.closed) return; this.closed = true; this.db.close(); this.release() }
+  close(): void { if (this.closed) return; this.closed = true; this.effects.close(); this.db.close(); this.release() }
 }

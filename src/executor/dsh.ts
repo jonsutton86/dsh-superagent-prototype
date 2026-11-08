@@ -441,6 +441,16 @@ export class DshExecutor implements Executor {
   }
   private relay({ id, text }: { id: string; text: string }): void { this.host.sessions.relay(id, text) }
   private async launch(ticket: Ticket, assignment: Assignment): Promise<void> {
+    if (!this.host.remote) return this.launchOwned(ticket, assignment)
+    return this.host.remote.world.withOwner({ kind: 'assignment', ticketId: ticket.id, assignmentId: assignment.id,
+      sessionId: workerSessionId(ticket.id), callId: `prepare:${assignment.id}`, tool: 'workspace-prepare' }, () => {
+      const current = this.host.store.tickets.get(ticket.id)
+      if (this.host.closing() || !current || !liveTicket(current) || latestAssignment(current)?.id !== assignment.id)
+        throw new PrepareFailed('Assignment changed before remote workspace preparation')
+      if (this.host.paused()) throw new Later('Processing is paused')
+    }, () => this.launchOwned(ticket, assignment))
+  }
+  private async launchOwned(ticket: Ticket, assignment: Assignment): Promise<void> {
     const current = () => {
       if (this.host.closing()) throw new Error('dsh-superagent is stopping')
       if (this.host.paused()) throw new Later('Processing is paused')

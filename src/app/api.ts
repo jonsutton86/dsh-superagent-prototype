@@ -13,6 +13,7 @@ import type { ArchiveRecordInput, CreateRecordInput, LibraryContent, LibraryEntr
 import type { Conversation, InboxFilter, InboxItem, InboxPage, InboxReplyInput, InboxStartInput } from '../workspace/inbox-model.ts'
 import type { PlanIndex, PlanProposal, PlanVersion, ProposePlanInput, ReviewPlanInput, RequestPlanInput } from '../workspace/plan-model.ts'
 import type { EnvironmentList, EnvironmentView, EnrollEnvironmentInput, EnvironmentCommandInput } from '../environments/model.ts'
+import type { ExecutionReceiptPage } from '../remote/effects.ts'
 
 export const TICKET_FILTERS = ['open', 'person', 'working', 'idle', 'ended'] as const
 export const THREAD_FILTERS = ['subscribed', 'evaluating', 'recent', 'all'] as const
@@ -24,6 +25,12 @@ interface Paged { offset?: number; limit?: number }
 type Delivery = 'injected' | 'pending'
 
 export interface Api {
+  'GET execution': { query?: Paged; response: ExecutionReceiptPage & { blocked: number } }
+  'POST execution/refresh': { response: ExecutionReceiptPage & { blocked: number } }
+  'POST execution/:effect/cancel': { body: { requestId: string }; response: ExecutionReceiptPage & { blocked: number } }
+  'GET tickets/:id/execution': { query?: Paged; response: ExecutionReceiptPage & { blocked: number } }
+  'POST tickets/:id/execution/refresh': { response: ExecutionReceiptPage & { blocked: number } }
+  'POST tickets/:id/execution/:effect/cancel': { body: { requestId: string }; response: ExecutionReceiptPage & { blocked: number } }
   'GET environments': { response: EnvironmentList }
   'POST environments': { body: EnrollEnvironmentInput; response: EnvironmentView }
   'PUT environments/:id': { body: EnvironmentCommandInput; response: EnvironmentView }

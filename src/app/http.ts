@@ -35,9 +35,12 @@ import type { Library } from '../workspace/library.ts'
 import type { Inbox } from '../workspace/inbox.ts'
 import type { Environments } from '../environments/service.ts'
 import { EnvironmentError } from '../environments/model.ts'
+import { RemoteError } from '../remote/protocol.ts'
+import type { RemoteWorld } from '../remote/world.ts'
 
 export interface HttpHost {
   readonly remoteRoot?: string
+  readonly remoteEffects?: Pick<RemoteWorld, 'effects' | 'refreshEffects' | 'cancelEffect' | 'status'>
   readonly environments: Environments
   readonly inbox: Inbox
   readonly library: Library
@@ -101,6 +104,7 @@ function failure(error: unknown): [number, Record<string, unknown>] {
   if (error instanceof RouteError) return [error.status, { error: error.message }]
   if (error instanceof WorkspaceError) return [error.status, { error: error.message }]
   if (error instanceof EnvironmentError) return [error.status, { error: error.message }]
+  if (error instanceof RemoteError) return [error.status, { error: error.message, code: error.code }]
   if (error instanceof UserError) return [error.missing ? 404 : 400, { error: error.message, code: error.code, values: error.values }]
   if (error instanceof SettingsConflict || error instanceof PromptConflict) return [409, { error: error.message }]
   return [500, { error: error instanceof Error ? error.message : String(error) }]
@@ -167,8 +171,31 @@ const SaveRequest = z.object({ value: z.unknown(), revision: z.number().int().no
 function routes(runtime: HttpHost): Routes {
   const { store } = runtime
   const ticket = (id: string) => { if (!store.tickets.get(id)) throw new RouteError(404, 'Ticket not found'); return id }
+  const execution = (id?: string) => {
+    const world = runtime.remoteEffects
+    if (id !== undefined) ticket(id)
+    if (!world || id !== undefined && store.tickets.get(id)?.execution?.environment?.world !== world.status().binding)
+      throw new RemoteError(409, 'world_mismatch', 'This task is not bound to the current remote execution world')
+    return world
+  }
+  const receiptPage = (id: string | undefined, query: Record<string, string> = {}) => {
+    const world = execution(id)
+    return { ...world.effects(id, offset.parse(query.offset), limit(20, 100).parse(query.limit)), blocked: world.status().effectsBlocked }
+  }
+  const refreshReceipts = async (id?: string) => { await execution(id).refreshEffects(); return receiptPage(id) }
+  const cancelReceipt = async (id: string | undefined, effect: string, body: unknown) => {
+    const request = z.object({ requestId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/) }).strict().parse(body)
+    await execution(id).cancelEffect(id, effect, request.requestId)
+    return receiptPage(id)
+  }
   const promptBody = (input: { body: (maxBytes?: number) => Promise<unknown> }) => input.body(4 * runtime.machine.promptMaxChars.get() + 4096)
   return {
+    'GET execution': ({ query }) => receiptPage(undefined, query),
+    'POST execution/refresh': () => refreshReceipts(),
+    'POST execution/:effect/cancel': async ({ params, body }) => cancelReceipt(undefined, params.effect, await body()),
+    'GET tickets/:id/execution': ({ params, query }) => receiptPage(params.id, query),
+    'POST tickets/:id/execution/refresh': ({ params }) => refreshReceipts(params.id),
+    'POST tickets/:id/execution/:effect/cancel': async ({ params, body }) => cancelReceipt(params.id, params.effect, await body()),
     'GET environments': () => runtime.environments.list(),
     'POST environments': async ({ body }) => runtime.environments.enroll(await body()),
     'PUT environments/:id': async ({ params, body }) => runtime.environments.update(params.id, await body()),

@@ -3,13 +3,14 @@ import { realpathSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
 import { RemoteClient, type RemoteConnection } from './client.ts'
 import { inside } from './journal.ts'
-import { RemoteError, Rpc, type EndpointIdentity, type GrantReceipt, type RemoteGrant, type RevocationReceipt } from './protocol.ts'
+import { RemoteError, Rpc, type EndpointIdentity, type GrantReceipt, type RemoteGrant, type RevocationReceipt, type EffectOwner } from './protocol.ts'
 import { WorldJournal, worldBinding, type WorldRecord } from './world-journal.ts'
 
 export interface RemoteWorldConfig extends RemoteConnection { stateDir: string }
 export interface RemoteWorldStatus {
   endpointId: string; grantId: string; epoch: number; root: string; binding: string
   phase: WorldRecord['phase']; ready: boolean; leaseUntil?: number; checkedAt?: string; problem?: string
+  effectsBlocked: number
   revocation?: { requestId: string; reason: string; acknowledged: boolean; quiescent: boolean }
 }
 declare module '@deepseek-ai/cordis' { interface Context { superagentRemoteWorld: RemoteWorld } }
@@ -28,7 +29,11 @@ export class RemoteWorld {
   private maintaining?: Promise<void>
   constructor(private readonly config: RemoteWorldConfig) {
     if (!isAbsolute(config.stateDir) || !isAbsolute(config.credentialFile)) throw new Error('Remote world state and credential paths must be absolute')
-    this.control = new RemoteClient({ ...config, lifetime: this.signal })
+    this.control = new RemoteClient({ ...config, lifetime: this.signal }, undefined, {
+      prepare: request => request,
+      observed: (request, value) => this.journal.effects.observed(request, value),
+      failed: (request, error, ambiguous) => this.journal.effects.failed(request, error, ambiguous),
+    })
     this.journal = new WorldJournal(config.stateDir, error => {
       this.problem = error.message; this.lifetime.abort(error)
     })
@@ -50,6 +55,7 @@ export class RemoteWorld {
     }
     const identity = await this.control.call<EndpointIdentity>({ op: 'identity' })
     if (identity.protocol !== 1 || identity.confinement !== 'linux-bubblewrap') throw new Error('Remote world requires the supported confined endpoint protocol')
+    if (!identity.capabilities.effectOwnership) throw new Error('Remote world requires endpoint effect-ownership receipts; update the endpoint first')
     const current = await this.control.call<{ grant: RemoteGrant; authorized: boolean }>({ op: 'grant.status' })
     const root = stored?.grant.root ?? current.grant.root, state = realpathSync(this.config.stateDir)
     if (inside(root, state) || inside(state, root) || inside(root, realpathSync(this.config.credentialFile)))
@@ -84,13 +90,13 @@ export class RemoteWorld {
   status(): RemoteWorldStatus {
     const record = this.record
     if (!record) throw new Error('Remote world has not started')
-    const revocation = record.revocation
+    const revocation = record.revocation, effectsBlocked = this.journal.effects.blocked()
     return { endpointId: record.endpointId, grantId: record.grant.id, epoch: record.grant.epoch, root: record.grant.root,
       binding: worldBinding(record.endpointId, record.grant), phase: record.phase,
-      ready: !this.closed && !this.signal.aborted && record.phase === 'active' && !this.problem
+      ready: !this.closed && !this.signal.aborted && record.phase === 'active' && !this.problem && !effectsBlocked
         && !!this.observed?.authorized && this.observed.grant.leaseUntil > Date.now(),
       leaseUntil: this.observed?.grant.epoch === record.grant.epoch ? this.observed.grant.leaseUntil : undefined,
-      checkedAt: this.checkedAt, problem: this.problem,
+      checkedAt: this.checkedAt, effectsBlocked, problem: this.problem ?? (effectsBlocked ? `${effectsBlocked} remote effects require observation or reconciliation` : undefined),
       ...(revocation ? { revocation: { requestId: revocation.requestId, reason: revocation.reason,
         acknowledged: !!revocation.receipt, quiescent: revocation.receipt?.quiescent === true } } : {}) }
   }
@@ -98,10 +104,15 @@ export class RemoteWorld {
   executionClient(): RemoteClient {
     if (!this.record) throw new Error('Remote world has not started')
     const client = new RemoteClient({ ...this.config, lifetime: this.signal }, request => {
+      this.journal.effects.authorize(request)
       if ((request.op.startsWith('fs.') || request.op === 'job.spawn' || request.op === 'process.executable') && !this.status().ready)
         throw new RemoteError(409, 'world_unavailable', 'Remote execution world is unavailable or locally revoked')
       if (request.op.startsWith('grant.') && request.op !== 'grant.status')
         throw new RemoteError(403, 'control_only', 'Worker execution providers cannot change execution authority')
+    }, {
+      prepare: request => this.journal.effects.prepare(request, { world: this.status().binding, grantId: this.record!.grant.id, epoch: this.record!.grant.epoch }),
+      observed: (request, value) => this.journal.effects.observed(request, value),
+      failed: (request, error, ambiguous) => this.journal.effects.failed(request, error, ambiguous),
     })
     client.bindGrant(this.record.grant)
     return client
@@ -115,12 +126,14 @@ export class RemoteWorld {
       const current = await this.control.call<{ grant: RemoteGrant; authorized: boolean }>({ op: 'grant.status' })
       this.observe(current)
       if (this.record!.revocation) { await this.flushRevocation(); return }
-      if (!this.status().ready) return
+      // Receipt recovery must not cause a healthy grant to expire while an operator observes or cancels old work.
+      if (!this.observed?.authorized || this.record!.phase !== 'active') { await this.refreshEffects(); return }
       if (current.grant.leaseUntil - Date.now() < 240_000) {
         const renewed = await this.control.intent<GrantReceipt>({ op: 'grant.renew', requestId: randomUUID(), revision: current.grant.revision, leaseMs: 300_000 })
         this.observe({ grant: renewed.grant, authorized: true })
       }
       if (this.record!.revocation) await this.flushRevocation()
+      else await this.refreshEffects()
     }
     const pending = run().catch(error => { this.problem = error instanceof Error ? error.message : String(error); throw error })
       .finally(() => { if (this.maintaining === pending) this.maintaining = undefined })
@@ -144,6 +157,26 @@ export class RemoteWorld {
     const request = this.record!.revocation!
     const receipt = await this.control.intent<RevocationReceipt>({ op: 'grant.revoke', requestId: request.requestId, reason: request.reason })
     this.journal.acknowledge(receipt); this.record = this.journal.read()!; this.problem = undefined
+    if (receipt.quiescent) this.journal.effects.revoked()
+  }
+  /** Trusted host scope is captured at tool/assignment dispatch, never reconstructed from worker arguments or environment text. */
+  withOwner<T>(owner: EffectOwner, authorize: () => void, operation: () => T): T { return this.journal.effects.run(owner, authorize, operation) }
+  effects(ticketId?: string, offset = 0, limit = 50) { return this.journal.effects.list(ticketId, offset, limit) }
+  /** Bounded read-only reconciliation; missing or conflicting receipts remain unknown, without automatic replacement dispatch. */
+  async refreshEffects(): Promise<void> {
+    if (this.closed) return
+    await Promise.all(this.journal.effects.pending(16).map(async record => {
+      const request = { op: record.kind === 'command' ? 'job.get' as const : 'operation.get' as const, id: record.id }
+      try { await this.control.call(request) } catch (error) { this.journal.effects.failed(request, error, true) }
+    }))
+  }
+  async cancelEffect(ticketId: string | undefined, id: string, requestId: string): Promise<void> {
+    const record = this.journal.effects.get(id)
+    if (!record || ticketId !== undefined && (record.owner.kind !== 'assignment' || record.owner.ticketId !== ticketId))
+      throw new RemoteError(404, 'not_found', 'Execution receipt does not belong to this mission task')
+    if (record.kind !== 'command') throw new RemoteError(409, 'not_cancellable', 'File mutations require observation or endpoint reconciliation')
+    await this.control.intent({ op: 'job.cancel', id, requestId })
+    await this.refreshEffects()
   }
   async close(): Promise<void> {
     if (this.closed) return

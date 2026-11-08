@@ -11,12 +11,17 @@ export class RemoteUncertain extends Error {
   constructor(readonly operationId: string, message: string) { super(`${message} (remote operation ${operationId}); reconcile this receipt before issuing replacement work`) }
 }
 export interface RemoteConnection { url: string; endpointId: string; credentialFile: string; lifetime?: AbortSignal; timeoutMs?: number }
+export interface RemoteEffectHooks {
+  prepare(request: RpcInput & { requestId: string }): RpcInput & { requestId: string }
+  observed(request: RpcInput, value: unknown): void
+  failed(request: RpcInput, error: unknown, ambiguous: boolean): void
+}
 
 /** Pinned, bounded RPC for both members of one remote Harness execution world. */
 export class RemoteClient {
   private readonly url: string
   private credentialPin?: string
-  constructor(readonly connection: RemoteConnection, private readonly authorize?: (request: RpcInput) => void) {
+  constructor(readonly connection: RemoteConnection, private readonly authorize?: (request: RpcInput) => void, private readonly effects?: RemoteEffectHooks) {
     const url = new URL(connection.url)
     if (url.username || url.password || url.pathname !== '/' || url.search || url.hash
       || !(url.protocol === 'https:' || (url.protocol === 'http:' && url.hostname === '127.0.0.1')))
@@ -33,6 +38,11 @@ export class RemoteClient {
     this.credentialPin = pin
   }
   async call<T>(request: RpcInput, signal?: AbortSignal): Promise<T> {
+    if (this.effects && (request.op === 'job.spawn' || request.op === 'fs.write' || request.op === 'fs.edit'))
+      return this.intent<T>(request, signal)
+    return this.send<T>(request, signal)
+  }
+  private async send<T>(request: RpcInput, signal?: AbortSignal): Promise<T> {
     this.authorize?.(request)
     const credential = readFileSync(this.connection.credentialFile, 'utf8').trim()
     if (credential.length < 32 || /\s/.test(credential)) throw new Error('Invalid execution credential file')
@@ -54,6 +64,7 @@ export class RemoteClient {
       throw new RemoteError(response.status, envelope.error.code, envelope.error.message)
     }
     if (!response.ok) throw new RemoteError(response.status, 'http_error', 'Execution endpoint request failed')
+    this.effects?.observed(request, envelope.result)
     return envelope.result as T
   }
   /** Reconnect observations by the same command ID. Losing connectivity never starts replacement work. */
@@ -62,22 +73,28 @@ export class RemoteClient {
     for (;;) {
       try { return await this.call<T>(request) }
       catch (error) {
-        if (refused(error)) throw error
-        if (Date.now() >= until || this.connection.lifetime?.aborted) throw new RemoteUncertain(operationId, 'Endpoint did not reconnect before the observation deadline')
+        if (refused(error)) { this.effects?.failed(request, error, true); throw error }
+        if (Date.now() >= until || this.connection.lifetime?.aborted) {
+          const uncertain = new RemoteUncertain(operationId, 'Endpoint did not reconnect before the observation deadline')
+          this.effects?.failed(request, uncertain, true); throw uncertain
+        }
         await new Promise<void>(resolve => setTimeout(resolve, 200))
       }
     }
   }
   /** Retries the identical durable intent, never a fresh ID; a second lost response stays explicitly uncertain. */
   async intent<T>(request: RpcInput & { requestId: string }, signal?: AbortSignal): Promise<T> {
-    try { return await this.call<T>(request, signal) }
+    request = this.effects?.prepare(request) ?? request
+    try { return await this.send<T>(request, signal) }
     catch (error) {
       if (refused(error) || signal?.aborted || this.connection.lifetime?.aborted) {
+        this.effects?.failed(request, error, !refused(error))
         if (refused(error)) throw error
         throw new RemoteUncertain(request.requestId, 'Delivery interrupted before the remote receipt was confirmed')
       }
-      try { return await this.call<T>(request, signal) }
+      try { return await this.send<T>(request, signal) }
       catch (second) {
+        this.effects?.failed(request, second, true)
         if (refused(second)) throw second
         throw new RemoteUncertain(request.requestId, 'Remote receipt could not be confirmed')
       }
@@ -89,7 +106,10 @@ export class RemoteClient {
     while (receipt.phase === 'started') {
       await new Promise<void>(resolve => setTimeout(resolve, 50))
       try { receipt = await this.call<RemoteOperation>({ op: 'operation.get', id: requestId }, signal) }
-      catch { throw new RemoteUncertain(requestId, 'File mutation receipt is unavailable') }
+      catch (error) {
+        this.effects?.failed({ op: 'operation.get', id: requestId }, error, true)
+        throw new RemoteUncertain(requestId, 'File mutation receipt is unavailable')
+      }
     }
     if (receipt.phase === 'unknown') throw new RemoteUncertain(requestId, receipt.error?.message ?? 'File mutation outcome is unknown')
     if (receipt.error) throw new FsError(receipt.error.message, receipt.error.code as FsErrorCode)

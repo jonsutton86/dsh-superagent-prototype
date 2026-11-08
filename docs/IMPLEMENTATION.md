@@ -16,7 +16,7 @@ not a claim that the prototype already ships every feature or that the article s
 | Event admission and routing | `src/policy.ts`, `src/core/intake.ts`, `src/core/evals.ts`, `src/sources/*` | Extend source scope only where required; retain subscription ownership and handback invariants |
 | Context and recall | Existing resources plus `src/workspace/library.ts`: immutable scoped records, provenance and FTS recall | Enforced total recall budgets, transitive freshness, measured retrieval and long-horizon validation |
 | Speculative work | Inferred mandates, observe/auto, configurable rules | Durable budgets, expiry and promotion/publication gates |
-| Full duplex | Harness job/subagent services, `src/executor/background.ts`, `src/app/delivery.ts`, remote process receipts and reconnect | Durable command-to-assignment receipts and broader restart/unknown-effect integration |
+| Full duplex | Harness job/subagent services, `src/executor/background.ts`, `src/app/delivery.ts`, remote receipts, durable assignment/tool ownership, receipt-only restart recovery and operator cancellation | Broader long-running job, process-failure and cross-host acceptance |
 | Compute/state separation | SQLite Store; Harness session persistence service abstraction | Deployable persistent-state ownership and restore/failover integration |
 | Remote environments | Paired local/remote providers, authenticated leased grants, durable revocation, mission/Session binding, remote profile and artifact/restart qualification | Per-action environment selection, endpoint credentials, operator enrollment/reconciliation, quotas and cross-host acceptance |
 | Watchdog | Existing health and bounded transient executor retry; now `src/supervision/*` | Live-provider and process-level acceptance, incident UI/alerts, retention, richer progress evidence and separately authorized recovery policies |
@@ -59,8 +59,14 @@ Remote mission verification on 2026-11-08: local `pnpm check` passed 1,326 tests
 Flash artifact/restart qualification passed separately. Commit `d8223312706205e2f9cfa352b975cc603b1ab75a` passed
 [Linux run 42515787855](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42515787855) with 1,327 tests,
 including native mission dispatch and filesystem/process confinement. The full product goal remains open; the next remote
-work is durable command-to-assignment ownership, endpoint credential binding and operator enrollment/reconciliation before
-per-action multi-environment dispatch.
+work includes endpoint credential binding and operator enrollment/reconciliation before per-action multi-environment dispatch.
+
+The [execution ownership increment](018-execution-ownership.md) records trusted mission/assignment/Session/tool ownership
+before command or file-effect dispatch, compares endpoint fingerprints, and recovers by observing original receipt IDs.
+Unresolved and recovered running effects block new work without blindly replaying it. The Environments and task views
+expose paginated metadata, read-only observation and same-ID command cancellation while keeping outcome and quiescence
+separate. The configured-model qualification has verified ownership through an actual Harness restart; full-suite and
+native Linux receipts are recorded below after checks complete.
 
 The [environment enrollment increment](015-execution-environments.md) implements local root proof, immutable task grant
 bindings, revocation, reauthorization, replacement and operator controls. Its generation is local authorization state;
@@ -145,7 +151,8 @@ Keep the agent's state and credentials outside the endpoint unless an operation 
 Implemented transport details and exercised versus outstanding acceptance are recorded in `016-remote-execution.md`.
 Whole-profile remote dispatch is integrated into the existing registry and `DshExecutor`, with immutable task and Session
 world bindings. `017-remote-missions.md` records the profile, real-model qualification and explicit scope. Next, add per-action
-environment selection, durable command-to-assignment receipts and endpoint enrollment/reconciliation. Run
+environment selection, endpoint credential bindings and endpoint enrollment/reconciliation. Durable command-to-assignment
+receipts and operator observation/cancellation are integrated in `018-execution-ownership.md`. Run
 `pnpm test:remote-linux` on the intended Linux runtime before deployment claims.
 
 Acceptance: remote shell and file operations see the same workspace; disconnect during execution does not duplicate an

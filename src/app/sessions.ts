@@ -374,6 +374,21 @@ export class Sessions {
     agent.ctx.effect(() => agent.ctx.tools.guard(() => this.worldProblem(agent)))
     agent.ctx.effect(() => agent.ctx.systemPrompt.section({ name: 'dsh-superagent-execution-world', order: -10000, interpolate: false,
       text: () => { const problem = this.worldProblem(agent); if (problem) throw new Error(problem); return '' } }))
+    if (this.host.remote) agent.ctx.on('tools/execute', (execution, next) => {
+      const world = this.host.remote!.world, ticketId = this.ticketOf(agent)?.id ?? this.remoteOwners.get(agent)
+      const ticket = ticketId ? this.host.store.tickets.get(ticketId) : undefined, assignment = ticket?.assignments.at(-1)
+      const authorize = () => {
+        const problem = this.worldProblem(agent)
+        if (problem) throw new Error(problem)
+        if (ticket && this.host.store.tickets.get(ticket.id)?.assignments.at(-1)?.id !== assignment?.id)
+          throw new Error('Mission assignment changed before remote dispatch')
+        if (this.host.closing()) throw new Error('Coordinator is stopping')
+      }
+      if (agent.id === this.host.masterId) return world.withOwner({ kind: 'host', purpose: 'router-tool' }, authorize, next)
+      if (!ticket || !assignment) throw new Error('Remote effect has no owning mission assignment')
+      return world.withOwner({ kind: 'assignment', ticketId: ticket.id, assignmentId: assignment.id, sessionId: agent.id,
+        callId: execution.callId, tool: execution.name }, authorize, next)
+    }, { prepend: true })
   }
   /**
    * Worker descendants inherit mission guards. Remote descendants must prove their immutable parent chain, including

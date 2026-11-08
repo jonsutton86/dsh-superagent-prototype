@@ -261,7 +261,7 @@ export class Runtime extends Service implements SourceHost {
     const runtime = this
     const { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, ready, sourceLinks, setup, passes } = this
     return { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, ready, sourceLinks, remoteRoot: this.remoteWorkspace?.world.grant.root,
-      get health() { return runtime.health },
+      get health() { return runtime.health }, remoteEffects: this.remoteWorkspace?.world,
       supervision: this.supervision, workspace: this.workspace, library: this.library, inbox: this.inbox, environments: this.environments,
       get deployment() { return setup.deployment },
       get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem },

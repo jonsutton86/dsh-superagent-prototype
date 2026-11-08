@@ -71,7 +71,7 @@ export class RemoteEndpoint {
   }
   identity(): EndpointIdentity {
     return { protocol: 1, id: this.journal.id, platform: process.platform, confinement: this.host.isolation.name,
-      capabilities: { filesystem: true, process: true, terminal: false, interactiveStdin: false, controlChannel: false, outputWindow: MAX_WINDOW } }
+      capabilities: { filesystem: true, process: true, terminal: false, interactiveStdin: false, controlChannel: false, outputWindow: MAX_WINDOW, effectOwnership: true } }
   }
   private admin(principal: Principal): void { if (principal.role !== 'admin') throw new RemoteError(403, 'admin_required', 'Endpoint administration credential required') }
   private owned(principal: Principal, value: { grantId: string; epoch: number }): void {
@@ -257,7 +257,8 @@ export class RemoteEndpoint {
     // Another identical request can finish path resolution first.
     const current = this.journal.operation(request.requestId)
     if (current) { if (current.fingerprint !== digest) throw new RemoteError(409, 'request_conflict', 'Mutation ID already used'); return current }
-    const operation: RemoteOperation = { id: request.requestId, grantId: grant.id, epoch: grant.epoch, fingerprint: digest, kind: request.op, phase: 'started', at: timestamp() }
+    const operation: RemoteOperation = { id: request.requestId, grantId: grant.id, epoch: grant.epoch, fingerprint: digest, kind: request.op,
+      ...(request.owner ? { owner: request.owner } : {}), phase: 'started', at: timestamp() }
     this.journal.saveOperation(operation)
     try {
       if (this.host.filesystemRpc) operation.value = await this.host.filesystemRpc(grant, request, this.signal(grant)) as RemoteOperation['value']

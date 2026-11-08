@@ -15,6 +15,14 @@ const version = z.string().min(1).max(1000)
 const intent = z.discriminatedUnion('kind', [z.object({ kind: z.literal('createIfAbsent') }).strict(),
   z.object({ kind: z.literal('replaceIfVersion'), version }).strict()])
 const request = { requestId: id }
+/** Attribution supplied by trusted coordinator code; it never grants endpoint authority. */
+export const EffectOwner = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('assignment'), ticketId: id, assignmentId: id, sessionId: z.string().min(1).max(300),
+    callId: z.string().min(1).max(300), tool: z.string().min(1).max(100) }).strict(),
+  z.object({ kind: z.literal('host'), purpose: z.string().min(1).max(100) }).strict(),
+])
+export type EffectOwner = z.infer<typeof EffectOwner>
+const ownership = { owner: EffectOwner.optional() }
 export const Rpc = z.discriminatedUnion('op', [
   z.object({ op: z.literal('identity') }).strict(),
   z.object({ op: z.literal('grant.create'), ...request, owner: id, workspace: id,
@@ -23,7 +31,7 @@ export const Rpc = z.discriminatedUnion('op', [
   z.object({ op: z.literal('grant.renew'), ...request, revision, leaseMs }).strict(),
   z.object({ op: z.literal('grant.revoke'), ...request, reason: z.string().trim().min(1).max(2000) }).strict(),
   z.object({ op: z.literal('grant.status') }).strict(),
-  z.object({ op: z.literal('job.spawn'), ...request, revision, argv: z.array(z.string().max(MAX_TEXT).refine(value => !value.includes('\0'))).min(1).max(256),
+  z.object({ op: z.literal('job.spawn'), ...request, ...ownership, revision, argv: z.array(z.string().max(MAX_TEXT).refine(value => !value.includes('\0'))).min(1).max(256),
     cwd: path, stdin: z.string().max(MAX_TEXT).optional(), graceMs: z.number().int().min(1).max(30_000),
     env: z.record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.string().max(8192).refine(value => !value.includes('\0')).nullable()).default({}) }).strict(),
   z.object({ op: z.literal('job.get'), id }).strict(),
@@ -39,8 +47,8 @@ export const Rpc = z.discriminatedUnion('op', [
   z.object({ op: z.literal('fs.read'), path }).strict(),
   z.object({ op: z.literal('fs.bytes'), path, offset: z.number().int().nonnegative(), length: z.number().int().min(0).max(MAX_WINDOW) }).strict(),
   z.object({ op: z.literal('fs.list'), path }).strict(),
-  z.object({ op: z.literal('fs.write'), ...request, path, content: z.string().max(MAX_TEXT), expected: intent.optional() }).strict(),
-  z.object({ op: z.literal('fs.edit'), ...request, path, oldString: z.string().min(1).max(MAX_TEXT), newString: z.string().max(MAX_TEXT),
+  z.object({ op: z.literal('fs.write'), ...request, ...ownership, path, content: z.string().max(MAX_TEXT), expected: intent.optional() }).strict(),
+  z.object({ op: z.literal('fs.edit'), ...request, ...ownership, path, oldString: z.string().min(1).max(MAX_TEXT), newString: z.string().max(MAX_TEXT),
     replaceAll: z.boolean(), expected: z.object({ version }).strict().optional() }).strict(),
   z.object({ op: z.literal('operation.get'), id }).strict(),
   z.object({ op: z.literal('operation.reconcile'), ...request, id, note: z.string().trim().min(1).max(2000) }).strict(),
@@ -58,7 +66,7 @@ export interface GrantReceipt { grant: RemoteGrant; credential?: string }
 export interface RevocationReceipt { grantId: string; epoch: number; at: string; quiescent: boolean }
 export interface EndpointIdentity {
   protocol: 1; id: string; platform: string; confinement: string
-  capabilities: { filesystem: true; process: true; terminal: false; interactiveStdin: false; controlChannel: false; outputWindow: number }
+  capabilities: { filesystem: true; process: true; terminal: false; interactiveStdin: false; controlChannel: false; outputWindow: number; effectOwnership?: true }
 }
 export interface RemoteJob {
   id: string; grantId: string; epoch: number; revision: number; fingerprint: string
@@ -68,6 +76,7 @@ export interface RemoteJob {
 }
 export interface RemoteOperation {
   id: string; grantId: string; epoch: number; fingerprint: string; kind: string
+  owner?: EffectOwner
   phase: 'started' | 'settled' | 'unknown'; value?: FsWriteOutcome | FsEditOutcome
   error?: { code: string; message: string }; at: string
   reconciled?: { at: string; note: string }

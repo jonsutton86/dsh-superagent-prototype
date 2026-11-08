@@ -127,9 +127,10 @@ provider determines that execution is remote. Leaving the execution directory se
 
 Remote account CLIs, repository mode and host command shims are explicitly refused. Endpoint-owned credentials and command
 policy must be implemented before those features can be enabled. One profile currently owns one grant shared by its tasks;
-task directories are not independent security principals. Selecting different environments per action, mapping command
-receipts durably to assignments, operator endpoint enrollment/reconciliation, resource quotas, state ownership/failover and
-backup restoration remain open requirements of the full architecture.
+task directories are not independent security principals. Durable command/file ownership, assignment/tool attribution and
+operator receipt controls are implemented in `018-execution-ownership.md`. Selecting different environments per action,
+operator endpoint enrollment/reconciliation, resource quotas, state ownership/failover and backup restoration remain open
+requirements of the full architecture.
 
 ## Qualification
 

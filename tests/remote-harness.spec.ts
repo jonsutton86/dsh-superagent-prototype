@@ -82,12 +82,18 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1')('runs a real Harness wor
     expect(ticket.executionEnvironment.world).toMatch(/^[a-f0-9]{64}$/)
     expect(await readFile(join(ticket.directory, 'result.txt'), 'utf8')).toBe('remote-harness-proof')
     expect(artifact.content).toBe('remote-harness-proof')
-    expect(h.endpoint.journal.jobs().some(job => job.request.cwd === ticket.directory && job.request.argv[0] === 'bash'
-      && job.request.argv.some(arg => arg.includes('result.txt')) && job.outcome?.exitCode === 0)).toBe(true)
+    const command = h.endpoint.journal.jobs().find(job => job.request.cwd === ticket.directory && job.request.argv[0] === 'bash'
+      && job.request.argv.some(arg => arg.includes('result.txt')) && job.outcome?.exitCode === 0)
+    expect(command?.request.owner).toMatchObject({ kind: 'assignment', ticketId: task.id,
+      assignmentId: ticket.assignments.at(-1).id, sessionId: ticket.sessionId, tool: 'bash' })
+    const receipts = await api(`tickets/${task.id}/execution`)
+    expect(receipts.items.find((item: { id: string }) => item.id === command!.id)).toMatchObject({ owner: command!.request.owner, quiescent: true })
     await stop(); start(); await ready()
     expect((await api(`tickets/${task.id}`)).executionEnvironment).toEqual(ticket.executionEnvironment)
     expect((await api('inbox', request)).id).toBe(task.id)
     expect((await api(`tickets/${task.id}`)).assignments).toHaveLength(1)
+    expect((await api(`tickets/${task.id}/execution`)).items.find((item: { id: string }) => item.id === command!.id)).toMatchObject({
+      owner: command!.request.owner, quiescent: true })
   } catch (error) {
     const redacted = log.split('\n').filter(line => !/api.?key|authorization|secret|credential|token/i.test(line)).slice(-65).join('\n')
     throw new Error(`${String(error)}\nHarness qualification log (sensitive lines omitted):\n${redacted}`)
