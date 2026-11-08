@@ -336,6 +336,13 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/app/runtime.ts` | The Runtime, the composition root, with its start and stop |
 | `src/environments/model.ts` | Local environment enrollment, operator grant contracts and views |
 | `src/environments/service.ts` | Persistent grants, paired filesystem/process verification, execution binding, revocation and replacement |
+| `src/remote/protocol.ts`, `limits.ts` | Versioned endpoint RPC, grant generations, process/file receipts and bounded transport windows |
+| `src/remote/journal.ts` | Independent single-writer SQLite state, HMAC credentials, intent deduplication, output offsets and restart uncertainty |
+| `src/remote/endpoint.ts`, `http.ts` | Authenticated execution admission, lease expiry, process supervision, mutation serialization and browser-request refusal |
+| `src/remote/isolation.ts`, `filesystem-runner.ts`, `fs-worker.ts` | Linux bubblewrap process worlds and standalone confined filesystem operations |
+| `src/remote/client.ts`, `admin.ts` | Pinned host-side RPC, same-ID retry, reconnect observation and explicit uncertain outcomes |
+| `src/remote/filesystem.ts`, `subprocess.ts` | Paired Harness filesystem/process services, scoped targets, guarded writes, stream cursors and independent exit observation |
+| `src/remote/endpoint-plugin.ts`, `provider-plugin.ts` | Dedicated endpoint and execution-world Harness composition; bounded lease renewal |
 | `src/app/setup.ts` | Setup, and `setupChanged`, whether a save changes a field setup reads |
 | `src/app/passes.ts` | Passes, the pass scheduler |
 | `src/app/outbox.ts` | The Outbox: the Engine's `Outbox` port, the receipts and the `reply` effects that send them |
@@ -440,6 +447,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/inbox.spec.ts` | Inbox persistence, dispatch/reply replay, read races, authority, history projection and follow-up review/cancellation gates |
 | `tests/inbox-ui.spec.tsx` | Rendered task/question/reply flow, lost reply response, safe text and artifact/mission links |
 | `tests/local-execution.spec.ts` | General local missions without accounts, filesystem/process probes, mode mismatch, local prompts and GitHub exclusion |
+| `tests/remote.spec.ts` | Real Harness/HTTP execution, acknowledgement loss, lease fencing, uncertain recovery, confined-helper semantics, output backpressure and opt-in native Linux qualification |
 | `tests/watchdog.spec.ts` | Independent journal recovery, assessment budgets, service outages, bounded interventions and concurrent polling |
 | `tests/watchdog-runtime.spec.ts` | Independent Cordis/Harness composition with simulated inference: restricted tools, Session creation, state ownership and shutdown |
 | `tests/policy.spec.ts` | Source scope, the gate, the admission table, Mandate revalidation, the Policy version, settings migrations and assessment outcomes |

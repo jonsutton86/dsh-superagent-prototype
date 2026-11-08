@@ -17,6 +17,9 @@
     "./github-watch": "./lib/github-watch.js",
     "./feishu-watch": "./lib/feishu-watch.js",
     "./watchdog": "./lib/watchdog.js",
+    "./remote-endpoint": "./lib/remote-endpoint.js",
+    "./remote-world": "./lib/remote-world.js",
+    "./remote-client": "./lib/remote-client.js",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json"
   },
@@ -49,6 +52,7 @@
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:remote-linux": "pnpm build && DSH_REMOTE_ISOLATION=1 vitest run tests/remote.spec.ts",
     "check": "pnpm typecheck && pnpm test && pnpm build"
   },
   "engines": {
@@ -123,6 +127,8 @@
     "react-dom": "18.3.1",
     "@types/react-dom": "18.3.7",
     "@deepseek-ai/dsh-subprocess": "0.2.1-alpha.2",
-    "@deepseek-ai/dsh-fs": "0.2.1-alpha.2"
+    "@deepseek-ai/dsh-fs": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-fs-local": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-subprocess-local": "0.2.1-alpha.2"
   }
 }

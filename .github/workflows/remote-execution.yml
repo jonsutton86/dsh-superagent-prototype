@@ -1,0 +1,36 @@
+name: Remote execution qualification
+
+on:
+  push:
+    branches: [feat/full-superagent-architecture]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Install the confined runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes bubblewrap
+          sudo install -m 0755 "$(command -v node)" /usr/local/bin/node
+          echo /usr/local/bin >> "$GITHUB_PATH"
+          npm install --global pnpm@11.25.0
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check the complete suite with native confinement enabled
+        run: |
+          pnpm typecheck
+          pnpm build
+          DSH_REMOTE_ISOLATION=1 pnpm test

@@ -39,6 +39,12 @@ checkout environment, so no live-provider or unattended production acceptance is
 
 ## Target architecture
 
+The [remote transport increment](016-remote-execution.md) adds a separately exported authenticated endpoint, durable command
+and file-effect receipts, leased grants, output cursors and paired Harness filesystem/process providers. File RPC and commands
+use the same Linux bubblewrap boundary in production. Real local Harness providers exercise the HTTP and recovery tests;
+native Linux isolation qualification, remote mission selection, endpoint credential bindings and coordinator ownership remain
+open. This is an execution foundation, not completion of the distributed architecture.
+
 The [environment enrollment increment](015-execution-environments.md) implements local root proof, immutable task grant
 bindings, revocation, reauthorization, replacement and operator controls. Its generation is local authorization state;
 authenticated remote transports and distributed leases remain required below.
@@ -106,7 +112,7 @@ transport and a deliberately long but productive job. Add incident UI, explicit 
 alert routing before calling the operational experience complete. Process restarts or task retries require their own narrow,
 audited recovery policies; they must not be inferred from arbitrary worker text.
 
-### 2. Compute/state/environment contracts and remote execution — next implementation
+### 2. Compute/state/environment contracts and remote execution — local grants and remote transport implemented
 
 Introduce an environment registry in the existing state store. Each environment has a stable ID, endpoint identity,
 capabilities, availability, grant revision and lease epoch. Bind a ticket's execution to that environment and grant revision.
@@ -118,6 +124,11 @@ credentials, process IDs, durable command IDs, lease epochs, output cursors and 
 `started`, `settled` and `unknown` outcomes. Reconnect reconciles receipts and streams missing output; it must never rerun a
 command merely because its acknowledgement was lost. A queued operation revalidates its grant after offline reconnection.
 Keep the agent's state and credentials outside the endpoint unless an operation explicitly requires them.
+
+Implemented transport details and exercised versus outstanding acceptance are recorded in `016-remote-execution.md`.
+Next, bind remote worlds into the existing environment registry and `DshExecutor` selection, with a durable command-owner
+mapping and an operator enrollment/reconciliation path. Retain the existing local root admission rules until that composition
+has independent end-to-end evidence. Run `pnpm test:remote-linux` on the supported Linux runtime before deployment claims.
 
 Acceptance: remote shell and file operations see the same workspace; disconnect during execution does not duplicate an
 effect; revoke a grant while offline; reconnect with an obsolete lease; cancel descendants; read output without gaps or
