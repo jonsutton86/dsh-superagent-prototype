@@ -16,12 +16,12 @@ not a claim that the prototype already ships every feature or that the article s
 | Event admission and routing | `src/policy.ts`, `src/core/intake.ts`, `src/core/evals.ts`, `src/sources/*` | Extend source scope only where required; retain subscription ownership and handback invariants |
 | Context and recall | Existing resources plus `src/workspace/library.ts`: immutable scoped records, provenance and FTS recall | Enforced total recall budgets, transitive freshness, measured retrieval and long-horizon validation |
 | Speculative work | Inferred mandates, observe/auto, configurable rules | Durable budgets, expiry and promotion/publication gates |
-| Full duplex | Harness job/subagent services, `src/executor/background.ts`, `src/app/delivery.ts` | Remote job receipt/reconnect integration; retain current local behavior |
+| Full duplex | Harness job/subagent services, `src/executor/background.ts`, `src/app/delivery.ts`, remote process receipts and reconnect | Durable command-to-assignment receipts and broader restart/unknown-effect integration |
 | Compute/state separation | SQLite Store; Harness session persistence service abstraction | Deployable persistent-state ownership and restore/failover integration |
-| Remote environments | Local enrollment, paired Harness filesystem/process proof, persisted task grants, revocation and recovery UI | Paired remote transport, authenticated endpoints, lease fencing, offline queue/reconciliation and isolation |
+| Remote environments | Paired local/remote providers, authenticated leased grants, durable revocation, mission/Session binding, remote profile and artifact/restart qualification | Per-action environment selection, endpoint credentials, operator enrollment/reconciliation, quotas and cross-host acceptance |
 | Watchdog | Existing health and bounded transient executor retry; now `src/supervision/*` | Live-provider and process-level acceptance, incident UI/alerts, retention, richer progress evidence and separately authorized recovery policies |
 | Delivery | Reports and PR binding/closure; content-addressed artifacts and stale mission-review invalidation | Host-collected check evidence, Git/environment revision binding and external publication receipts |
-| Operator control | Existing web panel, settings, pause/retry/stop and local environment controls | Supervision, remote environments, budgets and evidence surfaces |
+| Operator control | Existing web panel, settings, pause/retry/stop and local/remote environment status and revocation | Endpoint enrollment/reconciliation, supervision, budgets and evidence surfaces |
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
@@ -48,12 +48,16 @@ This is an execution foundation, not completion of the distributed architecture.
 
 The remote provider now also persists its exact authority binding and local revocation intent. A changed credential cannot
 silently transfer new authority across a restart. Self-revocation needs only the current grant, replays the same request after
-disconnects, and reports endpoint acknowledgement separately from process/file quiescence. Integrating that binding into
-mission/Session ownership and the complete Harness execution profile remains the next remote execution requirement.
+disconnects, and reports endpoint acknowledgement separately from process/file quiescence. The
+[remote mission increment](017-remote-missions.md) now composes a dedicated whole Harness profile and binds missions, worker
+Sessions and children to that exact authority. Remote directory preparation, bounded endpoint searches, typed router tools
+and operator revocation are integrated. Actual Harness with the configured DeepSeek Flash provider has created/published a
+remote artifact and preserved authority and request idempotency through restart. This local composition test uses a test-only
+endpoint on macOS; native confinement and cross-host deployment remain distinct qualification boundaries.
 
 The [environment enrollment increment](015-execution-environments.md) implements local root proof, immutable task grant
 bindings, revocation, reauthorization, replacement and operator controls. Its generation is local authorization state;
-authenticated remote transports and distributed leases remain required below.
+remote endpoint grants and their leases are integrated in the subsequent remote increments; coordinator ownership is still separate.
 
 The [mission planning increment](014-mission-plans.md) adds editable immutable versions, scoped worker proposals, explicit
 operator approval, history restoration and transitive result invalidation. Planning uses existing Harness workers and
@@ -118,7 +122,7 @@ transport and a deliberately long but productive job. Add incident UI, explicit 
 alert routing before calling the operational experience complete. Process restarts or task retries require their own narrow,
 audited recovery policies; they must not be inferred from arbitrary worker text.
 
-### 2. Compute/state/environment contracts and remote execution — local grants and remote transport implemented
+### 2. Compute/state/environment contracts and remote execution — whole-profile mission integration implemented
 
 Introduce an environment registry in the existing state store. Each environment has a stable ID, endpoint identity,
 capabilities, availability, grant revision and lease epoch. Bind a ticket's execution to that environment and grant revision.
@@ -132,9 +136,10 @@ command merely because its acknowledgement was lost. A queued operation revalida
 Keep the agent's state and credentials outside the endpoint unless an operation explicitly requires them.
 
 Implemented transport details and exercised versus outstanding acceptance are recorded in `016-remote-execution.md`.
-Next, bind remote worlds into the existing environment registry and `DshExecutor` selection, with a durable command-owner
-mapping and an operator enrollment/reconciliation path. Retain the existing local root admission rules until that composition
-has independent end-to-end evidence. Run `pnpm test:remote-linux` on the supported Linux runtime before deployment claims.
+Whole-profile remote dispatch is integrated into the existing registry and `DshExecutor`, with immutable task and Session
+world bindings. `017-remote-missions.md` records the profile, real-model qualification and explicit scope. Next, add per-action
+environment selection, durable command-to-assignment receipts and endpoint enrollment/reconciliation. Run
+`pnpm test:remote-linux` on the intended Linux runtime before deployment claims.
 
 Acceptance: remote shell and file operations see the same workspace; disconnect during execution does not duplicate an
 effect; revoke a grant while offline; reconnect with an obsolete lease; cancel descendants; read output without gaps or

@@ -14,6 +14,7 @@ import type { Store } from '../app/store.ts'
 import { Later, type Effects } from '../app/effects.ts'
 import { executionRoot, type Variable } from '../app/execution-environment.ts'
 import type { Environments } from '../environments/service.ts'
+import type { RemoteWorkspace } from '../environments/remote-workspace.ts'
 import type { Sessions } from '../app/sessions.ts'
 import { WorktreeNameSchema } from '../app/assessment.ts'
 import { resultRelay } from '../app/notices.ts'
@@ -60,6 +61,7 @@ const ticketWorktreeName = (name: string, id: string): string => `${WorktreeName
 export interface ExecutorHost {
   /** Present in the application runtime; reusable executor-only hosts may supply their own admission boundary. */
   environments?: Environments
+  remote?: RemoteWorkspace
   /** DSH Cordis context: agents and their events, and the subprocess service used to run prepare commands. */
   readonly context: Context
   /** Where the Executor reports what happened to Assignments and Inputs. */
@@ -98,7 +100,7 @@ export function mandateInstructions(mandate: Pick<Mandate, 'strength'>): string 
 }
 /** Builds a newly accepted ticket's Execution metadata: its worktree name, workspace directory, and assignment text. */
 export function ticketExecution(ticket: Ticket, outcome: Extract<AssessmentOutcome, { kind: 'accept' }>, settings: Settings,
-  stateDir: string): Execution {
+  stateDir: string, remoteRoot?: string): Execution {
   const name = ticketWorktreeName(outcome.name ?? '', ticket.id)
   const source = ticket.origin.triggerId
   const note = outcome.note ? `\nRouting note (not the source request): ${outcome.note}` : ''
@@ -110,7 +112,7 @@ export function ticketExecution(ticket: Ticket, outcome: Extract<AssessmentOutco
   const assignment = ticket.mandate.strength === 'inferred' && ruleIds
     ? `Proactively accepted under ${ruleIds.join(', ')}. Scope: ${outcome.scope}.${precedence}${note}`
     : note.trim()
-  return { name, directory: join(executionRoot(settings, stateDir), name), assignment }
+  return { name, directory: join(executionRoot(settings, stateDir, remoteRoot), name), assignment }
 }
 /** Character limits for inline assignment and trigger text in worker messages; longer text is read via its resource. */
 const ASSIGNMENT_CHARS = 1500, TRIGGER_CHARS = 600
@@ -243,7 +245,7 @@ export class DshExecutor implements Executor {
   }
   /** Populates a newly accepted ticket's `execution` attributes (worktree name, workspace directory, and assignment text). */
   prepare(ticket: Ticket, outcome: Extract<AssessmentOutcome, { kind: 'accept' }>): Ticket {
-    const execution = { ...ticketExecution(ticket, outcome, this.host.store.settings(), this.host.machine.stateDir),
+    const execution = { ...ticketExecution(ticket, outcome, this.host.store.settings(), this.host.machine.stateDir, this.host.remote?.world.grant.root),
       ...(this.host.machine.executionMode === 'local' ? { mode: 'local' as const } : {}) }
     const environment = this.host.environments?.bind(execution)
     return { ...ticket, ...(environment ? { mandate: { ...ticket.mandate, environment } } : {}),
@@ -257,6 +259,11 @@ export class DshExecutor implements Executor {
    */
   private async prepareDirectory(ticket: Ticket): Promise<void> {
     const directory = ticket.execution?.directory ?? ''
+    if (this.host.remote) {
+      if (ticket.execution?.mode !== 'local') throw new PrepareFailed('Remote repository execution requires endpoint credential bindings')
+      await this.host.remote.mkdir(directory)
+      return
+    }
     await mkdir(dirname(directory), { recursive: true })
     const local = ticket.execution?.mode === 'local'
     const command = local ? '' : this.host.store.settings().executor.prepare.trim()
@@ -451,12 +458,13 @@ export class DshExecutor implements Executor {
     }
     if (!current()) return
     // Prepare the workspace directory once; an existing directory counts as already prepared, including worktrees created before `prepare` commands existed.
-    if (!await stat(workspace).then(() => true, () => false)) {
+    if (!await (this.host.remote ? this.host.remote.exists(workspace) : stat(workspace).then(() => true, () => false))) {
       await this.prepareDirectory(ticket)
       if (!current()) return
     }
     if (this.host.environments) await this.host.environments.validate(ticket).catch((error: unknown) => { throw new PrepareFailed(String(error)) })
-    if (ticket.execution?.mode === 'local') await verifyLocalWorkspace(workspace, this.host.context.subprocess, this.host.lifetime, this.host.context.fs)
+    if (ticket.execution?.mode === 'local') await (this.host.remote ? this.host.remote.verify(workspace)
+      : verifyLocalWorkspace(workspace, this.host.context.subprocess, this.host.lifetime, this.host.context.fs))
       .catch((error: unknown) => { throw new PrepareFailed(`Local task directory is unavailable: ${String(error)}`) })
     if (!current()) return
     const sessionId = workerSessionId(ticket.id)

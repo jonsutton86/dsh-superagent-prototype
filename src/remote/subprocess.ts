@@ -5,6 +5,7 @@ import { SubprocessRuntime, type SubprocessHandle, type SubprocessSpawnSpec, typ
   type SubprocessTerminalHandle, type SubprocessTerminalEnvironment, type SubprocessOutputReader, type SubprocessOutputRead } from '@deepseek-ai/dsh-subprocess'
 import { RemoteClient, RemoteUncertain } from './client.ts'
 import { MAX_WINDOW, type RemoteGrant, type RemoteJob, type OutputWindow } from './protocol.ts'
+import { worldBinding } from './world-journal.ts'
 
 /** Non-consuming byte-offset reader; remote truncation and local tail eviction are always reported as loss. */
 class OutputTail implements SubprocessOutputReader {
@@ -42,12 +43,14 @@ const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, m
 
 /** Harness process handles use remote command receipts and byte cursors; service disposal requests cancellation and observes quiescence. */
 export class RemoteSubprocess extends SubprocessRuntime {
+  readonly executionBinding: string
   private readonly active = new Set<SubprocessHandle>()
   private readonly ids = new Set<string>()
   private readonly uncertain = new Set<string>()
   constructor(ctx: Context, private readonly client: RemoteClient, private readonly grant: RemoteGrant) {
     super(ctx)
     client.bindGrant(grant)
+    this.executionBinding = worldBinding(client.connection.endpointId, grant)
     ctx.effect(() => async () => {
       const deadline = AbortSignal.timeout(10_000)
       for (const handle of this.active) handle.terminate()
@@ -116,7 +119,10 @@ export class RemoteSubprocess extends SubprocessRuntime {
       if (cancel) throw new Error('Command cancelled before remote dispatch')
       let job = await this.client.intent<RemoteJob>({ op: 'job.spawn', requestId: id, revision: status.grant.revision, argv: [...spec.argv], cwd: spec.cwd,
         graceMs: spec.graceMs, ...(typeof spec.stdio.stdin === 'object' ? { stdin: spec.stdio.stdin.data } : {}),
-        env: Object.fromEntries(Object.entries(spec.env ?? {}).map(([key, value]) => [key, value ?? null])) })
+        // Forward only Harness identity facts, never coordinator control paths, URLs, credentials or unset ambient keys.
+        env: Object.fromEntries(Object.entries(spec.env ?? {}).filter(([key, value]) => value !== undefined
+          && (!key.startsWith('DSH_') || key.startsWith('DSH_SUPERAGENT_') || ['DSH_SHELL', 'DSH_SESSION_ID', 'DSH_PROFILE'].includes(key)))
+          .map(([key, value]) => [key, value ?? null])) })
       submitted = true
       // Process observation never waits for a downstream reader to drain its pipe.
       const monitor = (async () => {

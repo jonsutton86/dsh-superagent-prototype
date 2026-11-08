@@ -334,14 +334,17 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/core/memory.ts` | `MemoryRepositories`: the Store's repositories in memory, in the Store's order and with its nested rollback, for domain tests |
 | `src/core/index.ts` | The core's exports |
 | `src/app/runtime.ts` | The Runtime, the composition root, with its start and stop |
-| `src/environments/model.ts` | Local environment enrollment, operator grant contracts and views |
+| `src/environments/model.ts` | Local and remote environment enrollment, operator grant contracts and views |
 | `src/environments/service.ts` | Persistent grants, paired filesystem/process verification, execution binding, revocation and replacement |
+| `src/environments/remote-workspace.ts` | Bound remote provider verification and workspace preparation without host path interpretation |
 | `src/remote/protocol.ts`, `limits.ts` | Versioned endpoint RPC, grant generations, process/file receipts and bounded transport windows |
 | `src/remote/journal.ts` | Independent single-writer SQLite state, HMAC credentials, intent deduplication, output offsets and restart uncertainty |
 | `src/remote/endpoint.ts`, `http.ts` | Authenticated execution admission, lease expiry, process supervision, mutation serialization and browser-request refusal |
 | `src/remote/isolation.ts`, `filesystem-runner.ts`, `fs-worker.ts` | Linux bubblewrap process worlds and standalone confined filesystem operations |
 | `src/remote/client.ts`, `admin.ts` | Pinned host-side RPC, same-ID retry, reconnect observation and explicit uncertain outcomes |
 | `src/remote/world.ts`, `world-journal.ts` | Persistent execution-world authority binding, serialized lease maintenance, durable self-revocation and independent quiescence observations |
+| `src/remote/presets.ts` | Authority-specific Harness presets for remote workers, children and the typed-tool router |
+| `src/remote/search.ts` | Bounded remote glob/grep tools using endpoint ripgrep and grant-checked paths |
 | `src/remote/filesystem.ts`, `subprocess.ts` | Paired Harness filesystem/process services, scoped targets, guarded writes, stream cursors and independent exit observation |
 | `src/remote/endpoint-plugin.ts`, `provider-plugin.ts` | Dedicated endpoint and execution-world Harness composition; bounded lease renewal |
 | `src/app/setup.ts` | Setup, and `setupChanged`, whether a save changes a field setup reads |
@@ -449,6 +452,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/inbox-ui.spec.tsx` | Rendered task/question/reply flow, lost reply response, safe text and artifact/mission links |
 | `tests/local-execution.spec.ts` | General local missions without accounts, filesystem/process probes, mode mismatch, local prompts and GitHub exclusion |
 | `tests/remote.spec.ts` | Real Harness/HTTP execution, acknowledgement loss, lease fencing, uncertain recovery, confined-helper semantics, output backpressure and opt-in native Linux qualification |
+| `tests/remote-harness.spec.ts` | Opt-in installed Harness qualification with a configured model, remote artifact production and coordinator restart |
 | `tests/watchdog.spec.ts` | Independent journal recovery, assessment budgets, service outages, bounded interventions and concurrent polling |
 | `tests/watchdog-runtime.spec.ts` | Independent Cordis/Harness composition with simulated inference: restricted tools, Session creation, state ownership and shutdown |
 | `tests/policy.spec.ts` | Source scope, the gate, the admission table, Mandate revalidation, the Policy version, settings migrations and assessment outcomes |

@@ -42,7 +42,7 @@ export function EnvironmentsPage() {
   return <section className="dt-missions">
     <div className="dt-mission-heading"><div><h2>{t('tab.environments')}</h2><p>{t('environment.intro')}</p></div>
       <Button onClick={() => { void reload(); void refreshState() }}>{t('mission.refresh')}</Button></div>
-    <p className="dt-hint">{t('environment.localBoundary')}</p>
+    <p className="dt-hint">{t(data?.currentKind === 'remote' ? 'environment.remoteBoundary' : 'environment.localBoundary')}</p>
     {(error || command.error) && <p role="alert" className="dt-error">{command.error || error?.message}
       {command.error && command.retry && <Button disabled={command.busy} onClick={() => { void command.retry?.() }}>{t('environment.retry')}</Button>}</p>}
     {!data && !error && <p role="status">{t('loading')}</p>}
@@ -81,20 +81,24 @@ function EnvironmentCard({ record, listing, changed }: { record: EnvironmentView
     <p>{t('environment.openTickets', { count: record.openTickets })}</p>
     {record.verifiedAt && <p>{t('environment.verified')}: <When at={record.verifiedAt} /></p>}
     {record.problem && <p role="status" className="dt-error">{record.problem}</p>}
+    {record.remote && <p className="dt-hint">{t('environment.remoteEndpoint')}: <code>{record.remote.endpointId}</code></p>}
+    {record.remoteStatus?.problem && <p role="status" className="dt-error">{record.remoteStatus.problem}</p>}
+    {record.remoteStatus && record.remoteStatus.phase !== 'active' && <p role="status">{t(!record.remoteStatus.acknowledged
+      ? 'environment.remotePending' : record.remoteStatus.quiescent ? 'environment.remoteStopped' : 'environment.remoteUncertain')}</p>}
     {command.error && <p role="alert" className="dt-error">{command.error}
       {command.retry && <Button disabled={command.busy} onClick={() => { void command.retry?.() }}>{t('environment.retry')}</Button>}</p>}
     {!record.retired && <>
       {record.current && <div className="dt-mission-buttons">
         <Button disabled={command.busy} onClick={verify}>{t('environment.verify')}</Button>
-        <Button disabled={command.busy} onClick={() => setReplace(!replace)}>{t('environment.replace')}</Button>
+        {record.kind === 'local' && <Button disabled={command.busy} onClick={() => setReplace(!replace)}>{t('environment.replace')}</Button>}
       </div>}
       {replace && <div className="dt-mission-form"><p>{t('environment.replaceHint')}</p>
         <Button disabled={command.busy} onClick={replaceEnrollment}>{t('environment.replaceConfirm')}</Button></div>}
-      <form className="dt-mission-form" onSubmit={submit}>
+      {record.kind === 'remote' && !record.enabled ? <p>{t('environment.remoteReauthorize')}</p> : <form className="dt-mission-form" onSubmit={submit}>
         <p className="dt-hint">{t(record.enabled ? 'environment.revokeHint' : 'environment.enableHint')}</p>
         <label>{t('environment.reason')}<textarea value={reason} onChange={event => setReason(event.target.value)} required maxLength={2000} rows={2} /></label>
         <Button type="submit" disabled={command.busy || !reason.trim()}>{t(record.enabled ? 'environment.revoke' : 'environment.enable')}</Button>
-      </form>
+      </form>}
     </>}
   </article>
 }

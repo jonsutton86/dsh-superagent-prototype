@@ -10,15 +10,17 @@ export const EnrollEnvironment = z.object({ requestId, name: z.string().trim().m
 export const EnvironmentCommand = z.object({ requestId, revision: z.number().int().positive(), enabled: z.boolean(),
   reason: z.string().trim().min(1).max(2000) }).strict()
 export interface EnvironmentRecord {
-  id: string; name: string; kind: 'local'; root: string; configuredRoot: string; mode: 'repository' | 'local'
+  id: string; name: string; kind: 'local' | 'remote'; root: string; configuredRoot: string; mode: 'repository' | 'local'
   identity: string; revision: number; epoch: number; enabled: boolean; createdAt: string; updatedAt: string
+  remote?: { binding: string; endpointId: string; grantId: string; epoch: number }
   retired?: boolean
 }
 export interface EnvironmentView extends Omit<EnvironmentRecord, 'identity'> {
   current: boolean; verifiedAt?: string; problem?: string; openTickets: number
-  capabilities: { filesystem: true; subprocess: true; osIsolation: false; remote: false }
+  capabilities: { filesystem: true; subprocess: true; osIsolation: boolean; remote: boolean }
+  remoteStatus?: { ready: boolean; phase: 'active' | 'revoking' | 'revoked'; problem?: string; acknowledged?: boolean; quiescent?: boolean }
 }
-export interface EnvironmentList { items: EnvironmentView[]; currentRoot: string; currentMode: 'local' | 'repository'; needsEnrollment: boolean }
+export interface EnvironmentList { items: EnvironmentView[]; currentRoot: string; currentMode: 'local' | 'repository'; currentKind?: 'local' | 'remote'; needsEnrollment: boolean }
 export type EnrollEnvironmentInput = z.input<typeof EnrollEnvironment>
 export type EnvironmentCommandInput = z.input<typeof EnvironmentCommand>
 export type { ExecutionGrant }

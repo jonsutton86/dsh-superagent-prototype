@@ -19,6 +19,7 @@ import { SourceRegistry } from '../sources/registry.ts'
 import { Commands } from '../infra/commands.ts'
 import type { Deployment, Machine } from '../deployment.ts'
 import { environmentOf, ticketEnvironment, executionRoot, type Variable } from './execution-environment.ts'
+import { RemoteWorkspace, remoteWorld } from '../environments/remote-workspace.ts'
 import type { SetupProblem } from '../setup.ts'
 import { DshExecutor, sourceTrigger, triggerMessage, workerSessionId, ticketOfSession } from '../executor/dsh.ts'
 import { ticketCard } from './cards.ts'
@@ -80,6 +81,7 @@ export class Runtime extends Service implements SourceHost {
   readonly inbox: Inbox
   readonly library: Library
   readonly environments: Environments
+  readonly remoteWorkspace?: RemoteWorkspace
   readonly ready: Promise<void>
   private readonly board = new HealthBoard()
   private readonly runtimeHealth = this.board.claim('runtime', { state: 'starting', detail: '' })
@@ -107,8 +109,10 @@ export class Runtime extends Service implements SourceHost {
     try {
       const report = (error: unknown) => { ctx.logger.warn('dsh-superagent: %s', String(error)) }
       const store = opened = this.store = new Store(join(machine.stateDir, 'orchestrator.sqlite'), report)
+      const world = remoteWorld(ctx)
+      const remote = this.remoteWorkspace = world ? new RemoteWorkspace(world, ctx.fs, ctx.subprocess, this.lifetime) : undefined
       const environments = this.environments = new Environments({ store, filesystem: ctx.fs, subprocess: ctx.subprocess, lifetime: this.lifetime,
-        root: () => executionRoot(store.settings(), machine.stateDir), mode: () => machine.executionMode ?? 'repository', engine: () => runtime.engine })
+        remote, root: () => executionRoot(store.settings(), machine.stateDir, world?.grant.root), mode: () => machine.executionMode ?? 'repository', engine: () => runtime.engine })
       const library = this.library = new Library(store)
       const workspace = this.workspace = new Workspace(store, () => runtime.engine, () => !this.paused() && !this.closing(),
         id => library.evidenceRevision(id), ticket => environments.allows(ticket.execution?.environment))
@@ -118,7 +122,7 @@ export class Runtime extends Service implements SourceHost {
         const id = ticketOfSession(session.id)
         if (id) inbox.record(id, event)
       }))
-      const setup = this.setup = new Setup({ context: ctx, machine, lifetime: this.lifetime, restart,
+      const setup = this.setup = new Setup({ context: ctx, machine, lifetime: this.lifetime, restart, remote,
         incompatibleTickets: () => store.tickets.open().some(ticket => ticket.execution
           && (ticket.execution.mode ?? 'repository') !== (machine.executionMode ?? 'repository')) })
       const deployed = () => setup.configured()
@@ -145,13 +149,13 @@ export class Runtime extends Service implements SourceHost {
         promptVersion: id => this.sessions.promptVersion(id), mayRead: (id, revision) => this.sessions.mayRead(id, revision),
         feishuPageSize: () => feishuSettings(sources).readPageSize, sourceLink: link }
       const sessions = this.sessions = new Sessions({ context: ctx, store, prompts, effects, health: board.claim('models'), masterId,
-        lifetime: this.lifetime,
+        lifetime: this.lifetime, remote, environmentAllowed: ticket => environments.allows(ticket.execution?.environment),
         closing: () => this.closing(), environment,
         tools: (agent, ticket) => ticket ? executorTools(this.toolHost, ticket) : mainTools(this.toolHost, agent) })
       const policyChanged: EngineForSettings['policyChanged'] = (from, to, effects) => { this.engine.policyChanged(from, to, effects) }
       this.settings = new Settings({ store, sources, engine: { policyChanged }, health: board, context: ctx, lifetime: this.lifetime, sessions,
         sourceHost: this, setup, requestPass: () => { this.passes.request() } })
-      this.executor = new DshExecutor({ context: ctx, get engine() { return runtime.engine }, store, effects, health: board.claim('worker'), machine, environments,
+      this.executor = new DshExecutor({ context: ctx, get engine() { return runtime.engine }, store, effects, health: board.claim('worker'), machine, environments, remote,
         lifetime: this.lifetime, sessions, closing: () => this.closing(), paused: () => this.paused(), environment, sourceLink: link,
         repliedTo: trigger => repliedTo({ store, sources }, trigger) })
       this.assessor = new MasterAssessor({ get engine() { return runtime.engine }, commands, get deployment() { return setup.deployment }, effects,
@@ -239,9 +243,12 @@ export class Runtime extends Service implements SourceHost {
       return
     }
     await this.environments.initialize().catch(error => this.ctx.logger.warn('Execution environment enrollment: %s', String(error)))
+    if (this.remoteWorkspace && !this.environments.ready()) {
+      this.runtimeHealth.set({ state: 'paused', detail: 'Remote execution environment requires authorization or enrollment', at: now() }); return
+    }
     this.sessions.install()
     this.executor.install()
-    await this.sessions.ensure(this.masterId, this.machine.stateDir, 'dsh-superagent orchestrator', 'orchestrator')
+    await this.sessions.ensure(this.masterId, this.remoteWorkspace?.world.grant.root ?? this.machine.stateDir, 'dsh-superagent orchestrator', 'orchestrator')
     for (const id of this.settings.syncable()) await this.settings.sync(id).catch(() => { /* sync() records its failure in health. */ })
     // If stop() was called while awaiting setup, session creation, or policy sync, do not start background loops.
     if (this.closing()) return
@@ -253,7 +260,7 @@ export class Runtime extends Service implements SourceHost {
   private httpHost(): HttpHost {
     const runtime = this
     const { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, ready, sourceLinks, setup, passes } = this
-    return { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, ready, sourceLinks,
+    return { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, ready, sourceLinks, remoteRoot: this.remoteWorkspace?.world.grant.root,
       get health() { return runtime.health },
       supervision: this.supervision, workspace: this.workspace, library: this.library, inbox: this.inbox, environments: this.environments,
       get deployment() { return setup.deployment },

@@ -6,6 +6,7 @@ import { agentVariables, applyEnvironment, verifyEnvironment, verifyLocalWorkspa
 import { executionRoot } from './execution-environment.ts'
 import type { Settings, SettingsBlock } from '../policy.ts'
 import { SetupError, type SetupProblem } from '../setup.ts'
+import type { RemoteWorkspace } from '../environments/remote-workspace.ts'
 
 export interface SetupHost {
   readonly context: Context
@@ -13,6 +14,7 @@ export interface SetupHost {
   readonly lifetime: AbortSignal
   restart(): void
   incompatibleTickets?(): boolean
+  remote?: RemoteWorkspace
 }
 
 const setupFields = (settings: Settings) =>
@@ -64,6 +66,7 @@ export class Setup {
   restart(): void { setTimeout(this.host.restart, 0) }
   /** Verify account CLIs for a modified source block before saving, ignoring setup errors belonging to other blocks. */
   async checkAccounts(block: SettingsBlock, settings: Settings): Promise<void> {
+    if (this.host.remote) throw new SetupError('environmentFailed', { output: 'Remote endpoint credential bindings are required before configuring account CLIs for a remote profile.' })
     const { machine } = this.host
     if (machine.executionMode === 'local' && block === 'source:github') throw new SetupError('githubUnavailable')
     const check = block === 'source:feishu' ? resolveFeishuBot(machine, settings.sources.feishu?.config, this.probe())
@@ -71,6 +74,10 @@ export class Setup {
     await check.catch((error: unknown) => { if (!(error instanceof SetupError) || error.place === block.slice(7)) throw error })
   }
   async blockCommands(blocked: readonly string[]): Promise<void> {
+    if (this.host.remote) {
+      if (blocked.length) throw new SetupError('environmentFailed', { output: 'Host command shims cannot enforce commands in a remote environment. Configure endpoint policy before using blocked commands.' })
+      return
+    }
     if (this.resolved) await writeEnvironment(this.resolved, blocked)
   }
   restore(): void { this.restoreEnvironment?.(); this.restoreEnvironment = undefined }
@@ -81,6 +88,18 @@ export class Setup {
   }
   private async resolve(settings: Settings): Promise<Deployment> {
     const { context, machine, lifetime } = this.host
+    if (this.host.remote) {
+      try {
+        if (machine.executionMode !== 'local') throw new Error('Remote mission profiles currently require general-mission mode (executionMode: local); repository credentials must be bound at the endpoint first.')
+        if (settings.sources.github?.config.cli || settings.sources.feishu?.config.cli)
+          throw new Error('Host account CLIs cannot be forwarded to a remote environment; endpoint credential bindings are required.')
+        await this.blockCommands(settings.executor.blockedCommands)
+        const root = executionRoot(settings, machine.stateDir, this.host.remote.world.grant.root)
+        if (root !== this.host.remote.world.grant.root) throw new Error('The configured execution directory must equal the remote grant root.')
+        await this.host.remote.verify(root)
+        return { ...machine, executionMode: 'local' }
+      } catch (error) { throw new SetupError('environmentFailed', { output: error instanceof Error ? error.message : String(error) }) }
+    }
     const probe = this.probe()
     const deployment: Deployment = machine.executionMode === 'local' ? { ...machine, executionMode: 'local' }
       : await resolveDeployment(machine, settings.sources.github?.config, probe)

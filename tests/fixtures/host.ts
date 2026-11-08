@@ -8,6 +8,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { vi, type Mock } from 'vitest'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
+import type { Agent, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
+import type { FileSystem } from '@deepseek-ai/dsh-fs'
+import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
+import { ApiSessionNotFound } from '@deepseek-ai/dsh-api-session-controller'
+import type { RemoteWorld } from '../../src/remote/world.ts'
 import { Runtime } from '../../src/app/runtime.ts'
 import { Store } from '../../src/app/store.ts'
 import { SettingsSchema } from '../../src/policy.ts'
@@ -133,7 +138,8 @@ export function subagentRuntime(agents: Map<string, FakeAgent>) {
 }
 
 /** @param seed - writes to the database before the Runtime opens it, such as records an earlier version stored. */
-export async function startRuntime(seed?: (store: Store) => void, options: { executionMode?: 'local' | 'repository'; noAccounts?: boolean } = {}) {
+export async function startRuntime(seed?: (store: Store) => void, options: { executionMode?: 'local' | 'repository'; noAccounts?: boolean;
+  remote?: { world: RemoteWorld; filesystem: FileSystem; subprocess: SubprocessRuntime } } = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'orchestrator-host-'))
   const AGENT = join(directory, 'agent-gh'), BOT = join(directory, 'lark-bot')
   const repository = { default_branch: 'master', permissions: { push: true } }
@@ -168,8 +174,7 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
   const deliveries = vi.fn<(request: Delivery) => void>()
   let http!: HttpHandler
   const resolveDefault = async (id: string) => agents.has(id) ? { agent: agents.get(id) } : { error: { code: 'session/not-found' } }
-  const controller = {
-    create: vi.fn(async ({ sessionId }: { sessionId: string }) => {
+  const createAgent = async ({ sessionId, workspaceId, agentPreset }: { sessionId: string; workspaceId?: string; agentPreset?: string }) => {
       if (agents.has(sessionId)) return
       const agentCtx = new Context()
       const sessionTools = new Map<string, RegisteredTool>()
@@ -211,7 +216,7 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
         turn++
         take(true)
       })
-      const session = { id: sessionId, snapshotEvents: () => [], requestHeader: () => undefined, append: vi.fn() }
+      const session = { id: sessionId, header: { id: sessionId, cwd: workspaceId, agentPreset }, snapshotEvents: () => [], requestHeader: () => undefined, append: vi.fn() }
       let status = 'idle'
       const idle: (() => void)[] = []
       // A cancel drops the inbox unless kept, and the turn it stops ends a moment later, which DSH says.
@@ -229,18 +234,39 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
         get status() { return status }, set status(next: string) { status = next; if (next === 'idle') for (const wake of idle.splice(0)) wake() },
         // Once its turn ended, as DSH's does.
         whenIdle: () => status === 'idle' ? Promise.resolve() : new Promise<void>(resolve => { idle.push(resolve) }) } as never)
-    }),
+    }
+  const controller = {
+    create: vi.fn(createAgent),
     selectModel: vi.fn(async () => {}), resolveAgent: vi.fn(resolveDefault), rename: vi.fn(async () => {}),
     prompt: vi.fn(() => { throw new Error('Plugin delivery must not use user RPC') }),
-    inspect: vi.fn(async () => ({ events: [] })),
+    inspect: vi.fn(async (id: string) => {
+      const agent = agents.get(id) as unknown as Agent | undefined
+      if (!agent) throw new ApiSessionNotFound('Session not found')
+      return { meta: agent.session.header, events: [] }
+    }),
   }
   const reader = { read: async () => ({ events: [] }), [Symbol.asyncDispose]: async () => {} }
   const persistence = { flush: vi.fn(async () => {}), open: vi.fn(async () => reader) }
   const webServer = { host: '127.0.0.1', port: 3082, register: (route: { handler: HttpHandler }) => { http = route.handler; return () => {} } }
   const jobs = jobRegistry(id => agents.get(id))
   const subagents = subagentRuntime(agents)
-  const services = { fs: filesystem, agents, llm: { resolveCallConfig: vi.fn(async (value: unknown) => value) }, sessionController: controller,
-    sessionPersistence: persistence, workspaceRegistry: { create: async (cwd: string) => ({ id: cwd }) }, permissionPresets: { set: () => {} }, subprocess, webServer,
+  const presets = new Map<string, { id: string; plugins: unknown[] }>()
+  const registry = Object.assign(agents, { create: vi.fn(async (options: CreateAgentOptions) => {
+    await createAgent({ sessionId: options.sessionId, workspaceId: options.meta?.cwd, agentPreset: options.meta?.agentPreset })
+    const agent = agents.get(options.sessionId) as unknown as Agent
+    try { const ready = await options.setup?.(agent.ctx, agent); ready?.commit?.() }
+    catch (error) { agents.delete(options.sessionId); await agent.ctx.fiber.dispose(); throw error }
+    return { agent, dispose: () => agent.ctx.fiber.dispose() }
+  }) })
+  const services = { fs: options.remote?.filesystem ?? filesystem, agents: registry, llm: { resolveCallConfig: vi.fn(async (value: unknown) => value) }, sessionController: controller,
+    sessionPersistence: persistence, workspaceRegistry: { create: async (cwd: string) => ({ id: cwd }) }, permissionPresets: { set: () => {} },
+    subprocess: options.remote?.subprocess ?? subprocess, webServer,
+    ...(options.remote ? { superagentRemoteWorld: options.remote.world,
+      agentDefaultModel: { currentSelection: () => ({ provider: 'test', model: 'test' }) },
+      sandboxPolicy: { resolve: () => ({ mode: 'danger-full-access' }) },
+      sessionProjections: { stateOf: () => ({ pending: null }) },
+      agentPresets: { register: async (definition: { id: string; plugins: unknown[] }) => { presets.set(definition.id, definition); return async () => { presets.delete(definition.id) } },
+        resolve: async (id: string) => { if (!presets.has(id)) throw new Error('Preset unavailable'); return { id } }, mount: async () => {} } } : {}),
     jobs: jobs.service, subagents: subagents.service }
   const ctx = new Context()
   for (const [name, service] of Object.entries(services)) ctx.reflect.provide(name, service)
@@ -295,6 +321,6 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
   /** A step of the worker claims what waits for it, and is cut off before the Session took it. */
   const claim = (sessionId: string) => { claims.get(sessionId)!() }
   return { runtime, ctx, directory, agents, tools, deliveries, relays, candidates, runTool, route, acceptedTicket, api, controller, subprocess, hooks, resolveDefault, stop,
-    jobs, subagents, step, claim }
+    jobs, subagents, step, claim, presets }
 }
 export type Host = Awaited<ReturnType<typeof startRuntime>>

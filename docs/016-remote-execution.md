@@ -2,8 +2,9 @@
 
 This increment implements an independent endpoint and paired DeepSeek Harness filesystem/process services. It builds on
 [015 Execution environments](015-execution-environments.md) and preserves Harness as the execution framework. It does not
-yet enable remote selection in the mission UI: the existing Runtime still admits its verified local environment. Remote
-world composition, command-to-assignment ownership, restore and operator enrollment/reconciliation remain integration work.
+provide per-action selection of different environments. The subsequent `017-remote-missions.md` increment composes a whole
+Harness profile for remote general missions. Command-to-assignment receipts, restore and endpoint enrollment/reconciliation
+remain integration work.
 
 ## Components and authority
 
@@ -12,8 +13,8 @@ services. Its listener must be `127.0.0.1`; HTTPS termination or an authenticate
 execution and filesystem RPC run inside bubblewrap. There is no production unconfined fallback.
 
 `dsh-superagent/remote-world` supplies both `FileSystem` and `SubprocessRuntime` in one dedicated Harness execution-world
-scope. Remove that scope's local providers; installing a remote shell alone does not create a remote world. Do not replace
-the coordinator's global services or mount this into an ordinary worker scope that cannot override those services. This
+scope. Remove that scope's local providers; installing a remote shell alone does not create a remote world. A dedicated
+remote mission profile replaces its root providers together; an ordinary worker preset cannot override the complete world. This
 plugin requires a pinned endpoint identity, a grant credential file, a persistent private coordinator `stateDir`, and
 `fs.read`/`process.spawn`. State and credentials must be outside worker workspaces. It checks the same grant generation once
 per minute and renews an eligible active lease when less than four minutes remain, for at most five minutes. Revocation or
@@ -49,12 +50,11 @@ lease still bounds authority if revocation cannot be delivered. Closing a provid
 There is deliberately no local re-enable operation: new authority requires a separately composed world with separate Session
 ownership. Do not delete the journal to make old Sessions inherit new credentials.
 
-This service is a prerequisite for mission integration, not its completion. Mission and Session records still need to store
-and enforce the binding fingerprint. Inspection of Harness's agent loop and working-directory services confirmed that their
-provider context is fixed at composition; an ordinary agent preset cannot replace the whole execution world. A complete
-remote profile must also avoid the Session controller's host-side directory creation, prepare workspaces through the remote
-providers, keep coordinator account probes local, and bind child Sessions to the same authority. Those paths are not yet
-enabled by the operator mission UI. No host filesystem fallback is introduced by this lifecycle service.
+The lifecycle service supplies the authority used by the remote mission integration in `017-remote-missions.md`. That
+increment binds mission and Session records to the fingerprint, prepares remote directories without host filesystem calls,
+and pins child presets to the same world. Ordinary presets alone cannot replace Harness's composition-bound filesystem
+and process context. Endpoint credential bindings, per-action environment choice and distributed coordinator ownership
+remain separate requirements.
 
 The control directory, workspace parent and system runtime mounts must be disjoint. Every grant pins a canonical workspace
 and its device/inode/birth identity. Production workers see read-only system runtime directories, a minimal `/etc`, their own
@@ -149,7 +149,7 @@ writeFileSync('/private/coordinator/mission-one.token', receipt.credential, { fl
 
 Configure the paired provider with the same URL/UUID, `credentialFile: /private/coordinator/mission-one.token` and
 `stateDir: /private/coordinator/worlds/mission-one` in its dedicated world. Preserve that directory across restarts and keep
-client and endpoint builds aligned. This is a developer composition API; it is not yet a supported remote mission deployment recipe.
+client and endpoint builds aligned. `017-remote-missions.md` records the dedicated general-mission profile recipe and its limits.
 For administration use `job.list`, `job.get`, `job.output`, `job.cancel`, `grant.change`, `job.reconcile` and
 `operation.reconcile`. Preserve request IDs across uncertain responses. Inspect the endpoint and effects independently before
 attesting quiescence; a model statement is insufficient. Revocation increments the epoch, so reauthorization requires installing
@@ -186,7 +186,7 @@ All 74 test files / 1,315 tests passed; the one skipped case checks refusal on a
 paired file/process visibility, hidden control state, ambient environment exclusion, network isolation, dangling-symlink
 refusal and offline revocation of a detached child. This qualifies the exercised Linux transport and namespace boundary.
 Cross-host TLS/tunnel failure drills, hostile concurrent filesystem races, coordinator restore/failover, resource limits and
-full mission dispatch remain required acceptance work. The full article and Agentic OS objective remain open.
+broader multi-environment mission dispatch remain required acceptance work. The full article and Agentic OS objective remain open.
 
 Local verification on 2026-11-08: typecheck, all builds and 74 test files / 1,315 tests passed, with the native Linux case
 explicitly skipped. Built endpoint/world/client imports and a standalone built-helper write/read proof passed separately.

@@ -20,51 +20,18 @@ import { BubblewrapIsolation, type ExecutionIsolation } from '../src/remote/isol
 import type { GrantReceipt, RemoteJob, RemoteOperation, OutputWindow, RpcInput, RevocationReceipt } from '../src/remote/protocol.ts'
 import { RemoteWorld } from '../src/remote/world.ts'
 import { apply as composeWorld } from '../src/remote/provider-plugin.ts'
+import { startRuntime } from './fixtures/host.ts'
+import { remoteFixture } from './fixtures/remote.ts'
+import { filesystem as localFilesystemFixture } from './fixtures/filesystem.ts'
+import type { MissionView } from '../src/workspace/model.ts'
+import type { LibraryEntry } from '../src/workspace/library-model.ts'
+import type { FileSystem } from '@deepseek-ai/dsh-fs'
+import { KV } from '../src/kv.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { for (const stop of cleanup.reverse()) await stop(); cleanup.length = 0; vi.restoreAllMocks() })
 
-/** Real Harness local providers and real HTTP; test-only passthrough never enters the production endpoint plugin. */
-async function fixture(options: { leaseMs?: number; outputMaxBytes?: number; native?: boolean } = {}) {
-  const directory = await mkdtemp(join(tmpdir(), 'dsh-remote-')), ctx = new Context()
-  const fs = new LocalFileSystem(ctx, { cwd: directory, diffBasisMaxBytes: 1024 * 1024 }), process = new LocalSubprocessRuntime(ctx)
-  const isolation: ExecutionIsolation = options.native ? new BubblewrapIsolation(process) : { name: 'test-only-unconfined',
-    wrap: async (argv, _root, _cwd, _network, _signal, _env, helper) => argv.map(arg => arg === '/run/dsh-filesystem.mjs' && helper ? helper : arg) }
-  const endpoint = new RemoteEndpoint({ stateDir: join(directory, 'control'), root: join(directory, 'work'), filesystem: fs, subprocess: process,
-    isolation, filesystemRpc: confinedFilesystem(process, isolation, fileURLToPath(new URL(options.native ? '../lib/remote-fs-worker.js' : '../src/remote/fs-worker.ts', import.meta.url))),
-    outputMaxBytes: options.outputMaxBytes, shutdownMs: 2000 })
-  await endpoint.start()
-  let lose = false, offline = false
-  const handler = remoteHandler(endpoint)
-  const server = createServer((req, res) => {
-    if (offline) { res.destroy(); return }
-    if (lose) { lose = false; res.end = (() => { res.destroy(); return res }) as typeof res.end }
-    void handler(req, res).catch(() => res.destroy())
-  })
-  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
-  const url = `http://127.0.0.1:${(server.address() as { port: number }).port}`
-  const connection = { url, endpointId: endpoint.journal.id, credentialFile: join(directory, 'control/admin.token'), timeoutMs: 1000 }
-  const admin = new RemoteClient(connection)
-  const enrolled = await admin.call<GrantReceipt>({ op: 'grant.create', requestId: 'enroll', owner: 'coordinator', workspace: 'task',
-    operations: ['fs.read', 'fs.write', 'process.spawn'], leaseMs: options.leaseMs ?? 300_000 })
-  const credentialFile = join(directory, 'grant.token'); await writeFile(credentialFile, enrolled.credential!, { mode: 0o600 })
-  const client = new RemoteClient({ ...connection, credentialFile })
-  const world = new Context(), remoteFs = new RemoteFileSystem(world, client, enrolled.grant), remoteProcess = new RemoteSubprocess(world, client, enrolled.grant)
-  cleanup.push(async () => { offline = false; await endpoint.stop(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()));
-    await world.fiber.dispose(); await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }) })
-  const spawn = (script: string, extra = {}) => ({ op: 'job.spawn' as const, requestId: randomUUID(), revision: enrolled.grant.revision,
-    argv: ['/bin/sh', '-c', script], cwd: enrolled.grant.root, graceMs: 100, env: {}, ...extra })
-  const settled = async (id: string) => {
-    let value: RemoteJob | undefined
-    await vi.waitFor(async () => { value = await client.call<RemoteJob>({ op: 'job.get', id }); expect(value.quiescent).toBe(true) }, { timeout: 5000 })
-    return value!
-  }
-  return { directory, ctx, endpoint, server, url, connection, admin, client, enrolled, remoteFs, remoteProcess, fs, isolation, spawn, settled,
-    lose: () => { lose = true }, failResponse: () => {
-      const rpc = endpoint.rpc.bind(endpoint)
-      vi.spyOn(endpoint, 'rpc').mockImplementationOnce(async (...args) => { await rpc(...args); throw new Error('Response failed after commit') })
-    }, offline: (value: boolean) => { offline = value } }
-}
+const fixture = (options: Parameters<typeof remoteFixture>[1] = {}) => remoteFixture(cleanup, options)
 
 it('authenticates and pins the endpoint, denies browser RPC, and keeps grant credentials out of process overrides', async () => {
   const h = await fixture()
@@ -452,6 +419,96 @@ it('refuses a different endpoint binding and fences an externally revoked world 
   await ctx.fiber.dispose()
   const wrong = new RemoteWorld({ ...config, endpointId: 'another-endpoint' }); cleanup.push(() => wrong.close())
   await expect(wrong.start()).rejects.toMatchObject({ code: 'world_changed' })
+})
+
+/** Exercise real remote filesystem/process providers beneath the actual mission/Engine APIs; only inference is a host fixture. */
+async function remoteMission(native: boolean) {
+  const h = await fixture({ native }), p = await persistentWorld(h, native)
+  const host = await startRuntime(undefined, { executionMode: 'local', noAccounts: true,
+    remote: { world: p.world, filesystem: p.ctx.fs, subprocess: p.ctx.subprocess } })
+  cleanup.push(() => host.stop())
+  const environment = host.runtime.environments.list().items[0]!, binding = p.world.status().binding
+  expect(environment).toMatchObject({ kind: 'remote', root: h.enrolled.grant.root, capabilities: { remote: true, osIsolation: true }, remote: { binding } })
+  expect(host.runtime.environments.ready()).toBe(true)
+  expect((await host.api('GET', 'settings')).body).toMatchObject({ environment: { root: h.enrolled.grant.root } })
+  let mission = (await host.api('POST', 'missions', { requestId: randomUUID(), title: 'Remote result', objective: 'Produce a result on the execution endpoint', acceptance: 'Read the stored artifact' })).body as unknown as MissionView
+  mission = (await host.api('POST', `missions/${mission.id}/actions`, { requestId: randomUUID(), revision: mission.revision,
+    title: 'Create result', instructions: 'Write and publish a result', owner: 'agent' })).body as unknown as MissionView
+  mission = (await host.api('POST', `missions/${mission.id}/actions/${mission.actions[0]!.id}`, { requestId: randomUUID(), revision: mission.revision, command: 'run' })).body as unknown as MissionView
+  await host.runtime.idle()
+  const ticketId = mission.actions[0]!.ticket!.id, ticket = host.runtime.store.tickets.get(ticketId)!, id = `worker-${ticketId}`
+  expect(ticket.execution?.environment?.world).toBe(binding)
+  expect(ticket.mandate.environment).toEqual(ticket.execution?.environment)
+  expect(host.agents.has(id), JSON.stringify(ticket.assignments)).toBe(true)
+  expect(host.controller.create).not.toHaveBeenCalled()
+  expect(host.runtime.store.get(KV.sessions.world(id))).toBe(binding)
+  expect(host.ctx.agents.get(id as never)?.session.header.agentPreset).toBe(`dsh-superagent-remote-worker-${binding}`)
+  const child = host.presets.get(`dsh-superagent-remote-child-${binding}`)!
+  expect(JSON.stringify(child)).toContain(`dsh-superagent-remote-child-${binding}`)
+  const router = JSON.stringify(host.presets.get(`dsh-superagent-remote-router-${binding}`))
+  expect(router).not.toMatch(/bash|tool-fs|subagent/)
+  const createChild = async (name: string, parent?: string) => {
+    await host.controller.create({ sessionId: name, workspaceId: ticket.execution!.directory, agentPreset: `dsh-superagent-remote-child-${binding}` })
+    const agent = host.ctx.agents.get(name as never)!
+    Object.assign(agent.session.header, { parentSession: parent })
+    await host.ctx.parallel('agent/created', { agent, source: 'resume' })
+    return agent
+  }
+  const refusals = (agent: Awaited<ReturnType<typeof createChild>>) => vi.mocked(agent.ctx.tools.guard).mock.calls
+    .map(([guard]) => guard({} as never)).filter(Boolean)
+  const parentHeader = { ...host.ctx.agents.get(id as never)!.session.header, id: 'unloaded-parent', parentSession: id }
+  host.controller.inspect.mockImplementationOnce(async () => ({ meta: parentHeader as never, events: [] }))
+  const restoredChild = await createChild('restored-child', 'unloaded-parent')
+  expect(refusals(restoredChild)).toEqual([])
+  expect(refusals(await createChild('orphan-child'))).toContain('Remote Session has no verified parent mission')
+  const policy = host.ctx.get('sandboxPolicy') as { resolve(): { mode: string } }
+  const selection = vi.spyOn(policy, 'resolve').mockReturnValue({ mode: 'read-only' })
+  expect(refusals(restoredChild)).toContain('This profile uses endpoint grant confinement; select its Endpoint grant permissions before running tools')
+  selection.mockRestore()
+  const result = host.ctx.subprocess.spawn({ argv: ['/bin/sh', '-c', "printf 'remote result' > result.txt"], cwd: ticket.execution!.directory, graceMs: 100,
+    env: { DSH_HOME: '/private/coordinator', DSH_PROFILE_DIR: '/private/profile', DSH_WEB_URL: 'http://127.0.0.1:3082', DSH_UNUSED: undefined,
+      DSH_SESSION_ID: id, DSH_PROFILE: 'remote-mission', DSH_SHELL: '1' },
+    stdio: { stdin: 'ignore', stdout: { maxBytes: 1024 }, stderr: { maxBytes: 1024 } } })
+  expect((await result.done).exitCode).toBe(0)
+  const submitted = h.endpoint.journal.jobs().at(-1)!.request.env
+  expect(submitted).toMatchObject({ DSH_SESSION_ID: id }); expect(submitted).not.toHaveProperty('DSH_HOME'); expect(submitted).not.toHaveProperty('DSH_PROFILE_DIR')
+  expect(submitted).not.toHaveProperty('DSH_WEB_URL'); expect(submitted).not.toHaveProperty('DSH_UNUSED')
+  const content = await host.ctx.fs.readText(await host.ctx.fs.resolve(join(ticket.execution!.directory, 'result.txt')))
+  expect(await host.runTool(id, 'glob', { pattern: '*.txt' })).toMatchObject({ paths: [join(ticket.execution!.directory, 'result.txt')], truncated: false })
+  expect(await host.runTool(id, 'grep', { pattern: 'remote' })).toMatchObject({ matches: [{ line: 1, text: 'remote result' }], truncated: false })
+  await expect(host.runTool(id, 'glob', { pattern: '*', path: h.directory })).rejects.toThrow('outside the granted workspace')
+  expect(await host.runTool(id, 'grep', { pattern: 'no-match-here' })).toMatchObject({ matches: [], truncated: false })
+  const artifact = await host.runTool(id, 'workspace_publish', { requestId: randomUUID(), kind: 'artifact', title: 'Remote result', summary: 'Stored result', content }) as unknown as LibraryEntry
+  await host.runTool(id, 'orchestrator_report', { state: 'ready', summary: 'Remote result is ready for review' })
+  expect(host.runtime.library.read(artifact.id).content).toBe('remote result')
+  expect(host.runtime.workspace.get(mission.id).actions[0]!.status).toBe('review')
+  const wrong = host.runtime.store.get(KV.sessions.world(id))!
+  host.runtime.store.set(KV.sessions.world(id), 'another-world')
+  await expect(host.runtime.sessions.ensure(id, ticket.execution!.directory, ticket.title, 'worker')).rejects.toThrow('another execution world')
+  host.runtime.store.set(KV.sessions.world(id), wrong)
+  h.offline(true)
+  const revoked = await host.runtime.environments.update(environment.id, { requestId: 'stop-remote-missions', revision: environment.revision,
+    enabled: false, reason: 'Operator stopped remote mission execution' })
+  expect(revoked).toMatchObject({ enabled: false, remoteStatus: { phase: 'revoking', ready: false, acknowledged: false } })
+  expect(host.runtime.environments.allows(ticket.mandate.environment)).toBe(false)
+  expect(refusals(restoredChild).length).toBeGreaterThan(0)
+  h.offline(false); await p.world.refresh()
+  expect(host.runtime.environments.list().items[0]!.remoteStatus).toMatchObject({ phase: 'revoked', acknowledged: true, quiescent: true })
+  await expect(host.runtime.environments.update(environment.id, { requestId: 'cannot-reenable-old-world', revision: revoked.revision,
+    enabled: true, reason: 'Old Sessions cannot inherit new authorization' })).rejects.toThrow()
+}
+
+it('runs a mission and publishes a remote artifact with bound Session ownership and durable revocation', () => remoteMission(false), 30_000)
+it.runIf(process.env.DSH_REMOTE_ISOLATION === '1')('qualifies remote mission dispatch through native Linux confinement', () => remoteMission(true), 30_000)
+
+it('refuses a remote mission profile whose filesystem still resolves on the coordinator', async () => {
+  const h = await fixture(), p = await persistentWorld(h)
+  const host = await startRuntime(undefined, { executionMode: 'local', noAccounts: true,
+    remote: { world: p.world, filesystem: localFilesystemFixture as FileSystem, subprocess: p.ctx.subprocess } })
+  cleanup.push(() => host.stop())
+  expect(host.runtime.configured()).toBe(false)
+  expect(host.runtime.setupProblem?.detail).toContain('same remote execution world')
+  expect(host.agents.size).toBe(0)
 })
 
 it.runIf(process.platform !== 'linux')('refuses an unconfined production endpoint on unsupported hosts', async () => {

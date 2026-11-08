@@ -8,6 +8,12 @@ import { HEALTH_TEXT } from '../sources/host.ts'
 const TEXT = {
   'tab.environments': ['执行环境', 'Environments'],
   'environment.intro': ['管理助手的工作目录及其执行授权。', 'Manage where agents work and their permission to execute.'],
+  'environment.remoteBoundary': ['文件与命令在已授权的远程机器上运行。任务及其会话绑定到同一个执行环境。', 'Files and commands run on an authorized remote machine. Tasks and their Sessions stay bound to that execution environment.'],
+  'environment.remoteEndpoint': ['远程端点', 'Remote endpoint'],
+  'environment.remotePending': ['已在本机阻止新执行，正在等待远程端点确认撤销。', 'New execution is blocked locally; remote revocation acknowledgement is pending.'],
+  'environment.remoteStopped': ['远程撤销已确认，命令和文件操作均已停止。', 'Remote revocation is acknowledged; commands and file mutations are confirmed stopped.'],
+  'environment.remoteUncertain': ['远程撤销已确认，但仍有进程或文件操作需要确认或人工核对。', 'Remote revocation is acknowledged; a process or file mutation still needs observation or operator reconciliation.'],
+  'environment.remoteReauthorize': ['在远程端点授权新的执行环境，并使用新的会话配置。旧任务不会继承新的授权。', 'Authorize a replacement environment at the endpoint and compose a new Session profile. Existing tasks cannot inherit replacement authority.'],
   'environment.localBoundary': ['此配置使用本机的文件系统和进程服务。目录检查不提供操作系统级隔离，也不连接远程机器。', 'This profile uses local filesystem and process services. Directory checks do not provide OS isolation or connect remote machines.'],
   'environment.configuredRoot': ['配置的工作根目录', 'Configured workspace root'],
   'environment.enrollHint': ['验证此目录可供助手访问，然后登记此执行环境。', 'Verify that the agent can access this directory, then enroll it.'],

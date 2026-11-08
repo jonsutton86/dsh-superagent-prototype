@@ -135,7 +135,7 @@ export interface Mandate {
 }
 
 /** Stable execution environment and the exact authorization generation admitted for this work. */
-export interface ExecutionGrant { environmentId: string; revision: number; epoch: number }
+export interface ExecutionGrant { environmentId: string; revision: number; epoch: number; world?: string }
 
 /** Active trigger evaluation on a thread; at most one exists per thread. */
 export interface Evaluation {

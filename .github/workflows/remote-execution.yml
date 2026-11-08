@@ -23,7 +23,7 @@ jobs:
       - name: Install the confined runtime
         run: |
           sudo apt-get update
-          sudo apt-get install --yes bubblewrap
+          sudo apt-get install --yes bubblewrap ripgrep
           sudo install -m 0755 "$(command -v node)" /usr/local/bin/node
           echo /usr/local/bin >> "$GITHUB_PATH"
           npm install --global pnpm@11.25.0

@@ -128,10 +128,13 @@ export class RemoteWorld {
     return pending
   }
   /** Durable local denial survives offline restarts; replay the same request until the endpoint acknowledges it. No re-enable method exists. */
-  async revoke(requestId: string, reason: string): Promise<RemoteWorldStatus> {
+  requestRevocation(requestId: string, reason: string): void {
     if (this.closed || !this.record) throw new Error('Remote world is not open')
     const request = Rpc.parse({ op: 'grant.revoke', requestId, reason }) as Extract<ReturnType<typeof Rpc.parse>, { op: 'grant.revoke' }>
     this.record = this.journal.revoke(request.requestId, request.reason)
+  }
+  async revoke(requestId: string, reason: string): Promise<RemoteWorldStatus> {
+    this.requestRevocation(requestId, reason)
     // A renewal already sent may complete, but no later renewal can be admitted. Its lease still has the endpoint's hard cap.
     await this.maintaining?.catch(() => {})
     await this.refresh()

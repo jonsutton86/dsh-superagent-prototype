@@ -15,7 +15,7 @@ export interface EndpointHost {
   filesystemRpc?(grant: RemoteGrant, request: RpcRequest, signal: AbortSignal): Promise<unknown>
 }
 const message = (error: unknown) => error instanceof Error ? error.message : String(error)
-const DEFAULT_ENV = ['NO_COLOR', 'TERM', 'PAGER', 'GIT_PAGER', 'LANG', 'LC_ALL', 'CI', 'GIT_TERMINAL_PROMPT']
+const DEFAULT_ENV = ['NO_COLOR', 'TERM', 'PAGER', 'GIT_PAGER', 'LANG', 'LC_ALL', 'CI', 'GIT_TERMINAL_PROMPT', 'DSH_SHELL', 'DSH_SESSION_ID', 'DSH_PROFILE']
 const rootIdentity = async (path: string) => { const value = await stat(path, { bigint: true }); return `${value.dev}:${value.ino}:${value.birthtimeNs}` }
 
 /** Independently authenticated execution endpoint; accepts durable intents before crossing a process or file-effect boundary. */
@@ -191,8 +191,9 @@ export class RemoteEndpoint {
     if (this.journal.jobs().filter(job => !job.quiescent && job.phase !== 'unknown').length >= (this.host.maxRunning ?? 8))
       throw new RemoteError(429, 'capacity', 'Endpoint process capacity is reserved')
     const allowed = new Set([...DEFAULT_ENV, ...this.host.allowedEnv ?? []])
-    if (Object.keys(request.env).length > 100 || Object.keys(request.env).some(key => !allowed.has(key) && !key.startsWith('DSH_SUPERAGENT_')))
-      throw new RemoteError(403, 'environment_denied', 'Only explicitly allowed non-credential environment overrides may be forwarded')
+    const denied = Object.keys(request.env).filter(key => !allowed.has(key) && !key.startsWith('DSH_SUPERAGENT_'))
+    if (Object.keys(request.env).length > 100 || denied.length)
+      throw new RemoteError(403, 'environment_denied', `Only explicitly allowed non-credential environment overrides may be forwarded; rejected names: ${denied.join(', ')}`)
     const at = timestamp(), job: RemoteJob = { id: request.requestId, grantId: grant.id, epoch: grant.epoch, revision: grant.revision,
       fingerprint: digest, request, phase: 'accepted', createdAt: at, updatedAt: at, cancelRequested: false, quiescent: false }
     this.journal.atomic(() => { this.journal.saveJob(job); this.journal.audit({ job: job.id, grant: grant.id, epoch: grant.epoch, action: 'accepted' }) })

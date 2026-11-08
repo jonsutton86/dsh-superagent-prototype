@@ -5,11 +5,15 @@ import { posix } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { MAX_WINDOW, type RemoteGrant } from './protocol.ts'
 import type { RemoteClient } from './client.ts'
+import { worldBinding } from './world-journal.ts'
 
 /** Harness filesystem provider paired with one authenticated remote process world. Host files are never implicitly mapped. */
 export class RemoteFileSystem extends FileSystem {
+  readonly executionBinding: string
   private readonly targets = new Map<string, string>()
-  constructor(ctx: Context, private readonly client: RemoteClient, private readonly grant: RemoteGrant) { super(ctx); client.bindGrant(grant) }
+  constructor(ctx: Context, private readonly client: RemoteClient, private readonly grant: RemoteGrant) {
+    super(ctx); client.bindGrant(grant); this.executionBinding = worldBinding(client.connection.endpointId, grant)
+  }
   private target(value: FsTarget): FsTarget {
     const key = FsTargetKey(`${this.client.connection.endpointId}:${this.grant.id}:${this.grant.epoch}:${value.targetKey}`)
     this.targets.set(key, value.displayPath)
