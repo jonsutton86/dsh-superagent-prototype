@@ -58,7 +58,7 @@ refer to the same environment. Remote access requires authentication; do not exp
 | Usage and budgets | Worker concurrency and health | Provider usage, estimated/reported costs, durable reservations/limits and spend/workload UI |
 | Models and connectors | Harness configuration, optional GitHub/Feishu, local grants, authenticated remote transport, paired Harness services, persistent remote authority/revocation and native Linux namespace/cancellation CI, whole-profile and per-action world binding, durable command/file ownership and operator receipts, endpoint-owned versioned credentials, real model artifact/restart qualification, endpoint enrollment/reconciliation and independent managed worlds | Managed endpoint/runtime launch, cross-host deployment qualification and connector scope |
 | Voice | None | Optional input/output adapters, interruption, local/cloud modes and text fallback |
-| Supervision and recovery | Watchdog foundation in `009-supervision.md` | Incident UI, live failure tests, restore/failover and remote reconciliation from article tracker |
+| Supervision and recovery | Watchdog foundation, encrypted checkpoints/held Session import, independent ownership authority and remote endpoint handoff fencing | Runtime/provider/publication ownership integration, clean-host activation/failover, incident UI and live failure tests |
 | Whole-product qualification | Deterministic unit, API/DOM flows, actual Harness restarts, live local model/tool, inbox and planner-to-execution missions | Browser/desktop layout, broader provider acceptance, backup/restore drills, accessibility and packaging |
 
 ## Missions increment
@@ -181,3 +181,8 @@ model cases extended through maintenance capture, verification, staging and repe
 1,388 tests with native confinement enabled in
 [Linux run 42531703951](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42531703951).
 These results qualify the staged recovery increment; they do not complete ownership activation or failover.
+
+Ownership increment: `024-ownership-fencing.md` records independent ownership acquisition, all-resource preparation,
+monotonic lease expiry, endpoint cancellation/reconciliation barriers and paired-world handoff with original receipt
+generations. Existing workspace grants retain their identity. Runtime/managed-pool and publication integration remain open,
+as do clean-host activation and failover drills; the recovery hold is unchanged.

@@ -72,7 +72,7 @@ export class EndpointCredentials {
     } catch { throw new RemoteError(409, 'credential_file', 'Credential must be a stable private regular file owned by the endpoint user, with no links, and at most 64 KiB') }
     finally { await handle?.close() }
   }
-  async import(request: Extract<RpcRequest, { op: 'credential.import' }>): Promise<EndpointCredential> {
+  async import(request: Extract<RpcRequest, { op: 'credential.import' }>, authorize: () => Promise<void> = async () => {}): Promise<EndpointCredential> {
     const hash = fingerprint(request), replay = this.journal.receipt<EndpointCredential>(request.requestId, hash)
     if (replay) return publicRecord(this.get(replay.id)!)
     const previous = this.get(request.id)
@@ -91,6 +91,7 @@ export class EndpointCredentials {
     const directory = await open(this.vault, 'r')
     try { await directory.sync() } finally { await directory.close() }
     try {
+      await authorize()
       this.journal.atomic(() => {
         this.save(record); this.journal.remember(request.requestId, hash, publicRecord(record))
         this.journal.audit({ action: request.op, credential: record.id, version: record.version, revision: record.revision, reason: request.reason })

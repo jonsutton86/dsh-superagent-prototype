@@ -3,14 +3,15 @@ import { createHash, randomUUID } from 'node:crypto'
 import { FsError, type FsErrorCode } from '@deepseek-ai/dsh-fs'
 import { z } from 'zod'
 import { RPC_PATH, RemoteError, type RpcInput, type RemoteOperation } from './protocol.ts'
+import { OwnershipError, requiresOwnership, type OwnershipAccess } from '../ownership/protocol.ts'
 
 const Envelope = z.object({ endpointId: z.string(), result: z.unknown().optional(), error: z.object({ code: z.string(), message: z.string() }).optional() })
-const refused = (error: unknown) => error instanceof FsError || error instanceof RemoteError && error.status < 500
+const refused = (error: unknown) => error instanceof FsError || (error instanceof RemoteError || error instanceof OwnershipError) && error.status < 500
 /** An operation may have crossed the remote effect boundary; callers retain its ID and reconcile instead of rerunning it. */
 export class RemoteUncertain extends Error {
   constructor(readonly operationId: string, message: string) { super(`${message} (remote operation ${operationId}); reconcile this receipt before issuing replacement work`) }
 }
-export interface RemoteConnection { url: string; endpointId: string; credentialFile: string; lifetime?: AbortSignal; timeoutMs?: number }
+export interface RemoteConnection { url: string; endpointId: string; credentialFile: string; lifetime?: AbortSignal; timeoutMs?: number; ownership?: OwnershipAccess }
 export interface RemoteEffectHooks {
   prepare(request: RpcInput & { requestId: string }): RpcInput & { requestId: string }
   observed(request: RpcInput, value: unknown): void
@@ -51,7 +52,8 @@ export class RemoteClient {
       throw new RemoteError(409, 'grant_changed', 'Execution world credential changed; compose a new world')
     const response = await fetch(this.url, { method: 'POST', redirect: 'error',
       signal: AbortSignal.any([AbortSignal.timeout(this.connection.timeoutMs ?? 10_000), ...[signal, this.connection.lifetime].filter((value): value is AbortSignal => !!value)]),
-      headers: { authorization: `Bearer ${credential}`, 'content-type': 'application/json', 'x-dsh-endpoint': this.connection.endpointId }, body: JSON.stringify(request) })
+      headers: { authorization: `Bearer ${credential}`, 'content-type': 'application/json', 'x-dsh-endpoint': this.connection.endpointId,
+        ...(this.connection.ownership && requiresOwnership(request.op) ? { 'x-dsh-owner': this.connection.ownership.proof() } : {}) }, body: JSON.stringify(request) })
     if (!response.body) throw new Error('Endpoint returned no body')
     const reader = response.body.getReader(), chunks: Uint8Array[] = []; let size = 0
     try {

@@ -17,7 +17,7 @@ not a claim that the prototype already ships every feature or that the article s
 | Context and recall | Existing resources plus `src/workspace/library.ts`: immutable scoped records, provenance and FTS recall | Enforced total recall budgets, transitive freshness, measured retrieval and long-horizon validation |
 | Speculative work | Inferred mandates, observe/auto, configurable rules | Durable budgets, expiry and promotion/publication gates |
 | Full duplex | Harness job/subagent services, `src/executor/background.ts`, `src/app/delivery.ts`, remote receipts, durable assignment/tool ownership, receipt-only restart recovery and operator cancellation | Broader long-running job, process-failure and cross-host acceptance |
-| Compute/state separation | SQLite Store; Harness session persistence service abstraction | Deployable persistent-state ownership and restore/failover integration |
+| Compute/state separation | SQLite Store; Harness Session checkpoints and held import; independent ownership authority and endpoint handoff fencing | Runtime/pool and publication ownership integration, clean-host activation and failover qualification |
 | Remote environments | Paired local/remote providers, authenticated leased grants, durable revocation, mission/Session binding, endpoint-owned versioned credentials, remote profile and artifact/restart qualification, operator enrollment/reconciliation, generated profiles, managed world pool and exact per-action selection | Managed endpoint/machine launch, remote repository workflows, quotas and cross-host acceptance |
 | Watchdog | Existing health and bounded transient executor retry; now `src/supervision/*` | Live-provider and process-level acceptance, incident UI/alerts, retention, richer progress evidence and separately authorized recovery policies |
 | Delivery | Reports and PR binding/closure; content-addressed artifacts and stale mission-review invalidation | Host-collected check evidence, Git/environment revision binding and external publication receipts |
@@ -219,7 +219,7 @@ Acceptance: remote shell and file operations see the same workspace; disconnect 
 effect; revoke a grant while offline; reconnect with an obsolete lease; cancel descendants; read output without gaps or
 duplicates; enforce workspace/symlink boundaries; show unknown outcomes for operator reconciliation.
 
-### 3. Durable restore and state ownership — offline checkpoint and staged import implemented
+### 3. Durable restore and state ownership — staged import and endpoint ownership implemented
 
 Use Harness's Session-persistence abstraction alongside the existing orchestration store. Define a consistent checkpoint
 manifest covering task state, Session offsets, environment leases and artifact references. A restored coordinator acquires
@@ -228,8 +228,11 @@ old epoch. Avoid shared-network SQLite as a substitute for an ownership protocol
 
 Implemented: `023-checkpoint-recovery.md` defines encrypted offline capture of the Store, logical Harness Sessions and world
 journals, full verification, execution-fenced staging and retryable Session import. It does not grant execution ownership.
-Next: implement the authoritative handoff, endpoint/publication fencing and original-ID reconciliation required to activate
-a restored coordinator. Keep clean-host recovery and failover open until that path is qualified.
+`024-ownership-fencing.md` adds an independent ownership authority, conservative process leases, all-resource handoff and
+real endpoint enforcement, preserving world identities and original effect generations across handoff. The authority is a
+single writer, not a replicated consensus service. Next: integrate ownership into Runtime, managed/dedicated provider
+lifecycle and external publication; reconcile original effects before activating a restored coordinator. The maintenance
+hold stays in place. Keep clean-host recovery and failover open until that complete path is qualified.
 
 Acceptance: crash after every enqueue/dispatch/receipt boundary; recover a consistent task/Session pair; reject two active
 writers; resume pending input once; reconcile already-started work; restore from a documented backup on a clean host.

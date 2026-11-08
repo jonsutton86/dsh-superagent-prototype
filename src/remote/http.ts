@@ -3,6 +3,7 @@ import { FsError } from '@deepseek-ai/dsh-fs'
 import { z } from 'zod'
 import { RemoteError, RPC_PATH } from './protocol.ts'
 import type { RemoteEndpoint } from './endpoint.ts'
+import { OwnershipError } from '../ownership/protocol.ts'
 
 /** Bounded authenticated RPC. The endpoint is pinned before payload processing; credentials never follow redirects. */
 export function remoteHandler(endpoint: RemoteEndpoint) {
@@ -24,10 +25,12 @@ export function remoteHandler(endpoint: RemoteEndpoint) {
       }
       const input = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { op?: string }
       if (!pinned && input.op !== 'identity') throw new RemoteError(409, 'endpoint_mismatch', 'Pin the endpoint identity before changing state')
-      send(200, { endpointId: endpoint.journal.id, result: await endpoint.rpc(principal, input) })
+      const owner = req.headers['x-dsh-owner']
+      if (owner !== undefined && (typeof owner !== 'string' || owner.length > 1024)) throw new RemoteError(400, 'invalid_owner', 'Invalid ownership proof header')
+      send(200, { endpointId: endpoint.journal.id, result: await endpoint.rpc(principal, input, owner) })
     } catch (error) {
-      const status = error instanceof RemoteError ? error.status : error instanceof FsError ? 409 : error instanceof z.ZodError || error instanceof SyntaxError ? 400 : 500
-      const code = error instanceof RemoteError || error instanceof FsError ? error.code : status === 400 ? 'invalid_request' : 'endpoint_error'
+      const status = error instanceof RemoteError || error instanceof OwnershipError ? error.status : error instanceof FsError ? 409 : error instanceof z.ZodError || error instanceof SyntaxError ? 400 : 500
+      const code = error instanceof RemoteError || error instanceof OwnershipError || error instanceof FsError ? error.code : status === 400 ? 'invalid_request' : 'endpoint_error'
       send(status, { endpointId: endpoint.journal.id, error: { code, message: error instanceof Error ? error.message.slice(0, 4000) : 'Endpoint request failed' } })
     }
   }

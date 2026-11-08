@@ -59,6 +59,9 @@ export class RemoteWorld {
     const identity = await this.control.call<EndpointIdentity>({ op: 'identity' })
     if (identity.protocol !== 1 || identity.confinement !== 'linux-bubblewrap') throw new Error('Remote world requires the supported confined endpoint protocol')
     if (!identity.capabilities.effectOwnership) throw new Error('Remote world requires endpoint effect-ownership receipts; update the endpoint first')
+    if (!!identity.ownership !== !!this.config.ownership || identity.ownership && (identity.ownership.authorityId !== this.config.ownership?.authorityId
+      || identity.ownership.coordinatorId !== this.config.ownership?.coordinatorId))
+      throw new Error('Remote world and coordinator must use the same explicit ownership authority')
     const current = await this.control.call<{ grant: RemoteGrant; authorized: boolean }>({ op: 'grant.status' })
     if (this.expected && (!stored || current.authorized) && worldBinding(this.config.endpointId, current.grant) !== worldBinding(this.config.endpointId, this.expected.grant))
       throw new RemoteError(409, 'world_changed', 'The endpoint grant differs from the explicitly activated authority')
@@ -98,12 +101,15 @@ export class RemoteWorld {
     const record = this.record
     if (!record) throw new Error('Remote world has not started')
     const revocation = record.revocation, effectsBlocked = this.journal.effects.blocked()
+    let ownerReady = true
+    try { this.config.ownership?.proof() } catch { ownerReady = false }
     return { endpointId: record.endpointId, grantId: record.grant.id, epoch: record.grant.epoch, root: record.grant.root,
       binding: worldBinding(record.endpointId, record.grant), phase: record.phase,
-      ready: !this.closed && !this.signal.aborted && record.phase === 'active' && !this.problem && !effectsBlocked
+      ready: ownerReady && !this.closed && !this.signal.aborted && record.phase === 'active' && !this.problem && !effectsBlocked
         && !!this.observed?.authorized && this.observed.grant.leaseUntil > Date.now(),
       leaseUntil: this.observed?.grant.epoch === record.grant.epoch ? this.observed.grant.leaseUntil : undefined,
-      checkedAt: this.checkedAt, effectsBlocked, problem: this.problem ?? (effectsBlocked ? `${effectsBlocked} remote effects require observation or reconciliation` : undefined),
+      checkedAt: this.checkedAt, effectsBlocked, problem: !ownerReady ? 'Coordinator execution ownership is unavailable'
+        : this.problem ?? (effectsBlocked ? `${effectsBlocked} remote effects require observation or reconciliation` : undefined),
       ...(revocation ? { revocation: { requestId: revocation.requestId, reason: revocation.reason,
         acknowledged: !!revocation.receipt, quiescent: revocation.receipt?.quiescent === true } } : {}) }
   }
@@ -117,7 +123,8 @@ export class RemoteWorld {
       if (request.op.startsWith('grant.') && request.op !== 'grant.status')
         throw new RemoteError(403, 'control_only', 'Worker execution providers cannot change execution authority')
     }, {
-      prepare: request => this.journal.effects.prepare(request, { world: this.status().binding, grantId: this.record!.grant.id, epoch: this.record!.grant.epoch }),
+      prepare: request => this.journal.effects.prepare(request, { world: this.status().binding, grantId: this.record!.grant.id, epoch: this.record!.grant.epoch,
+        ...(this.config.ownership ? { ownershipCoordinatorId: this.config.ownership.coordinatorId } : {}) }),
       observed: (request, value) => this.journal.effects.observed(request, value),
       failed: (request, error, ambiguous) => this.journal.effects.failed(request, error, ambiguous),
     }, this.expected?.credentialReader)

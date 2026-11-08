@@ -6,6 +6,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
 import { remoteFixture } from './fixtures/remote.ts'
 import { qualifyRecovery } from './fixtures/recovery.ts'
+import { qualifyOwnership } from './fixtures/ownership.ts'
 import { Store } from '../src/app/store.ts'
 import { Endpoints } from '../src/environments/endpoints.ts'
 
@@ -199,6 +200,7 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     const worldDirectories = executionProfile.flatMap(entry => entry.insert ?? []).filter(entry => entry.id === 'operator-remote-world').map(entry => entry.config.stateDir)
     await qualifyRecovery({ cli, home, profile, directory, temporary: h.directory, port, stateDir, sessionRoot,
       worldDirectories, worker: ticket.sessionId, worlds: mode === 'managed' ? 2 : 1 })
+    if (mode === 'dedicated') await qualifyOwnership({ cli, home, profile, directory, temporary: h.directory, port, native })
   } catch (error) {
     const diagnostics: unknown[] = []
     try {

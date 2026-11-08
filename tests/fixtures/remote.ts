@@ -16,9 +16,12 @@ import { RemoteSubprocess } from '../../src/remote/subprocess.ts'
 import { confinedFilesystem } from '../../src/remote/filesystem-runner.ts'
 import { BubblewrapIsolation, type ExecutionIsolation } from '../../src/remote/isolation.ts'
 import type { GrantReceipt, RemoteJob } from '../../src/remote/protocol.ts'
+import type { ResourceOwnershipConfig } from '../../src/ownership/gate.ts'
+import type { OwnershipAccess } from '../../src/ownership/protocol.ts'
 
 /** Real Harness local providers and real HTTP; test-only passthrough never enters the production endpoint plugin. */
-export async function remoteFixture(cleanup: (() => Promise<unknown>)[], options: { leaseMs?: number; outputMaxBytes?: number; native?: boolean } = {}) {
+export async function remoteFixture(cleanup: (() => Promise<unknown>)[], options: { leaseMs?: number; outputMaxBytes?: number; native?: boolean;
+  ownership?: ResourceOwnershipConfig; access?: OwnershipAccess; beforeEnroll?(endpoint: RemoteEndpoint): Promise<void> } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-remote-')), ctx = new Context()
   const fs = new LocalFileSystem(ctx, { cwd: directory, diffBasisMaxBytes: 1024 * 1024 }), process = new LocalSubprocessRuntime(ctx)
   const isolation: ExecutionIsolation = options.native ? new BubblewrapIsolation(process) : { name: 'test-only-unconfined',
@@ -36,9 +39,10 @@ export async function remoteFixture(cleanup: (() => Promise<unknown>)[], options
   const host = { stateDir: join(directory, 'control'), root: join(directory, 'work'), filesystem: fs, subprocess: process,
     isolation, filesystemRpc: confinedFilesystem(process, isolation, fileURLToPath(new URL(options.native ? '../../lib/remote-fs-worker.js' : '../../src/remote/fs-worker.ts', import.meta.url))),
     commandHelper: fileURLToPath(new URL(options.native ? '../../lib/remote-command-worker.js' : '../../src/remote/command-worker.ts', import.meta.url)),
-    outputMaxBytes: options.outputMaxBytes, shutdownMs: 2000 }
+    outputMaxBytes: options.outputMaxBytes, shutdownMs: 2000, ownership: options.ownership }
   let endpoint = new RemoteEndpoint(host)
-  await endpoint.start()
+  try { await endpoint.start() }
+  catch (error) { await endpoint.stop(); await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }); throw error }
   let lose = false, offline = false
   let handler = remoteHandler(endpoint)
   const server = createServer((req, res) => {
@@ -48,15 +52,17 @@ export async function remoteFixture(cleanup: (() => Promise<unknown>)[], options
   })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   const url = `http://127.0.0.1:${(server.address() as { port: number }).port}`
-  const connection = { url, endpointId: endpoint.journal.id, credentialFile: join(directory, 'control/admin.token'), timeoutMs: 1000 }
+  const connection = { url, endpointId: endpoint.journal.id, credentialFile: join(directory, 'control/admin.token'), timeoutMs: 1000, ownership: options.access }
+  const world = new Context()
+  cleanup.push(async () => { offline = false; await endpoint.stop(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()));
+    await world.fiber.dispose(); await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }) })
   const admin = new RemoteClient(connection)
+  await options.beforeEnroll?.(endpoint)
   const enrolled = await admin.call<GrantReceipt>({ op: 'grant.create', requestId: 'enroll', owner: 'coordinator', workspace: 'task',
     operations: ['fs.read', 'fs.write', 'process.spawn'], leaseMs: options.leaseMs ?? 300_000 })
   const credentialFile = join(directory, 'grant.token'); await writeFile(credentialFile, enrolled.credential!, { mode: 0o600 })
   const client = new RemoteClient({ ...connection, credentialFile })
-  const world = new Context(), remoteFs = new RemoteFileSystem(world, client, enrolled.grant), remoteProcess = new RemoteSubprocess(world, client, enrolled.grant)
-  cleanup.push(async () => { offline = false; await endpoint.stop(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()));
-    await world.fiber.dispose(); await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }) })
+  const remoteFs = new RemoteFileSystem(world, client, enrolled.grant), remoteProcess = new RemoteSubprocess(world, client, enrolled.grant)
   const spawn = (script: string, extra = {}) => ({ op: 'job.spawn' as const, requestId: randomUUID(), revision: enrolled.grant.revision,
     argv: ['/bin/sh', '-c', script], cwd: enrolled.grant.root, graceMs: 100, env: {}, ...extra })
   const settled = async (id: string) => {
@@ -64,7 +70,7 @@ export async function remoteFixture(cleanup: (() => Promise<unknown>)[], options
     await vi.waitFor(async () => { value = await client.call<RemoteJob>({ op: 'job.get', id }); expect(value.quiescent).toBe(true) }, { timeout: 5000 })
     return value!
   }
-  return { directory, ctx, get endpoint() { return endpoint }, server, url, connection, admin, client, enrolled, remoteFs, remoteProcess, fs, isolation, spawn, settled,
+  return { directory, ctx, host, get endpoint() { return endpoint }, server, url, connection, admin, client, enrolled, remoteFs, remoteProcess, fs, isolation, spawn, settled,
     restart: async () => { await endpoint.stop(); endpoint = new RemoteEndpoint(host); await endpoint.start(); handler = remoteHandler(endpoint) },
     lose: () => { lose = true }, failResponse: () => {
       const rpc = endpoint.rpc.bind(endpoint)

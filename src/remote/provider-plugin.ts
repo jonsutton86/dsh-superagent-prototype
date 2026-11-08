@@ -4,6 +4,8 @@ import { RemoteFileSystem } from './filesystem.ts'
 import { RemoteSubprocess } from './subprocess.ts'
 import { RemoteWorld, type RemoteWorldConfig } from './world.ts'
 
+export { RemoteWorld, type RemoteWorldConfig, type RemoteWorldStatus } from './world.ts'
+
 export const name = 'dsh-superagent-remote-world'
 export const Config: s<Partial<RemoteWorldConfig>, RemoteWorldConfig> = s.object({
   url: s.string().required().description('Pinned HTTPS endpoint origin, or a loopback HTTP origin through a secure tunnel.'),

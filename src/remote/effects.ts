@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import type { DatabaseSync } from 'node:sqlite'
 import { fingerprint, timestamp } from './journal.ts'
 import { EffectOwner, RemoteError, Rpc, type RpcInput, type RemoteJob, type RemoteOperation } from './protocol.ts'
+import { OwnershipError, OwnershipStamp } from '../ownership/protocol.ts'
 
 export interface ExecutionReceipt {
   id: string; world: string; grantId: string; epoch: number; fingerprint: string; owner: EffectOwner
@@ -9,9 +10,10 @@ export interface ExecutionReceipt {
   phase: 'pending' | 'accepted' | 'started' | 'settled' | 'refused' | 'unknown'; quiescent: boolean | null
   createdAt: string; updatedAt: string; observedAt?: string; problem?: string; recovered?: true
   outcome?: RemoteJob['outcome']; reconciled?: { at: string; note: string }
+  ownership?: OwnershipStamp; ownershipCoordinatorId?: string
 }
 export interface ExecutionReceiptPage { items: ExecutionReceipt[]; total: number; nextOffset: number | null }
-type Authority = { world: string; grantId: string; epoch: number }
+type Authority = { world: string; grantId: string; epoch: number; ownershipCoordinatorId?: string }
 const effect = (request: RpcInput) => request.op === 'job.spawn' || request.op === 'fs.write' || request.op === 'fs.edit'
 const receiptId = (request: RpcInput): string | undefined => effect(request) && 'requestId' in request ? request.requestId
   : ['job.get', 'job.cancel', 'job.reconcile', 'operation.get', 'operation.reconcile'].includes(request.op) && 'id' in request ? request.id : undefined
@@ -86,13 +88,17 @@ export class ExecutionEffects {
     if (!record) return // Never invent attribution for legacy/unowned endpoint work.
     const remote = value as RemoteJob | RemoteOperation
     const owner = record.kind === 'command' ? (remote as RemoteJob)?.request?.owner : (remote as RemoteOperation)?.owner
+    const ownership = remote?.ownership === undefined ? undefined : OwnershipStamp.safeParse(remote.ownership)
     if (!remote || remote.id !== record.id || remote.grantId !== record.grantId || remote.epoch !== record.epoch
-      || remote.fingerprint !== record.fingerprint || !owner || fingerprint(owner) !== fingerprint(record.owner)) {
+      || remote.fingerprint !== record.fingerprint || !owner || fingerprint(owner) !== fingerprint(record.owner)
+      || record.ownershipCoordinatorId && (!ownership?.success || ownership.data.coordinatorId !== record.ownershipCoordinatorId)
+      || ownership && !ownership.success || record.ownership && (!ownership?.success || fingerprint(record.ownership) !== fingerprint(ownership.data))) {
       record.phase = 'unknown'; record.quiescent = null; record.problem = 'Endpoint receipt does not match the saved effect ownership and request'
       this.save(record); throw new RemoteError(409, 'receipt_mismatch', record.problem)
     }
     if (!['accepted', 'started', 'settled', 'unknown'].includes(remote.phase)) throw new Error('Invalid endpoint effect phase')
     if (record.quiescent === true) return // A late in-flight observation cannot undo confirmed quiescence.
+    if (ownership?.success) record.ownership = ownership.data
     record.phase = remote.phase; record.observedAt = timestamp(); record.reconciled = remote.reconciled
     if (record.kind === 'command') {
       const job = remote as RemoteJob
@@ -107,7 +113,7 @@ export class ExecutionEffects {
     if (this.closed) return
     const id = receiptId(request), record = id && this.get(id)
     if (!record || record.quiescent === true) return
-    const refused = !ambiguous && !record.recovered && record.phase === 'pending' && error instanceof RemoteError
+    const refused = !ambiguous && !record.recovered && record.phase === 'pending' && (error instanceof RemoteError || error instanceof OwnershipError)
       && error.status < 500 && !['request_conflict', 'receipt_mismatch', 'endpoint_mismatch'].includes(error.code)
     record.phase = refused ? 'refused' : 'unknown'; record.quiescent = refused ? true : null
     record.observedAt = timestamp(); record.problem = (error instanceof Error ? error.message : String(error)).slice(0, 2000)

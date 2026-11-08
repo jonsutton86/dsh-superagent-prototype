@@ -21,6 +21,8 @@
     "./remote-world": "./lib/remote-world.js",
     "./scoped-world": "./lib/scoped-world.js",
     "./recovery": "./lib/recovery.js",
+    "./ownership": "./lib/ownership.js",
+    "./ownership-authority": "./lib/ownership-authority.js",
     "./remote-client": "./lib/remote-client.js",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json"

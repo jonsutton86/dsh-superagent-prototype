@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { mkdir, mkdtemp, realpath, rm, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { FsError, FsVersion, type FileSystem, type FsTarget } from '@deepseek-ai/dsh-fs'
@@ -9,11 +10,15 @@ import { Rpc, RemoteError, MAX_TEXT, MAX_WINDOW, type Principal, type RpcRequest
   type RemoteOperation, type EndpointIdentity } from './protocol.ts'
 import type { ExecutionIsolation } from './isolation.ts'
 import { EndpointCredentials } from './credentials.ts'
+import { OwnershipGate, sameOwner, type ResourceOwnershipConfig, type OwnershipGuard, type OwnershipFloor } from '../ownership/gate.ts'
+import { OwnershipError, requiresOwnership, type OwnershipStamp } from '../ownership/protocol.ts'
 
 export interface EndpointHost {
   filesystem: FileSystem; subprocess: SubprocessRuntime; isolation: ExecutionIsolation; stateDir: string; root: string
   allowedEnv?: string[]; outputMaxBytes?: number; maxRunning?: number; shutdownMs?: number
   commandHelper?: string
+  ownership?: ResourceOwnershipConfig
+  report?(error: unknown): void
   filesystemRpc?(grant: RemoteGrant, request: RpcRequest, signal: AbortSignal): Promise<unknown>
 }
 const message = (error: unknown) => error instanceof Error ? error.message : String(error)
@@ -24,6 +29,9 @@ const rootIdentity = async (path: string) => { const value = await stat(path, { 
 export class RemoteEndpoint {
   readonly journal: RemoteJournal
   readonly credentials: EndpointCredentials
+  readonly ownership?: OwnershipGate
+  private readonly ownershipScope = new AsyncLocalStorage<OwnershipGuard>()
+  private protectedCalls = 0
   private readonly lifetime = new AbortController()
   private readonly live = new Map<string, SubprocessHandle>()
   private readonly pending = new Map<string, Promise<void>>()
@@ -38,12 +46,33 @@ export class RemoteEndpoint {
   private root = ''
   constructor(private readonly host: EndpointHost) {
     this.journal = new RemoteJournal(host.stateDir, host.root)
-    try { this.credentials = new EndpointCredentials(this.journal) }
+    try {
+      this.credentials = new EndpointCredentials(this.journal)
+      const binding = host.ownership ? { authorityId: host.ownership.authorityId, coordinatorId: host.ownership.coordinatorId, resourceId: host.ownership.resourceId } : undefined
+      const saved = this.journal.db.prepare('SELECT value FROM endpoint_meta WHERE key=?').get('ownership-binding')?.value
+      if (saved && String(saved) !== JSON.stringify(binding)) throw new Error('Persisted endpoint ownership binding cannot be removed or replaced')
+      if (host.ownership && this.journal.grants().some(grant => grant.owner !== host.ownership!.coordinatorId))
+        throw new Error('Existing endpoint grants belong to a different ownership coordinator')
+      if (host.ownership) this.ownership = new OwnershipGate(host.ownership, {
+        floor: () => {
+          const row = this.journal.db.prepare('SELECT value FROM endpoint_meta WHERE key=?').get('ownership-floor')
+          return row ? JSON.parse(String(row.value)) as OwnershipFloor : undefined
+        },
+        remember: value => { this.journal.db.prepare('INSERT INTO endpoint_meta VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('ownership-floor', JSON.stringify(value)) },
+        fence: keep => this.fenceOwnership(keep), quiescent: keep => this.ownershipQuiescent(keep),
+      })
+      if (binding && !saved) this.journal.db.prepare('INSERT INTO endpoint_meta VALUES (?,?)').run('ownership-binding', JSON.stringify(binding))
+    }
     catch (error) { this.journal.close(); throw error }
   }
   async start(): Promise<void> {
     this.root = await realpath(this.host.root)
     const control = await realpath(this.host.stateDir)
+    if (this.host.ownership) {
+      const credential = await realpath(this.host.ownership.credentialFile)
+      if (inside(this.root, credential) || ['/usr', '/bin', '/sbin', '/lib', '/lib64', '/etc', '/dev', '/proc'].some(path => inside(path, credential)))
+        throw new Error('Resource ownership credential must be outside the endpoint workspace and system runtime mounts')
+    }
     if (['/', '/usr', '/bin', '/sbin', '/lib', '/lib64', '/etc', '/dev', '/proc', '/tmp'].some(path => this.root === path || (path !== '/' && inside(path, this.root) && path !== '/tmp')))
       throw new Error('Endpoint workspaces must use a dedicated data directory outside system runtime mounts')
     if (['/usr', '/bin', '/sbin', '/lib', '/lib64', '/etc', '/dev', '/proc'].some(path => inside(path, control)))
@@ -53,6 +82,7 @@ export class RemoteEndpoint {
     this.initialized = true
     this.sweep()
     this.timer = setInterval(() => this.sweep(), 250); this.timer.unref()
+    this.ownership?.start(error => this.host.report?.(error))
     for (const job of this.journal.jobs()) if (job.phase === 'accepted') this.enqueue(job.id)
   }
   private async verifyIsolation(control: string): Promise<void> {
@@ -78,6 +108,7 @@ export class RemoteEndpoint {
   }
   identity(): EndpointIdentity {
     return { protocol: 1, id: this.journal.id, platform: process.platform, confinement: this.host.isolation.name,
+      ...(this.host.ownership ? { ownership: { authorityId: this.host.ownership.authorityId, coordinatorId: this.host.ownership.coordinatorId, resourceId: this.host.ownership.resourceId } } : {}),
       capabilities: { filesystem: true, process: true, terminal: false, interactiveStdin: false, controlChannel: false, outputWindow: MAX_WINDOW, effectOwnership: true, administration: true,
         ...(this.host.commandHelper ? { credentialBindings: true as const } : {}) } }
   }
@@ -87,6 +118,11 @@ export class RemoteEndpoint {
   }
   private grant(principal: Principal, operation?: RemoteGrant['operations'][number]): RemoteGrant {
     if (this.closing) throw new RemoteError(503, 'unavailable', 'Endpoint is stopping')
+    if (this.ownership) {
+      const guard = this.ownershipScope.getStore()
+      if (!guard) throw new OwnershipError(403, 'owner_required', 'Operation has no verified coordinator owner')
+      guard.signal.throwIfAborted()
+    }
     if (principal.role !== 'grant') throw new RemoteError(403, 'grant_required', 'Use a workspace grant for execution')
     const grant = this.journal.grant(principal.id)
     if (grant.epoch !== principal.epoch || !grant.enabled || grant.leaseUntil <= Date.now())
@@ -99,7 +135,29 @@ export class RemoteEndpoint {
     const key = `${grant.id}:${grant.epoch}`
     let controller = this.grants.get(key)
     if (!controller) { controller = new AbortController(); this.grants.set(key, controller) }
-    return AbortSignal.any([controller.signal, this.lifetime.signal])
+    const owner = this.ownershipScope.getStore()
+    return AbortSignal.any([controller.signal, this.lifetime.signal, ...owner ? [owner.signal] : []])
+  }
+  private fenceOwnership(keepAccepted?: OwnershipStamp): void {
+    if (this.closed) return
+    for (const job of this.journal.jobs()) if (!job.quiescent
+      && !(keepAccepted && job.phase === 'accepted' && !job.cancelRequested && job.ownership && sameOwner(keepAccepted, job.ownership))) this.cancel(job)
+  }
+  private ownershipQuiescent(keepAccepted?: OwnershipStamp): boolean {
+    return !this.closed && this.protectedCalls === 0
+      && ![...this.pending.keys()].some(id => {
+        const job = this.journal.job(id)
+        return !(keepAccepted && job.phase === 'accepted' && !job.cancelRequested && job.ownership && sameOwner(keepAccepted, job.ownership))
+      })
+      && !this.journal.jobs().some(job => !job.quiescent
+        && !(keepAccepted && job.phase === 'accepted' && !job.cancelRequested && job.ownership && sameOwner(keepAccepted, job.ownership)))
+      && !this.journal.operations().some(operation => operation.phase === 'started' || operation.phase === 'unknown' && !operation.reconciled)
+  }
+  private async verifyOwnership(): Promise<void> {
+    if (!this.ownership) return
+    const guard = this.ownershipScope.getStore()
+    if (!guard) throw new OwnershipError(403, 'owner_required', 'Operation has no verified coordinator owner')
+    await this.ownership.verify(guard)
   }
   private noUnknown(): void {
     if (this.journal.jobs().some(job => job.phase === 'unknown' && !job.quiescent)
@@ -110,8 +168,10 @@ export class RemoteEndpoint {
   private serial<T>(run: () => Promise<T>): Promise<T> { const next = this.adminQueue.then(run, run); this.adminQueue = next.catch(() => {}); return next }
   private async enroll(principal: Principal, request: Extract<RpcRequest, { op: 'grant.create' }>) {
     this.admin(principal)
+    if (this.host.ownership && request.owner !== this.host.ownership.coordinatorId) throw new OwnershipError(403, 'owner_mismatch', 'Grant owner differs from this endpoint ownership scope')
     return this.serial(async () => {
       this.lifetime.signal.throwIfAborted()
+      await this.verifyOwnership()
       const digest = fingerprint({ principal, request }), replay = this.journal.receipt<string>(request.requestId, digest)
       if (replay) return this.view(this.journal.grant(replay))
       if (request.operations.includes('fs.write') && !request.operations.includes('fs.read')) throw new RemoteError(400, 'invalid_grant', 'Filesystem writes require read access for version guards')
@@ -125,6 +185,7 @@ export class RemoteEndpoint {
         operations: [...new Set(request.operations)], ...(credentials.length ? { credentials } : {}), enabled: true, revision: 1, epoch: 1, leaseUntil: Date.now() + request.leaseMs,
         createdAt: at, updatedAt: at, rootIdentity: await rootIdentity(root) }
       this.lifetime.signal.throwIfAborted()
+      await this.verifyOwnership()
       this.journal.atomic(() => { this.journal.saveGrant(grant); this.journal.remember(request.requestId, digest, grant.id); this.journal.audit({ grant: grant.id, epoch: grant.epoch, action: 'enrolled' }) })
       return this.view(grant)
     })
@@ -218,6 +279,7 @@ export class RemoteEndpoint {
       throw new RemoteError(403, 'environment_denied', `Only explicitly allowed non-credential environment overrides may be forwarded; rejected names: ${denied.join(', ')}`)
     const at = timestamp(), job: RemoteJob = { id: request.requestId, grantId: grant.id, epoch: grant.epoch, revision: grant.revision,
       fingerprint: digest, request, ...(grant.credentials?.length ? { credentials: grant.credentials } : {}),
+      ...(this.ownershipScope.getStore() ? { ownership: this.ownershipScope.getStore()!.stamp } : {}),
       phase: 'accepted', createdAt: at, updatedAt: at, cancelRequested: false, quiescent: false }
     this.journal.atomic(() => { this.journal.saveJob(job); this.journal.audit({ job: job.id, grant: grant.id, epoch: grant.epoch, action: 'accepted' }) })
     this.enqueue(job.id)
@@ -225,7 +287,17 @@ export class RemoteEndpoint {
   }
   private enqueue(id: string): void {
     if (this.pending.has(id) || this.closing) return
-    const running = Promise.resolve().then(() => this.launch(id)).finally(() => this.pending.delete(id))
+    const running = Promise.resolve().then(async () => {
+      if (!this.ownership) return this.launch(id)
+      try {
+        const guard = await this.ownership.resume(this.journal.job(id).ownership)
+        await this.ownershipScope.run(guard, () => this.launch(id))
+      } catch (error) {
+        if (this.closed) return
+        const job = this.journal.job(id)
+        if (job.phase === 'accepted') { job.phase = 'settled'; job.quiescent = true; job.error = message(error).slice(0, 4000); this.journal.saveJob(job) }
+      }
+    }).finally(() => this.pending.delete(id))
     this.pending.set(id, running)
     void running.catch(() => { /* launch persists failures; shutdown may already have closed the journal. */ })
   }
@@ -248,6 +320,7 @@ export class RemoteEndpoint {
         attachments.push({ source: this.host.commandHelper, target: '/run/dsh-command.mjs' })
       }
       const argv = await this.host.isolation.wrap(command, grant.root, cwd, grant.operations.includes('network'), this.signal(grant), job.request.env, undefined, attachments)
+      await this.verifyOwnership()
       this.grant(principal, 'process.spawn'); this.noUnknown()
       job = this.journal.job(id)
       if (job.phase !== 'accepted' || job.cancelRequested || this.closing) return
@@ -286,12 +359,14 @@ export class RemoteEndpoint {
     const grant = this.grant(principal, 'fs.write'); this.noUnknown()
     const target = await this.target(grant, request.path), info = await this.host.filesystem.stat(target, this.signal(grant))
     if ((info?.size ?? 0) > MAX_TEXT) throw new FsError('Atomic text mutation exceeds endpoint limit; use a scoped process for larger files', 'FS_TOO_LARGE')
+    await this.verifyOwnership()
     this.grant(principal, 'fs.write'); this.noUnknown()
     // Another identical request can finish path resolution first.
     const current = this.journal.operation(request.requestId)
     if (current) { if (current.fingerprint !== digest) throw new RemoteError(409, 'request_conflict', 'Mutation ID already used'); return current }
     const operation: RemoteOperation = { id: request.requestId, grantId: grant.id, epoch: grant.epoch, fingerprint: digest, kind: request.op,
       ...(request.owner ? { owner: request.owner } : {}), phase: 'started', at: timestamp() }
+    if (this.ownershipScope.getStore()) operation.ownership = this.ownershipScope.getStore()!.stamp
     this.journal.saveOperation(operation)
     try {
       if (this.host.filesystemRpc) operation.value = await this.host.filesystemRpc(grant, request, this.signal(grant)) as RemoteOperation['value']
@@ -306,9 +381,16 @@ export class RemoteEndpoint {
     if (!this.closed) this.journal.saveOperation(operation)
     return operation
   }
-  async rpc(principal: Principal, input: unknown): Promise<unknown> {
+  async rpc(principal: Principal, input: unknown, ownershipProof?: string): Promise<unknown> {
     if (!this.initialized || this.closing) throw new RemoteError(503, 'unavailable', 'Endpoint is not ready')
     const request = Rpc.parse(input)
+    if (!this.ownership || !requiresOwnership(request.op)) return this.dispatch(principal, request)
+    const guard = await this.ownership.authorize(ownershipProof)
+    this.protectedCalls++
+    try { return await this.ownershipScope.run(guard, () => this.dispatch(principal, request)) }
+    finally { this.protectedCalls-- }
+  }
+  private async dispatch(principal: Principal, request: RpcRequest): Promise<unknown> {
     switch (request.op) {
       case 'identity': return this.identity()
       case 'grant.get': this.admin(principal); return this.journal.grant(request.id)
@@ -328,7 +410,8 @@ export class RemoteEndpoint {
         this.admin(principal)
         return this.serial(async () => {
           this.lifetime.signal.throwIfAborted()
-          const result = request.op === 'credential.import' ? await this.credentials.import(request) : this.credentials.revoke(request)
+          await this.verifyOwnership()
+          const result = request.op === 'credential.import' ? await this.credentials.import(request, () => this.verifyOwnership()) : this.credentials.revoke(request)
           this.sweep() // New dispatch was fenced by the catalog commit; cancel affected generations before acknowledging.
           return result
         })
@@ -420,6 +503,7 @@ export class RemoteEndpoint {
   stop(): Promise<void> { return this.stopping ??= this.close() }
   private async close(): Promise<void> {
     this.closing = true; if (this.timer) clearInterval(this.timer)
+    this.ownership?.close()
     this.lifetime.abort()
     for (const handle of this.live.values()) try { handle.terminate() } catch { /* The journal keeps uncertain work. */ }
     const timer = AbortSignal.timeout(this.host.shutdownMs ?? 10_000)
