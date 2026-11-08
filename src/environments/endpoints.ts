@@ -16,9 +16,9 @@ interface Registration extends EndpointRegistration { credentialPin: string }
 interface Command extends OperatorCommand { fingerprint: string; registration: Registration; expectedEpoch?: number; previousGrant?: RemoteGrant; credentialPin?: string }
 interface EndpointHost { store: Store; stateDir: string; lifetime: AbortSignal; workerRoots(): string[] }
 const stamp = () => new Date().toISOString()
-const jobView = ({ id, grantId, epoch, phase, createdAt, updatedAt, cancelRequested, quiescent, reconciled }: RemoteJob): EndpointJob =>
+const jobView = ({ id, grantId, epoch, phase, createdAt, updatedAt, cancelRequested, quiescent, reconciled }: EndpointJob): EndpointJob =>
   ({ id, grantId, epoch, phase, createdAt, updatedAt, cancelRequested, quiescent, reconciled })
-const operationView = ({ id, grantId, epoch, kind, phase, at, reconciled }: RemoteOperation): EndpointOperation =>
+const operationView = ({ id, grantId, epoch, kind, phase, at, reconciled }: EndpointOperation): EndpointOperation =>
   ({ id, grantId, epoch, kind, phase, at, reconciled })
 
 /** Single-owner control plane. Remote mutations are journaled before dispatch and retried only under their original binding. */
@@ -107,7 +107,7 @@ export class Endpoints {
     const { offset } = EndpointPage.parse(input), client = this.client(this.get(id))
     const [grants, credentials, jobs, operations] = await Promise.all([
       client.call<EndpointList<RemoteGrant>>({ op: 'grant.list', offset }), client.call<EndpointList<EndpointCredential>>({ op: 'credential.list', offset }),
-      client.call<EndpointList<RemoteJob>>({ op: 'job.list', offset }), client.call<EndpointList<RemoteOperation>>({ op: 'operation.list', offset }),
+      client.call<EndpointList<EndpointJob>>({ op: 'job.catalog', offset }), client.call<EndpointList<EndpointOperation>>({ op: 'operation.list', offset }),
     ])
     return { grants: { ...grants, items: grants.items.map(value => GrantMetadata.parse(value)) }, credentials: { ...credentials, items: credentials.items.map(value => CredentialMetadata.parse(value)) },
       jobs: { ...jobs, items: jobs.items.map(jobView) }, operations: { ...operations, items: operations.items.map(operationView) } }

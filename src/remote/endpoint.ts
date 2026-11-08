@@ -312,10 +312,16 @@ export class RemoteEndpoint {
     switch (request.op) {
       case 'identity': return this.identity()
       case 'grant.get': this.admin(principal); return this.journal.grant(request.id)
-      case 'grant.list': case 'operation.list': {
+      case 'grant.list': case 'operation.list': case 'job.catalog': {
         this.admin(principal)
-        const all = request.op === 'grant.list' ? this.journal.grants() : this.journal.operations()
-        return { items: all.slice(request.offset, request.offset + 100), nextOffset: request.offset + 100 < all.length ? request.offset + 100 : null }
+        const all = request.op === 'grant.list' ? this.journal.grants() : request.op === 'operation.list' ? this.journal.operations() : this.journal.jobs()
+        const page = all.slice(request.offset, request.offset + 100)
+        // Administrative catalogs must not transport argv, stdin, env, output or file-edit payloads, even before coordinator projection.
+        const items = request.op === 'job.catalog' ? (page as RemoteJob[]).map(({ id, grantId, epoch, phase, createdAt, updatedAt, cancelRequested, quiescent, reconciled }) =>
+          ({ id, grantId, epoch, phase, createdAt, updatedAt, cancelRequested, quiescent, reconciled }))
+          : request.op === 'operation.list' ? (page as RemoteOperation[]).map(({ id, grantId, epoch, kind, phase, at, reconciled }) =>
+            ({ id, grantId, epoch, kind, phase, at, reconciled })) : page
+        return { items, nextOffset: request.offset + 100 < all.length ? request.offset + 100 : null }
       }
       case 'credential.list': this.admin(principal); return this.credentials.list(request.offset)
       case 'credential.import': case 'credential.revoke': {

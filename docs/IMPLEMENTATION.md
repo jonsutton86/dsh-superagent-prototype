@@ -89,7 +89,7 @@ The [endpoint administration increment](020-endpoint-administration.md) adds pin
 metadata catalogs, durable operator request IDs, explicit retry/reconciliation, grant and credential forms, generation-safe
 grant credential publication and complete dedicated Harness profile generation. Lost-response replays cannot adopt later
 authority. The opt-in model qualification consumes the generated overlay without modifying it. Managed launch and per-action
-world/persona selection follow; the full article/product scope remains open. Local `pnpm check` passed 1,355 tests across
+world/persona selection follow; the full article/product scope remains open. Local `pnpm check` passed 1,356 tests across
 79 files, typechecking and all four builds on 2026-11-08; the generated-profile configured-model qualification passed
 separately with credential use, artifact publication, execution attribution and coordinator restart.
 

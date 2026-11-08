@@ -33,7 +33,7 @@ it('registers a pinned administrator, paginates metadata and denies administrati
   expect(registry.list().items).toHaveLength(1)
   expect(await registry.catalog(h.record.id)).toMatchObject({ grants: { items: [h.enrolled.grant], nextOffset: null }, jobs: { items: [] } })
   expect(await registry.catalog(h.record.id, { offset: 100 })).toMatchObject({ grants: { items: [], nextOffset: null } })
-  for (const op of ['grant.list', 'operation.list'] as const) await expect(h.client.call({ op })).rejects.toMatchObject({ code: 'admin_required' })
+  for (const op of ['grant.list', 'operation.list', 'job.catalog'] as const) await expect(h.client.call({ op })).rejects.toMatchObject({ code: 'admin_required' })
   await expect(h.client.call({ op: 'grant.get', id: h.enrolled.grant.id })).rejects.toMatchObject({ code: 'admin_required' })
   await expect(registry.register({ ...h.input, requestId: randomUUID(), revision: 1, credentialFile: join(h.directory, 'grant.token') })).rejects.toThrow('administrator')
   await expect(registry.register({ ...h.input, requestId: randomUUID(), revision: 0 })).rejects.toThrow('registration changed')
@@ -179,3 +179,21 @@ it('exposes enrollment and administration through Runtime management routes with
   expect(profile.status).toBe(200)
   expect(String(profile.body.patchFile)).toContain(realpathSync(host.directory))
 })
+
+it('keeps administrative catalog pages below the transport cap even when command and file receipts contain large payloads', async () => {
+  const h = await fixture(), at = new Date().toISOString(), payload = 'private-payload-'.repeat(32_768)
+  for (let index = 0; index < 101; index++) {
+    const id = `large-${index}`
+    h.endpoint.journal.saveJob({ id, grantId: h.enrolled.grant.id, epoch: 1, revision: 1, fingerprint: 'test', phase: 'settled',
+      request: { ...h.spawn('true'), stdin: index < 18 ? payload : '' }, createdAt: at, updatedAt: at, cancelRequested: false, quiescent: true })
+    h.endpoint.journal.saveOperation({ id, grantId: h.enrolled.grant.id, epoch: 1, fingerprint: 'test', kind: 'fs.write', phase: 'settled', at,
+      error: { code: 'test', message: index < 18 ? payload : '' } })
+  }
+  const first = await h.registry().catalog(h.record.id), last = await h.registry().catalog(h.record.id, { offset: 100 })
+  expect(first.jobs.items).toHaveLength(100); expect(first.operations.items).toHaveLength(100)
+  expect(first.jobs.nextOffset).toBe(100); expect(first.operations.nextOffset).toBe(100)
+  expect(last.jobs.items).toHaveLength(1); expect(last.operations.items).toHaveLength(1)
+  expect(last.jobs.nextOffset).toBeNull(); expect(last.operations.nextOffset).toBeNull()
+  expect(JSON.stringify(first)).not.toContain('private-payload-')
+  expect(JSON.stringify(first).length).toBeLessThan(100_000)
+}, 20_000)

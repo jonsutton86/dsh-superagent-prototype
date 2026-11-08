@@ -76,8 +76,8 @@ Multiuser authentication, credential brokers and isolation of local coordinators
 
 ## Reconciliation and catalog
 
-Administrator-only `grant.list`, `grant.get` and `operation.list` complement existing credential and command APIs.
-Catalogs use bounded 100-record pages. The operator API projects command metadata and omits argv, stdin, environment,
+Administrator-only `grant.list`, `grant.get`, `job.catalog` and `operation.list` complement existing credential and command APIs.
+Catalogs use bounded 100-record pages. The endpoint projects command metadata before transport and omits argv, stdin, environment,
 output and file-effect payloads. Grant catalog responses never include grant bearer credentials. The UI can cancel an
 original command or submit explicit reconciliation of an unknown command/file operation with a verification note.
 
@@ -91,12 +91,12 @@ administrator control plane, then refresh the originating world's execution rece
 The tests exercise actual endpoint HTTP, coordinator Store reopen, Runtime management routes and rendered operator forms.
 They cover original-ID recovery after both endpoint and panel response loss, superseded generation refusal, pinned-file
 changes, unsafe file placement, credential binding and rotation, private profile generation, typed administration-only
-requests, and explicit reconciliation. The opt-in real-model Harness test now registers the endpoint, imports a synthetic
+requests, explicit reconciliation, and payload-heavy catalogs exceeding the transport cap before endpoint projection. The opt-in real-model Harness test now registers the endpoint, imports a synthetic
 service credential, obtains its grant through this administration service and launches the **unchanged generated overlay**.
 The temporary base profile selects the qualification model. It verifies endpoint credential use, owned execution receipts,
 an artifact and retained task/world identity across a coordinator restart.
 
-Local verification on 2026-11-08: `pnpm check` passed typechecking, all four builds and 1,355 tests across 79 files;
+Local verification on 2026-11-08: `pnpm check` passed typechecking, all four builds and 1,356 tests across 79 files;
 the three native Linux cases and opt-in model case were skipped in that ordinary macOS run. The separate configured-model
 qualification passed against Harness `0.2.1-rc.3` and `deepseek-official/deepseek-flash`, completing credential use, artifact
 publication, execution attribution and coordinator restart from the generated profile. Native Linux confinement and

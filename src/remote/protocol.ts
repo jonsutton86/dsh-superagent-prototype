@@ -31,6 +31,7 @@ export const Rpc = z.discriminatedUnion('op', [
   z.object({ op: z.literal('identity') }).strict(),
   z.object({ op: z.literal('grant.list'), offset: z.number().int().nonnegative().default(0) }).strict(),
   z.object({ op: z.literal('grant.get'), id }).strict(),
+  z.object({ op: z.literal('job.catalog'), offset: z.number().int().nonnegative().default(0) }).strict(),
   z.object({ op: z.literal('operation.list'), offset: z.number().int().nonnegative().default(0) }).strict(),
   z.object({ op: z.literal('credential.list'), offset: z.number().int().nonnegative().default(0) }).strict(),
   z.object({ op: z.literal('credential.import'), ...request, id, revision: z.number().int().nonnegative(),
