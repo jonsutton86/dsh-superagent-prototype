@@ -124,5 +124,12 @@ Linux cases and opt-in model case were skipped in that ordinary macOS run. The r
 Harness `0.2.1-rc.3` and `deepseek-official/deepseek-flash`, using the explicitly injected macOS test endpoint. This verifies
 the credential-bearing Harness path and restart behavior; native confinement is qualified separately on Linux.
 
+Native Linux qualification passed for code commit `18b2dc8c1f0409c5c6266daf35638590f1ea1a99` in
+[run 42519570124](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42519570124), job `128849894259`.
+Typechecking, all four builds and 1,347 tests passed across 77 files. All three native cases ran, including credential
+environment/file use, preserved stdin, read-only credential mounts, hidden control state and cancellation after credential
+revocation. The real-model case and the non-Linux refusal case were skipped in CI. The Ubuntu 22.04 runner used bubblewrap
+0.6.1 and ripgrep 13.0.0. The configured-model qualification also passed separately on the final local build.
+
 Cross-host deployment, grant/persona selection per action, broader service integrations and all other unfinished Agentic OS
 requirements remain in scope. Passing these cases is evidence for this credential execution path, not whole-product completion.

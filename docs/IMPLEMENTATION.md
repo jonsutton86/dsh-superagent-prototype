@@ -79,6 +79,12 @@ displays binding metadata; credentials remain an explicit capability available t
 Harness qualification has used a synthetic bound credential, produced an artifact and preserved the world through restart.
 Endpoint enrollment UI, per-action environment/persona selection and the remaining article/product requirements stay open.
 
+Credential verification on 2026-11-08: local `pnpm check` passed 1,345 tests, typechecking and all builds, followed by a passing
+configured-model Harness credential/artifact/restart qualification on the final build. Code commit
+`18b2dc8c1f0409c5c6266daf35638590f1ea1a99` passed
+[Linux run 42519570124](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42519570124) with 1,347 tests,
+typechecking and all four builds. The native credential case exercised read-only mounts and cancellation on revocation.
+
 The [environment enrollment increment](015-execution-environments.md) implements local root proof, immutable task grant
 bindings, revocation, reauthorization, replacement and operator controls. Its generation is local authorization state;
 remote endpoint grants and their leases are integrated in the subsequent remote increments; coordinator ownership is still separate.
