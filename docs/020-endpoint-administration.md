@@ -103,6 +103,14 @@ publication, execution attribution and coordinator restart from the generated pr
 real-model composition remain separate acceptance boundaries; the macOS test endpoint does not qualify OS isolation or
 cross-host transport.
 
+Native Linux qualification passed for code commit `0c07ac80126d4aa9c0fbefd5047fcc96742eda37` in
+[run 42522276793](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42522276793), job `128858164276`.
+Typechecking, all four builds and 1,358 tests passed across 79 files. All three native confinement cases ran: filesystem and
+process confinement, remote mission dispatch, and private credential mounts/cancellation. The real-model and non-Linux
+refusal cases were skipped in CI. The runner used Ubuntu 22.04, Node 24, bubblewrap 0.6.1 and ripgrep 13.0.0. The separate
+configured-model qualification passed twice, including on the release build for `9faef224704e2c08504698e11194f64ed228b9d0`;
+the subsequent catalog-only fix leaves that generated-profile execution path unchanged.
+
 Per-action environment/persona selection, managed runtime pooling/launch, endpoint provisioning, cross-host deployment,
 quotas, retention, persistent-state ownership and restore/failover remain in scope, alongside the other article and Agentic
 OS product requirements. This increment makes endpoint authority operable from the app; it is not whole-product completion.

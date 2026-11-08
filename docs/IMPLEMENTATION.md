@@ -91,7 +91,10 @@ grant credential publication and complete dedicated Harness profile generation. 
 authority. The opt-in model qualification consumes the generated overlay without modifying it. Managed launch and per-action
 world/persona selection follow; the full article/product scope remains open. Local `pnpm check` passed 1,356 tests across
 79 files, typechecking and all four builds on 2026-11-08; the generated-profile configured-model qualification passed
-separately with credential use, artifact publication, execution attribution and coordinator restart.
+separately with credential use, artifact publication, execution attribution and coordinator restart. Code commit
+`0c07ac80126d4aa9c0fbefd5047fcc96742eda37` passed
+[Linux run 42522276793](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42522276793) with 1,358 tests,
+typechecking and all builds, including all three native confinement cases and the large-catalog regression.
 
 The [environment enrollment increment](015-execution-environments.md) implements local root proof, immutable task grant
 bindings, revocation, reauthorization, replacement and operator controls. Its generation is local authorization state;
