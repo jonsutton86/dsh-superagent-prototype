@@ -292,6 +292,11 @@ const SourceSave = z.object({ enabled: z.boolean(), config: z.unknown() })
 
 const ROUTES: { [K in keyof Api]: Route<K> } = {
   'GET missions': { query: ['offset', 'limit'], answer: () => ({ items: [], nextOffset: null }) },
+  'GET library': { query: ['q', 'kind', 'scope', 'offset', 'limit', 'includeInactive'], answer: () => ({ items: [], nextOffset: null }) },
+  'GET library/:id': { query: ['offset', 'limit'], answer: () => refuse(404, 'Library record not found') },
+  'GET library/:id/content': { answer: () => refuse(404, 'Library record not found') },
+  'POST library': { body: true, answer: () => refuse(409, 'Library fixture not configured') },
+  'PUT library/:id': { body: true, answer: () => refuse(409, 'Library fixture not configured') },
   'GET missions/:id': { answer: () => refuse(404, 'Mission not found') },
   'POST missions': { body: true, answer: () => refuse(409, 'Workspace fixture not configured') },
   'POST missions/:id/actions': { body: true, answer: () => refuse(409, 'Workspace fixture not configured') },

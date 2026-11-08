@@ -9,6 +9,7 @@ import type { SourceStatusView } from './views/sources.ts'
 import type { DecisionListView, SearchView, ThreadDetailView, ThreadListView } from './views/threads.ts'
 import type { TicketListView } from './views/tickets.ts'
 import type { ActionCommandInput, AddActionInput, CreateMissionInput, MissionCommandInput, MissionList, MissionView } from '../workspace/model.ts'
+import type { ArchiveRecordInput, CreateRecordInput, LibraryContent, LibraryEntry, LibraryList, LibraryQueryInput, LibraryRead } from '../workspace/library-model.ts'
 
 export const TICKET_FILTERS = ['open', 'person', 'working', 'idle', 'ended'] as const
 export const THREAD_FILTERS = ['subscribed', 'evaluating', 'recent', 'all'] as const
@@ -19,6 +20,11 @@ interface Paged { offset?: number; limit?: number }
 type Delivery = 'injected' | 'pending'
 
 export interface Api {
+  'GET library': { query?: LibraryQueryInput; response: LibraryList }
+  'POST library': { body: CreateRecordInput; response: LibraryEntry }
+  'GET library/:id': { query?: Paged; response: LibraryRead }
+  'GET library/:id/content': { response: LibraryContent }
+  'PUT library/:id': { body: ArchiveRecordInput; response: LibraryEntry }
   'GET missions': { query?: Paged; response: MissionList }
   'GET missions/:id': { response: MissionView }
   'POST missions': { body: CreateMissionInput; response: MissionView }

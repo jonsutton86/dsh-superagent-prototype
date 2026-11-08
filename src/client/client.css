@@ -417,3 +417,16 @@ a.dt-btn, a.dt-btn:hover { text-decoration: none; }
 .dt-admission-slot { display: inline-flex; flex: none; width: 16px; }
 .dt-info-warn { color: var(--dsw-alias-state-warn-primary); }
 .dt-field-segmented { max-width: 240px; }
+
+.dt-library { display: grid; gap: 16px; }
+.dt-library-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+.dt-library-filters label { display: grid; gap: 6px; }
+.dt-library-flags { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; }
+.dt-library-preview { display: grid; gap: 12px; min-width: 0; }
+.dt-library-preview iframe { width: 100%; min-height: 520px; border: 1px solid var(--dsw-alias-border-l3); background: white; }
+.dt-library-preview img { max-width: 100%; max-height: 640px; object-fit: contain; }
+.dt-library-preview pre, .dt-library-excerpt { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 640px; overflow: auto; padding: 16px; }
+.dt-library-provenance { overflow-wrap: anywhere; }
+.dt-library-provenance dt { font-weight: 600; margin-top: 8px; }
+.dt-library-provenance dd { margin: 4px 0; }
+.dt-library-provenance code { display: block; font-size: 12px; }

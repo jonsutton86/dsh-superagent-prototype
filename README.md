@@ -36,8 +36,9 @@ Read the numbered documents in order; each builds only on the ones before it.
 
 This fork retains DeepSeek Harness and is implementing the article's broader architecture in integrated increments.
 It is also building an [Agentic OS workspace](docs/010-agentic-os.md). The Missions tab supports persistent goals,
-human/agent actions, dependencies, actual Harness dispatch, steering, and reviewed completion. The workspace ledger
-distinguishes this implemented increment from the remaining full product and live deployment requirements.
+human/agent actions, dependencies, actual Harness dispatch, steering, and reviewed completion. The
+[memory and artifact library](docs/011-library.md) adds scoped recall, immutable results, provenance, previews and worker
+publication tools. The workspace ledger distinguishes these increments from the remaining full product and live deployment requirements.
 The [implementation tracker](docs/IMPLEMENTATION.md) distinguishes working code from remaining work.
 The first increment adds [independent watchdog supervision](docs/009-supervision.md), with a separate Harness profile,
 durable incident history, semantic progress assessment, and bounded, fenced progress requests.

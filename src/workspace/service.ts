@@ -14,7 +14,8 @@ const now = () => new Date().toISOString()
 
 /** Single-owner local workspace, sharing the Engine's database transaction and crash-safe effect queue. */
 export class Workspace {
-  constructor(private readonly store: Store, private readonly engine: () => Execution, private readonly runnable: () => boolean) {
+  constructor(private readonly store: Store, private readonly engine: () => Execution, private readonly runnable: () => boolean,
+    private readonly evidenceRevision?: (ticketId: string) => string) {
     store.db.exec(`CREATE TABLE IF NOT EXISTS workspace_mission (id TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS workspace_event (id INTEGER PRIMARY KEY, mission TEXT NOT NULL, value TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS workspace_event_mission ON workspace_event(mission, id);
@@ -71,7 +72,7 @@ export class Workspace {
     const cached = memo.get(action.id)
     if (cached) return cached
     const ticket = action.runs.length ? this.store.tickets.get(action.runs.at(-1)!) : undefined
-    const revision = ticket ? key(JSON.stringify(ticket)) : undefined
+    const revision = ticket ? key(JSON.stringify(ticket) + (this.evidenceRevision?.(ticket.id) ?? '')) : undefined
     const changed = !!action.dependencyRevision && action.dependencyRevision !== this.dependencyRevision(action, actions)
     const accepted = !changed && !!action.accepted && (action.owner === 'person' || (!!ticket?.ended && action.accepted.ticketRevision === revision))
     const dependencies = action.dependsOn.every(id => {

@@ -14,13 +14,13 @@ not a claim that the prototype already ships every feature or that the article s
 | --- | --- | --- |
 | Two-level coordination | `src/core/engine.ts`, `src/app/sessions.ts`, `src/executor/dsh.ts` | Separate router execution authority from routing; retain worker-local subagents |
 | Event admission and routing | `src/policy.ts`, `src/core/intake.ts`, `src/core/evals.ts`, `src/sources/*` | Extend source scope only where required; retain subscription ownership and handback invariants |
-| Context and recall | `src/app/resources.ts`, `src/app/assessment.ts`, stored Threads/Tickets | Evidence-linked durable knowledge and long-horizon recall validation |
+| Context and recall | Existing resources plus `src/workspace/library.ts`: immutable scoped records, provenance and FTS recall | Enforced total recall budgets, transitive freshness, measured retrieval and long-horizon validation |
 | Speculative work | Inferred mandates, observe/auto, configurable rules | Durable budgets, expiry and promotion/publication gates |
 | Full duplex | Harness job/subagent services, `src/executor/background.ts`, `src/app/delivery.ts` | Remote job receipt/reconnect integration; retain current local behavior |
 | Compute/state separation | SQLite Store; Harness session persistence service abstraction | Deployable persistent-state ownership and restore/failover integration |
 | Remote environments | Harness subprocess abstraction (paired filesystem world required) | Enrolled execution transport, local grants, offline queue/reconciliation, isolation |
 | Watchdog | Existing health and bounded transient executor retry; now `src/supervision/*` | Live-provider and process-level acceptance, incident UI/alerts, retention, richer progress evidence and separately authorized recovery policies |
-| Delivery | Reports and PR binding/closure | Version-bound verification evidence and publication checks |
+| Delivery | Reports and PR binding/closure; content-addressed artifacts and stale mission-review invalidation | Host-collected check evidence, Git/environment revision binding and external publication receipts |
 | Operator control | Existing web panel, settings, pause/retry/stop | Supervision, environments, budgets and evidence surfaces |
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
@@ -38,6 +38,10 @@ configuration were also checked directly in Node. A DeepSeek Harness CLI/provide
 checkout environment, so no live-provider or unattended production acceptance is claimed.
 
 ## Target architecture
+
+The [durable library increment](011-library.md) implements worker publication, scoped memory/artifact search, immutable
+provenance and the operator library. These are candidate results: host-verified task success and external delivery remain
+separate requirements. The library's limits and local process trust boundary are explicit in that document.
 
 The Agentic OS mission workspace increment is implemented and verified in `010-agentic-os.md`. It adds a local operator
 source and persistent goals over this same Engine/Harness path; it does not replace the remaining article work below.

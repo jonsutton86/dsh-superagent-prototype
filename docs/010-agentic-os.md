@@ -49,10 +49,10 @@ refer to the same environment. Remote access requires authentication; do not exp
 | --- | --- | --- |
 | Persistent missions | `workspace/service.ts`, SQLite mission/event/command tables, Missions panel, dependency acceptance invalidation | Editable/versioned plans, planner proposals, revisions, multi-workspace ownership |
 | Action execution | Operator dispatch into Engine/Harness; runtime and rendered-form tests | Live-provider acceptance, per-action workspace/persona bindings, onboarding independent of GitHub |
-| Human participation and completion | Human actions, reviewed dependency notes, explicit acceptance bound to ticket snapshot | Artifact/check evidence bound to revisions, rejected results and revisions |
+| Human participation and completion | Human actions, reviewed dependencies; acceptance bound to ticket, library evidence and direct provenance state | Host-collected check evidence bound to Git/environment revisions; rejected results and revisions |
 | Conversations and steering | Harness conversations, mission links, human follow-ups, stop/retry, attempt history | Unified inbox, unread/question indicators and cross-workspace navigation |
-| Shared memory and recall | Existing ticket/trigger resources | Context capsules, provenance, access checks, full-text search, conflict/freshness, worker tools and memory UI |
-| Artifact library | Existing worktree files and reports | Content-addressed ingestion, search/previews/download, mission/session links, verification and publication receipts |
+| Shared memory and recall | Immutable scoped capsules, typed/hash-bound provenance, FTS search, source freshness/conflict flags, worker tools and library UI | Host-enforced total recall budgets, transitive freshness, measured recall quality, import connectors and multi-workspace ownership |
+| Artifact library | Content-addressed publication, search/previews/download, mission/session links, archival and immutable revision history | Large/streamed files, matched-environment imports and directory sync, retention, host verification and external delivery receipts |
 | Personas and skills | Harness subagents/tools and prompt configuration | Versioned personas, model preferences, tool scopes, management UI and per-action assignment |
 | Schedules and reflection | Existing runtime passes | Persisted occurrences, deduplication, timezone/DST, missed-run policy, budgets and reviewable reflection proposals |
 | Usage and budgets | Worker concurrency and health | Provider usage, estimated/reported costs, durable reservations/limits and spend/workload UI |
@@ -98,16 +98,23 @@ on Node 25.9.0. Twelve tests were added, including a rendered create/dispatch/re
 routes and Harness adapter. Other coverage checks request replay after reopening SQLite, rollback, conflicting revisions,
 dependency ordering and invalidation, human steering, source disablement, and stale review rejection.
 
+2026-11-08, library increment: `pnpm check` passed TypeScript, all 66 test files / 1,249 tests, and server/client builds.
+Sixteen tests were added for library persistence, scope boundaries, provenance, integrity, review freshness, API integration,
+rendered revision/archive flows and a worker-produced HTML artifact preview. Original orchestration prompt-size budgets
+remain unchanged; new library tools have separate ceilings of 2,200 router / 4,500 worker characters.
+
 The `dsh` CLI is not installed in this environment. No live provider, unattended deployment, or real-browser visual
 acceptance is claimed. The next implementation can proceed without those credentials; whole-product completion cannot.
 
 ## Next implementation order
 
-1. Durable artifacts and memory with scope/provenance, bounded retrieval, real worker publication tools and UI.
-2. Local missions without mandatory GitHub setup: workspace roots, general-task prompt profiles, preserved GitHub behavior,
+The durable memory/artifact increment is described in `011-library.md`; its application-level scope boundary does not
+replace the article's isolated execution environments. It uses the existing SQLite database and Harness tool registration.
+
+1. Local missions without mandatory GitHub setup: workspace roots, general-task prompt profiles, preserved GitHub behavior,
    and a real configured Harness profile.
-3. Integrated workspace shell, conversation inbox, memory browser and artifact previews over real services.
-4. Persona/skill management, durable schedules, budgeted reflection proposals and usage reporting.
-5. Article requirements: remote execution, recall, speculation, verification, recovery; optional voice.
-6. Actual model/tool user flows, process restarts, restore drills and browser/desktop acceptance. Record supported provider/OS
+2. Integrated workspace shell and conversation inbox; richer imports, large-file support and recall budgets over the library.
+3. Persona/skill management, durable schedules, budgeted reflection proposals and usage reporting.
+4. Article requirements: remote execution, recall, speculation, verification, recovery; optional voice.
+5. Actual model/tool user flows, process restarts, restore drills and browser/desktop acceptance. Record supported provider/OS
    combinations and audit every row above before declaring the goal achieved.

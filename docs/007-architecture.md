@@ -292,6 +292,10 @@ Some generic modules still refer directly to GitHub or Feishu:
 | --- | --- |
 | `src/index.ts` | The main plugin entry: reads the machine settings, starts the Runtime, and gives it the restart that a save of a Source's account uses |
 | `src/supervision/protocol.ts` | Bounded observation, assessment and intervention schemas shared by independent processes |
+| `src/workspace/library-model.ts` | Scoped memory/artifact contracts, immutable provenance and bounded publication/recall schemas |
+| `src/workspace/library.ts` | Transactional content-addressed storage, search, scope authorization, provenance, archival and evidence revisions |
+| `src/app/tools/library.ts` | Host-bound worker publication and worker/router recall tools |
+| `src/client/library.tsx` | Library search, authoring, immutable revisions, inert previews, downloads and source history |
 | `src/workspace/model.ts` | Mission, action and activity contracts, validated commands and workspace errors |
 | `src/workspace/service.ts` | Durable missions, dependency checks, operator dispatch, review and transactional request receipts |
 | `src/client/missions.tsx` | Mission workspace: creation, action ownership, dependencies, execution controls and reviewed completion |
@@ -415,6 +419,8 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/core-engine.spec.ts` | Domain rules on in-memory repositories: receiving, Eval, fan-out, resume and stop, interrupted Assignments, the pause, Policy changes, reports and outcomes, attaching, replies, failed deliveries and dismissed problems |
 | `tests/stage.spec.ts` | The Ticket stages, row by row |
 | `tests/supervision.spec.ts` | Real HTTP transport, token authentication, stale commands, transactional receipts and existing worker delivery integration |
+| `tests/library.spec.ts` | Library restart/replay, atomic rollback, scoping, provenance, integrity, freshness, review invalidation and Runtime/API integration |
+| `tests/library-ui.spec.tsx` | Rendered library creation/revision/archive and worker artifact preview through actual management routes |
 | `tests/workspace.spec.ts` | Mission persistence, deduplication, dependencies, review freshness, rollback and Runtime/Harness wiring |
 | `tests/workspace-ui.spec.tsx` | Rendered mission forms through management routes, Harness adapter, worker result review and completion |
 | `tests/watchdog.spec.ts` | Independent journal recovery, assessment budgets, service outages, bounded interventions and concurrent polling |
