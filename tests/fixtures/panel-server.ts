@@ -159,7 +159,7 @@ function sourceStatuses(): SourceStatusRow[] {
 }
 const stateView = (): StateView => ({
   setup: server.setup, load: { running: server.setup.problem ? 0 : 2, queued: 0, maxWorkers: server.settings.executor.maxWorkers },
-  masterId: 'master', paused: server.settings.paused,
+  masterId: 'master', paused: server.settings.paused, environment: { ready: true },
   // The panel does not read health; the service script does.
   health: {},
 })
@@ -292,6 +292,9 @@ const SourceSave = z.object({ enabled: z.boolean(), config: z.unknown() })
 
 const ROUTES: { [K in keyof Api]: Route<K> } = {
   'GET missions': { query: ['offset', 'limit'], answer: () => ({ items: [], nextOffset: null }) },
+  'GET environments': { answer: () => ({ items: [], currentRoot: '/work', currentMode: 'local', needsEnrollment: true }) },
+  'POST environments': { body: true, answer: () => refuse(409, 'Environment fixture not configured') },
+  'PUT environments/:id': { body: true, answer: () => refuse(409, 'Environment fixture not configured') },
   'GET missions/:id/plans': { query: ['offset', 'limit'], answer: () => ({ currentVersion: 1, versions: [], proposals: [], nextOffset: null }) },
   'GET missions/:id/plans/:version': { answer: () => refuse(404, 'Plan not found') },
   'GET missions/:id/proposals/:proposal': { answer: () => refuse(404, 'Proposal not found') },

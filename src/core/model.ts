@@ -130,7 +130,12 @@ export interface Mandate {
   basis: MandateBasis
   actor: ActorRef
   scope: string
+  /** Optional host-issued execution grant, fixed when the ticket is accepted. */
+  environment?: ExecutionGrant
 }
+
+/** Stable execution environment and the exact authorization generation admitted for this work. */
+export interface ExecutionGrant { environmentId: string; revision: number; epoch: number }
 
 /** Active trigger evaluation on a thread; at most one exists per thread. */
 export interface Evaluation {
@@ -312,7 +317,7 @@ export interface Ticket {
  * Thread closed; the ticket then ends unless its work has not finished (see `Tickets.unfinished`).
  */
 export interface Follow { thread: string; own: boolean; closed?: { at: string; outcome: 'merged' | 'closed' } }
-export interface Execution { name: string; directory: string; assignment: string; mode?: 'repository' | 'local' }
+export interface Execution { name: string; directory: string; assignment: string; mode?: 'repository' | 'local'; environment?: ExecutionGrant }
 
 /** Whether a ticket is open: it has not ended. */
 export const liveTicket = (ticket: Pick<Ticket, 'ended'>): boolean => !ticket.ended

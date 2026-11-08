@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import { key, latestAssignment, ticketStage, canRetry, canStop, hasPendingFollowup, type Engine, type Policy, type Trigger } from '../core/index.ts'
+import { key, latestAssignment, ticketStage, canRetry, canStop, hasPendingFollowup, type Engine, type Policy, type Trigger, type Ticket } from '../core/index.ts'
 import type { Store } from '../app/store.ts'
 import type { SourceKind } from '../sources/kind.ts'
 import { workerSessionId } from '../executor/dsh.ts'
@@ -18,13 +18,14 @@ const now = () => new Date().toISOString()
 export class Workspace {
   readonly plans: Planning
   constructor(private readonly store: Store, private readonly engine: () => Execution, private readonly runnable: () => boolean,
-    private readonly evidenceRevision?: (ticketId: string) => string) {
+    private readonly evidenceRevision?: (ticketId: string) => string, private readonly executionAuthorization?: (ticket: Ticket) => boolean) {
     store.db.exec(`CREATE TABLE IF NOT EXISTS workspace_mission (id TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS workspace_event (id INTEGER PRIMARY KEY, mission TEXT NOT NULL, value TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS workspace_event_mission ON workspace_event(mission, id);
       CREATE TABLE IF NOT EXISTS workspace_command (id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, mission TEXT NOT NULL);`)
     this.plans = new Planning(store, this)
   }
+  executionAllowed(ticket: Ticket): boolean { return this.executionAuthorization?.(ticket) ?? true }
 
   readonly source: SourceKind = { kind: SOURCE, title: { en: 'Workspace', zh: '工作空间' },
     description: { en: 'Missions authorized by the local operator.', zh: '由本地用户授权的任务。' },
@@ -247,6 +248,8 @@ export class Workspace {
           throw new WorkspaceError(409, 'This action was stopped. Run a new action to authorize further work.')
         if (request.command !== 'stop' && (!view.ticket.currentDefinition || view.status === 'outdated'))
           throw new WorkspaceError(409, 'This action definition changed. Run it again under the current plan.')
+        if (request.command !== 'stop' && !this.executionAllowed(this.store.tickets.get(view.ticket.id)!))
+          throw new WorkspaceError(409, 'This execution grant changed. Start a new action under the current environment.')
         if (request.command !== 'stop' && !this.authorized({ mission: id, action: actionId, actionRevision: action.definitionRevision ?? 1 }))
           throw new WorkspaceError(409, 'The workspace source is disabled. Enable it before sending new work.')
         if (request.command === 'retry') {

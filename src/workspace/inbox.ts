@@ -77,7 +77,7 @@ export class Inbox {
     const seen = this.store.db.prepare('SELECT revision FROM workspace_inbox_read WHERE ticket=?').get(id)
     const at = [ticket.updatedAt, message?.at ?? ''].sort().at(-1)!
     const canReply = !!mission?.current && definitionCurrent && ticket.ended?.by !== 'human' && this.workspace.get(mission.id, false).status === 'active'
-      && this.store.settings().sources.workspace?.enabled !== false
+      && this.store.settings().sources.workspace?.enabled !== false && this.workspace.executionAllowed(ticket)
     return { id, title: ticket.title, source: origin?.source ?? ticket.mandate.actor.source, at, revision,
       unread: seen?.revision !== revision, status, preview: (ticket.attention?.question || report?.summary || message?.text || origin?.text || '').slice(0, 300),
       ...(ticket.attention ? { question: ticket.attention.question } : {}), ...(ticket.execution ? { sessionId: workerSessionId(id) } : {}),

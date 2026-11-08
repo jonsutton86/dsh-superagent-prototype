@@ -334,6 +334,8 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/core/memory.ts` | `MemoryRepositories`: the Store's repositories in memory, in the Store's order and with its nested rollback, for domain tests |
 | `src/core/index.ts` | The core's exports |
 | `src/app/runtime.ts` | The Runtime, the composition root, with its start and stop |
+| `src/environments/model.ts` | Local environment enrollment, operator grant contracts and views |
+| `src/environments/service.ts` | Persistent grants, paired filesystem/process verification, execution binding, revocation and replacement |
 | `src/app/setup.ts` | Setup, and `setupChanged`, whether a save changes a field setup reads |
 | `src/app/passes.ts` | Passes, the pass scheduler |
 | `src/app/outbox.ts` | The Outbox: the Engine's `Outbox` port, the receipts and the `reply` effects that send them |
@@ -396,6 +398,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/sources/feishu-image.ts` | Reads a Feishu message's image as an attachment for the assessing Session |
 | `src/client/index.tsx` | The client plugin entry: the sidebar entry, the main panel and the page in DeepSeek Harness's Plugin Manager |
 | `src/client/app.tsx` | The panel: header, search, glossary, tabs and the page of the current route |
+| `src/client/environments.tsx` | Environment enrollment, proof status, revocation, reauthorization and replacement controls |
 | `src/client/provider.tsx` | What every page reads from its host: copy, calls, navigation, notices, the state poll, and `restart`, which reads the state quickly while dsh-superagent restarts |
 | `src/client/api.ts` | Calls and polls of the management API, typed by `src/app/api.ts`, and the Decision filters of the Eval status |
 | `src/client/route.ts` | The tabs, the settings groups, the typed routes that `parseRoute` reads, and the route memory with the settings group opened last |
@@ -424,6 +427,8 @@ Some generic modules still refer directly to GitHub or Feishu:
 | Test | Covers |
 | --- | --- |
 | `tests/core-engine.spec.ts` | Domain rules on in-memory repositories: receiving, Eval, fan-out, resume and stop, interrupted Assignments, the pause, Policy changes, reports and outcomes, attaching, replies, failed deliveries and dismissed problems |
+| `tests/environments.spec.ts` | Runtime/API enrollment, persistent grants, paired-provider proof, races, revocation, replacement and legacy task binding |
+| `tests/environments-ui.spec.tsx` | Rendered enrollment/recovery and exact mutation retry after response loss and polling |
 | `tests/stage.spec.ts` | The Ticket stages, row by row |
 | `tests/supervision.spec.ts` | Real HTTP transport, token authentication, stale commands, transactional receipts and existing worker delivery integration |
 | `tests/library.spec.ts` | Library restart/replay, atomic rollback, scoping, provenance, integrity, freshness, review invalidation and Runtime/API integration |
@@ -477,7 +482,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/class-docs.spec.ts` | Every class in `src` has a JSDoc block before it |
 | `tests/docs.spec.ts` | Numbered documents link only to earlier ones, every local link resolves, no document has merge conflict markers, and this document's tables list every module and every test |
 
-`tests/fixtures/` holds what several tests share: `host.ts`, a simulated DeepSeek Harness host; `panel-server.ts` and `panel.tsx`, the fake management API and the panel around a page; `deployment.ts`, a resolved deployment; `git.ts`, the environment of every git the tests start, which names no repository; and `async.ts`.
+`tests/fixtures/` holds what several tests share: `host.ts`, a simulated DeepSeek Harness host; `filesystem.ts`, its real local filesystem seam; `panel-server.ts` and `panel.tsx`, the fake management API and the panel around a page; `deployment.ts`, a resolved deployment; `git.ts`, the environment of every git the tests start, which names no repository; and `async.ts`.
 
 ## Persistence
 

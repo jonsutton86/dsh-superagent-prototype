@@ -97,7 +97,7 @@ function MissionDetail({ id }: { id: string }) {
       <div className="dt-mission-criteria"><h3>{t('mission.acceptance')}</h3><p className="dt-mission-prose">{mission.acceptance}</p></div>
       <MissionPlans mission={mission} changed={() => { void reload() }} />
       <Button onClick={() => navigate({ page: 'library', query: { scope: `mission:${mission.id}` } })}>{t('library.missionRecords')}</Button>
-      {(state?.paused || state?.setup.problem) && <p role="status">{t('mission.executionUnavailable')}</p>}
+      {(state?.paused || state?.setup.problem || (state && !state.environment?.ready)) && <p role="status">{t('mission.executionUnavailable')}</p>}
       <div className="dt-mission-buttons">
         {mission.status === 'active' ? <>
           <Button onClick={() => setAdding(!adding)}>{t(adding ? 'cancel' : 'mission.addAction')}</Button>
@@ -118,7 +118,7 @@ function MissionDetail({ id }: { id: string }) {
       </form>}
       {!mission.actions.length && <div className="dt-mission-empty"><h3>{t('mission.noActions')}</h3><p>{t('mission.actionsHint')}</p></div>}
       <div className="dt-mission-actions">{mission.actions.map(action => <Action key={action.id} action={action} mission={mission}
-        busy={command.busy} runnable={!!state && !state.paused && !state.setup.problem} act={act} />)}</div>
+        busy={command.busy} runnable={!!state && !state.paused && !state.setup.problem && state.environment?.ready} act={act} />)}</div>
       <details className="dt-mission-history"><summary>{t('mission.activity')}</summary><ol>{mission.events.map(event =>
         <li key={event.id}><time dateTime={event.at}>{new Date(event.at).toLocaleString()}</time><p>{event.text}</p></li>)}</ol></details>
     </>}

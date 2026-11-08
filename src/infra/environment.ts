@@ -8,6 +8,7 @@ import { realpathSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { delimiter, join, resolve } from 'node:path'
 import type { SubprocessOutputReader, SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
+import type { FileSystem } from '@deepseek-ai/dsh-fs'
 import type { Deployment } from '../deployment.ts'
 import { SetupError } from '../setup.ts'
 import { CliError } from './commands.ts'
@@ -144,12 +145,16 @@ export async function verifyEnvironment(deployment: Pick<Deployment, 'github' | 
   if (helpers.join('\0') !== [`file:${workerGitConfig(stateDir)}`, credentialHelper(github.cli), ''].join('\0')) throw new SetupError('gitTooOld')
 }
 
-/** Proves that host filesystem writes and the configured subprocess provider share the selected local directory. */
-export async function verifyLocalWorkspace(directory: string, subprocess: SubprocessRuntime, lifetime: AbortSignal): Promise<void> {
+/** Proves that host writes, Harness filesystem reads and the subprocess provider share the selected local directory. */
+export async function verifyLocalWorkspace(directory: string, subprocess: SubprocessRuntime, lifetime: AbortSignal,
+  filesystem: Pick<FileSystem, 'resolve' | 'readText' | 'processPathFromHostPath'>): Promise<void> {
   await mkdir(directory, { recursive: true, mode: 0o700 })
   const nonce = randomUUID(), file = join(directory, `.dsh-world-${nonce}`)
   await writeFile(file, nonce, { mode: 0o600, flag: 'wx' })
   try {
+    const path = filesystem.processPathFromHostPath(file)
+    if (!path || await filesystem.readText(await filesystem.resolve(path), lifetime) !== nonce)
+      throw new SetupError('localWorkspaceUnavailable')
     const observed = await runAsWorker(subprocess, ['cat', file], directory, AbortSignal.any([lifetime, AbortSignal.timeout(15_000)]))
     if (observed !== nonce) throw new SetupError('localWorkspaceUnavailable')
   } finally { await unlink(file) }

@@ -18,10 +18,10 @@ not a claim that the prototype already ships every feature or that the article s
 | Speculative work | Inferred mandates, observe/auto, configurable rules | Durable budgets, expiry and promotion/publication gates |
 | Full duplex | Harness job/subagent services, `src/executor/background.ts`, `src/app/delivery.ts` | Remote job receipt/reconnect integration; retain current local behavior |
 | Compute/state separation | SQLite Store; Harness session persistence service abstraction | Deployable persistent-state ownership and restore/failover integration |
-| Remote environments | Harness subprocess abstraction (paired filesystem world required) | Enrolled execution transport, local grants, offline queue/reconciliation, isolation |
+| Remote environments | Local enrollment, paired Harness filesystem/process proof, persisted task grants, revocation and recovery UI | Paired remote transport, authenticated endpoints, lease fencing, offline queue/reconciliation and isolation |
 | Watchdog | Existing health and bounded transient executor retry; now `src/supervision/*` | Live-provider and process-level acceptance, incident UI/alerts, retention, richer progress evidence and separately authorized recovery policies |
 | Delivery | Reports and PR binding/closure; content-addressed artifacts and stale mission-review invalidation | Host-collected check evidence, Git/environment revision binding and external publication receipts |
-| Operator control | Existing web panel, settings, pause/retry/stop | Supervision, environments, budgets and evidence surfaces |
+| Operator control | Existing web panel, settings, pause/retry/stop and local environment controls | Supervision, remote environments, budgets and evidence surfaces |
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
@@ -38,6 +38,10 @@ configuration were also checked directly in Node. A DeepSeek Harness CLI/provide
 checkout environment, so no live-provider or unattended production acceptance is claimed.
 
 ## Target architecture
+
+The [environment enrollment increment](015-execution-environments.md) implements local root proof, immutable task grant
+bindings, revocation, reauthorization, replacement and operator controls. Its generation is local authorization state;
+authenticated remote transports and distributed leases remain required below.
 
 The [mission planning increment](014-mission-plans.md) adds editable immutable versions, scoped worker proposals, explicit
 operator approval, history restoration and transitive result invalidation. Planning uses existing Harness workers and

@@ -60,7 +60,7 @@ export function MissionPlans({ mission, changed }: { mission: MissionView; chang
       })
     }}><p>{t('plan.requestHint')}</p><label>{t('plan.guidance')}<textarea value={guidance} maxLength={10000} rows={3}
         onChange={event => setGuidance(event.target.value)} /></label>
-      <Button type="submit" disabled={command.busy || !state || state.paused || !!state.setup.problem}>{t('plan.request')}</Button></form>}
+      <Button type="submit" disabled={command.busy || !state || state.paused || !!state.setup.problem || !state.environment?.ready}>{t('plan.request')}</Button></form>}
     {draft && active && <PlanEditor key={draft.key} initial={draft.plan} busy={command.busy} cancel={() => setDraft(undefined)} submit={(plan, rationale) => {
       void command.run({ operation: 'propose', plan, rationale, baseVersion: draft.baseVersion }, async requestId => {
         const proposal = await call('POST missions/:id/proposals', { id, body: { requestId, plan, rationale, baseVersion: draft.baseVersion } })

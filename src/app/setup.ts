@@ -97,7 +97,7 @@ export class Setup {
     }
     await writeEnvironment(resolved, settings.executor.blockedCommands).catch(machineProblem)
     this.restoreEnvironment = applyEnvironment(this.variables, machine.stateDir, this.path)
-    const verify = deployment.executionMode === 'local' ? verifyLocalWorkspace(executionRoot(settings, machine.stateDir), context.subprocess, lifetime)
+    const verify = deployment.executionMode === 'local' ? verifyLocalWorkspace(executionRoot(settings, machine.stateDir), context.subprocess, lifetime, context.fs)
       .catch((error: unknown) => { throw error instanceof SetupError ? error : new SetupError('localWorkspaceUnavailable', { output: String(error) }) })
       : verifyEnvironment(resolved, context.subprocess, lifetime)
     await verify.catch((error: unknown) => {

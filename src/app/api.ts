@@ -12,6 +12,7 @@ import type { ActionCommandInput, AddActionInput, CreateMissionInput, MissionCom
 import type { ArchiveRecordInput, CreateRecordInput, LibraryContent, LibraryEntry, LibraryList, LibraryQueryInput, LibraryRead } from '../workspace/library-model.ts'
 import type { Conversation, InboxFilter, InboxItem, InboxPage, InboxReplyInput, InboxStartInput } from '../workspace/inbox-model.ts'
 import type { PlanIndex, PlanProposal, PlanVersion, ProposePlanInput, ReviewPlanInput, RequestPlanInput } from '../workspace/plan-model.ts'
+import type { EnvironmentList, EnvironmentView, EnrollEnvironmentInput, EnvironmentCommandInput } from '../environments/model.ts'
 
 export const TICKET_FILTERS = ['open', 'person', 'working', 'idle', 'ended'] as const
 export const THREAD_FILTERS = ['subscribed', 'evaluating', 'recent', 'all'] as const
@@ -23,6 +24,9 @@ interface Paged { offset?: number; limit?: number }
 type Delivery = 'injected' | 'pending'
 
 export interface Api {
+  'GET environments': { response: EnvironmentList }
+  'POST environments': { body: EnrollEnvironmentInput; response: EnvironmentView }
+  'PUT environments/:id': { body: EnvironmentCommandInput; response: EnvironmentView }
   'GET missions/:id/plans': { query?: Paged; response: PlanIndex }
   'GET missions/:id/plans/:version': { response: PlanVersion }
   'GET missions/:id/proposals/:proposal': { response: PlanProposal }

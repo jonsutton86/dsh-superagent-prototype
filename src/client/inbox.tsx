@@ -49,7 +49,7 @@ function ConversationList({ filter }: { filter: InboxFilter }) {
       <Button variant="primary" onClick={() => setCreating(!creating)}>{t(creating ? 'cancel' : 'inbox.new')}</Button></div>
     {data && <p className="dt-hint">{t('inbox.counts', { unread: data.unread, questions: data.questions, review: data.review })}</p>}
     {creating && <><p className="dt-hint">{t('inbox.newHint')}</p>
-      {state?.paused || state?.setup.problem ? <p role="status">{t('mission.executionUnavailable')}</p>
+      {state?.paused || state?.setup.problem || (state && !state.environment?.ready) ? <p role="status">{t('mission.executionUnavailable')}</p>
         : <Composer fresh send={(text, requestId) => call('POST inbox', { body: { text, requestId } })}
           done={item => navigate({ page: 'inbox', id: item.id })} />}</>}
     <div className="dt-filters">{INBOX_FILTERS.map(value => <Pill key={value} active={value === filter}

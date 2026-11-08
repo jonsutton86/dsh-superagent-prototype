@@ -9,6 +9,7 @@ import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import { Runtime } from '../src/app/runtime.ts'
 import { jobRegistry } from './fixtures/host.ts'
+import { filesystem } from './fixtures/filesystem.ts'
 import { evalsHealth } from '../src/app/views/overview.ts'
 import { mandateInstructions } from '../src/executor/dsh.ts'
 import { masterPrompt } from '../src/app/context.ts'
@@ -89,7 +90,7 @@ const subprocess = { spawn: vi.fn((spec: { argv: readonly string[] }) => {
   // Strip leading `env` and `KEY=VALUE` arguments before looking up the command response.
   const argv = [...spec.argv]
   while (argv[0] === 'env' || /^[A-Z_]+=/.test(argv[0] ?? '')) argv.shift()
-  const answer = answers[argv.join(' ')] ?? ''
+  const answer = argv[0] === 'cat' ? readFileSync(argv[1]!, 'utf8') : answers[argv.join(' ')] ?? ''
   const reader = (text: string) => ({ readFrom: () => ({ text, nextOffset: text.length, lossy: false }) })
   return { done: Promise.resolve({ exitCode: answer instanceof Error ? 1 : 0, signal: null }), collected: { stdout: reader(answer instanceof Error ? '' : answer), stderr: reader(answer instanceof Error ? answer.message : '') } }
 }) }
@@ -203,7 +204,7 @@ beforeEach(async () => {
     inspect: vi.fn(async () => ({ events: [] })),
   }
   jobs = jobRegistry()
-  services = { agents, llm: { resolveCallConfig: vi.fn(async value => value) }, sessionController: controller, sessionPersistence: { flush: vi.fn(async () => {}), open: vi.fn(async () => ({ read: async () => ({ events: [] }), [Symbol.asyncDispose]: async () => {} })) }, workspaceRegistry: { create: async (cwd: string) => ({ id: cwd }) }, permissionPresets: { set: () => {} }, subprocess, webServer: { host: '127.0.0.1', port: 3082, register: (route: { handler: HttpHandler }) => { http = route.handler; return () => {} } }, jobs: jobs.service }
+  services = { fs: filesystem, agents, llm: { resolveCallConfig: vi.fn(async value => value) }, sessionController: controller, sessionPersistence: { flush: vi.fn(async () => {}), open: vi.fn(async () => ({ read: async () => ({ events: [] }), [Symbol.asyncDispose]: async () => {} })) }, workspaceRegistry: { create: async (cwd: string) => ({ id: cwd }) }, permissionPresets: { set: () => {} }, subprocess, webServer: { host: '127.0.0.1', port: 3082, register: (route: { handler: HttpHandler }) => { http = route.handler; return () => {} } }, jobs: jobs.service }
   for (const [name, service] of Object.entries(services)) ctx.reflect.provide(name, service)
   for (const cli of [AGENT(), OTHER(), BOT()]) writeFileSync(cli, '#!/bin/sh\n', { mode: 0o755 })
   const store = new Store(join(directory, 'orchestrator.sqlite')); seed(store); store.close()
@@ -1101,7 +1102,8 @@ it('counts a ticket whose directory the host prepared before prepare commands ex
   await runTool(sessionId, 'orchestrator_report', { state: 'failed', summary: 'offline' })
   // A ticket from before prepare commands has its worktree.
   const stored = runtime.store.tickets.get(ticket.id)!
-  runtime.store.tickets.save({ ...stored, execution: { ...stored.execution!, directory } })
+  runtime.store.tickets.save({ ...stored, mandate: { ...stored.mandate, environment: undefined },
+    execution: { ...stored.execution!, environment: undefined } })
   runtime.store.saveSettings({ ...runtime.store.settings(), executor: { ...runtime.store.settings().executor, prepare: 'exit 1' } })
   subprocess.spawn.mockClear()
   await runtime.engine.retryTicket(ticket.id)

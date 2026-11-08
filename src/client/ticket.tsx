@@ -186,6 +186,8 @@ export function TicketPage({ id }: { id: string }) {
       <Details icon="hash" title={t('identifiers')}>
         <KeyValues rows={[[t('ticketId'), <span className="dt-mono">{data.id}</span>], [t('executionDirectory'), <span
           className="dt-mono">{data.directory ?? t('empty')}</span>],
+          ...data.executionEnvironment ? [[t('tab.environments'), <span className="dt-mono">{data.executionEnvironment.environmentId}{' · '}
+            {t('environment.grant', { revision: data.executionEnvironment.revision, epoch: data.executionEnvironment.epoch })}</span>] as [string, ReactNode]] : [],
           ...legacy && data.mandate.scope ? [[t('legacyAssignment'), <span
             className="dt-mono dt-clamp">{data.mandate.scope}</span>] as [string, ReactNode]] : []]} />
       </Details>

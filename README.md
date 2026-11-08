@@ -45,6 +45,8 @@ publication tools. The workspace ledger distinguishes these increments from the 
 The [local execution profile](docs/012-local-execution.md) runs general missions without mandatory GitHub setup, using
 the same Engine, Harness Sessions, library, and completion review.
 The [mission planner](docs/014-mission-plans.md) adds editable plans, agent proposals, explicit review and immutable history.
+The [Environments tab](docs/015-execution-environments.md) enrolls local workspaces, verifies paired Harness filesystem/process
+access, and manages task-bound execution grants with revocation and replacement.
 Approved plans preserve execution history and invalidate affected results before they can be accepted again.
 
 The [Inbox](docs/013-inbox.md) brings conversations, unread updates, questions and review into one view. Start a task,

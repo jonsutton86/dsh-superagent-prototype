@@ -13,6 +13,7 @@ import type { Settings } from '../policy.ts'
 import type { Store } from '../app/store.ts'
 import { Later, type Effects } from '../app/effects.ts'
 import { executionRoot, type Variable } from '../app/execution-environment.ts'
+import type { Environments } from '../environments/service.ts'
 import type { Sessions } from '../app/sessions.ts'
 import { WorktreeNameSchema } from '../app/assessment.ts'
 import { resultRelay } from '../app/notices.ts'
@@ -57,6 +58,8 @@ export function transient(error: unknown): boolean {
 const ticketWorktreeName = (name: string, id: string): string => `${WorktreeNameSchema.parse(name)}-${id.slice(0, 12)}`
 /** Host dependencies used by `DshExecutor`. */
 export interface ExecutorHost {
+  /** Present in the application runtime; reusable executor-only hosts may supply their own admission boundary. */
+  environments?: Environments
   /** DSH Cordis context: agents and their events, and the subprocess service used to run prepare commands. */
   readonly context: Context
   /** Where the Executor reports what happened to Assignments and Inputs. */
@@ -240,8 +243,11 @@ export class DshExecutor implements Executor {
   }
   /** Populates a newly accepted ticket's `execution` attributes (worktree name, workspace directory, and assignment text). */
   prepare(ticket: Ticket, outcome: Extract<AssessmentOutcome, { kind: 'accept' }>): Ticket {
-    return { ...ticket, execution: { ...ticketExecution(ticket, outcome, this.host.store.settings(), this.host.machine.stateDir),
-      ...(this.host.machine.executionMode === 'local' ? { mode: 'local' as const } : {}) } }
+    const execution = { ...ticketExecution(ticket, outcome, this.host.store.settings(), this.host.machine.stateDir),
+      ...(this.host.machine.executionMode === 'local' ? { mode: 'local' as const } : {}) }
+    const environment = this.host.environments?.bind(execution)
+    return { ...ticket, ...(environment ? { mandate: { ...ticket.mandate, environment } } : {}),
+      execution: { ...execution, ...(environment ? { environment } : {}) } }
   }
   /**
    * Runs the configured `executor.prepare` command for a new ticket workspace in its parent directory with the ticket's
@@ -439,12 +445,18 @@ export class DshExecutor implements Executor {
     if ((ticket.execution?.mode ?? 'repository') !== (this.host.machine.executionMode ?? 'repository'))
       throw new PrepareFailed('Ticket execution mode differs from this profile')
     if (!current()) return
+    if (this.host.environments) {
+      try { ticket = this.host.environments.pin(ticket); await this.host.environments.validate(ticket) }
+      catch (error) { throw new PrepareFailed(`Execution environment unavailable: ${error instanceof Error ? error.message : String(error)}`) }
+    }
+    if (!current()) return
     // Prepare the workspace directory once; an existing directory counts as already prepared, including worktrees created before `prepare` commands existed.
     if (!await stat(workspace).then(() => true, () => false)) {
       await this.prepareDirectory(ticket)
       if (!current()) return
     }
-    if (ticket.execution?.mode === 'local') await verifyLocalWorkspace(workspace, this.host.context.subprocess, this.host.lifetime)
+    if (this.host.environments) await this.host.environments.validate(ticket).catch((error: unknown) => { throw new PrepareFailed(String(error)) })
+    if (ticket.execution?.mode === 'local') await verifyLocalWorkspace(workspace, this.host.context.subprocess, this.host.lifetime, this.host.context.fs)
       .catch((error: unknown) => { throw new PrepareFailed(`Local task directory is unavailable: ${String(error)}`) })
     if (!current()) return
     const sessionId = workerSessionId(ticket.id)

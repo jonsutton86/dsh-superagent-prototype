@@ -33,8 +33,11 @@ import type { Workspace } from '../workspace/service.ts'
 import { WorkspaceError } from '../workspace/model.ts'
 import type { Library } from '../workspace/library.ts'
 import type { Inbox } from '../workspace/inbox.ts'
+import type { Environments } from '../environments/service.ts'
+import { EnvironmentError } from '../environments/model.ts'
 
 export interface HttpHost {
+  readonly environments: Environments
   readonly inbox: Inbox
   readonly library: Library
   readonly workspace: Workspace
@@ -96,6 +99,7 @@ function failure(error: unknown): [number, Record<string, unknown>] {
   if (error instanceof SetupError) return [400, { error: error.message, setup: error.problem }]
   if (error instanceof RouteError) return [error.status, { error: error.message }]
   if (error instanceof WorkspaceError) return [error.status, { error: error.message }]
+  if (error instanceof EnvironmentError) return [error.status, { error: error.message }]
   if (error instanceof UserError) return [error.missing ? 404 : 400, { error: error.message, code: error.code, values: error.values }]
   if (error instanceof SettingsConflict || error instanceof PromptConflict) return [409, { error: error.message }]
   return [500, { error: error instanceof Error ? error.message : String(error) }]
@@ -117,7 +121,7 @@ export function stateView(runtime: HttpHost) {
   const settings = runtime.store.settings()
   return { setup: setupView(runtime), load: { ...executorLoad(runtime.store, runtime.executor.activeCount()),
     maxWorkers: settings.executor.maxWorkers },
-    masterId: runtime.masterId, paused: settings.paused, health: runtime.health }
+    masterId: runtime.masterId, paused: settings.paused, environment: { ready: runtime.environments.ready() }, health: runtime.health }
 }
 const views = (runtime: HttpHost): ViewHost => ({ store: runtime.store, sources: runtime.sources, links: runtime.links() })
 const setupState = (runtime: HttpHost): SetupState => ({ deployment: runtime.configured() ? runtime.deployment : undefined,
@@ -164,6 +168,9 @@ function routes(runtime: HttpHost): Routes {
   const ticket = (id: string) => { if (!store.tickets.get(id)) throw new RouteError(404, 'Ticket not found'); return id }
   const promptBody = (input: { body: (maxBytes?: number) => Promise<unknown> }) => input.body(4 * runtime.machine.promptMaxChars.get() + 4096)
   return {
+    'GET environments': () => runtime.environments.list(),
+    'POST environments': async ({ body }) => runtime.environments.enroll(await body()),
+    'PUT environments/:id': async ({ params, body }) => runtime.environments.update(params.id, await body()),
     'GET inbox': ({ query }) => runtime.inbox.list(query),
     'POST inbox': async ({ body }) => runtime.inbox.start(await body()),
     'GET inbox/:id': ({ params, query }) => runtime.inbox.conversation(params.id, query),

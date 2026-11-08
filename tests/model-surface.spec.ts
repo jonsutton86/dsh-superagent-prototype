@@ -3,7 +3,7 @@
  * orchestrator and worker roles against tool schemas, environment variables, glossary rules (`docs/001`), and size budgets.
  */
 import { Context } from '@deepseek-ai/cordis'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, expect, it, vi } from 'vitest'
@@ -23,6 +23,7 @@ import { SettingsSchema } from '../src/policy.ts'
 import { feishuKind, feishuTrigger } from '../src/sources/feishu.ts'
 import { githubKind } from '../src/sources/github.ts'
 import { testMachine } from './fixtures/deployment.ts'
+import { filesystem } from './fixtures/filesystem.ts'
 
 type Role = 'orchestrator' | 'worker'
 interface Surface { where: string; owner: string; role: Role | 'both'; text: string }
@@ -94,7 +95,7 @@ async function start() {
   const subprocess = { spawn: (spec: { argv: readonly string[] }) => {
     const argv = [...spec.argv]
     while (argv[0] === 'env' || /^[A-Z_]+=/.test(argv[0] ?? '')) argv.shift()
-    const collected = { stdout: reader(answers[argv.join(' ')] ?? ''), stderr: reader('') }
+    const collected = { stdout: reader(argv[0] === 'cat' ? readFileSync(argv[1]!, 'utf8') : answers[argv.join(' ')] ?? ''), stderr: reader('') }
     return { done: Promise.resolve({ exitCode: 0, signal: null }), collected }
   } }
   const agents = new Map<string, { status: string }>()
@@ -132,7 +133,7 @@ async function start() {
   const resolveAgent = async (id: string) => agents.has(id) ? { agent: agents.get(id) } : { error: { code: 'session/not-found' } }
   const ctx = new Context()
   const history = { read: async () => ({ events: [] }), [Symbol.asyncDispose]: async () => {} }
-  const services = { agents, llm: { resolveCallConfig: async (value: unknown) => value },
+  const services = { fs: filesystem, agents, llm: { resolveCallConfig: async (value: unknown) => value },
     workspaceRegistry: { create: async (cwd: string) => ({ id: cwd }) },
     sessionController: { create, resolveAgent, selectModel: async () => {}, rename: async () => {}, inspect: async () => ({ events: [] }) },
     sessionPersistence: { flush: async () => {}, open: async () => history }, permissionPresets: { set: () => {} }, subprocess,
@@ -169,7 +170,7 @@ async function drive(host: Host) {
     { kind: 'accept', trigger_id: request.id, title: '修复回归', worktree_name: 'fix-regression', acknowledgement: '收到，修复回归。' },
     { kind: 'ignore', trigger_id: thanks.id, reason: 'Thanks only.' }, { kind: 'ignore', trigger_id: chat.id, reason: 'Lunch chat.' }] }) as
     { results: { decision?: string; reason?: string; ticket?: { ticket_id: string } }[] }
-  expect(routed.results.map(result => result.decision)).toEqual(['accept', 'ignore', 'ignore'])
+  expect(routed.results.map(result => result.decision), JSON.stringify(routed)).toEqual(['accept', 'ignore', 'ignore'])
   expect(routed.results[2]!.reason).toMatch(/^Ignored from its card/)
   const a = routed.results[0]!.ticket!.ticket_id
   const answer = { trigger_id: request.id, purpose: 'answer', text: '是配置。' }

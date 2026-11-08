@@ -18,7 +18,7 @@ import { allowedSender, settingsPolicy } from '../policy.ts'
 import { SourceRegistry } from '../sources/registry.ts'
 import { Commands } from '../infra/commands.ts'
 import type { Deployment, Machine } from '../deployment.ts'
-import { environmentOf, ticketEnvironment, type Variable } from './execution-environment.ts'
+import { environmentOf, ticketEnvironment, executionRoot, type Variable } from './execution-environment.ts'
 import type { SetupProblem } from '../setup.ts'
 import { DshExecutor, sourceTrigger, triggerMessage, workerSessionId, ticketOfSession } from '../executor/dsh.ts'
 import { ticketCard } from './cards.ts'
@@ -50,6 +50,7 @@ import { Supervision } from '../supervision/service.ts'
 import { Workspace } from '../workspace/service.ts'
 import { Inbox } from '../workspace/inbox.ts'
 import { Library } from '../workspace/library.ts'
+import { Environments } from '../environments/service.ts'
 
 // Source plugins interact with dsh-superagent exclusively through the `SourceHost` service interface.
 declare module '@deepseek-ai/cordis' { interface Context { orchestrator: SourceHost } }
@@ -78,9 +79,11 @@ export class Runtime extends Service implements SourceHost {
   readonly workspace: Workspace
   readonly inbox: Inbox
   readonly library: Library
+  readonly environments: Environments
   readonly ready: Promise<void>
   private readonly board = new HealthBoard()
   private readonly runtimeHealth = this.board.claim('runtime', { state: 'starting', detail: '' })
+  private readonly environmentHealth = this.board.claim('environment')
   readonly masterId: string
   private readonly sourceLinks = new TextCache(200_000)
   private readonly stopped = new AbortController()
@@ -104,9 +107,11 @@ export class Runtime extends Service implements SourceHost {
     try {
       const report = (error: unknown) => { ctx.logger.warn('dsh-superagent: %s', String(error)) }
       const store = opened = this.store = new Store(join(machine.stateDir, 'orchestrator.sqlite'), report)
+      const environments = this.environments = new Environments({ store, filesystem: ctx.fs, subprocess: ctx.subprocess, lifetime: this.lifetime,
+        root: () => executionRoot(store.settings(), machine.stateDir), mode: () => machine.executionMode ?? 'repository', engine: () => runtime.engine })
       const library = this.library = new Library(store)
       const workspace = this.workspace = new Workspace(store, () => runtime.engine, () => !this.paused() && !this.closing(),
-        id => library.evidenceRevision(id))
+        id => library.evidenceRevision(id), ticket => environments.allows(ticket.execution?.environment))
       const inbox = this.inbox = new Inbox(store, workspace, library,
         async id => (await ctx.sessionController.inspect(id as SessionId, AbortSignal.any([this.lifetime, AbortSignal.timeout(15_000)]))).events)
       this.disposers.push(ctx.on('session/event', (session, event) => {
@@ -146,7 +151,7 @@ export class Runtime extends Service implements SourceHost {
       const policyChanged: EngineForSettings['policyChanged'] = (from, to, effects) => { this.engine.policyChanged(from, to, effects) }
       this.settings = new Settings({ store, sources, engine: { policyChanged }, health: board, context: ctx, lifetime: this.lifetime, sessions,
         sourceHost: this, setup, requestPass: () => { this.passes.request() } })
-      this.executor = new DshExecutor({ context: ctx, get engine() { return runtime.engine }, store, effects, health: board.claim('worker'), machine,
+      this.executor = new DshExecutor({ context: ctx, get engine() { return runtime.engine }, store, effects, health: board.claim('worker'), machine, environments,
         lifetime: this.lifetime, sessions, closing: () => this.closing(), paused: () => this.paused(), environment, sourceLink: link,
         repliedTo: trigger => repliedTo({ store, sources }, trigger) })
       this.assessor = new MasterAssessor({ get engine() { return runtime.engine }, commands, get deployment() { return setup.deployment }, effects,
@@ -154,7 +159,7 @@ export class Runtime extends Service implements SourceHost {
         deliver: (id, text) => sessions.prompt(masterId, id, text, 'steer'), candidateCard: candidate => candidateCard(links, candidate) })
       const outbox = this.outbox = new Outbox({ store, effects, sources, commands, paused: () => this.paused() })
       const { assessor, executor } = this
-      const policy = () => workspace.policy(settingsPolicy(store.settings(), sources))
+      const policy = () => environments.policy(workspace.policy(settingsPolicy(store.settings(), sources)))
       const engine = this.engine = new Engine({ repo: store, scope: sources, policy, assessor, executor,
         outbox, prepareTicket: (ticket, outcome) => executor.prepare(ticket, outcome), emit: event => {
           // Notify the main Session only about domain events it did not initiate itself.
@@ -193,7 +198,12 @@ export class Runtime extends Service implements SourceHost {
       throw error
     }
   }
-  get health(): Readonly<Record<string, Health>> { return this.board.all }
+  get health(): Readonly<Record<string, Health>> {
+    const ready = !this.closingFlag && this.environments.ready()
+    this.environmentHealth.set({ state: ready ? 'ready' : 'paused',
+      detail: ready ? 'Execution environment is enrolled and verified' : 'Execution environment needs enrollment, verification or authorization' })
+    return this.board.all
+  }
   /** Aborted when dsh-superagent stops or loses its state directory lock, cancelling running reads and subprocesses. */
   get lifetime(): AbortSignal { return this.stopped.signal }
   context(kind: { kind: string; health: readonly string[] }): SourceContext { return sourceContextOf(this.sourceDeps, kind) }
@@ -220,7 +230,7 @@ export class Runtime extends Service implements SourceHost {
   sendReplies(): Promise<void> { return this.outbox.sent() }
   private closing(): boolean { return this.closingFlag }
   /** Hold evaluation, dispatch, and outbound delivery while paused or awaiting setup; sources still record incoming triggers. */
-  private paused(): boolean { return !this.setup.configured() || this.store.settings().paused }
+  private paused(): boolean { return !this.setup.configured() || !this.environments.ready() || this.store.settings().paused }
   private async initialize(): Promise<void> {
     // Register management HTTP routes before setup completes so operators can fix setup problems in the UI.
     this.disposers.push(registerHttp(this.ctx, this.httpHost()))
@@ -228,6 +238,7 @@ export class Runtime extends Service implements SourceHost {
       this.runtimeHealth.set({ ...health('paused', 'setupPending'), at: now() })
       return
     }
+    await this.environments.initialize().catch(error => this.ctx.logger.warn('Execution environment enrollment: %s', String(error)))
     this.sessions.install()
     this.executor.install()
     await this.sessions.ensure(this.masterId, this.machine.stateDir, 'dsh-superagent orchestrator', 'orchestrator')
@@ -241,9 +252,10 @@ export class Runtime extends Service implements SourceHost {
   }
   private httpHost(): HttpHost {
     const runtime = this
-    const { store, sources, prompts, sessions, settings, engine, executor, health, machine, masterId, ready, sourceLinks, setup, passes } = this
-    return { store, sources, prompts, sessions, settings, engine, executor, health, machine, masterId, ready, sourceLinks,
-      supervision: this.supervision, workspace: this.workspace, library: this.library, inbox: this.inbox,
+    const { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, ready, sourceLinks, setup, passes } = this
+    return { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, ready, sourceLinks,
+      get health() { return runtime.health },
+      supervision: this.supervision, workspace: this.workspace, library: this.library, inbox: this.inbox, environments: this.environments,
       get deployment() { return setup.deployment },
       get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem },
       configured: () => setup.configured(), links: () => runtime.links(), ticketEnvironment: ticket => runtime.ticketEnvironment(ticket),

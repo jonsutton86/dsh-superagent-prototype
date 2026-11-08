@@ -17,6 +17,7 @@ import { Commands } from '../../src/infra/commands.ts'
 import { credentialHelper, workerGitConfig } from '../../src/infra/environment.ts'
 import type { Trigger } from '../../src/core/index.ts'
 import { testMachine } from './deployment.ts'
+import { filesystem } from './filesystem.ts'
 
 export const MEMBER = 'ou_alice'
 export const CHAT = 'oc_team'
@@ -238,7 +239,7 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
   const webServer = { host: '127.0.0.1', port: 3082, register: (route: { handler: HttpHandler }) => { http = route.handler; return () => {} } }
   const jobs = jobRegistry(id => agents.get(id))
   const subagents = subagentRuntime(agents)
-  const services = { agents, llm: { resolveCallConfig: vi.fn(async (value: unknown) => value) }, sessionController: controller,
+  const services = { fs: filesystem, agents, llm: { resolveCallConfig: vi.fn(async (value: unknown) => value) }, sessionController: controller,
     sessionPersistence: persistence, workspaceRegistry: { create: async (cwd: string) => ({ id: cwd }) }, permissionPresets: { set: () => {} }, subprocess, webServer,
     jobs: jobs.service, subagents: subagents.service }
   const ctx = new Context()

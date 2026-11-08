@@ -10,6 +10,7 @@ import { Setup } from '../src/app/setup.ts'
 import { SettingsSchema } from '../src/policy.ts'
 import { Commands } from '../src/infra/commands.ts'
 import { verifyLocalWorkspace, workerBin, workerGitConfig } from '../src/infra/environment.ts'
+import { filesystem } from './fixtures/filesystem.ts'
 import { Config, machineOf } from '../src/deployment.ts'
 import type { MissionView } from '../src/workspace/model.ts'
 import type { LibraryEntry } from '../src/workspace/library-model.ts'
@@ -40,6 +41,7 @@ function directory() { const path = mkdtempSync(join(tmpdir(), 'agentic-local-')
 it('starts local setup with a real child process and no GitHub CLI, repository, or Git probe', async () => {
   const stateDir = directory(), context = new Context(), process = localProcesses()
   context.reflect.provide('subprocess', process.subprocess)
+  context.reflect.provide('fs', filesystem)
   const setup = new Setup({ context, machine: testMachine({ stateDir, executionMode: 'local' }), lifetime: new AbortController().signal, restart: vi.fn() })
   close.push(() => setup.restore())
   expect(await setup.run(SettingsSchema.parse({}))).toBe(true)
@@ -56,13 +58,14 @@ it('starts local setup with a real child process and no GitHub CLI, repository, 
 it('rejects a mismatched subprocess/filesystem world and removes its probe', async () => {
   const path = directory(), subprocess = { spawn: () => ({ done: Promise.resolve({ exitCode: 0 }),
     collected: { stdout: { readFrom: () => ({ text: 'different-world' }) } } }) } as unknown as SubprocessRuntime
-  await expect(verifyLocalWorkspace(path, subprocess, new AbortController().signal)).rejects.toThrow('same local process')
+  await expect(verifyLocalWorkspace(path, subprocess, new AbortController().signal, filesystem)).rejects.toThrow('same local process')
   expect(readdirSync(path)).toEqual([])
 })
 
 it('refuses profile mode changes while incompatible tickets remain open', async () => {
   const stateDir = directory(), context = new Context(), subprocess = localProcesses()
   context.reflect.provide('subprocess', subprocess.subprocess)
+  context.reflect.provide('fs', filesystem)
   const setup = new Setup({ context, machine: testMachine({ stateDir, executionMode: 'local' }), lifetime: new AbortController().signal,
     restart: vi.fn(), incompatibleTickets: () => true })
   expect(await setup.run(SettingsSchema.parse({}))).toBe(false)
