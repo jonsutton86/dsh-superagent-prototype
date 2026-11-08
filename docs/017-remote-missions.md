@@ -160,4 +160,10 @@ tracker after the full suite completes.
 
 Local `pnpm check` on 2026-11-08 passed typechecking, all builds and 1,326 tests in 74 files. Two native Linux cases and the
 opt-in real-model case were skipped by that ordinary macOS run. The real-model qualification passed separately as described
-above. The Linux workflow must independently pass for the exact pushed code before claiming current native acceptance.
+above. Native Linux qualification passed for commit `d8223312706205e2f9cfa352b975cc603b1ab75a` in
+[GitHub Actions run 42515787855](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42515787855), job
+`128838381859`: typechecking, all builds and 1,327 tests passed across 74 test files. Both native cases ran, including remote
+mission dispatch, endpoint search, artifact publication, descendant guards and offline revocation. The opt-in model-backed
+case and the non-Linux refusal case were skipped. The runner used Ubuntu 22.04, bubblewrap 0.6.1 and ripgrep 13.0.0. This
+qualifies the exercised Linux application/provider composition; separate-machine transport and the other open requirements
+above still need acceptance evidence.

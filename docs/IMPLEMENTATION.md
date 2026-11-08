@@ -55,6 +55,13 @@ and operator revocation are integrated. Actual Harness with the configured DeepS
 remote artifact and preserved authority and request idempotency through restart. This local composition test uses a test-only
 endpoint on macOS; native confinement and cross-host deployment remain distinct qualification boundaries.
 
+Remote mission verification on 2026-11-08: local `pnpm check` passed 1,326 tests, typechecking and all builds; the real Harness
+Flash artifact/restart qualification passed separately. Commit `d8223312706205e2f9cfa352b975cc603b1ab75a` passed
+[Linux run 42515787855](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42515787855) with 1,327 tests,
+including native mission dispatch and filesystem/process confinement. The full product goal remains open; the next remote
+work is durable command-to-assignment ownership, endpoint credential binding and operator enrollment/reconciliation before
+per-action multi-environment dispatch.
+
 The [environment enrollment increment](015-execution-environments.md) implements local root proof, immutable task grant
 bindings, revocation, reauthorization, replacement and operator controls. Its generation is local authorization state;
 remote endpoint grants and their leases are integrated in the subsequent remote increments; coordinator ownership is still separate.
