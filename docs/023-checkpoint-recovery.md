@@ -109,7 +109,18 @@ transitive Session selection, active-owner refusal, cancellation, digest/framing
 partial/exact imports, fork prefixes spanning pages, conflicting/newer history, missing task/receipt references, and preservation of
 settled/pending receipts and revoked authority. The opt-in installed-Harness qualification extends real configured-model
 missions with maintenance-plugin capture, verify, stage and two imports into a fresh backend, while retaining the hold.
-Actual test results are recorded after qualification; these test definitions alone are not deployment evidence.
+Qualification on 2026-11-08: code commit `aef82a2ce95666a58cd7892487d3bb3e0ab35175` passed local `pnpm check`:
+1,386 tests, typechecking and all four builds; five cases were skipped locally, including two opt-in model cases.
+Those two cases passed separately against Harness 0.2.1-rc.3 and `deepseek-official/deepseek-flash` in 139.87 seconds.
+Both dedicated and managed deployments completed real missions, stopped their coordinator, captured their real Session and
+world state, verified and staged the checkpoint through the installed Harness loader, and imported Sessions twice into a
+fresh backend. Managed qualification included child-owned execution receipts and independently revoked authority. Each
+restored coordinator retained its execution hold. The private maintenance completion receipts, not stdout, signaled success.
+
+The same code passed [Linux run 42531703951](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42531703951):
+1,388 tests, typechecking and all four builds on Ubuntu 22.04/Node 24 with native confinement enabled. Three cases were
+skipped, including the separately qualified model cases. This is evidence for checkpoint/staged import and existing native
+confinement; it is not evidence for a running clean-host failover or distributed ownership transfer.
 
 Remaining requirements in the full implementation plan include an authoritative ownership handoff and epoch protocol,
 endpoint and publication fencing against stale coordinators, original-ID receipt reconciliation, workspace/endpoint recovery,

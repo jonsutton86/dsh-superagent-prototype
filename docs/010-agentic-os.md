@@ -175,3 +175,9 @@ The same code passed 1,378 tests and all three native confinement cases in
 Checkpoint increment: `023-checkpoint-recovery.md` records encrypted offline capture, complete verification, held staging and
 retryable Harness Session import. Activation remains unavailable until exclusive ownership, stale-owner fencing and remote
 receipt reconciliation are enforced. The full persistent ownership and clean-host failover requirement remains open.
+
+Checkpoint qualification: code `aef82a2ce95666a58cd7892487d3bb3e0ab35175` passed 1,386 local tests and both installed-Harness
+model cases extended through maintenance capture, verification, staging and repeated fresh-backend imports. It also passed
+1,388 tests with native confinement enabled in
+[Linux run 42531703951](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42531703951).
+These results qualify the staged recovery increment; they do not complete ownership activation or failover.
