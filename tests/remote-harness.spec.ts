@@ -2,9 +2,10 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { createServer } from 'node:net'
 import { copyFile, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
 import { remoteFixture } from './fixtures/remote.ts'
+import type { EndpointCredential, GrantReceipt } from '../src/remote/protocol.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { for (const dispose of cleanup.reverse()) await dispose(); cleanup.length = 0; vi.restoreAllMocks() })
@@ -14,6 +15,14 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1')('runs a real Harness wor
   const cli = process.env.DSH_QUALIFICATION_CLI!, home = process.env.DSH_QUALIFICATION_HOME!, source = process.env.DSH_QUALIFICATION_PROFILE!
   if (!cli || !home || !source) throw new Error('Supply the qualification CLI, DSH home and source profile paths')
   const native = process.env.DSH_REMOTE_ISOLATION === '1', h = await remoteFixture(cleanup, { native })
+  // Synthetic service credential exercises endpoint binding; the operator's inference credential remains on the coordinator.
+  const secret = randomUUID(), secretDigest = createHash('sha256').update(secret).digest('hex')
+  await writeFile(join(h.endpoint.credentials.imports, 'qualification'), secret, { mode: 0o600 })
+  const binding = await h.admin.intent<EndpointCredential>({ op: 'credential.import', requestId: 'qualification-credential', id: 'qualification', revision: 0,
+    variable: 'SERVICE_API_KEY', mode: 'env', file: 'qualification', reason: 'Synthetic qualification credential' })
+  const enrolled = await h.admin.intent<GrantReceipt>({ op: 'grant.create', requestId: 'qualification-grant', owner: 'coordinator', workspace: 'credential-proof',
+    operations: ['fs.read', 'fs.write', 'process.spawn'], leaseMs: 300_000, credentials: [{ id: binding.id, version: binding.version }] })
+  const credentialFile = join(h.directory, 'qualification-grant.token'); await writeFile(credentialFile, enrolled.credential!, { mode: 0o600 })
   // On macOS this test qualifies Harness composition only. Native confinement is independently mandatory in Linux CI.
   if (!native) vi.spyOn(h.endpoint, 'identity').mockReturnValue({ ...h.endpoint.identity(), confinement: 'linux-bubblewrap' })
   const profile = `remote-qualification-${randomUUID().slice(0, 8)}`, directory = join(home, 'profiles', profile)
@@ -29,7 +38,7 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1')('runs a real Harness wor
     { id: 'webserver', config: { host: '127.0.0.1', port } },
     { id: 'agent-default-model', config: { provider: 'deepseek-official', model: 'deepseek-flash' } },
     { id: 'dsh-superagent', config: { stateDir, executionMode: 'local' } },
-    { id: 'sandbox-policy', config: { mode: 'danger-full-access', workspaceRoot: h.enrolled.grant.root } },
+    { id: 'sandbox-policy', config: { mode: 'danger-full-access', workspaceRoot: enrolled.grant.root } },
     { id: 'permission', config: { defaultPreset: 'danger-full-access', presets: {
       'danger-full-access': { sandbox: 'danger-full-access', approval: 'never', name: 'Endpoint grant', description: 'Execution is bounded by the remote endpoint grant.' },
     } } },
@@ -37,7 +46,7 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1')('runs a real Harness wor
       'dsh-superagent-router-preset', 'preset-standard', 'preset-ptc', 'preset-minimal', 'preset-cordis'].map(id => ({ id, disabled: true })),
     { insert: [
       { id: 'qualification-remote-world', name: 'dsh-superagent/remote-world', config: {
-        url: h.url, endpointId: h.endpoint.journal.id, credentialFile: h.client.connection.credentialFile, stateDir: join(h.directory, 'world') } },
+        url: h.url, endpointId: h.endpoint.journal.id, credentialFile, stateDir: join(h.directory, 'world') } },
     ] },
   ], null, 2), { mode: 0o600 })
   let log = '', child: ChildProcess | undefined
@@ -68,7 +77,7 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1')('runs a real Harness wor
   }, { timeout: 40_000, interval: 250 })
   try {
     start(); await ready()
-    const request = { requestId: 'remote-live-proof', title: 'Remote Harness proof', text: 'In your assigned directory, use bash to create result.txt containing exactly remote-harness-proof (no newline). Read it back, publish that exact content as an artifact with workspace_publish, then report ready. Do not use external services or background work. If any tool fails, immediately report failed with the exact error and end the turn; do not attempt to repair the execution environment.' }
+    const request = { requestId: 'remote-live-proof', title: 'Remote Harness proof', text: `In your assigned directory, use bash to verify that the SHA256 of the endpoint-provided SERVICE_API_KEY equals ${secretDigest}, without printing the credential itself. Only after that check succeeds, create result.txt containing exactly remote-harness-proof (no newline). Read it back, publish that exact content as an artifact with workspace_publish, then report ready. Do not use external services or background work. If any tool fails, immediately report failed with the exact error and end the turn; do not attempt to repair the execution environment.` }
     const task = await api('inbox', request)
     const deadline = Date.now() + 120_000
     for (;;) {
@@ -86,6 +95,10 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1')('runs a real Harness wor
       && job.request.argv.some(arg => arg.includes('result.txt')) && job.outcome?.exitCode === 0)
     expect(command?.request.owner).toMatchObject({ kind: 'assignment', ticketId: task.id,
       assignmentId: ticket.assignments.at(-1).id, sessionId: ticket.sessionId, tool: 'bash' })
+    expect(command?.credentials).toEqual(enrolled.grant.credentials)
+    expect(h.endpoint.journal.jobs().some(job => job.request.cwd === ticket.directory
+      && job.request.argv.some(arg => arg.includes('SERVICE_API_KEY')) && job.outcome?.exitCode === 0)).toBe(true)
+    expect(JSON.stringify(h.endpoint.journal.jobs())).not.toContain(secret)
     const receipts = await api(`tickets/${task.id}/execution`)
     expect(receipts.items.find((item: { id: string }) => item.id === command!.id)).toMatchObject({ owner: command!.request.owner, quiescent: true })
     await stop(); start(); await ready()

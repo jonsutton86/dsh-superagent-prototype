@@ -84,6 +84,13 @@ function EnvironmentCard({ record, listing, changed }: { record: EnvironmentView
     {record.verifiedAt && <p>{t('environment.verified')}: <When at={record.verifiedAt} /></p>}
     {record.problem && <p role="status" className="dt-error">{record.problem}</p>}
     {record.remote && <p className="dt-hint">{t('environment.remoteEndpoint')}: <code>{record.remote.endpointId}</code></p>}
+    {!!record.remote?.credentials?.length && <div>
+      <p>{t('environment.credentials')}</p><p className="dt-hint">{t('environment.credentialBoundary')}</p>
+      <ul>{record.remote.credentials.map(binding => <li key={binding.id}><code>{binding.id}</code> · <code>{binding.variable}</code>
+        {' · '}{t(binding.mode === 'env' ? 'environment.credentialEnv' : 'environment.credentialFile')}
+        <div className="dt-hint">{t('environment.credentialVersion')}: <code>{binding.version}</code></div>
+      </li>)}</ul>
+    </div>}
     {record.remoteStatus?.problem && <p role="status" className="dt-error">{record.remoteStatus.problem}</p>}
     {record.remoteStatus && record.remoteStatus.phase !== 'active' && <p role="status">{t(!record.remoteStatus.acknowledged
       ? 'environment.remotePending' : record.remoteStatus.quiescent ? 'environment.remoteStopped' : 'environment.remoteUncertain')}</p>}

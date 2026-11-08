@@ -15,4 +15,5 @@ export default defineConfig([
     outputOptions: { entryFileNames: 'client.js', banner: 'window.__ModuleLoader__.load({ id: "dsh-superagent", factory: (require) => {', footer: 'return module.exports; } });', intro: 'var module = { exports: {} }; var exports = module.exports;' } },
   // A separate one-entry build keeps the confined helper self-contained: no host shared chunks are mounted into workers.
   { entry: { 'remote-fs-worker': 'src/remote/fs-worker.ts' }, outDir: 'lib', format: 'esm', fixedExtension: false, platform: 'node', target: 'es2024', dts: false, clean: false },
+  { entry: { 'remote-command-worker': 'src/remote/command-worker.ts' }, outDir: 'lib', format: 'esm', fixedExtension: false, platform: 'node', target: 'es2024', dts: false, clean: false },
 ])

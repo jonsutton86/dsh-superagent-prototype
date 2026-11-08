@@ -98,7 +98,7 @@ task receipt API, cancellation after task completion and revocation. The configu
 were skipped. The Ubuntu 22.04 runner used bubblewrap 0.6.1 and ripgrep 13.0.0. This establishes the exercised Linux
 confinement and application integration; it does not establish cross-host deployment or whole-product completion.
 
-Cross-host transport deployment, endpoint credential bindings, operator enrollment, quotas, per-action worlds/personas,
+Endpoint credential bindings are integrated in `019-endpoint-credentials.md`. Cross-host transport deployment, operator enrollment, quotas, per-action worlds/personas,
 state backup/restore and failover remain separate work. These receipts do not certify external publication, grant a child
 independent authority, prove that an artifact fulfills its task, or eliminate the need for administrator investigation of
 unknown endpoint effects. Visual browser/desktop acceptance remains unperformed in this increment.

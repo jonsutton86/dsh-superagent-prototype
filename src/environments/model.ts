@@ -1,6 +1,7 @@
 /** Execution environment enrollment and operator grant contracts. Remote transports are separate providers. */
 import { z } from 'zod'
 import type { ExecutionGrant } from '../core/index.ts'
+import type { CredentialBinding } from '../remote/protocol.ts'
 
 const requestId = z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/)
 export const EnrollEnvironment = z.object({ requestId, name: z.string().trim().min(1).max(160),
@@ -12,7 +13,7 @@ export const EnvironmentCommand = z.object({ requestId, revision: z.number().int
 export interface EnvironmentRecord {
   id: string; name: string; kind: 'local' | 'remote'; root: string; configuredRoot: string; mode: 'repository' | 'local'
   identity: string; revision: number; epoch: number; enabled: boolean; createdAt: string; updatedAt: string
-  remote?: { binding: string; endpointId: string; grantId: string; epoch: number }
+  remote?: { binding: string; endpointId: string; grantId: string; epoch: number; credentials?: CredentialBinding[] }
   retired?: boolean
 }
 export interface EnvironmentView extends Omit<EnvironmentRecord, 'identity'> {

@@ -8,10 +8,12 @@ import { RemoteJournal, fingerprint, inside, timestamp } from './journal.ts'
 import { Rpc, RemoteError, MAX_TEXT, MAX_WINDOW, type Principal, type RpcRequest, type RemoteGrant, type RemoteJob,
   type RemoteOperation, type EndpointIdentity } from './protocol.ts'
 import type { ExecutionIsolation } from './isolation.ts'
+import { EndpointCredentials } from './credentials.ts'
 
 export interface EndpointHost {
   filesystem: FileSystem; subprocess: SubprocessRuntime; isolation: ExecutionIsolation; stateDir: string; root: string
   allowedEnv?: string[]; outputMaxBytes?: number; maxRunning?: number; shutdownMs?: number
+  commandHelper?: string
   filesystemRpc?(grant: RemoteGrant, request: RpcRequest, signal: AbortSignal): Promise<unknown>
 }
 const message = (error: unknown) => error instanceof Error ? error.message : String(error)
@@ -21,6 +23,7 @@ const rootIdentity = async (path: string) => { const value = await stat(path, { 
 /** Independently authenticated execution endpoint; accepts durable intents before crossing a process or file-effect boundary. */
 export class RemoteEndpoint {
   readonly journal: RemoteJournal
+  readonly credentials: EndpointCredentials
   private readonly lifetime = new AbortController()
   private readonly live = new Map<string, SubprocessHandle>()
   private readonly pending = new Map<string, Promise<void>>()
@@ -33,7 +36,11 @@ export class RemoteEndpoint {
   private stopping?: Promise<void>
   private initialized = false
   private root = ''
-  constructor(private readonly host: EndpointHost) { this.journal = new RemoteJournal(host.stateDir, host.root) }
+  constructor(private readonly host: EndpointHost) {
+    this.journal = new RemoteJournal(host.stateDir, host.root)
+    try { this.credentials = new EndpointCredentials(this.journal) }
+    catch (error) { this.journal.close(); throw error }
+  }
   async start(): Promise<void> {
     this.root = await realpath(this.host.root)
     const control = await realpath(this.host.stateDir)
@@ -71,7 +78,8 @@ export class RemoteEndpoint {
   }
   identity(): EndpointIdentity {
     return { protocol: 1, id: this.journal.id, platform: process.platform, confinement: this.host.isolation.name,
-      capabilities: { filesystem: true, process: true, terminal: false, interactiveStdin: false, controlChannel: false, outputWindow: MAX_WINDOW, effectOwnership: true } }
+      capabilities: { filesystem: true, process: true, terminal: false, interactiveStdin: false, controlChannel: false, outputWindow: MAX_WINDOW, effectOwnership: true,
+        ...(this.host.commandHelper ? { credentialBindings: true as const } : {}) } }
   }
   private admin(principal: Principal): void { if (principal.role !== 'admin') throw new RemoteError(403, 'admin_required', 'Endpoint administration credential required') }
   private owned(principal: Principal, value: { grantId: string; epoch: number }): void {
@@ -83,6 +91,7 @@ export class RemoteEndpoint {
     const grant = this.journal.grant(principal.id)
     if (grant.epoch !== principal.epoch || !grant.enabled || grant.leaseUntil <= Date.now())
       throw new RemoteError(409, 'grant_unavailable', 'Execution grant is revoked, expired or superseded')
+    if (!this.credentials.valid(grant.credentials)) throw new RemoteError(409, 'credential_unavailable', 'Execution credential binding is revoked or superseded')
     if (operation && !grant.operations.includes(operation)) throw new RemoteError(403, 'operation_denied', `Grant does not allow ${operation}`)
     return grant
   }
@@ -106,13 +115,14 @@ export class RemoteEndpoint {
       const digest = fingerprint({ principal, request }), replay = this.journal.receipt<string>(request.requestId, digest)
       if (replay) return this.view(this.journal.grant(replay))
       if (request.operations.includes('fs.write') && !request.operations.includes('fs.read')) throw new RemoteError(400, 'invalid_grant', 'Filesystem writes require read access for version guards')
+      const credentials = this.credentialBindings(request.credentials ?? [], request.operations)
       if (this.journal.grants().some(grant => grant.workspace === request.workspace)) throw new RemoteError(409, 'workspace_enrolled', 'This workspace already has a grant; change its existing grant')
       const directory = join(this.root, request.workspace)
       await mkdir(directory, { recursive: true, mode: 0o700 })
       const root = await realpath(directory)
       if (!inside(this.root, root) || root === this.root) throw new RemoteError(403, 'workspace_escape', 'Workspace resolves outside its assigned root')
       const at = timestamp(), grant: RemoteGrant = { id: randomUUID(), owner: request.owner, workspace: request.workspace, root,
-        operations: [...new Set(request.operations)], enabled: true, revision: 1, epoch: 1, leaseUntil: Date.now() + request.leaseMs,
+        operations: [...new Set(request.operations)], ...(credentials.length ? { credentials } : {}), enabled: true, revision: 1, epoch: 1, leaseUntil: Date.now() + request.leaseMs,
         createdAt: at, updatedAt: at, rootIdentity: await rootIdentity(root) }
       this.lifetime.signal.throwIfAborted()
       this.journal.atomic(() => { this.journal.saveGrant(grant); this.journal.remember(request.requestId, digest, grant.id); this.journal.audit({ grant: grant.id, epoch: grant.epoch, action: 'enrolled' }) })
@@ -127,6 +137,10 @@ export class RemoteEndpoint {
     const grant = request.op === 'grant.change' ? this.journal.grant(request.id) : this.grant(principal)
     if (grant.revision !== request.revision) throw new RemoteError(409, 'stale_revision', 'Grant revision changed')
     const oldEpoch = grant.epoch
+    if (request.op === 'grant.change') {
+      if (request.credentials !== undefined) grant.credentials = this.credentialBindings(request.credentials, grant.operations)
+      else if (request.enabled && !this.credentials.valid(grant.credentials)) throw new RemoteError(409, 'credential_unavailable', 'Supply current credential versions or explicitly remove credential bindings')
+    }
     grant.revision++; grant.updatedAt = timestamp(); grant.leaseUntil = Date.now() + request.leaseMs
     if (request.op === 'grant.change') { grant.epoch++; grant.enabled = request.enabled }
     this.journal.atomic(() => { this.journal.saveGrant(grant); this.journal.remember(request.requestId, digest, grant.id);
@@ -136,12 +150,18 @@ export class RemoteEndpoint {
   }
   private sweep(): void {
     if (this.closing) return
-    for (const grant of this.journal.grants()) if (grant.enabled && grant.leaseUntil <= Date.now()) {
+    for (const grant of this.journal.grants()) if (grant.enabled && (grant.leaseUntil <= Date.now() || !this.credentials.valid(grant.credentials))) {
       const epoch = grant.epoch
       grant.enabled = false; grant.epoch++; grant.revision++; grant.updatedAt = timestamp()
-      this.journal.atomic(() => { this.journal.saveGrant(grant); this.journal.audit({ grant: grant.id, epoch: grant.epoch, action: 'lease_expired' }) })
+      this.journal.atomic(() => { this.journal.saveGrant(grant); this.journal.audit({ grant: grant.id, epoch: grant.epoch,
+        action: grant.leaseUntil <= Date.now() ? 'lease_expired' : 'credential_invalidated' }) })
       this.cancelGeneration(grant.id, epoch)
     }
+  }
+  private credentialBindings(refs: readonly { id: string; version: string }[], operations: RemoteGrant['operations']) {
+    if (refs.length && (!this.host.commandHelper || !operations.includes('process.spawn')))
+      throw new RemoteError(400, 'credential_capability', 'Credential bindings require the confined command launcher and process permission')
+    return this.credentials.resolve(refs)
   }
   /** A grant may remove only its own generation's authority, including after expiry; it cannot affect a replacement. */
   private revoke(principal: Principal, request: Extract<RpcRequest, { op: 'grant.revoke' }>) {
@@ -191,11 +211,14 @@ export class RemoteEndpoint {
     if (this.journal.jobs().filter(job => !job.quiescent && job.phase !== 'unknown').length >= (this.host.maxRunning ?? 8))
       throw new RemoteError(429, 'capacity', 'Endpoint process capacity is reserved')
     const allowed = new Set([...DEFAULT_ENV, ...this.host.allowedEnv ?? []])
+    if (grant.credentials?.some(binding => binding.variable in request.env))
+      throw new RemoteError(403, 'credential_override', 'Worker environment overrides cannot replace an endpoint credential binding')
     const denied = Object.keys(request.env).filter(key => !allowed.has(key) && !key.startsWith('DSH_SUPERAGENT_'))
     if (Object.keys(request.env).length > 100 || denied.length)
       throw new RemoteError(403, 'environment_denied', `Only explicitly allowed non-credential environment overrides may be forwarded; rejected names: ${denied.join(', ')}`)
     const at = timestamp(), job: RemoteJob = { id: request.requestId, grantId: grant.id, epoch: grant.epoch, revision: grant.revision,
-      fingerprint: digest, request, phase: 'accepted', createdAt: at, updatedAt: at, cancelRequested: false, quiescent: false }
+      fingerprint: digest, request, ...(grant.credentials?.length ? { credentials: grant.credentials } : {}),
+      phase: 'accepted', createdAt: at, updatedAt: at, cancelRequested: false, quiescent: false }
     this.journal.atomic(() => { this.journal.saveJob(job); this.journal.audit({ job: job.id, grant: grant.id, epoch: grant.epoch, action: 'accepted' }) })
     this.enqueue(job.id)
     return job
@@ -214,7 +237,17 @@ export class RemoteEndpoint {
       this.noUnknown()
       const target = await this.target(grant, job.request.cwd), cwd = this.host.filesystem.processPath(target)
       if ((await this.host.filesystem.stat(target, this.signal(grant)))?.type !== 'directory') throw new FsError('Working directory is not a directory', 'FS_NOT_DIRECTORY')
-      const argv = await this.host.isolation.wrap(job.request.argv, grant.root, cwd, grant.operations.includes('network'), this.signal(grant), job.request.env)
+      const mounts = await this.credentials.mounts(job.credentials ?? [])
+      let command: readonly string[] = job.request.argv
+      const attachments: { source: string; target: string }[] = [...mounts]
+      if (mounts.length) {
+        if (!this.host.commandHelper) throw new RemoteError(503, 'credential_capability', 'Confined command launcher is unavailable')
+        const node = await this.host.subprocess.resolveExecutable('node', undefined, this.signal(grant))
+        command = [node, '--no-warnings', '/run/dsh-command.mjs', JSON.stringify({ argv: job.request.argv,
+          bindings: mounts.map(item => ({ path: item.target, variable: item.variable, mode: item.mode })) })]
+        attachments.push({ source: this.host.commandHelper, target: '/run/dsh-command.mjs' })
+      }
+      const argv = await this.host.isolation.wrap(command, grant.root, cwd, grant.operations.includes('network'), this.signal(grant), job.request.env, undefined, attachments)
       this.grant(principal, 'process.spawn'); this.noUnknown()
       job = this.journal.job(id)
       if (job.phase !== 'accepted' || job.cancelRequested || this.closing) return
@@ -278,13 +311,23 @@ export class RemoteEndpoint {
     const request = Rpc.parse(input)
     switch (request.op) {
       case 'identity': return this.identity()
+      case 'credential.list': this.admin(principal); return this.credentials.list(request.offset)
+      case 'credential.import': case 'credential.revoke': {
+        this.admin(principal)
+        return this.serial(async () => {
+          this.lifetime.signal.throwIfAborted()
+          const result = request.op === 'credential.import' ? await this.credentials.import(request) : this.credentials.revoke(request)
+          this.sweep() // New dispatch was fenced by the catalog commit; cancel affected generations before acknowledging.
+          return result
+        })
+      }
       case 'grant.create': return this.enroll(principal, request)
       case 'grant.change': case 'grant.renew': return this.change(principal, request)
       case 'grant.revoke': return this.revoke(principal, request)
       case 'grant.status': {
         if (principal.role !== 'grant') throw new RemoteError(403, 'grant_required', 'Workspace grant required')
         const grant = this.journal.grant(principal.id)
-        return { grant, authorized: grant.enabled && grant.epoch === principal.epoch && grant.leaseUntil > Date.now() }
+        return { grant, authorized: grant.enabled && grant.epoch === principal.epoch && grant.leaseUntil > Date.now() && this.credentials.valid(grant.credentials) }
       }
       case 'job.spawn': return this.spawn(principal, request)
       case 'job.list': {

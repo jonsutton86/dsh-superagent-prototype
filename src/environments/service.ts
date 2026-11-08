@@ -120,7 +120,8 @@ export class Environments {
       const status = remote?.world.status()
       const at = stamp(), record: EnvironmentRecord = { id: randomUUID(), name: request.name, kind: remote ? 'remote' : 'local', root, configuredRoot,
         mode, identity: randomUUID(), revision: 1, epoch: 1, enabled: true, createdAt: at, updatedAt: at }
-      if (status) { record.identity = status.binding; record.remote = { binding: status.binding, endpointId: status.endpointId, grantId: status.grantId, epoch: status.epoch } }
+      if (status) { record.identity = status.binding; record.remote = { binding: status.binding, endpointId: status.endpointId, grantId: status.grantId, epoch: status.epoch,
+        ...(remote!.world.grant.credentials?.length ? { credentials: remote!.world.grant.credentials } : {}) } }
       else await writeFile(marker(record), record.identity, { flag: 'wx', mode: 0o600 })
       try {
         await this.probe(record)

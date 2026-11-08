@@ -20,7 +20,7 @@ async function enter(label: string, text: string) {
   const prototype = element instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype
   await act(async () => { Object.getOwnPropertyDescriptor(prototype, 'value')!.set!.call(element, text); element.dispatchEvent(new Event('input', { bubbles: true })) })
 }
-async function fixture(options: { lose?: boolean; newRoot?: boolean; remote?: EnvironmentView['remoteStatus'] } = {}) {
+async function fixture(options: { lose?: boolean; newRoot?: boolean; remote?: EnvironmentView['remoteStatus']; credentials?: NonNullable<EnvironmentView['remote']>['credentials'] } = {}) {
   host = await startRuntime(undefined, { executionMode: 'local', noAccounts: true })
   if (options.newRoot) {
     const settings = host.runtime.store.settings()
@@ -38,7 +38,7 @@ async function fixture(options: { lose?: boolean; newRoot?: boolean; remote?: En
       const listing = response.body as unknown as EnvironmentList
       return new Response(JSON.stringify({ ...listing, currentKind: 'remote', items: listing.items.map(record => ({ ...record,
         kind: 'remote', capabilities: { ...record.capabilities, remote: true, osIsolation: true },
-        remote: { binding: 'a'.repeat(64), endpointId: 'remote-endpoint', grantId: 'remote-grant', epoch: 1 }, remoteStatus: options.remote })) }))
+        remote: { binding: 'a'.repeat(64), endpointId: 'remote-endpoint', grantId: 'remote-grant', epoch: 1, credentials: options.credentials }, remoteStatus: options.remote })) }))
     }
     return new Response(JSON.stringify(response.body), { status: response.status, headers: { 'content-type': 'application/json' } })
   })
@@ -107,4 +107,17 @@ it('distinguishes remote denial, acknowledgement and confirmed quiescence withou
   remote.quiescent = true
   await click('Refresh')
   await vi.waitFor(() => expect(container!.textContent).toContain('commands and file mutations are confirmed stopped'))
+})
+
+it('shows pinned endpoint credential metadata and explains command access without offering credential values', async () => {
+  await fixture({ remote: { ready: true, phase: 'active' }, credentials: [
+    { id: 'service', version: 'pinned-version', variable: 'SERVICE_API_KEY', mode: 'env' },
+    { id: 'service-file', version: 'file-version', variable: 'SERVICE_CONFIG_FILE', mode: 'file' },
+  ] })
+  expect(container!.textContent).toContain('Endpoint credential bindings')
+  expect(container!.textContent).toContain('SERVICE_API_KEY')
+  expect(container!.textContent).toContain('pinned-version')
+  expect(container!.textContent).toContain('Read-only file path')
+  expect(container!.textContent).toContain('accessible to commands under this grant')
+  expect(container!.querySelector('input[type=password]')).toBeNull()
 })

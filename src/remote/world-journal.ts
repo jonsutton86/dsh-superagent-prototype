@@ -13,7 +13,8 @@ export interface WorldRecord {
 
 /** Authority identity excludes a renewable lease and revision, but includes the root, owner, permissions and generation. */
 export const worldBinding = (endpointId: string, grant: RemoteGrant): string => fingerprint({ endpointId, id: grant.id, epoch: grant.epoch,
-  owner: grant.owner, workspace: grant.workspace, root: grant.root, rootIdentity: grant.rootIdentity, operations: [...grant.operations].sort() })
+  owner: grant.owner, workspace: grant.workspace, root: grant.root, rootIdentity: grant.rootIdentity, operations: [...grant.operations].sort(),
+  ...(grant.credentials?.length ? { credentials: [...grant.credentials].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0) } : {}) })
 
 /** Single-writer coordinator journal: immutable world binding and a revocation intent committed before network I/O. */
 export class WorldJournal {

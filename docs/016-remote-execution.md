@@ -53,8 +53,8 @@ ownership. Do not delete the journal to make old Sessions inherit new credential
 The lifecycle service supplies the authority used by the remote mission integration in `017-remote-missions.md`. That
 increment binds mission and Session records to the fingerprint, prepares remote directories without host filesystem calls,
 and pins child presets to the same world. Ordinary presets alone cannot replace Harness's composition-bound filesystem
-and process context. Endpoint credential bindings, per-action environment choice and distributed coordinator ownership
-remain separate requirements.
+and process context. Endpoint credential bindings are integrated in `019-endpoint-credentials.md`; per-action environment
+choice and distributed coordinator ownership remain separate requirements.
 
 The control directory, workspace parent and system runtime mounts must be disjoint. Every grant pins a canonical workspace
 and its device/inode/birth identity. Production workers see read-only system runtime directories, a minimal `/etc`, their own
@@ -105,7 +105,7 @@ Transport loss or an ambiguous helper failure preserves an operation ID for reco
 | Spill recovery | Retained output available by RPC; Harness `spillPath` files are not provided yet; output beyond endpoint retention is explicitly lossy |
 
 The journal currently retains command/operation receipts and audit records indefinitely. Automated archival, receipt tombstones,
-disk quotas, cgroup resource limits, endpoint-owned credential bindings, coordinator ownership epochs and backup restoration
+disk quotas, cgroup resource limits, coordinator ownership epochs and backup restoration
 are outstanding. A lease is endpoint authority, not a distributed coordinator ownership protocol. Do not garbage-collect
 deduplication receipts without a design that prevents replaying old effects.
 

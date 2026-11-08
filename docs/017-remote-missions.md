@@ -125,8 +125,9 @@ coordinator profile. Keep the web listener on loopback. Launch the dedicated pro
 before dispatching work. `executionMode: local` currently means general missions without repository setup; the composed
 provider determines that execution is remote. Leaving the execution directory setting empty selects the grant root.
 
-Remote account CLIs, repository mode and host command shims are explicitly refused. Endpoint-owned credentials and command
-policy must be implemented before those features can be enabled. One profile currently owns one grant shared by its tasks;
+Remote account CLIs, repository mode and host command shims are explicitly refused. Endpoint-owned credentials are integrated
+in `019-endpoint-credentials.md`; connector/command policy and service-specific acceptance are still needed before those
+adapters can be enabled. One profile currently owns one grant shared by its tasks;
 task directories are not independent security principals. Durable command/file ownership, assignment/tool attribution and
 operator receipt controls are implemented in `018-execution-ownership.md`. Selecting different environments per action,
 operator endpoint enrollment/reconciliation, resource quotas, state ownership/failover and backup restoration remain open

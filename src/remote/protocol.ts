@@ -15,6 +15,10 @@ const version = z.string().min(1).max(1000)
 const intent = z.discriminatedUnion('kind', [z.object({ kind: z.literal('createIfAbsent') }).strict(),
   z.object({ kind: z.literal('replaceIfVersion'), version }).strict()])
 const request = { requestId: id }
+export const CredentialRef = z.object({ id, version: z.string().uuid() }).strict()
+const credentialRefs = z.array(CredentialRef).max(16)
+export interface CredentialBinding { id: string; version: string; variable: string; mode: 'env' | 'file' }
+export interface EndpointCredential extends CredentialBinding { revision: number; enabled: boolean; createdAt: string; updatedAt: string }
 /** Attribution supplied by trusted coordinator code; it never grants endpoint authority. */
 export const EffectOwner = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('assignment'), ticketId: id, assignmentId: id, sessionId: z.string().min(1).max(300),
@@ -25,9 +29,15 @@ export type EffectOwner = z.infer<typeof EffectOwner>
 const ownership = { owner: EffectOwner.optional() }
 export const Rpc = z.discriminatedUnion('op', [
   z.object({ op: z.literal('identity') }).strict(),
+  z.object({ op: z.literal('credential.list'), offset: z.number().int().nonnegative().default(0) }).strict(),
+  z.object({ op: z.literal('credential.import'), ...request, id, revision: z.number().int().nonnegative(),
+    file: z.string().regex(/^[a-zA-Z0-9_-][a-zA-Z0-9_.-]{0,99}$/), variable: z.string().regex(/^[A-Z][A-Z0-9_]{0,99}$/),
+    mode: z.enum(['env', 'file']), reason: z.string().trim().min(1).max(2000) }).strict(),
+  z.object({ op: z.literal('credential.revoke'), ...request, id, revision, reason: z.string().trim().min(1).max(2000) }).strict(),
   z.object({ op: z.literal('grant.create'), ...request, owner: id, workspace: id,
-    operations: z.array(Operations).min(1).max(4), leaseMs }).strict(),
-  z.object({ op: z.literal('grant.change'), ...request, id, revision, enabled: z.boolean(), leaseMs, reason: z.string().trim().min(1).max(2000) }).strict(),
+    operations: z.array(Operations).min(1).max(4), leaseMs, credentials: credentialRefs.optional() }).strict(),
+  z.object({ op: z.literal('grant.change'), ...request, id, revision, enabled: z.boolean(), leaseMs, reason: z.string().trim().min(1).max(2000),
+    credentials: credentialRefs.optional() }).strict(),
   z.object({ op: z.literal('grant.renew'), ...request, revision, leaseMs }).strict(),
   z.object({ op: z.literal('grant.revoke'), ...request, reason: z.string().trim().min(1).max(2000) }).strict(),
   z.object({ op: z.literal('grant.status') }).strict(),
@@ -60,18 +70,20 @@ export interface RemoteGrant {
   id: string; owner: string; workspace: string; root: string; operations: z.infer<typeof Operations>[]
   revision: number; epoch: number; enabled: boolean; leaseUntil: number; createdAt: string; updatedAt: string
   rootIdentity: string
+  credentials?: CredentialBinding[]
 }
 export interface GrantReceipt { grant: RemoteGrant; credential?: string }
 /** Acknowledges removal of this credential's authority; process/file quiescence is a separate observation. */
 export interface RevocationReceipt { grantId: string; epoch: number; at: string; quiescent: boolean }
 export interface EndpointIdentity {
   protocol: 1; id: string; platform: string; confinement: string
-  capabilities: { filesystem: true; process: true; terminal: false; interactiveStdin: false; controlChannel: false; outputWindow: number; effectOwnership?: true }
+  capabilities: { filesystem: true; process: true; terminal: false; interactiveStdin: false; controlChannel: false; outputWindow: number; effectOwnership?: true; credentialBindings?: true }
 }
 export interface RemoteJob {
   id: string; grantId: string; epoch: number; revision: number; fingerprint: string
   phase: 'accepted' | 'started' | 'settled' | 'unknown'; createdAt: string; updatedAt: string
   request: Extract<RpcRequest, { op: 'job.spawn' }>; cancelRequested: boolean; quiescent: boolean | null
+  credentials?: CredentialBinding[]
   outcome?: { exitCode: number | null; signal: string | null }; error?: string; reconciled?: { at: string; note: string }
 }
 export interface RemoteOperation {

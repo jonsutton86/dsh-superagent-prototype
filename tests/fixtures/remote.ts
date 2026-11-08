@@ -22,13 +22,25 @@ export async function remoteFixture(cleanup: (() => Promise<unknown>)[], options
   const directory = await mkdtemp(join(tmpdir(), 'dsh-remote-')), ctx = new Context()
   const fs = new LocalFileSystem(ctx, { cwd: directory, diffBasisMaxBytes: 1024 * 1024 }), process = new LocalSubprocessRuntime(ctx)
   const isolation: ExecutionIsolation = options.native ? new BubblewrapIsolation(process) : { name: 'test-only-unconfined',
-    wrap: async (argv, _root, _cwd, _network, _signal, _env, helper) => argv.map(arg => arg === '/run/dsh-filesystem.mjs' && helper ? helper : arg) }
-  const endpoint = new RemoteEndpoint({ stateDir: join(directory, 'control'), root: join(directory, 'work'), filesystem: fs, subprocess: process,
+    wrap: async (argv, _root, _cwd, _network, _signal, _env, helper, mounts = []) => argv.map(arg => {
+      if (arg === '/run/dsh-filesystem.mjs' && helper) return helper
+      const mounted = mounts.find(mount => mount.target === arg)
+      if (mounted) return mounted.source
+      if (arg.startsWith('{"argv":') && mounts.length) {
+        const config = JSON.parse(arg)
+        config.bindings = config.bindings.map((binding: { path: string }) => ({ ...binding, path: mounts.find(mount => mount.target === binding.path)!.source }))
+        return JSON.stringify(config)
+      }
+      return arg
+    }) }
+  const host = { stateDir: join(directory, 'control'), root: join(directory, 'work'), filesystem: fs, subprocess: process,
     isolation, filesystemRpc: confinedFilesystem(process, isolation, fileURLToPath(new URL(options.native ? '../../lib/remote-fs-worker.js' : '../../src/remote/fs-worker.ts', import.meta.url))),
-    outputMaxBytes: options.outputMaxBytes, shutdownMs: 2000 })
+    commandHelper: fileURLToPath(new URL(options.native ? '../../lib/remote-command-worker.js' : '../../src/remote/command-worker.ts', import.meta.url)),
+    outputMaxBytes: options.outputMaxBytes, shutdownMs: 2000 }
+  let endpoint = new RemoteEndpoint(host)
   await endpoint.start()
   let lose = false, offline = false
-  const handler = remoteHandler(endpoint)
+  let handler = remoteHandler(endpoint)
   const server = createServer((req, res) => {
     if (offline) { res.destroy(); return }
     if (lose) { lose = false; res.end = (() => { res.destroy(); return res }) as typeof res.end }
@@ -52,7 +64,8 @@ export async function remoteFixture(cleanup: (() => Promise<unknown>)[], options
     await vi.waitFor(async () => { value = await client.call<RemoteJob>({ op: 'job.get', id }); expect(value.quiescent).toBe(true) }, { timeout: 5000 })
     return value!
   }
-  return { directory, ctx, endpoint, server, url, connection, admin, client, enrolled, remoteFs, remoteProcess, fs, isolation, spawn, settled,
+  return { directory, ctx, get endpoint() { return endpoint }, server, url, connection, admin, client, enrolled, remoteFs, remoteProcess, fs, isolation, spawn, settled,
+    restart: async () => { await endpoint.stop(); endpoint = new RemoteEndpoint(host); await endpoint.start(); handler = remoteHandler(endpoint) },
     lose: () => { lose = true }, failResponse: () => {
       const rpc = endpoint.rpc.bind(endpoint)
       vi.spyOn(endpoint, 'rpc').mockImplementationOnce(async (...args) => { await rpc(...args); throw new Error('Response failed after commit') })

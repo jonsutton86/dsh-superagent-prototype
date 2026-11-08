@@ -341,6 +341,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/remote/journal.ts` | Independent single-writer SQLite state, HMAC credentials, intent deduplication, output offsets and restart uncertainty |
 | `src/remote/endpoint.ts`, `http.ts` | Authenticated execution admission, lease expiry, process supervision, mutation serialization and browser-request refusal |
 | `src/remote/isolation.ts`, `filesystem-runner.ts`, `fs-worker.ts` | Linux bubblewrap process worlds and standalone confined filesystem operations |
+| `src/remote/credentials.ts`, `command-worker.ts` | Endpoint-private immutable credential snapshots, version binding/revocation and credential loading inside the command namespace without secret argv |
 | `src/remote/client.ts`, `admin.ts` | Pinned host-side RPC, same-ID retry, reconnect observation and explicit uncertain outcomes |
 | `src/remote/world.ts`, `world-journal.ts` | Persistent execution-world authority binding, serialized lease maintenance, durable self-revocation and independent quiescence observations |
 | `src/remote/effects.ts` | Durable pre-dispatch command/file ownership, trusted tool scopes, request fingerprints and receipt-only restart recovery |
@@ -456,6 +457,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/remote.spec.ts` | Real Harness/HTTP execution, acknowledgement loss, lease fencing, uncertain recovery, confined-helper semantics, output backpressure and opt-in native Linux qualification |
 | `tests/remote-harness.spec.ts` | Opt-in installed Harness qualification with a configured model, remote artifact production and coordinator restart |
 | `tests/remote-ownership.spec.ts` | Pre-dispatch persistence, concurrent attribution, lost responses, assignment fences, restart/cancel recovery and receipt mismatch refusal |
+| `tests/remote-credentials.spec.ts` | Private import validation, environment/file bindings, secret-free provider argv and receipts, rotation/rebind, restart, tamper refusal and native Linux mounts/cancellation |
 | `tests/execution-receipts-ui.spec.tsx` | Rendered receipt pagination, separate outcome/quiescence and same-ID cancellation retry after an ambiguous response |
 | `tests/watchdog.spec.ts` | Independent journal recovery, assessment budgets, service outages, bounded interventions and concurrent polling |
 | `tests/watchdog-runtime.spec.ts` | Independent Cordis/Harness composition with simulated inference: restricted tools, Session creation, state ownership and shutdown |

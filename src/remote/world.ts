@@ -57,6 +57,8 @@ export class RemoteWorld {
     if (identity.protocol !== 1 || identity.confinement !== 'linux-bubblewrap') throw new Error('Remote world requires the supported confined endpoint protocol')
     if (!identity.capabilities.effectOwnership) throw new Error('Remote world requires endpoint effect-ownership receipts; update the endpoint first')
     const current = await this.control.call<{ grant: RemoteGrant; authorized: boolean }>({ op: 'grant.status' })
+    if (current.grant.credentials?.length && !identity.capabilities.credentialBindings)
+      throw new Error('Remote world requires endpoint credential-binding support; update the endpoint first')
     const root = stored?.grant.root ?? current.grant.root, state = realpathSync(this.config.stateDir)
     if (inside(root, state) || inside(state, root) || inside(root, realpathSync(this.config.credentialFile)))
       throw new Error('Coordinator world state and credentials must be outside the granted workspace')
