@@ -25,6 +25,15 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: versioned execution personas
+
+[021 Personas](021-personas.md) adds operator-managed immutable instructions, model preferences, optional tool capabilities
+and embedded skills. Mission actions and reviewed plan proposals select exact versions; execution snapshots and resumed
+worker descendants retain those versions after later edits or archival. Persona updates do not grant additional environment
+authority. The panel supports creation, editing, exact historical reads, restoration as a new version, archival and per-action
+selection. This completes the initial persona management path; multiple active execution worlds and per-action environment
+selection still require a managed runtime registry and correctly scoped paired providers on creation and resume.
+
 ## Implemented increment: independent supervision
 
 The code now includes the authenticated observation/recovery API, independently persisted incidents and delivery reservations,

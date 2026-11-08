@@ -15,6 +15,7 @@ import { Later, type Effects } from '../app/effects.ts'
 import { executionRoot, type Variable } from '../app/execution-environment.ts'
 import type { Environments } from '../environments/service.ts'
 import type { RemoteWorkspace } from '../environments/remote-workspace.ts'
+import type { Personas } from '../personas/service.ts'
 import type { Sessions } from '../app/sessions.ts'
 import { WorktreeNameSchema } from '../app/assessment.ts'
 import { resultRelay } from '../app/notices.ts'
@@ -61,6 +62,7 @@ const ticketWorktreeName = (name: string, id: string): string => `${WorktreeName
 export interface ExecutorHost {
   /** Present in the application runtime; reusable executor-only hosts may supply their own admission boundary. */
   environments?: Environments
+  personas?: Pick<Personas, 'snapshot'>
   remote?: RemoteWorkspace
   /** DSH Cordis context: agents and their events, and the subprocess service used to run prepare commands. */
   readonly context: Context
@@ -248,8 +250,11 @@ export class DshExecutor implements Executor {
     const execution = { ...ticketExecution(ticket, outcome, this.host.store.settings(), this.host.machine.stateDir, this.host.remote?.world.grant.root),
       ...(this.host.machine.executionMode === 'local' ? { mode: 'local' as const } : {}) }
     const environment = this.host.environments?.bind(execution)
+    const reference = ticket.mandate.actor.source === 'workspace' ? sourceTrigger(this.host, ticket)?.meta.persona : undefined
+    if (reference && !this.host.personas) throw new PrepareFailed('Persona registry is unavailable')
+    const persona = reference ? this.host.personas!.snapshot(reference) : undefined
     return { ...ticket, ...(environment ? { mandate: { ...ticket.mandate, environment } } : {}),
-      execution: { ...execution, ...(environment ? { environment } : {}) } }
+      execution: { ...execution, ...(environment ? { environment } : {}), ...(persona ? { persona } : {}) } }
   }
   /**
    * Runs the configured `executor.prepare` command for a new ticket workspace in its parent directory with the ticket's

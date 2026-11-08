@@ -1,12 +1,14 @@
 /** Persistent personal workspace contracts. Execution remains owned by the domain Engine and Harness. */
 import { z } from 'zod'
+import { PersonaRef } from '../personas/model.ts'
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/)
 const title = z.string().trim().min(1).max(160)
 const text = z.string().trim().min(1).max(12000)
 export const CreateMission = z.object({ requestId: id, title, objective: text, acceptance: text }).strict()
 export const AddAction = z.object({ requestId: id, revision: z.number().int().positive(), title,
-  instructions: text, owner: z.enum(['person', 'agent']), dependsOn: z.array(id).max(200).default([]) }).strict()
+  instructions: text, owner: z.enum(['person', 'agent']), dependsOn: z.array(id).max(200).default([]), persona: PersonaRef.optional() }).strict()
+  .refine(value => value.owner === 'agent' || !value.persona, 'Only agent actions can select a persona')
 export const ActionCommand = z.object({ requestId: id, revision: z.number().int().positive(),
   command: z.enum(['run', 'complete', 'retry', 'stop', 'steer']), text: z.string().trim().max(12000).default(''),
   ticketRevision: z.string().max(100).optional() }).strict()
@@ -19,6 +21,7 @@ export type MissionCommandInput = z.input<typeof MissionCommand>
 
 export interface MissionAction {
   id: string; title: string; instructions: string; owner: 'person' | 'agent'; dependsOn: string[]; runs: string[]
+  persona?: PersonaRef
   dependencyRevision?: string
   definitionRevision?: number
   executionRevision?: number

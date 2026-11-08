@@ -6,6 +6,7 @@ import { Button } from './controls.tsx'
 import { usePanel, usePanelData } from './provider.tsx'
 import { errorText } from './text.ts'
 import { When } from './widgets.tsx'
+import { PersonaSelector } from './personas.tsx'
 
 /** Retain the exact request closure across ambiguous responses, including its original revision. */
 function usePlanCommand() {
@@ -25,7 +26,7 @@ function usePlanCommand() {
   return { busy, error, run }
 }
 const definition = (mission: MissionView): PlanDefinition => ({ title: mission.title, objective: mission.objective, acceptance: mission.acceptance,
-  actions: mission.actions.map(({ id, title, instructions, owner, dependsOn }) => ({ id, title, instructions, owner, dependsOn })) })
+  actions: mission.actions.map(({ id, title, instructions, owner, dependsOn, persona }) => ({ id, title, instructions, owner, dependsOn, ...(persona ? { persona } : {}) })) })
 
 export function MissionPlans({ mission, changed }: { mission: MissionView; changed: () => void }) {
   const { call, t, notify, navigate } = usePanel(), { state } = usePanelData(), id = mission.id
@@ -101,6 +102,7 @@ function PlanPreview({ plan }: { plan: PlanDefinition }) {
   const { t } = usePanel()
   return <div className="dt-plan-preview"><h4>{plan.title}</h4><p>{plan.objective}</p><strong>{t('mission.acceptance')}</strong><p>{plan.acceptance}</p>
     <ol>{plan.actions.map(action => <li key={action.id}><strong>{action.title} · {t(`mission.${action.owner}`)}</strong><p>{action.instructions}</p>
+      {action.persona && <p>{t('persona.select')}: <code>{action.persona.id}</code> · {t('persona.version', { version: action.persona.version })}</p>}
       {!!action.dependsOn.length && <p>{t('mission.after', { actions: action.dependsOn.map(id => plan.actions.find(item => item.id === id)?.title ?? id).join(', ') })}</p>}</li>)}</ol>
   </div>
 }
@@ -117,8 +119,10 @@ function PlanEditor({ initial, busy, submit, cancel }: { initial: PlanDefinition
     {plan.actions.map(action => <fieldset key={action.id}><legend>{action.title || t('mission.actionTitle')}</legend>
       <label>{t('mission.actionTitle')}<input required maxLength={160} value={action.title} onChange={event => change(action.id, { title: event.target.value })} /></label>
       <label>{t('mission.instructions')}<textarea required maxLength={12000} rows={3} value={action.instructions} onChange={event => change(action.id, { instructions: event.target.value })} /></label>
-      <label>{t('mission.owner')}<select value={action.owner} onChange={event => change(action.id, { owner: event.target.value as 'person' | 'agent' })}>
+      <label>{t('mission.owner')}<select value={action.owner} onChange={event => change(action.id, { owner: event.target.value as 'person' | 'agent',
+        ...(event.target.value === 'person' ? { persona: undefined } : {}) })}>
         <option value="agent">{t('mission.agent')}</option><option value="person">{t('mission.person')}</option></select></label>
+      {action.owner === 'agent' && <PersonaSelector value={action.persona} change={persona => change(action.id, { persona })} />}
       <fieldset><legend>{t('mission.dependencies')}</legend>{plan.actions.filter(item => item.id !== action.id).map(dependency =>
         <label className="dt-mission-check" key={dependency.id}><input type="checkbox" checked={action.dependsOn.includes(dependency.id)}
           onChange={event => change(action.id, { dependsOn: event.target.checked ? [...action.dependsOn, dependency.id] : action.dependsOn.filter(id => id !== dependency.id) })} />{dependency.title}</label>)}</fieldset>

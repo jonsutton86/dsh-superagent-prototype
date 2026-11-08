@@ -14,6 +14,7 @@ import type { Conversation, InboxFilter, InboxItem, InboxPage, InboxReplyInput, 
 import type { PlanIndex, PlanProposal, PlanVersion, ProposePlanInput, ReviewPlanInput, RequestPlanInput } from '../workspace/plan-model.ts'
 import type { EnvironmentList, EnvironmentView, EnrollEnvironmentInput, EnvironmentCommandInput } from '../environments/model.ts'
 import type { ExecutionReceiptPage } from '../remote/effects.ts'
+import type { ArchivePersonaInput, CreatePersonaInput, PersonaList, PersonaRecord, PersonaVersion, SavePersonaInput } from '../personas/model.ts'
 import type { EndpointCatalog, EndpointCommandInput, EndpointList, EndpointRegistration, OperatorCommand, RegisterEndpointInput, RemoteProfileView } from '../environments/endpoint-model.ts'
 
 export const TICKET_FILTERS = ['open', 'person', 'working', 'idle', 'ended'] as const
@@ -26,6 +27,12 @@ interface Paged { offset?: number; limit?: number }
 type Delivery = 'injected' | 'pending'
 
 export interface Api {
+  'GET personas': { query?: { offset?: number; q?: string; active?: 'true' | 'false' }; response: PersonaList }
+  'GET personas/:id': { response: PersonaRecord }
+  'GET personas/:id/versions/:version': { response: PersonaVersion }
+  'POST personas': { body: CreatePersonaInput; response: PersonaRecord }
+  'PUT personas/:id': { body: SavePersonaInput; response: PersonaRecord }
+  'POST personas/:id/archive': { body: ArchivePersonaInput; response: PersonaRecord }
   'GET endpoints': { query?: { offset?: number }; response: EndpointList<EndpointRegistration> }
   'POST endpoints': { body: RegisterEndpointInput; response: EndpointRegistration }
   'GET endpoints/:id/catalog': { query?: { offset?: number }; response: EndpointCatalog }

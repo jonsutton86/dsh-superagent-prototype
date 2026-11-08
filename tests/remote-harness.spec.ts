@@ -12,7 +12,7 @@ const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { for (const dispose of cleanup.reverse()) await dispose(); cleanup.length = 0; vi.restoreAllMocks() })
 
 /** Opt-in qualification against the operator's installed Harness and configured model; never copies or prints credential values. */
-it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1')('runs a real Harness worker on the remote mission profile', async () => {
+it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1')('runs a persona-bound real Harness worker on the remote mission profile', async () => {
   const cli = process.env.DSH_QUALIFICATION_CLI!, home = process.env.DSH_QUALIFICATION_HOME!, source = process.env.DSH_QUALIFICATION_PROFILE!
   if (!cli || !home || !source) throw new Error('Supply the qualification CLI, DSH home and source profile paths')
   const native = process.env.DSH_REMOTE_ISOLATION === '1', h = await remoteFixture(cleanup, { native })
@@ -63,8 +63,8 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1')('runs a real Harness wor
     child.stdout!.on('data', bytes => { log = (log + bytes.toString()).slice(-200_000) })
     child.stderr!.on('data', bytes => { log = (log + bytes.toString()).slice(-200_000) })
   }
-  const api = async (path: string, body?: unknown) => {
-    const response = await fetch(`http://127.0.0.1:${port}/orchestrator/api/${path}`, { method: body ? 'POST' : 'GET',
+  const api = async (path: string, body?: unknown, method = body ? 'POST' : 'GET') => {
+    const response = await fetch(`http://127.0.0.1:${port}/orchestrator/api/${path}`, { method,
       headers: { 'x-orchestrator-request': '1', 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(5000) })
     const value = await response.json() as any
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${JSON.stringify(value)}`)
@@ -76,8 +76,18 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1')('runs a real Harness wor
   }, { timeout: 40_000, interval: 250 })
   try {
     start(); await ready()
-    const request = { requestId: 'remote-live-proof', title: 'Remote Harness proof', text: `In your assigned directory, use bash to verify that the SHA256 of the endpoint-provided SERVICE_API_KEY equals ${secretDigest}, without printing the credential itself. Only after that check succeeds, create result.txt containing exactly remote-harness-proof (no newline). Read it back, publish that exact content as an artifact with workspace_publish, then report ready. Do not use external services or background work. If any tool fails, immediately report failed with the exact error and end the turn; do not attempt to repair the execution environment.` }
-    const task = await api('inbox', request)
+    const proof = `persona-proof-${randomUUID()}`
+    const definition = { name: 'Qualification researcher', description: 'Proves pinned persona instructions and embedded skills',
+      instructions: 'Before performing the mission, load your persona evidence skill using the skill tool. Follow its output instructions. Do not guess the proof value.',
+      model: { provider: 'deepseek-official', model: 'deepseek-flash' }, capabilities: ['read', 'write', 'commands', 'skills'],
+      skills: [{ name: 'evidence', description: 'Required proof instructions for this qualification mission', content: `After verifying the service credential, result.txt and the published artifact must contain exactly ${proof} with no newline. Do not put the credential in any output.` }] }
+    const persona = await api('personas', { requestId: 'persona-proof-create', definition })
+    let mission = await api('missions', { requestId: 'remote-live-mission', title: 'Remote Harness proof', objective: 'Prove persona-bound execution', acceptance: 'The artifact follows the persona skill and the service credential check passes' })
+    mission = await api(`missions/${mission.id}/actions`, { requestId: 'remote-live-action', revision: mission.revision, title: 'Produce proof', owner: 'agent',
+      persona: { id: persona.id, version: 1 }, instructions: `In your assigned directory, use bash to verify that the SHA256 of the endpoint-provided SERVICE_API_KEY equals ${secretDigest}, without printing the credential itself. Only after that check succeeds, create result.txt following your persona instructions. Read it back, publish that exact content as an artifact with workspace_publish, then report ready. Do not use external services or background work. If any tool fails, immediately report failed with the exact error and end the turn; do not attempt to repair the execution environment.` })
+    const request = { requestId: 'remote-live-proof', revision: mission.revision, command: 'run' }
+    const runPath = `missions/${mission.id}/actions/${mission.actions[0].id}`
+    const running = await api(runPath, request), task = { id: running.actions[0].runs[0] }
     const deadline = Date.now() + 120_000
     for (;;) {
       const view = await api(`inbox/${task.id}`)
@@ -88,8 +98,9 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1')('runs a real Harness wor
     }
     const ticket = await api(`tickets/${task.id}`), conversation = await api(`inbox/${task.id}`), artifact = await api(`library/${conversation.artifacts[0].id}`)
     expect(ticket.executionEnvironment.world).toMatch(/^[a-f0-9]{64}$/)
-    expect(await readFile(join(ticket.directory, 'result.txt'), 'utf8')).toBe('remote-harness-proof')
-    expect(artifact.content).toBe('remote-harness-proof')
+    expect(ticket.executionPersona).toMatchObject({ id: persona.id, version: 1, digest: persona.digest, definition })
+    expect(await readFile(join(ticket.directory, 'result.txt'), 'utf8')).toBe(proof)
+    expect(artifact.content).toBe(proof)
     const command = h.endpoint.journal.jobs().find(job => job.request.cwd === ticket.directory && job.request.argv[0] === 'bash'
       && job.request.argv.some(arg => arg.includes('result.txt')) && job.outcome?.exitCode === 0)
     expect(command?.request.owner).toMatchObject({ kind: 'assignment', ticketId: task.id,
@@ -100,9 +111,13 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1')('runs a real Harness wor
     expect(JSON.stringify(h.endpoint.journal.jobs())).not.toContain(secret)
     const receipts = await api(`tickets/${task.id}/execution`)
     expect(receipts.items.find((item: { id: string }) => item.id === command!.id)).toMatchObject({ owner: command!.request.owner, quiescent: true })
+    const updated = await api(`personas/${persona.id}`, { requestId: 'persona-proof-update', revision: 1,
+      definition: { ...definition, instructions: 'A future run uses this version.' } }, 'PUT')
+    await api(`personas/${persona.id}/archive`, { requestId: 'persona-proof-archive', revision: updated.revision, archived: true, reason: 'Qualification finished; preserve original execution' })
     await stop(); start(); await ready()
     expect((await api(`tickets/${task.id}`)).executionEnvironment).toEqual(ticket.executionEnvironment)
-    expect((await api('inbox', request)).id).toBe(task.id)
+    expect((await api(`tickets/${task.id}`)).executionPersona).toEqual(ticket.executionPersona)
+    expect((await api(runPath, request)).actions[0].runs).toEqual([task.id])
     expect((await api(`tickets/${task.id}`)).assignments).toHaveLength(1)
     expect((await api(`tickets/${task.id}/execution`)).items.find((item: { id: string }) => item.id === command!.id)).toMatchObject({
       owner: command!.request.owner, quiescent: true })

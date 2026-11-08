@@ -111,6 +111,6 @@ refusal cases were skipped in CI. The runner used Ubuntu 22.04, Node 24, bubblew
 configured-model qualification passed twice, including on the release build for `9faef224704e2c08504698e11194f64ed228b9d0`;
 the subsequent catalog-only fix leaves that generated-profile execution path unchanged.
 
-Per-action environment/persona selection, managed runtime pooling/launch, endpoint provisioning, cross-host deployment,
+Per-action environment selection, managed runtime pooling/launch, endpoint provisioning, cross-host deployment,
 quotas, retention, persistent-state ownership and restore/failover remain in scope, alongside the other article and Agentic
 OS product requirements. This increment makes endpoint authority operable from the app; it is not whole-product completion.

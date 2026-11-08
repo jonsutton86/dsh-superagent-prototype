@@ -305,6 +305,10 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/workspace/inbox.ts` | Durable read receipts and text projections, atomic new tasks, authorized replies and bounded history pages |
 | `src/client/inbox.tsx` | Inbox filters, conversation reading, task/reply forms and mission/artifact navigation |
 | `src/workspace/service.ts` | Durable missions, dependency checks, operator dispatch, review and transactional request receipts |
+| `src/personas/model.ts` | Bounded immutable persona definitions, exact version references, management commands and catalog contracts |
+| `src/personas/service.ts` | Transactional persona versions, revision checks, model validation, idempotent receipts and archive semantics |
+| `src/personas/runtime.ts` | Harness scoped persona instructions, embedded skills and monotonic optional-tool guards |
+| `src/client/personas.tsx` | Persona catalog, version editing/history, archive/restore and exact-version action selectors |
 | `src/client/missions.tsx` | Mission workspace: creation, action ownership, dependencies, execution controls and reviewed completion |
 | `src/supervision/service.ts` | Main-process supervision observations and transactional, idempotent, assignment-bounded progress requests |
 | `src/supervision/client.ts` | Authenticated loopback transport, bounded responses, consistent pagination and restart fencing |
@@ -508,6 +512,9 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/docs.spec.ts` | Numbered documents link only to earlier ones, every local link resolves, no document has merge conflict markers, and this document's tables list every module and every test |
 | `tests/endpoints.spec.ts` | Real endpoint HTTP and Runtime administration, private-file validation, ambiguous/restarted requests, grant generation fencing and profile composition |
 | `tests/endpoints-ui.spec.tsx` | Rendered endpoint registration, lost submission recovery, durable original-ID retries and secret-free generated profile inspection |
+| `tests/personas.spec.ts` | Immutable persona persistence, model-validation races, archived dispatch, plan changes and worker/descendant binding |
+| `tests/personas-runtime.spec.ts` | Actual Harness scoped prompt/skill services and monotonic guards, with independent worker isolation |
+| `tests/personas-ui.spec.tsx` | Lost persona response recovery, immutable edits/history restoration, archive/restore and pinned plan selectors |
 
 `tests/fixtures/` holds what several tests share: `host.ts`, a simulated DeepSeek Harness host; `filesystem.ts`, its real local filesystem seam; `panel-server.ts` and `panel.tsx`, the fake management API and the panel around a page; `deployment.ts`, a resolved deployment; `git.ts`, the environment of every git the tests start, which names no repository; and `async.ts`.
 

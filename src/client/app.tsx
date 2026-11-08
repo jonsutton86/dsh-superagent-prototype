@@ -12,6 +12,7 @@ import { MissionsPage } from './missions.tsx'
 import { LibraryPage } from './library.tsx'
 import { InboxPage } from './inbox.tsx'
 import { EnvironmentsPage } from './environments.tsx'
+import { PersonasPage } from './personas.tsx'
 import { PanelProvider, usePanel, usePanelData } from './provider.tsx'
 import { HOME, TABS, initialLocation, lastSettingsGroup, remember, routeLabel, settingsRoute, type Location, type Route,
   type Tab } from './route.ts'
@@ -151,6 +152,7 @@ function Pages({ route, openTab, deploymentForm }: { route: Route; openTab: (tab
   const page = (() => {
     switch (route.page) {
       case 'environments': return <EnvironmentsPage />
+      case 'personas': return <PersonasPage />
       case 'inbox': return <InboxPage key={route.id ?? 'list'} id={route.id} filter={route.query?.filter} />
       case 'library': return <LibraryPage key={`${route.id ?? 'list'}:${route.query?.scope ?? ''}`} id={route.id} scope={route.query?.scope} />
       case 'missions': return <MissionsPage key={route.id ?? 'list'} id={route.id} />

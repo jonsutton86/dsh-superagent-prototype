@@ -38,12 +38,14 @@ import { EnvironmentError } from '../environments/model.ts'
 import { RemoteError } from '../remote/protocol.ts'
 import type { RemoteWorld } from '../remote/world.ts'
 import type { Endpoints } from '../environments/endpoints.ts'
+import type { Personas } from '../personas/service.ts'
 
 export interface HttpHost {
   readonly remoteRoot?: string
   readonly remoteEffects?: Pick<RemoteWorld, 'effects' | 'refreshEffects' | 'cancelEffect' | 'status'>
   readonly environments: Environments
   readonly endpoints: Pick<Endpoints, 'list' | 'register' | 'catalog' | 'commands' | 'submit' | 'retry' | 'profile'>
+  readonly personas: Pick<Personas, 'list' | 'get' | 'version' | 'create' | 'update' | 'archive'>
   readonly inbox: Inbox
   readonly library: Library
   readonly workspace: Workspace
@@ -199,6 +201,12 @@ function routes(runtime: HttpHost): Routes {
     'POST tickets/:id/execution/refresh': ({ params }) => refreshReceipts(params.id),
     'POST tickets/:id/execution/:effect/cancel': async ({ params, body }) => cancelReceipt(params.id, params.effect, await body()),
     'GET environments': () => runtime.environments.list(),
+    'GET personas': ({ query }) => runtime.personas.list(query),
+    'GET personas/:id': ({ params }) => runtime.personas.get(params.id),
+    'GET personas/:id/versions/:version': ({ params }) => runtime.personas.version(params.id, z.coerce.number().int().positive().parse(params.version)),
+    'POST personas': async ({ body }) => runtime.personas.create(await body()),
+    'PUT personas/:id': async ({ params, body }) => runtime.personas.update(params.id, await body()),
+    'POST personas/:id/archive': async ({ params, body }) => runtime.personas.archive(params.id, await body()),
     'GET endpoints': ({ query }) => runtime.endpoints.list(query),
     'POST endpoints': async ({ body }) => runtime.endpoints.register(await body()),
     'GET endpoints/:id/catalog': ({ params, query }) => runtime.endpoints.catalog(params.id, query),

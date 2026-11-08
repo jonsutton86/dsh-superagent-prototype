@@ -23,6 +23,8 @@ import { SKILL_PREFIX, type PromptVersion, type Prompts } from './prompts.ts'
 import type { Store } from './store.ts'
 import { KV } from '../kv.ts'
 import type { RegisterTool, Tool } from './tools/tool.ts'
+import type { Personas } from '../personas/service.ts'
+import { bindPersona, personaDenial } from '../personas/runtime.ts'
 
 /** Host dependencies used by `Sessions`. */
 export interface SessionsHost {
@@ -36,6 +38,7 @@ export interface SessionsHost {
   readonly masterId: string
   readonly lifetime: AbortSignal
   readonly remote?: RemoteWorkspace
+  readonly personas?: Pick<Personas, 'verify'>
   environmentAllowed?(ticket: Ticket): boolean
   closing(): boolean
   /** Execution environment variables for `ticket`, rendered into its worker's system prompt. */
@@ -147,6 +150,8 @@ export class Sessions {
   /** Resolves or creates session `id` in workspace `cwd`, initializes its role model, decorates it with prompts/skills/tools, sets `danger-full-access` permissions, and renames it to `title`. */
   async ensure(id: string, cwd: string, title: string, role: 'orchestrator' | 'worker'): Promise<Agent> {
     const ctx = this.ctx
+    const ticketId = ticketOfSession(id), ticket = ticketId ? this.host.store.tickets.get(ticketId) : undefined
+    const persona = this.pinPersona(id, ticket)
     const binding = this.host.remote?.world.status().binding ?? 'local'
     const saved = this.host.store.get(KV.sessions.world(id))
     if (saved && saved !== binding) throw new Error('Session belongs to another execution world; authorize a new Session')
@@ -182,7 +187,7 @@ export class Sessions {
     }
     if ('error' in result) throw result.error
     const settings = this.host.store.settings()
-    await initializeRoleModel(ctx, result.agent, role === 'orchestrator' ? settings.eval.model : settings.executor.model)
+    await initializeRoleModel(ctx, result.agent, role === 'orchestrator' ? settings.eval.model : persona?.definition.model ?? settings.executor.model)
     await this.decorate(result.agent)
     ctx.permissionPresets.set(result.agent.session, 'danger-full-access')
     await ctx.sessionController.rename({ sessionId: id as SessionId, title })
@@ -310,7 +315,34 @@ export class Sessions {
     } else {
       // An Executor Session keeps the profile's work tools it has, which DSH requires to be known; its own tools are not masked.
       binding.disposers.push(...this.workOnly(agent, ticket!.id))
+      await this.decoratePersona(agent, ticket!, binding)
     }
+  }
+  /** Keep a Session and every resumed descendant on the persona definition that its task originally selected. */
+  private pinPersona(id: string, ticket?: Ticket) {
+    const persona = ticket?.execution?.persona, expected = persona?.digest ?? 'default'
+    if (persona) {
+      if (!this.host.personas) throw new Error('Persona registry is unavailable')
+      this.host.personas.verify(persona)
+    }
+    const stored = this.host.store.get(KV.sessions.persona(id))
+    if (stored && stored !== expected) throw new Error('Session belongs to another persona version; authorize a new run')
+    const owner = this.host.store.get(KV.sessions.personaOwner(id))
+    if (owner && owner !== ticket?.id) throw new Error('Session belongs to another persona task; authorize a new run')
+    if (!stored) this.host.store.set(KV.sessions.persona(id), expected)
+    if (persona && !owner) this.host.store.set(KV.sessions.personaOwner(id), ticket!.id)
+    return persona
+  }
+  private async decoratePersona(agent: Agent, ticket: Ticket, binding: SessionBinding): Promise<void> {
+    try {
+      const persona = this.pinPersona(agent.id, ticket)
+      if (persona) binding.disposers.push(await bindPersona(agent, persona))
+    } catch (error) { this.failPersona(agent, String(error)); throw error }
+  }
+  private failPersona(agent: Agent, reason: string): void {
+    agent.ctx.effect(() => agent.ctx.tools.guard(() => reason))
+    agent.ctx.effect(() => agent.ctx.systemPrompt.section({ name: 'dsh-superagent-persona-unavailable', order: -10001, interpolate: false,
+      text: () => { throw new Error(reason) } }))
   }
   /**
    * Whether a Session runs the router preset: as DSH's preset registry last selected it, read through the session projection
@@ -334,10 +366,12 @@ export class Sessions {
   private workOnly(agent: Agent, ticketId: string): (() => void)[] {
     const store = this.host.store
     const parent = scopeParentOf(agent)
-    const allow = WORK_TOOLS.filter(name => agent.ctx.tools.get(name, parent))
+    const persona = store.tickets.get(ticketId)?.execution?.persona
+    const allow = WORK_TOOLS.filter(name => agent.ctx.tools.get(name, parent) && (!persona || !personaDenial(persona, name)))
     return [agent.ctx.tools.restrict({ allow }), agent.ctx.tools.guard(() => {
       const current = store.tickets.get(ticketId)
       if (!current || !liveTicket(current)) return 'Ticket ended; new work needs a new authorized ticket'
+      if ((current.execution?.persona?.digest ?? 'default') !== (persona?.digest ?? 'default')) return 'The task persona changed; authorize a new run'
       if (this.host.environmentAllowed && !this.host.environmentAllowed(current)) return 'Execution environment authorization is unavailable or revoked'
       return this.worldProblem(agent)
     })]
@@ -401,27 +435,44 @@ export class Sessions {
         let header = this.ctx.agents.get(parent)?.session.header
         try { header ??= (await this.ctx.sessionController.inspect(parent, this.host.lifetime)).meta }
         catch { return }
-        if (remotePresetBinding(header.agentPreset) !== this.host.remote.world.status().binding) return
+        if (!header || remotePresetBinding(header.agentPreset) !== this.host.remote.world.status().binding) return
         const ticketId = ticketOfSession(parent), ticket = ticketId && this.host.store.tickets.get(ticketId)
         if (ticket && header.cwd === ticket.execution?.directory) {
           this.remoteOwners.set(agent, ticket.id)
           const binding: SessionBinding = { disposers: this.workOnly(agent, ticket.id), subagent: true }
-          this.bindings.set(agent, binding); this.bindRemoteSearch(agent, binding); return
+          this.bindings.set(agent, binding); this.bindRemoteSearch(agent, binding); await this.decoratePersona(agent, ticket, binding); return
         }
         parent = header.parentSession
       }
       return
     }
-    // Up the subagents' parents to the worker, which are loaded while their subagents run.
+    // Recover immutable parent headers too: a resumed descendant must not escape persona restrictions when its parent is unloaded.
+    let recordedOwner: string | undefined
     for (let depth = 0; parent !== undefined && ticketOfSession(parent) === undefined && depth < 8; depth++) {
-      parent = this.ctx.agents.get(parent)?.session.header.parentSession
+      // Each previously verified child is a durable lineage anchor; deeper teams do not lose their persona at the traversal bound.
+      recordedOwner = this.host.store.get(KV.sessions.personaOwner(parent))
+      if (recordedOwner) break
+      let header = this.ctx.agents.get(parent)?.session.header
+      try { header ??= (await this.ctx.sessionController.inspect(parent, this.host.lifetime)).meta } catch { break }
+      parent = header?.parentSession
     }
-    const ticketId = parent === undefined ? undefined : ticketOfSession(parent)
-    if (ticketId === undefined || !this.host.store.tickets.get(ticketId)) return
-    this.bindings.set(agent, { disposers: this.workOnly(agent, ticketId), subagent: true })
+    const ticketId = recordedOwner ?? (parent === undefined ? undefined : ticketOfSession(parent))
+    const ticket = ticketId && this.host.store.tickets.get(ticketId)
+    if (!ticket) {
+      const saved = this.host.store.get(KV.sessions.persona(agent.id))
+      if (saved && saved !== 'default') {
+        const reason = 'Cannot restore this persona-bound descendant without its owning task'
+        this.failPersona(agent, reason); throw new Error(reason)
+      }
+      return
+    }
+    const binding: SessionBinding = { disposers: this.workOnly(agent, ticket.id), subagent: true }
+    this.bindings.set(agent, binding); await this.decoratePersona(agent, ticket, binding)
   }
   private bindRemoteSearch(agent: Agent, binding: SessionBinding): void {
     if (!this.host.remote) return
+    const ticketId = this.ticketOf(agent)?.id ?? this.remoteOwners.get(agent), persona = ticketId ? this.host.store.tickets.get(ticketId)?.execution?.persona : undefined
+    if (persona && personaDenial(persona, 'grep')) return
     const register = this.registerTool(agent, binding)
     for (const tool of remoteSearchTools(agent.session.header.cwd!, this.host.remote, this.ctx.subprocess))
       register(tool.name, tool.description, tool.schema, tool.execute)

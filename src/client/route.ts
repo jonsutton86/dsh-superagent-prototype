@@ -5,11 +5,11 @@ import type { SetupPlace } from '../setup.ts'
 import { DECISION_FILTERS, type DecisionFilter } from './api.ts'
 import type { T } from './text.ts'
 
-export const TABS = ['inbox', 'missions', 'library', 'environments', 'overview', 'source', 'trigger', 'eval', 'execution', 'settings'] as const
+export const TABS = ['inbox', 'missions', 'library', 'personas', 'environments', 'overview', 'source', 'trigger', 'eval', 'execution', 'settings'] as const
 export type Tab = typeof TABS[number]
 export const SETTINGS_GROUPS = ['source', 'eval', 'execution', 'prompts', 'deployment'] as const
 export type SettingsGroup = typeof SETTINGS_GROUPS[number]
-export type Route = { page: 'overview' | 'source' | 'environments'; id?: undefined; query?: undefined }
+export type Route = { page: 'overview' | 'source' | 'environments' | 'personas'; id?: undefined; query?: undefined }
   | { page: 'inbox'; id?: string; query?: { filter?: InboxFilter } }
   | { page: 'missions'; id?: string; query?: undefined }
   | { page: 'library'; id?: string; query?: { scope?: string } }
@@ -41,7 +41,7 @@ export function parseRoute(value: unknown): Route | undefined {
     case 'inbox': return record ? { page, id: record } : { page, query: compact({ filter: pick(INBOX_FILTERS, query?.filter) }) }
     case 'library': return { page, ...(record ? { id: record } : {}), query: compact({ scope: text('scope') }) }
     case 'missions': return record ? { page, id: record } : { page }
-    case 'overview': case 'source': case 'environments': return { page }
+    case 'overview': case 'source': case 'environments': case 'personas': return { page }
     case 'trigger': return record ? { page, id: record, query: compact({ trigger: text('trigger') }) }
       : { page, query: compact({ filter: pick(THREAD_FILTERS, query?.filter) }) }
     case 'eval': return { page, query: compact({ filter: pick(DECISION_FILTERS, query?.filter),

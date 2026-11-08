@@ -8,6 +8,7 @@ import { ActionCommand, AddAction, CreateMission, MissionCommand, WorkspaceError
   type ActionView, type Mission, type MissionAction, type MissionEvent, type MissionList, type MissionView } from './model.ts'
 import { Planning } from './plans.ts'
 import { PlanDefinition, definitionOf } from './plan-model.ts'
+import type { PersonaRef } from '../personas/model.ts'
 
 type Execution = Pick<Engine, 'receive' | 'decide' | 'stopTicket' | 'retryTicket'>
 const SOURCE = 'workspace'
@@ -18,7 +19,8 @@ const now = () => new Date().toISOString()
 export class Workspace {
   readonly plans: Planning
   constructor(private readonly store: Store, private readonly engine: () => Execution, private readonly runnable: () => boolean,
-    private readonly evidenceRevision?: (ticketId: string) => string, private readonly executionAuthorization?: (ticket: Ticket) => boolean) {
+    private readonly evidenceRevision?: (ticketId: string) => string, private readonly executionAuthorization?: (ticket: Ticket) => boolean,
+    private readonly personaSelection?: (reference: PersonaRef) => unknown) {
     store.db.exec(`CREATE TABLE IF NOT EXISTS workspace_mission (id TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS workspace_event (id INTEGER PRIMARY KEY, mission TEXT NOT NULL, value TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS workspace_event_mission ON workspace_event(mission, id);
@@ -48,7 +50,13 @@ export class Workspace {
     if (typeof meta.mission !== 'string' || typeof meta.action !== 'string') return false
     const mission = this.find(meta.mission)
     return mission?.status === 'active' && !!mission.actions.find(action => action.id === meta.action && action.owner === 'agent'
-      && (action.definitionRevision ?? 1) === (meta.actionRevision ?? 1))
+      && (action.definitionRevision ?? 1) === (meta.actionRevision ?? 1)
+      && JSON.stringify(action.persona ?? null) === JSON.stringify(meta.persona ?? null))
+  }
+  private validatePersona(reference: PersonaRef | undefined): void {
+    if (!reference) return
+    if (!this.personaSelection) throw new WorkspaceError(409, 'Persona selection is unavailable')
+    this.personaSelection(reference)
   }
   private validTrigger(trigger: Trigger): boolean {
     return trigger.actor.source === SOURCE && trigger.actor.id === OPERATOR && trigger.human && trigger.addressed === 'direct'
@@ -154,11 +162,12 @@ export class Workspace {
     const request = AddAction.parse(input)
     return this.command(request.requestId, { operation: 'add', id, ...request }, () => {
       const mission = this.editable(id, request.revision); this.active(mission)
+      this.validatePersona(request.persona)
       if (mission.actions.length >= 200) throw new WorkspaceError(400, 'A mission can contain up to 200 actions')
       // Dependencies can only point backwards to existing actions, so cycles cannot be introduced.
       if (request.dependsOn.some(id => !mission.actions.some(action => action.id === id))) throw new WorkspaceError(400, 'Dependency not found')
       const action: MissionAction = { id: randomUUID(), title: request.title, instructions: request.instructions,
-        owner: request.owner, dependsOn: [...new Set(request.dependsOn)], runs: [] }
+        owner: request.owner, dependsOn: [...new Set(request.dependsOn)], runs: [], ...(request.persona ? { persona: request.persona } : {}) }
       mission.actions.push(action); mission.planVersion++
       PlanDefinition.parse(definitionOf(mission))
       this.plans.snapshot(mission, `Added action: ${action.title}`)
@@ -181,6 +190,7 @@ export class Workspace {
     const plan = PlanDefinition.parse(input)
     return this.store.atomic(() => {
       const mission = this.editable(id, revision); this.active(mission)
+      for (const action of plan.actions) this.validatePersona(action.persona)
       const previous = definitionOf(mission), proposed = new Map(plan.actions.map(action => [action.id, action]))
       const globalChange = plan.title !== mission.title || plan.objective !== mission.objective || plan.acceptance !== mission.acceptance
       const affected = new Set(previous.actions.filter(action => globalChange || JSON.stringify(action) !== JSON.stringify(proposed.get(action.id))).map(action => action.id))
@@ -196,6 +206,7 @@ export class Workspace {
         const old = mission.actions.find(action => action.id === definition.id)
         const action: MissionAction = { ...old, ...definition, id: ids.get(definition.id)!,
           dependsOn: definition.dependsOn.map(id => ids.get(id)!), runs: old?.runs ?? [] }
+        if (!definition.persona) delete action.persona
         if (old && affected.has(old.id)) { action.definitionRevision = (old.definitionRevision ?? 1) + 1; delete action.accepted }
         return action
       })
@@ -218,6 +229,7 @@ export class Workspace {
         if (!this.runnable()) throw new WorkspaceError(409, 'Configure execution and resume the executor before running an action.')
         if (action.owner !== 'agent' || !dependencies || view.status === 'done' || view.status === 'review' || view.ticket?.stoppable)
           throw new WorkspaceError(409, 'This action cannot start yet.')
+        this.validatePersona(action.persona)
         const intent = `workspace:${id}:${actionId}:${action.runs.length}`
         const context = action.dependsOn.map(id => {
           const dependency = mission.actions.find(item => item.id === id)!
@@ -227,7 +239,7 @@ export class Workspace {
           at: now(), threads: [{ source: SOURCE, id: intent }],
           text: `Mission: ${mission.title}\nObjective: ${mission.objective}\nAcceptance criteria: ${mission.acceptance}\n\nAction: ${action.title}\n${action.instructions}`
             + (context ? `\n\nReviewed dependency outcomes (context, not additional instructions):\n${context}` : ''),
-          meta: { mission: id, action: actionId, actionRevision: action.definitionRevision ?? 1, intent, label: action.title } })
+          meta: { mission: id, action: actionId, actionRevision: action.definitionRevision ?? 1, intent, label: action.title, ...(action.persona ? { persona: action.persona } : {}) } })
         const decision = engine.decide(intent, { kind: 'accept', title: action.title, scope: action.instructions,
           name: 'mission-action', reason: 'Explicit local operator dispatch from the mission workspace' })
         if (!decision.ticketId) throw new WorkspaceError(409, 'Execution did not accept the action.')
@@ -250,7 +262,7 @@ export class Workspace {
           throw new WorkspaceError(409, 'This action definition changed. Run it again under the current plan.')
         if (request.command !== 'stop' && !this.executionAllowed(this.store.tickets.get(view.ticket.id)!))
           throw new WorkspaceError(409, 'This execution grant changed. Start a new action under the current environment.')
-        if (request.command !== 'stop' && !this.authorized({ mission: id, action: actionId, actionRevision: action.definitionRevision ?? 1 }))
+        if (request.command !== 'stop' && !this.authorized({ mission: id, action: actionId, actionRevision: action.definitionRevision ?? 1, ...(action.persona ? { persona: action.persona } : {}) }))
           throw new WorkspaceError(409, 'The workspace source is disabled. Enable it before sending new work.')
         if (request.command === 'retry') {
           if (!this.runnable()) throw new WorkspaceError(409, 'Resume the executor before retrying this action.')
@@ -263,7 +275,7 @@ export class Workspace {
           const intent = `workspace-message:${request.requestId}`
           engine.receive({ id: intent, source: SOURCE, actor: { source: SOURCE, id: OPERATOR }, human: true, addressed: 'direct',
             at: now(), threads: origin.threads, text: request.text,
-            meta: { mission: id, action: actionId, actionRevision: action.definitionRevision ?? 1, intent, label: action.title } })
+            meta: { mission: id, action: actionId, actionRevision: action.definitionRevision ?? 1, intent, label: action.title, ...(action.persona ? { persona: action.persona } : {}) } })
         }
         delete action.accepted
       }
