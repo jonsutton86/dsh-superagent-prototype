@@ -138,12 +138,16 @@ that host loopback is unreachable without a network grant and that a detached ch
 Workflow configuration is not itself a passing run; record the exact commit and result before claiming Linux acceptance.
 
 Run `pnpm test:remote-linux` on the intended Linux host to exercise the built helper and actual bubblewrap boundary. That gate
-requires Node in the mounted runtime and user namespaces; it fails on an unsupported host. Native Linux acceptance has not
-been run on this macOS development host. Cross-host TLS/tunnel failures, native child-process termination, hostile filesystem
-races, coordinator restore/failover and full mission dispatch remain separate required acceptance work. The full article and
-Agentic OS objective remain open.
+requires Node in the mounted runtime and user namespaces; it fails on an unsupported host. Native Linux qualification passed
+on Ubuntu 22.04, Node 24.22.2 and bubblewrap 0.6.1-1ubuntu0.3 at commit `78a195dce656aebad9f50c93e7b01081e8713881` in
+[GitHub Actions run 42509765766](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42509765766).
+All 74 test files / 1,315 tests passed; the one skipped case checks refusal on a non-Linux host. The native test confirmed
+paired file/process visibility, hidden control state, ambient environment exclusion, network isolation, dangling-symlink
+refusal and offline revocation of a detached child. This qualifies the exercised Linux transport and namespace boundary.
+Cross-host TLS/tunnel failure drills, hostile concurrent filesystem races, coordinator restore/failover, resource limits and
+full mission dispatch remain required acceptance work. The full article and Agentic OS objective remain open.
 
-Local verification on 2026-11-08: typecheck, all builds and 74 test files / 1,314 tests passed, with the native Linux case
+Local verification on 2026-11-08: typecheck, all builds and 74 test files / 1,315 tests passed, with the native Linux case
 explicitly skipped. Built endpoint/world/client imports and a standalone built-helper write/read proof passed separately.
 The existing local Harness instance answered HTTP 200, reported its environment ready and had zero running or queued work.
 No local mission or provider credential was changed by this transport increment.

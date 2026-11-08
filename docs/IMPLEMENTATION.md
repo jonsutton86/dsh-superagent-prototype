@@ -42,8 +42,9 @@ checkout environment, so no live-provider or unattended production acceptance is
 The [remote transport increment](016-remote-execution.md) adds a separately exported authenticated endpoint, durable command
 and file-effect receipts, leased grants, output cursors and paired Harness filesystem/process providers. File RPC and commands
 use the same Linux bubblewrap boundary in production. Real local Harness providers exercise the HTTP and recovery tests;
-native Linux isolation qualification, remote mission selection, endpoint credential bindings and coordinator ownership remain
-open. This is an execution foundation, not completion of the distributed architecture.
+the full suite also passed with native Linux confinement and detached-child cancellation enabled in CI. Remote mission
+selection, operator endpoint enrollment/reconciliation, endpoint credential bindings and coordinator ownership remain open.
+This is an execution foundation, not completion of the distributed architecture.
 
 The [environment enrollment increment](015-execution-environments.md) implements local root proof, immutable task grant
 bindings, revocation, reauthorization, replacement and operator controls. Its generation is local authorization state;

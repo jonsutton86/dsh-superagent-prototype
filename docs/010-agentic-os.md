@@ -56,7 +56,7 @@ refer to the same environment. Remote access requires authentication; do not exp
 | Personas and skills | Harness subagents/tools and prompt configuration | Versioned personas, model preferences, tool scopes, management UI and per-action assignment |
 | Schedules and reflection | Existing runtime passes | Persisted occurrences, deduplication, timezone/DST, missed-run policy, budgets and reviewable reflection proposals |
 | Usage and budgets | Worker concurrency and health | Provider usage, estimated/reported costs, durable reservations/limits and spend/workload UI |
-| Models and connectors | Harness configuration, optional GitHub/Feishu, local grants, authenticated remote endpoint transport and paired remote Harness services | Remote mission/world composition, operator endpoint enrollment, native Linux qualification, per-action environments, endpoint credential bindings and connector scope |
+| Models and connectors | Harness configuration, optional GitHub/Feishu, local grants, authenticated remote transport, paired Harness services and native Linux namespace/cancellation CI | Remote mission/world composition, operator endpoint enrollment, per-action environments, endpoint credential bindings, cross-host deployment qualification and connector scope |
 | Voice | None | Optional input/output adapters, interruption, local/cloud modes and text fallback |
 | Supervision and recovery | Watchdog foundation in `009-supervision.md` | Incident UI, live failure tests, restore/failover and remote reconciliation from article tracker |
 | Whole-product qualification | Deterministic unit, API/DOM flows, actual Harness restarts, live local model/tool, inbox and planner-to-execution missions | Browser/desktop layout, broader provider acceptance, backup/restore drills, accessibility and packaging |
@@ -148,7 +148,7 @@ remain outstanding.
 The durable memory/artifact increment is described in `011-library.md`; its application-level scope boundary does not
 replace the article's isolated execution environments. It uses the existing SQLite database and Harness tool registration.
 
-1. Paired remote execution environments and authenticated endpoints; richer imports, large-file support and enforced recall budgets.
+1. Remote mission/world composition and operator endpoint enrollment; richer imports, large-file support and enforced recall budgets.
 2. Persona/skill management, durable schedules, budgeted reflection proposals and usage reporting.
 3. Article requirements: remote execution, recall, speculation, verification, recovery; optional voice.
 4. Actual model/tool user flows, process restarts, restore drills and browser/desktop acceptance. Record supported provider/OS
