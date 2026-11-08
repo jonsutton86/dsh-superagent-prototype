@@ -36,6 +36,8 @@ Resource acknowledgements are trusted host assertions. A resource credential mus
 given to a worker or claimant. Possessing the coordinator claimant alone cannot acknowledge resources. Raw proof credentials
 travel in authenticated control requests; they are not stored in command arguments, model tools, command receipts or journals.
 Host-side credential files are private owned regular files and are pinned against replacement for the process lifetime.
+Each resource ID represents one enforcing endpoint and its execution journal. Copying its credential to a standby that
+acknowledges without fencing the original endpoint is unsupported; endpoint-host replacement requires its own recovery proof.
 
 Acquisition allocates a strictly increasing safe-integer epoch, random nonce and process instance UUID. It initially enters
 `preparing`. In that state the owner may renew but may not execute. Each resource observes the new owner, cancels prior work,
@@ -142,6 +144,19 @@ Local verification on 2026-11-08: `pnpm check` passed typechecking, all four bui
 (including the two opt-in installed-Harness cases). The 14 ownership tests passed. Built public ownership, authority and
 remote-world entry points also imported successfully. Installed-Harness and native Linux results are recorded separately;
 the local result alone does not qualify cross-host deployment.
+
+Code `7e2a33cc4ff662188eee52417056900b4c21e0c4` passed both installed-Harness cases in 149.84 seconds using
+Harness 0.2.1-rc.3 and the configured `deepseek-official/deepseek-flash` provider. Dedicated and managed model missions,
+persona/child execution, restart, checkpoint verification, staging and repeated Session import passed. The dedicated case
+also loaded the independent authority plugin, stopped its real process during endpoint execution, restarted it with the
+same identity, rejected the old proof and ran a successor under epoch 2 with the unchanged workspace grant. Model missions
+still use the existing coordinator integration; this does not claim an ownership-fenced Runtime or restored activation.
+
+The same code passed [Linux run 42535557440](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42535557440)
+on Ubuntu 22.04/Node 24: 1,402 tests passed, three were skipped, typechecking and all four builds passed. All 14 ownership
+tests passed with native confinement enabled, alongside the existing namespace, mission dispatch and credential-mount
+qualification. This combines native endpoint enforcement with separately exercised installed-Harness authority hosting;
+it does not establish a cross-host failover deployment.
 
 The full implementation still requires Runtime/managed-pool and dedicated-profile lifecycle wiring, fencing every external
 publication destination, held-restore validation/activation, credential/configuration remapping, endpoint/workspace recovery,

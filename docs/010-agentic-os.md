@@ -186,3 +186,9 @@ Ownership increment: `024-ownership-fencing.md` records independent ownership ac
 monotonic lease expiry, endpoint cancellation/reconciliation barriers and paired-world handoff with original receipt
 generations. Existing workspace grants retain their identity. Runtime/managed-pool and publication integration remain open,
 as do clean-host activation and failover drills; the recovery hold is unchanged.
+
+Ownership qualification: code `7e2a33cc4ff662188eee52417056900b4c21e0c4` passed 1,400 local tests, both installed-Harness
+cases (including the independent authority process restart/handoff), and 1,402 Linux tests in
+[run 42535557440](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42535557440). Typechecking and all
+four builds passed. The model cases qualify existing coordinator workflows; full ownership-controlled Runtime and restored
+activation remain to be integrated.

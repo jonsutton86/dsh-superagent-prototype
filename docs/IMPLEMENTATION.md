@@ -25,6 +25,16 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: ownership authority and endpoint fencing
+
+[024 Ownership and resource fencing](024-ownership-fencing.md) adds an independent Harness authority, process-instance
+leases, all-resource preparation and endpoint cancellation/reconciliation before handoff. Paired worlds retain their grant
+identity and original effect generations. Code `7e2a33cc4ff662188eee52417056900b4c21e0c4` passed 1,400 local tests,
+both installed-Harness cases, and 1,402 tests with native confinement enabled in
+[Linux run 42535557440](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42535557440).
+The live authority process restart/handoff is qualified separately from model missions. Runtime/pool and publication
+integration, restored activation and clean-host failover remain open; the staged restore hold is retained.
+
 ## Implemented increment: managed execution worlds
 
 [022 Managed worlds](022-managed-worlds.md) adds independently activated remote worlds under one personal/local coordinator,
