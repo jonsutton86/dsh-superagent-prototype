@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
 import { remoteFixture } from './fixtures/remote.ts'
+import { qualifyRecovery } from './fixtures/recovery.ts'
 import { Store } from '../src/app/store.ts'
 import { Endpoints } from '../src/environments/endpoints.ts'
 
@@ -42,6 +43,8 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
   for (const file of ['package.json', 'cordis.yml', 'cordis.patch.yml']) await copyFile(join(source, file), join(directory, file))
   // Select the qualification model in this temporary base profile. The operator-generated overlay stays byte-for-byte unchanged.
   await appendFile(join(directory, 'cordis.patch.yml'), '\n- id: agent-default-model\n  config:\n    provider: deepseek-official\n    model: deepseek-flash\n')
+  const sessionRoot = join(h.directory, 'sessions')
+  await appendFile(join(directory, 'cordis.patch.yml'), '\n- id: session-persistence-jsonl\n  config:\n    root: ' + JSON.stringify(sessionRoot) + '\n    compression: none\n')
   await symlink(join(source, 'node_modules'), join(directory, 'node_modules'))
   const listener = createServer(); await new Promise<void>(resolve => listener.listen(0, '127.0.0.1', resolve))
   const port = (listener.address() as { port: number }).port
@@ -190,6 +193,12 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
         expect(resumed.executionEnvironment.world).toBe(alternate.id)
       }, { timeout: 120_000, interval: 1000 })
     }
+    await stop()
+    const executionProfile = JSON.parse(await readFile(overlay, 'utf8')) as any[]
+    const stateDir = executionProfile.find(entry => entry.id === 'dsh-superagent').config.stateDir
+    const worldDirectories = executionProfile.flatMap(entry => entry.insert ?? []).filter(entry => entry.id === 'operator-remote-world').map(entry => entry.config.stateDir)
+    await qualifyRecovery({ cli, home, profile, directory, temporary: h.directory, port, stateDir, sessionRoot,
+      worldDirectories, worker: ticket.sessionId, worlds: mode === 'managed' ? 2 : 1 })
   } catch (error) {
     const diagnostics: unknown[] = []
     try {

@@ -219,12 +219,17 @@ Acceptance: remote shell and file operations see the same workspace; disconnect 
 effect; revoke a grant while offline; reconnect with an obsolete lease; cancel descendants; read output without gaps or
 duplicates; enforce workspace/symlink boundaries; show unknown outcomes for operator reconciliation.
 
-### 3. Durable restore and state ownership
+### 3. Durable restore and state ownership — offline checkpoint and staged import implemented
 
 Use Harness's Session-persistence abstraction alongside the existing orchestration store. Define a consistent checkpoint
 manifest covering task state, Session offsets, environment leases and artifact references. A restored coordinator acquires
 exclusive ownership before resuming effects. A stale coordinator cannot issue environment or publication commands under its
 old epoch. Avoid shared-network SQLite as a substitute for an ownership protocol.
+
+Implemented: `023-checkpoint-recovery.md` defines encrypted offline capture of the Store, logical Harness Sessions and world
+journals, full verification, execution-fenced staging and retryable Session import. It does not grant execution ownership.
+Next: implement the authoritative handoff, endpoint/publication fencing and original-ID reconciliation required to activate
+a restored coordinator. Keep clean-host recovery and failover open until that path is qualified.
 
 Acceptance: crash after every enqueue/dispatch/receipt boundary; recover a consistent task/Session pair; reject two active
 writers; resume pending input once; reconcile already-started work; restore from a documented backup on a clean host.

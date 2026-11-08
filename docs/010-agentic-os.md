@@ -171,3 +171,7 @@ world lifecycle and restart contract. Code `cecfde32924209bca220bcf01fd9ac3b28ae
 separate configured-model Harness cases, including delegated work, isolated revocation and continuation after restart.
 The same code passed 1,378 tests and all three native confinement cases in
 [Linux run 42528377954](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42528377954).
+
+Checkpoint increment: `023-checkpoint-recovery.md` records encrypted offline capture, complete verification, held staging and
+retryable Harness Session import. Activation remains unavailable until exclusive ownership, stale-owner fencing and remote
+receipt reconciliation are enforced. The full persistent ownership and clean-host failover requirement remains open.

@@ -32,6 +32,8 @@ export const KV = {
     builtIn: family<string, [base: string]>('prompt-built-in:') },
   /** Runtime: the main Session's ID. */
   runtime: { masterId: record<string>('master-id') },
+  /** Copying a staged checkpoint cannot make its data an execution owner. */
+  recovery: { hold: record<{ checkpoint: string; at: string; state: 'staged' }>('recovery:restore-hold') },
   /** Supervision: acknowledged commands and the single status request allowed for each assignment. */
   supervision: { receipt: family<{ fingerprint: string; result: InterventionResult }>('supervision-receipt:'),
     nudged: family<string>('supervision-nudged:') },
