@@ -34,6 +34,12 @@ authority. The panel supports creation, editing, exact historical reads, restora
 selection. This completes the initial persona management path; multiple active execution worlds and per-action environment
 selection still require a managed runtime registry and correctly scoped paired providers on creation and resume.
 
+Qualification on 2026-11-08: 1,366 local tests, 1,368 Linux tests, typechecking and all four builds passed. Exact code commit
+`2610c3e69b3f0b0776c484ec2a133ba4cc2d7674` passed
+[Linux run 42524823550](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42524823550), including all three
+native confinement cases. The configured DeepSeek Flash/Harness test separately proved persona skill loading, owned remote
+execution, artifact publication and unchanged persona/world snapshots after edit/archive and coordinator restart.
+
 ## Implemented increment: independent supervision
 
 The code now includes the authenticated observation/recovery API, independently persisted incidents and delivery reservations,

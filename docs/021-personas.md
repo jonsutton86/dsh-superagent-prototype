@@ -107,6 +107,14 @@ The ordinary macOS run skipped three native Linux cases and the opt-in model cas
 passed with Harness `0.2.1-rc.3` and `deepseek-official/deepseek-flash`, including persona skill loading, endpoint credential
 use, artifact publication, execution attribution, persona edit/archive and coordinator restart.
 
+Code commit `2610c3e69b3f0b0776c484ec2a133ba4cc2d7674` passed
+[Linux run 42524823550](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42524823550), job `128865989953`:
+typechecking, all four builds and 1,368 tests across 82 files. All three native confinement cases ran successfully: remote
+mission dispatch, filesystem/process confinement, and private credential mounts/cancellation. The real-model and non-Linux
+refusal cases were skipped in that Linux run. The runner used Ubuntu 22.04, Node 24 and bubblewrap 0.6.1. The separate
+configured-model test passed twice on macOS, including the final release build (40 seconds); those checks qualify Harness
+composition and model behavior, independently of the Linux confinement checks.
+
 Per-action environment selection, managed runtime pools, multi-workspace persona ownership, retention and broader specialist
 quality evaluation remain open alongside the full article/Agentic OS ledger. Dedicated whole-profile environments are still
 required; a persona selector does not switch filesystems or process providers.
