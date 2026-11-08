@@ -292,6 +292,9 @@ Some generic modules still refer directly to GitHub or Feishu:
 | --- | --- |
 | `src/index.ts` | The main plugin entry: reads the machine settings, starts the Runtime, and gives it the restart that a save of a Source's account uses |
 | `src/supervision/protocol.ts` | Bounded observation, assessment and intervention schemas shared by independent processes |
+| `src/workspace/model.ts` | Mission, action and activity contracts, validated commands and workspace errors |
+| `src/workspace/service.ts` | Durable missions, dependency checks, operator dispatch, review and transactional request receipts |
+| `src/client/missions.tsx` | Mission workspace: creation, action ownership, dependencies, execution controls and reviewed completion |
 | `src/supervision/service.ts` | Main-process supervision observations and transactional, idempotent, assignment-bounded progress requests |
 | `src/supervision/client.ts` | Authenticated loopback transport, bounded responses, consistent pagination and restart fencing |
 | `src/supervision/journal.ts` | Independent SQLite incident history, assessment delivery reservations and intervention audit |
@@ -412,6 +415,8 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/core-engine.spec.ts` | Domain rules on in-memory repositories: receiving, Eval, fan-out, resume and stop, interrupted Assignments, the pause, Policy changes, reports and outcomes, attaching, replies, failed deliveries and dismissed problems |
 | `tests/stage.spec.ts` | The Ticket stages, row by row |
 | `tests/supervision.spec.ts` | Real HTTP transport, token authentication, stale commands, transactional receipts and existing worker delivery integration |
+| `tests/workspace.spec.ts` | Mission persistence, deduplication, dependencies, review freshness, rollback and Runtime/Harness wiring |
+| `tests/workspace-ui.spec.tsx` | Rendered mission forms through management routes, Harness adapter, worker result review and completion |
 | `tests/watchdog.spec.ts` | Independent journal recovery, assessment budgets, service outages, bounded interventions and concurrent polling |
 | `tests/watchdog-runtime.spec.ts` | Independent Cordis/Harness composition with simulated inference: restricted tools, Session creation, state ownership and shutdown |
 | `tests/policy.spec.ts` | Source scope, the gate, the admission table, Mandate revalidation, the Policy version, settings migrations and assessment outcomes |

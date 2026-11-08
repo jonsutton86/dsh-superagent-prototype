@@ -1,5 +1,8 @@
 # Article implementation tracker
 
+The active product objective also includes the full [Agentic OS workspace](010-agentic-os.md). Its implementation ledger
+preserves these article requirements and adds missions, shared memory, artifacts, personas, schedules, usage and voice.
+
 Target: implement the full article architecture in this fork, retaining DeepSeek Harness. Upstream baseline: `8c32a9dc5d72c033816c6a8110b37f40cf94fba4`. Baseline verification: `pnpm check`, 59 test files / 1,197 tests, typecheck and build passed on Node 25.9.0.
 
 Sources: [DeepSeek's article](https://x.com/deepseekharness/status/2116857257245987236),
@@ -35,6 +38,9 @@ configuration were also checked directly in Node. A DeepSeek Harness CLI/provide
 checkout environment, so no live-provider or unattended production acceptance is claimed.
 
 ## Target architecture
+
+The Agentic OS mission workspace increment is implemented and verified in `010-agentic-os.md`. It adds a local operator
+source and persistent goals over this same Engine/Harness path; it does not replace the remaining article work below.
 
 ```mermaid
 flowchart TB

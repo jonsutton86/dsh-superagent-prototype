@@ -29,8 +29,11 @@ import { settingsView } from './views/settings.ts'
 import { sourcesStatus, type SetupState } from './views/sources.ts'
 import { decisionList, search, threadDetail, threadList } from './views/threads.ts'
 import { executorLoad, ticketDetail, ticketList } from './views/tickets.ts'
+import type { Workspace } from '../workspace/service.ts'
+import { WorkspaceError } from '../workspace/model.ts'
 
 export interface HttpHost {
+  readonly workspace: Workspace
   readonly supervision?: Supervision
   readonly store: Store
   /** Feishu message links resolved since startup, used by search to match AppLink URLs. */
@@ -88,6 +91,7 @@ function failure(error: unknown): [number, Record<string, unknown>] {
   }
   if (error instanceof SetupError) return [400, { error: error.message, setup: error.problem }]
   if (error instanceof RouteError) return [error.status, { error: error.message }]
+  if (error instanceof WorkspaceError) return [error.status, { error: error.message }]
   if (error instanceof UserError) return [error.missing ? 404 : 400, { error: error.message, code: error.code, values: error.values }]
   if (error instanceof SettingsConflict || error instanceof PromptConflict) return [409, { error: error.message }]
   return [500, { error: error instanceof Error ? error.message : String(error) }]
@@ -156,6 +160,12 @@ function routes(runtime: HttpHost): Routes {
   const ticket = (id: string) => { if (!store.tickets.get(id)) throw new RouteError(404, 'Ticket not found'); return id }
   const promptBody = (input: { body: (maxBytes?: number) => Promise<unknown> }) => input.body(4 * runtime.machine.promptMaxChars.get() + 4096)
   return {
+    'GET missions': ({ query }) => runtime.workspace.list(offset.parse(query.offset), limit(30, 100).parse(query.limit)),
+    'GET missions/:id': ({ params }) => runtime.workspace.get(params.id),
+    'POST missions': async ({ body }) => runtime.workspace.create(await body()),
+    'POST missions/:id/actions': async ({ params, body }) => runtime.workspace.add(params.id, await body()),
+    'POST missions/:id/actions/:action': async ({ params, body }) => runtime.workspace.act(params.id, params.action, await body()),
+    'PUT missions/:id': async ({ params, body }) => runtime.workspace.update(params.id, await body()),
     'GET state': () => stateView(runtime),
     'GET overview': () => overview(views(runtime), runtime.health, policyVersion(store.settings()),
       executorLoad(store, runtime.executor.activeCount()), runtime.setupProblem ?? runtime.feishuProblem),

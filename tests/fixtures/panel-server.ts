@@ -291,6 +291,12 @@ const ticketOf = (id: string) =>
 const SourceSave = z.object({ enabled: z.boolean(), config: z.unknown() })
 
 const ROUTES: { [K in keyof Api]: Route<K> } = {
+  'GET missions': { query: ['offset', 'limit'], answer: () => ({ items: [], nextOffset: null }) },
+  'GET missions/:id': { answer: () => refuse(404, 'Mission not found') },
+  'POST missions': { body: true, answer: () => refuse(409, 'Workspace fixture not configured') },
+  'POST missions/:id/actions': { body: true, answer: () => refuse(409, 'Workspace fixture not configured') },
+  'POST missions/:id/actions/:action': { body: true, answer: () => refuse(409, 'Workspace fixture not configured') },
+  'PUT missions/:id': { body: true, answer: () => refuse(409, 'Workspace fixture not configured') },
   'GET state': { answer: stateView },
   'GET overview': { answer: overviewView },
   'GET search': { query: ['q'], answer: async ({ query }) => {

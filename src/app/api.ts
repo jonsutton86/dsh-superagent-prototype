@@ -8,6 +8,7 @@ import type { SettingsView } from './views/settings.ts'
 import type { SourceStatusView } from './views/sources.ts'
 import type { DecisionListView, SearchView, ThreadDetailView, ThreadListView } from './views/threads.ts'
 import type { TicketListView } from './views/tickets.ts'
+import type { ActionCommandInput, AddActionInput, CreateMissionInput, MissionCommandInput, MissionList, MissionView } from '../workspace/model.ts'
 
 export const TICKET_FILTERS = ['open', 'person', 'working', 'idle', 'ended'] as const
 export const THREAD_FILTERS = ['subscribed', 'evaluating', 'recent', 'all'] as const
@@ -18,6 +19,12 @@ interface Paged { offset?: number; limit?: number }
 type Delivery = 'injected' | 'pending'
 
 export interface Api {
+  'GET missions': { query?: Paged; response: MissionList }
+  'GET missions/:id': { response: MissionView }
+  'POST missions': { body: CreateMissionInput; response: MissionView }
+  'POST missions/:id/actions': { body: AddActionInput; response: MissionView }
+  'POST missions/:id/actions/:action': { body: ActionCommandInput; response: MissionView }
+  'PUT missions/:id': { body: MissionCommandInput; response: MissionView }
   'GET state': { response: StateView }
   'GET overview': { response: OverviewView }
   'GET search': { query: { q: string }; response: SearchView }
