@@ -160,7 +160,10 @@ the replacement credential and composing a new world. Never copy endpoint contro
 Persistent-world increment, local verification on 2026-11-08: `pnpm check` passed typechecking, 74 test files / 1,323 tests
 and all builds; one native Linux test was skipped on macOS. Built remote entry points imported successfully. The native
 case now additionally exercises the composed persistent-world providers and a revoked-world restart. Its Linux result
-must be recorded separately from the earlier transport qualification below.
+passed at commit `31832ff5499760368144ea92aca9298fd5f4b5d2` in
+[GitHub Actions run 42512327776](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42512327776): all 74 test
+files / 1,323 tests passed with native confinement enabled; the non-Linux refusal case was skipped. This is separate from
+the earlier transport qualification below and does not establish remote mission/Session integration.
 
 `tests/remote.spec.ts` exercises real Harness local providers and real HTTP. Its test-only passthrough confinement is injected
 directly and is unavailable through the production plugin. Tests cover paired file/process visibility, lost acknowledgements,
