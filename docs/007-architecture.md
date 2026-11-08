@@ -297,6 +297,10 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/app/tools/library.ts` | Host-bound worker publication and worker/router recall tools |
 | `src/client/library.tsx` | Library search, authoring, immutable revisions, inert previews, downloads and source history |
 | `src/workspace/model.ts` | Mission, action and activity contracts, validated commands and workspace errors |
+| `src/workspace/plan-model.ts` | Complete plan definitions, dependency validation, immutable version and proposal contracts |
+| `src/workspace/plans.ts` | Plan history, legacy migration, session-bound proposals, operator review and atomic planner requests |
+| `src/app/tools/planning.ts` | Mission-scoped worker plan reading and proposal tools, with no approval or dispatch tool |
+| `src/client/plans.tsx` | Plan editing, proposal comparison/review, planner requests and history restoration as new drafts |
 | `src/workspace/inbox-model.ts` | Validated inbox queries, task/reply contracts and conversation projections |
 | `src/workspace/inbox.ts` | Durable read receipts and text projections, atomic new tasks, authorized replies and bounded history pages |
 | `src/client/inbox.tsx` | Inbox filters, conversation reading, task/reply forms and mission/artifact navigation |
@@ -426,6 +430,8 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/library-ui.spec.tsx` | Rendered library creation/revision/archive and worker artifact preview through actual management routes |
 | `tests/workspace.spec.ts` | Mission persistence, deduplication, dependencies, review freshness, rollback and Runtime/Harness wiring |
 | `tests/workspace-ui.spec.tsx` | Rendered mission forms through management routes, Harness adapter, worker result review and completion |
+| `tests/plans.spec.ts` | Plan persistence, migration, approval races, dependency invalidation, active work protection, worker scope and planner integration |
+| `tests/plans-ui.spec.tsx` | Rendered plan editing/review, ambiguous proposal replay, historical drafts and stale planner proposals |
 | `tests/inbox.spec.ts` | Inbox persistence, dispatch/reply replay, read races, authority, history projection and follow-up review/cancellation gates |
 | `tests/inbox-ui.spec.tsx` | Rendered task/question/reply flow, lost reply response, safe text and artifact/mission links |
 | `tests/local-execution.spec.ts` | General local missions without accounts, filesystem/process probes, mode mismatch, local prompts and GitHub exclusion |

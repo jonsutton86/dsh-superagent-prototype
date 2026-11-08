@@ -39,6 +39,10 @@ checkout environment, so no live-provider or unattended production acceptance is
 
 ## Target architecture
 
+The [mission planning increment](014-mission-plans.md) adds editable immutable versions, scoped worker proposals, explicit
+operator approval, history restoration and transitive result invalidation. Planning uses existing Harness workers and
+Engine dispatch; candidate plans never authorize their own execution.
+
 The [Inbox increment](013-inbox.md) adds durable read state, Harness conversation projections, atomic task creation and
 idempotent steering through existing mission authorization. Result follow-ups preserve the original mandate, explicit
 human stops remain holds, and pending follow-ups prevent acceptance of an outdated result.

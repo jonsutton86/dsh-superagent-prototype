@@ -12,6 +12,15 @@
 .dt-mission-card p { margin: 0; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .dt-mission-card progress { width: 100%; height: 5px; margin-top: auto; accent-color: var(--dsw-alias-brand-primary); }
 .dt-mission-chip { align-self: flex-start; display: inline-block; font-size: 12px; padding: 4px 9px; border-radius: 6px; background: var(--dsw-alias-interactive-bg-hover); }
+.dt-plans { display: flex; flex-direction: column; gap: 16px; padding: 20px; border: 1px solid var(--dsw-alias-border-l3); border-radius: 14px; min-width: 0; }
+.dt-plan-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.dt-plan-list li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.dt-plan-list p { width: 100%; margin: 0; overflow-wrap: anywhere; }
+.dt-plan-review { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.dt-plan-compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 20px; }
+.dt-plan-preview { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
+.dt-plan-preview li { margin-block: 12px; }
+.dt-plan-editor fieldset { min-width: 0; }
 .dt-mission-form { display: flex; flex-direction: column; gap: 16px; padding: 20px; border: 1px solid var(--dsw-alias-border-l3); border-radius: 14px; }
 .dt-mission-form label { display: flex; flex-direction: column; gap: 7px; font-size: 13px; }
 .dt-mission-form input:not([type='checkbox']), .dt-mission-form textarea, .dt-mission-form select { box-sizing: border-box; width: 100%; font: inherit; color: inherit; background: var(--dsw-alias-bg-layer-2); border: 1px solid var(--dsw-alias-border-l3); border-radius: 8px; padding: 10px 12px; }

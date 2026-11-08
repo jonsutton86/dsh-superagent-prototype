@@ -11,6 +11,7 @@ import type { TicketListView } from './views/tickets.ts'
 import type { ActionCommandInput, AddActionInput, CreateMissionInput, MissionCommandInput, MissionList, MissionView } from '../workspace/model.ts'
 import type { ArchiveRecordInput, CreateRecordInput, LibraryContent, LibraryEntry, LibraryList, LibraryQueryInput, LibraryRead } from '../workspace/library-model.ts'
 import type { Conversation, InboxFilter, InboxItem, InboxPage, InboxReplyInput, InboxStartInput } from '../workspace/inbox-model.ts'
+import type { PlanIndex, PlanProposal, PlanVersion, ProposePlanInput, ReviewPlanInput, RequestPlanInput } from '../workspace/plan-model.ts'
 
 export const TICKET_FILTERS = ['open', 'person', 'working', 'idle', 'ended'] as const
 export const THREAD_FILTERS = ['subscribed', 'evaluating', 'recent', 'all'] as const
@@ -22,6 +23,12 @@ interface Paged { offset?: number; limit?: number }
 type Delivery = 'injected' | 'pending'
 
 export interface Api {
+  'GET missions/:id/plans': { query?: Paged; response: PlanIndex }
+  'GET missions/:id/plans/:version': { response: PlanVersion }
+  'GET missions/:id/proposals/:proposal': { response: PlanProposal }
+  'POST missions/:id/proposals': { body: ProposePlanInput; response: PlanProposal }
+  'POST missions/:id/proposals/:proposal': { body: ReviewPlanInput; response: PlanProposal }
+  'POST missions/:id/plan-request': { body: RequestPlanInput; response: MissionView }
   'GET inbox': { query?: Paged & { filter?: InboxFilter; q?: string }; response: InboxPage }
   'POST inbox': { body: InboxStartInput; response: InboxItem }
   'GET inbox/:id': { query?: { before?: string; limit?: number }; response: Conversation }

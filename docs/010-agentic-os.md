@@ -47,7 +47,7 @@ refer to the same environment. Remote access requires authentication; do not exp
 
 | Requirement | Current evidence | Remaining implementation and acceptance |
 | --- | --- | --- |
-| Persistent missions | `workspace/service.ts`, SQLite mission/event/command tables, Missions panel, dependency acceptance invalidation | Editable/versioned plans, planner proposals, revisions, multi-workspace ownership |
+| Persistent missions | Durable goals, editable/versioned plans, scoped planner proposals, operator review, immutable history, and transitive result invalidation | Multi-workspace ownership, plan-history retention and broader planning-quality evaluation |
 | Action execution | Operator dispatch into Engine/Harness; local and repository modes; unit/DOM flows and one actual DeepSeek Flash mission | Broader provider/tool acceptance, per-action workspace/persona bindings and guided onboarding |
 | Human participation and completion | Human actions, reviewed dependencies; acceptance bound to ticket, library evidence and direct provenance state | Host-collected check evidence bound to Git/environment revisions; rejected results and revisions |
 | Conversations and steering | Unified inbox, durable read receipts, question/review filters, visible Harness text, atomic task creation, idempotent replies and mission/artifact links | Cross-workspace enrollment, large-history indexing/retention, attachments and richer conversation tooling |
@@ -59,7 +59,7 @@ refer to the same environment. Remote access requires authentication; do not exp
 | Models and connectors | Harness configuration, optional GitHub/Feishu, local profile without accounts, filesystem/process matching | Workspace enrollment, connector scope and explicit local/cloud data flow |
 | Voice | None | Optional input/output adapters, interruption, local/cloud modes and text fallback |
 | Supervision and recovery | Watchdog foundation in `009-supervision.md` | Incident UI, live failure tests, restore/failover and remote reconciliation from article tracker |
-| Whole-product qualification | Deterministic unit, API/DOM flows, actual Harness restarts, live local model/tool and inbox question/follow-up missions | Browser/desktop layout, broader provider acceptance, backup/restore drills, accessibility and packaging |
+| Whole-product qualification | Deterministic unit, API/DOM flows, actual Harness restarts, live local model/tool, inbox and planner-to-execution missions | Browser/desktop layout, broader provider acceptance, backup/restore drills, accessibility and packaging |
 
 ## Missions increment
 
@@ -75,7 +75,8 @@ the source prevents new admission and mandate revalidation. This is a local sing
 
 Every mutation supplies `requestId`; its fingerprint and receipt commit with the mission, Engine changes, and queued effects.
 Identical retries return current state without repeating an effect; changed payloads using the same ID are refused. Revisions
-prevent lost updates. Dependencies refer only to earlier actions, preventing cycles. Missions permit at most 200 actions;
+prevent lost updates. Added actions depend on existing actions; complete plan proposals validate the whole dependency graph
+and reject cycles. Missions permit at most 200 actions;
 lists are paginated, and the activity view reads the latest 100 entries while older activity remains in SQLite.
 
 | API relative to `/orchestrator/api/` | Purpose |
@@ -128,12 +129,26 @@ eight projected messages, read state, mission acceptance, artifact bytes/hash an
 assignment was created. See `013-inbox.md` for the qualification evidence and remaining projection limits. Browser and
 desktop acceptance remain outstanding.
 
+2026-11-08, mission planning increment: `pnpm check` passed TypeScript, all 71 test files / 1,278 tests, and server/client
+builds. Eleven new tests cover version history, review replay, dependency validation, migration preserving accepted results,
+planner rollback, active/paused-work protection, scope, historical restoration, transitive invalidation and rendered review
+flows. Outdated executions are also identified as outdated in the Inbox rather than offered as current review results.
+
+An actual DeepSeek Flash planner submitted a two-action proposal and reported ready without applying or executing it.
+The qualification driver inspected and approved the exact proposal, verified that no action started on approval, then
+explicitly dispatched its agent action. Independent checks confirmed the JSON values, computed total/count, exact published
+bytes and SHA-256. The driver exercised the operator review endpoints to test the dependent human action and mission
+completion; this simulated review is not a claim of human inspection. A real process restart preserved the three plan
+versions, approved proposal, completed actions and artifact hash. Replaying planning, approval and dispatch requests created
+no extra assignment. `014-mission-plans.md` records identities and evidence. Broader planning quality and browser acceptance
+remain outstanding.
+
 ## Next implementation order
 
 The durable memory/artifact increment is described in `011-library.md`; its application-level scope boundary does not
 replace the article's isolated execution environments. It uses the existing SQLite database and Harness tool registration.
 
-1. Versioned mission plans and planner proposals; workspace enrollment, richer imports, large-file support and recall budgets.
+1. Workspace/environment enrollment, richer imports, large-file support and enforced recall budgets.
 2. Persona/skill management, durable schedules, budgeted reflection proposals and usage reporting.
 3. Article requirements: remote execution, recall, speculation, verification, recovery; optional voice.
 4. Actual model/tool user flows, process restarts, restore drills and browser/desktop acceptance. Record supported provider/OS

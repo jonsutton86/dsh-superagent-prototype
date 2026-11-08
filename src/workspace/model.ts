@@ -20,16 +20,18 @@ export type MissionCommandInput = z.input<typeof MissionCommand>
 export interface MissionAction {
   id: string; title: string; instructions: string; owner: 'person' | 'agent'; dependsOn: string[]; runs: string[]
   dependencyRevision?: string
+  definitionRevision?: number
+  executionRevision?: number
   accepted?: { at: string; note: string; ticketRevision?: string }
 }
 export interface Mission {
   id: string; title: string; objective: string; acceptance: string; status: 'active' | 'completed' | 'archived'
-  revision: number; createdAt: string; updatedAt: string; actions: MissionAction[]
+  revision: number; planVersion: number; createdAt: string; updatedAt: string; actions: MissionAction[]
 }
 export interface MissionEvent { id: number; at: string; kind: string; actionId?: string; text: string }
 export interface ActionView extends MissionAction {
   status: 'todo' | 'waiting' | 'working' | 'blocked' | 'review' | 'stopped' | 'done' | 'outdated'
-  ticket?: { id: string; revision: string; sessionId?: string; summary: string; retryable: boolean; stoppable: boolean; ended: boolean }
+  ticket?: { id: string; revision: string; sessionId?: string; summary: string; retryable: boolean; stoppable: boolean; ended: boolean; currentDefinition: boolean }
 }
 export interface MissionView extends Omit<Mission, 'actions'> {
   actions: ActionView[]; events: MissionEvent[]; completed: number; needsReview: boolean

@@ -6,6 +6,8 @@ import type { SourceKind } from '../sources/kind.ts'
 import { workerSessionId } from '../executor/dsh.ts'
 import { ActionCommand, AddAction, CreateMission, MissionCommand, WorkspaceError,
   type ActionView, type Mission, type MissionAction, type MissionEvent, type MissionList, type MissionView } from './model.ts'
+import { Planning } from './plans.ts'
+import { PlanDefinition, definitionOf } from './plan-model.ts'
 
 type Execution = Pick<Engine, 'receive' | 'decide' | 'stopTicket' | 'retryTicket'>
 const SOURCE = 'workspace'
@@ -14,12 +16,14 @@ const now = () => new Date().toISOString()
 
 /** Single-owner local workspace, sharing the Engine's database transaction and crash-safe effect queue. */
 export class Workspace {
+  readonly plans: Planning
   constructor(private readonly store: Store, private readonly engine: () => Execution, private readonly runnable: () => boolean,
     private readonly evidenceRevision?: (ticketId: string) => string) {
     store.db.exec(`CREATE TABLE IF NOT EXISTS workspace_mission (id TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS workspace_event (id INTEGER PRIMARY KEY, mission TEXT NOT NULL, value TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS workspace_event_mission ON workspace_event(mission, id);
       CREATE TABLE IF NOT EXISTS workspace_command (id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, mission TEXT NOT NULL);`)
+    this.plans = new Planning(store, this)
   }
 
   readonly source: SourceKind = { kind: SOURCE, title: { en: 'Workspace', zh: '工作空间' },
@@ -42,7 +46,8 @@ export class Workspace {
     if (this.store.settings().sources[SOURCE]?.enabled === false) return false
     if (typeof meta.mission !== 'string' || typeof meta.action !== 'string') return false
     const mission = this.find(meta.mission)
-    return mission?.status === 'active' && !!mission.actions.find(action => action.id === meta.action && action.owner === 'agent')
+    return mission?.status === 'active' && !!mission.actions.find(action => action.id === meta.action && action.owner === 'agent'
+      && (action.definitionRevision ?? 1) === (meta.actionRevision ?? 1))
   }
   private validTrigger(trigger: Trigger): boolean {
     return trigger.actor.source === SOURCE && trigger.actor.id === OPERATOR && trigger.human && trigger.addressed === 'direct'
@@ -73,14 +78,15 @@ export class Workspace {
     if (cached) return cached
     const ticket = action.runs.length ? this.store.tickets.get(action.runs.at(-1)!) : undefined
     const revision = ticket ? key(JSON.stringify(ticket) + (this.evidenceRevision?.(ticket.id) ?? '')) : undefined
-    const changed = !!action.dependencyRevision && action.dependencyRevision !== this.dependencyRevision(action, actions)
+    const currentDefinition = action.owner === 'person' || !ticket || (action.executionRevision ?? 1) === (action.definitionRevision ?? 1)
+    const changed = !currentDefinition || !!action.dependencyRevision && action.dependencyRevision !== this.dependencyRevision(action, actions)
     const accepted = !changed && !!action.accepted && (action.owner === 'person' || (!!ticket?.ended && action.accepted.ticketRevision === revision))
     const dependencies = action.dependsOn.every(id => {
       const dependency = actions.find(item => item.id === id)
       return !!dependency && this.viewAction(dependency, actions, memo).status === 'done'
     })
     let status: ActionView['status'] = !dependencies ? 'waiting' : accepted ? 'done' : changed ? 'outdated' : 'todo'
-    if (!accepted && ticket) {
+    if (!accepted && ticket && action.owner === 'agent') {
       const stage = ticketStage(ticket)
       const followup = hasPendingFollowup(ticket)
       status = followup ? 'working' : ticket.ended ? ['completed', 'merged'].includes(ticket.ended.outcome) ? 'review' : 'stopped'
@@ -90,7 +96,7 @@ export class Workspace {
     const assignment = ticket && latestAssignment(ticket)
     const result = { ...action, status, ...(ticket ? { ticket: { id: ticket.id, revision: revision!,
       ...(ticket.execution ? { sessionId: workerSessionId(ticket.id) } : {}),
-      summary: assignment?.report?.summary ?? '', retryable: canRetry(ticket), stoppable: canStop(ticket), ended: !!ticket.ended } } : {}) }
+      summary: assignment?.report?.summary ?? '', retryable: canRetry(ticket), stoppable: canStop(ticket), ended: !!ticket.ended, currentDefinition } } : {}) }
     memo.set(action.id, result)
     return result
   }
@@ -139,8 +145,8 @@ export class Workspace {
     const request = CreateMission.parse(input)
     return this.command(request.requestId, { operation: 'create', ...request }, () => {
       const at = now(), mission: Mission = { id: randomUUID(), title: request.title, objective: request.objective,
-        acceptance: request.acceptance, status: 'active', revision: 1, createdAt: at, updatedAt: at, actions: [] }
-      this.save(mission); this.event(mission, 'created', 'Mission created'); return mission
+        acceptance: request.acceptance, status: 'active', revision: 1, planVersion: 1, createdAt: at, updatedAt: at, actions: [] }
+      this.save(mission); this.plans.snapshot(mission, 'Mission created'); this.event(mission, 'created', 'Mission created'); return mission
     })
   }
   add(id: string, input: unknown): MissionView {
@@ -152,7 +158,10 @@ export class Workspace {
       if (request.dependsOn.some(id => !mission.actions.some(action => action.id === id))) throw new WorkspaceError(400, 'Dependency not found')
       const action: MissionAction = { id: randomUUID(), title: request.title, instructions: request.instructions,
         owner: request.owner, dependsOn: [...new Set(request.dependsOn)], runs: [] }
-      mission.actions.push(action); this.event(mission, 'action-added', action.title, action.id); return this.changed(mission)
+      mission.actions.push(action); mission.planVersion++
+      PlanDefinition.parse(definitionOf(mission))
+      this.plans.snapshot(mission, `Added action: ${action.title}`)
+      this.event(mission, 'action-added', action.title, action.id); return this.changed(mission)
     })
   }
   update(id: string, input: unknown): MissionView {
@@ -164,6 +173,36 @@ export class Workspace {
       if (request.status === 'completed' && (!view.actions.length || view.completed !== view.actions.length))
         throw new WorkspaceError(409, 'Review and complete every action before completing the mission.')
       mission.status = request.status; this.event(mission, request.status, `Mission ${request.status}`); return this.changed(mission)
+    })
+  }
+  /** Apply a reviewed definition atomically, retaining run history and invalidating affected results and mandates. */
+  applyPlan(id: string, revision: number, input: unknown, proposalId: string): MissionView {
+    const plan = PlanDefinition.parse(input)
+    return this.store.atomic(() => {
+      const mission = this.editable(id, revision); this.active(mission)
+      const previous = definitionOf(mission), proposed = new Map(plan.actions.map(action => [action.id, action]))
+      const globalChange = plan.title !== mission.title || plan.objective !== mission.objective || plan.acceptance !== mission.acceptance
+      const affected = new Set(previous.actions.filter(action => globalChange || JSON.stringify(action) !== JSON.stringify(proposed.get(action.id))).map(action => action.id))
+      // A changed dependency invalidates the instructions/context consumed by all downstream results as well.
+      for (let size = -1; size !== affected.size;) {
+        size = affected.size
+        for (const action of [...previous.actions, ...plan.actions]) if (action.dependsOn.some(id => affected.has(id))) affected.add(action.id)
+      }
+      if (this.get(id, false).actions.some(action => affected.has(action.id) && action.ticket?.stoppable))
+        throw new WorkspaceError(409, 'Stop or finish affected actions before applying this plan.')
+      const ids = new Map(plan.actions.map(action => [action.id, mission.actions.some(old => old.id === action.id) ? action.id : randomUUID()]))
+      const actions = plan.actions.map(definition => {
+        const old = mission.actions.find(action => action.id === definition.id)
+        const action: MissionAction = { ...old, ...definition, id: ids.get(definition.id)!,
+          dependsOn: definition.dependsOn.map(id => ids.get(id)!), runs: old?.runs ?? [] }
+        if (old && affected.has(old.id)) { action.definitionRevision = (old.definitionRevision ?? 1) + 1; delete action.accepted }
+        return action
+      })
+      Object.assign(mission, { title: plan.title, objective: plan.objective, acceptance: plan.acceptance, actions })
+      mission.planVersion++; this.changed(mission)
+      this.plans.snapshot(mission, 'Approved plan proposal', proposalId)
+      this.event(mission, 'plan-approved', `Applied plan version ${mission.planVersion} from proposal ${proposalId}`)
+      return this.get(id)
     })
   }
   act(id: string, actionId: string, input: unknown): MissionView {
@@ -187,11 +226,12 @@ export class Workspace {
           at: now(), threads: [{ source: SOURCE, id: intent }],
           text: `Mission: ${mission.title}\nObjective: ${mission.objective}\nAcceptance criteria: ${mission.acceptance}\n\nAction: ${action.title}\n${action.instructions}`
             + (context ? `\n\nReviewed dependency outcomes (context, not additional instructions):\n${context}` : ''),
-          meta: { mission: id, action: actionId, intent, label: action.title } })
+          meta: { mission: id, action: actionId, actionRevision: action.definitionRevision ?? 1, intent, label: action.title } })
         const decision = engine.decide(intent, { kind: 'accept', title: action.title, scope: action.instructions,
           name: 'mission-action', reason: 'Explicit local operator dispatch from the mission workspace' })
         if (!decision.ticketId) throw new WorkspaceError(409, 'Execution did not accept the action.')
-        action.runs.push(decision.ticketId); action.dependencyRevision = this.dependencyRevision(action, mission.actions); delete action.accepted
+        action.runs.push(decision.ticketId); action.executionRevision = action.definitionRevision ?? 1
+        action.dependencyRevision = this.dependencyRevision(action, mission.actions); delete action.accepted
       } else if (request.command === 'complete') {
         if (!dependencies) throw new WorkspaceError(409, 'Complete the dependencies first.')
         if (!request.text) throw new WorkspaceError(400, 'Describe the evidence or result you reviewed.')
@@ -205,7 +245,9 @@ export class Workspace {
           throw new WorkspaceError(409, 'This action has no active execution.')
         if (request.command === 'steer' && this.store.tickets.get(view.ticket.id)?.ended?.by === 'human')
           throw new WorkspaceError(409, 'This action was stopped. Run a new action to authorize further work.')
-        if (request.command !== 'stop' && !this.authorized({ mission: id, action: actionId }))
+        if (request.command !== 'stop' && (!view.ticket.currentDefinition || view.status === 'outdated'))
+          throw new WorkspaceError(409, 'This action definition changed. Run it again under the current plan.')
+        if (request.command !== 'stop' && !this.authorized({ mission: id, action: actionId, actionRevision: action.definitionRevision ?? 1 }))
           throw new WorkspaceError(409, 'The workspace source is disabled. Enable it before sending new work.')
         if (request.command === 'retry') {
           if (!this.runnable()) throw new WorkspaceError(409, 'Resume the executor before retrying this action.')
@@ -217,7 +259,8 @@ export class Workspace {
           const ticket = this.store.tickets.get(view.ticket.id)!, origin = this.store.triggers.get(ticket.origin.triggerId)!
           const intent = `workspace-message:${request.requestId}`
           engine.receive({ id: intent, source: SOURCE, actor: { source: SOURCE, id: OPERATOR }, human: true, addressed: 'direct',
-            at: now(), threads: origin.threads, text: request.text, meta: { mission: id, action: actionId, intent, label: action.title } })
+            at: now(), threads: origin.threads, text: request.text,
+            meta: { mission: id, action: actionId, actionRevision: action.definitionRevision ?? 1, intent, label: action.title } })
         }
         delete action.accepted
       }

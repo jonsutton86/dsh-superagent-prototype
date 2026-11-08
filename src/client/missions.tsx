@@ -4,6 +4,7 @@ import { usePoll } from './api.ts'
 import { Button } from './controls.tsx'
 import { usePanel, usePanelData } from './provider.tsx'
 import { errorText } from './text.ts'
+import { MissionPlans } from './plans.tsx'
 
 /** Retain a request ID after an ambiguous response; identical retries cannot duplicate an execution. */
 function useCommand(done: (mission: MissionView) => void) {
@@ -94,6 +95,7 @@ function MissionDetail({ id }: { id: string }) {
         <h2>{mission.title}</h2><p className="dt-mission-prose">{mission.objective}</p></div>
         <span>{t('mission.count', { complete: mission.completed, total: mission.actions.length })}</span></div>
       <div className="dt-mission-criteria"><h3>{t('mission.acceptance')}</h3><p className="dt-mission-prose">{mission.acceptance}</p></div>
+      <MissionPlans mission={mission} changed={() => { void reload() }} />
       <Button onClick={() => navigate({ page: 'library', query: { scope: `mission:${mission.id}` } })}>{t('library.missionRecords')}</Button>
       {(state?.paused || state?.setup.problem) && <p role="status">{t('mission.executionUnavailable')}</p>}
       <div className="dt-mission-buttons">

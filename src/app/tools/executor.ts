@@ -11,9 +11,12 @@ import type { Sessions } from '../sessions.ts'
 import { AcknowledgementSchema, readTool, tool, type Tool } from './tool.ts'
 import type { Library } from '../../workspace/library.ts'
 import { libraryTools } from './library.ts'
+import { planningTools } from './planning.ts'
+import type { Planning } from '../../workspace/plans.ts'
 
 export interface ExecutorToolsHost {
   readonly library: Library
+  readonly planning: Planning
   readonly engine: Pick<EngineForExecutor, 'report' | 'reply' | 'markUnrelated' | 'handback' | 'followForContext'>
   readonly store: Pick<Store, 'tickets' | 'replyStatus' | 'atomic'>
   readonly sessions: Pick<Sessions, 'relay' | 'notify'>
@@ -27,6 +30,7 @@ export function executorTools(host: ExecutorToolsHost, ticket: Ticket): Tool[] {
   const ticketId = ticket.id
   return [
     ...libraryTools(host.library, { role: 'worker', ticketId }),
+    ...(ticket.mandate.actor.source === 'workspace' ? planningTools(host.planning, ticketId) : []),
     readTool('Read one page of a resource of this ticket that the resource parameter lists. Follow next_offset, and next_resource where a page names one.',
       true, (resource, offset, limit, signal) => readResource(host.resources, resource, offset, limit, ticketId, signal)),
     tool({

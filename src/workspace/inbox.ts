@@ -52,20 +52,22 @@ export class Inbox {
     const activity = this.store.db.prepare('SELECT MAX(id) AS revision FROM workspace_inbox_message WHERE ticket=?').get(id)?.revision
     const message = last ? JSON.parse(String(last.value)) as ConversationMessage : undefined
     const report = latestAssignment(ticket)?.report
-    let mission: InboxItem['mission'], reviewed = false
+    let mission: InboxItem['mission'], reviewed = false, definitionCurrent = false, outdated = false
     if (origin?.source === 'workspace' && typeof origin.meta.mission === 'string' && typeof origin.meta.action === 'string') {
       try {
         const value = this.workspace.get(origin.meta.mission, false)
         const action = value.actions.find(action => action.id === origin.meta.action)
+        mission = { id: value.id, title: value.title, actionId: origin.meta.action, revision: value.revision, current: action?.ticket?.id === id }
         if (action) {
-          mission = { id: value.id, title: value.title, actionId: action.id, revision: value.revision, current: action.ticket?.id === id }
           reviewed = action.status === 'done'
+          definitionCurrent = action.owner === 'agent' && !!action.ticket?.currentDefinition && action.status !== 'outdated'
+          outdated = mission.current && !definitionCurrent
         }
       } catch (error) { if (!(error instanceof WorkspaceError && error.status === 404)) throw error }
     }
     const stage = ticketStage(ticket)
     const followup = hasPendingFollowup(ticket)
-    const status: InboxItem['status'] = ticket.attention ? 'question' : followup ? 'working' : ticket.ended
+    const status: InboxItem['status'] = outdated ? 'outdated' : ticket.attention ? 'question' : followup ? 'working' : ticket.ended
       ? ['completed', 'merged'].includes(ticket.ended.outcome) ? mission?.current && !reviewed ? 'review' : 'done' : 'stopped'
       : stage.stage === 'person' ? stage.action === 'review' ? 'review' : 'blocked' : stage.stage === 'working' ? 'working' : 'idle'
     // Delivery bookkeeping and a read acknowledgement never create unread work. New messages, reports, questions and state do.
@@ -74,7 +76,7 @@ export class Inbox {
       evidence: this.library.evidenceRevision(id), status }))
     const seen = this.store.db.prepare('SELECT revision FROM workspace_inbox_read WHERE ticket=?').get(id)
     const at = [ticket.updatedAt, message?.at ?? ''].sort().at(-1)!
-    const canReply = !!mission?.current && ticket.ended?.by !== 'human' && this.workspace.get(mission.id, false).status === 'active'
+    const canReply = !!mission?.current && definitionCurrent && ticket.ended?.by !== 'human' && this.workspace.get(mission.id, false).status === 'active'
       && this.store.settings().sources.workspace?.enabled !== false
     return { id, title: ticket.title, source: origin?.source ?? ticket.mandate.actor.source, at, revision,
       unread: seen?.revision !== revision, status, preview: (ticket.attention?.question || report?.summary || message?.text || origin?.text || '').slice(0, 300),

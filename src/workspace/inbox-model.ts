@@ -13,7 +13,7 @@ export const InboxHistory = z.object({ before: z.string().max(512).optional(),
   limit: z.coerce.number().int().min(1).max(50).default(30) }).strict()
 export interface InboxItem {
   id: string; title: string; source: string; at: string; revision: string; unread: boolean
-  status: 'question' | 'review' | 'working' | 'idle' | 'blocked' | 'done' | 'stopped'
+  status: 'question' | 'review' | 'working' | 'idle' | 'blocked' | 'done' | 'stopped' | 'outdated'
   preview: string; question?: string; sessionId?: string; canReply: boolean
   mission?: { id: string; title: string; actionId: string; revision: number; current: boolean }
 }

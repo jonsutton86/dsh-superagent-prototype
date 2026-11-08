@@ -44,6 +44,9 @@ human/agent actions, dependencies, actual Harness dispatch, steering, and review
 publication tools. The workspace ledger distinguishes these increments from the remaining full product and live deployment requirements.
 The [local execution profile](docs/012-local-execution.md) runs general missions without mandatory GitHub setup, using
 the same Engine, Harness Sessions, library, and completion review.
+The [mission planner](docs/014-mission-plans.md) adds editable plans, agent proposals, explicit review and immutable history.
+Approved plans preserve execution history and invalidate affected results before they can be accepted again.
+
 The [Inbox](docs/013-inbox.md) brings conversations, unread updates, questions and review into one view. Start a task,
 send a follow-up, and open its mission or artifacts while keeping the same durable execution path.
 The [implementation tracker](docs/IMPLEMENTATION.md) distinguishes working code from remaining work.

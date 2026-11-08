@@ -292,6 +292,12 @@ const SourceSave = z.object({ enabled: z.boolean(), config: z.unknown() })
 
 const ROUTES: { [K in keyof Api]: Route<K> } = {
   'GET missions': { query: ['offset', 'limit'], answer: () => ({ items: [], nextOffset: null }) },
+  'GET missions/:id/plans': { query: ['offset', 'limit'], answer: () => ({ currentVersion: 1, versions: [], proposals: [], nextOffset: null }) },
+  'GET missions/:id/plans/:version': { answer: () => refuse(404, 'Plan not found') },
+  'GET missions/:id/proposals/:proposal': { answer: () => refuse(404, 'Proposal not found') },
+  'POST missions/:id/proposals': { body: true, answer: () => refuse(409, 'Workspace fixture not configured') },
+  'POST missions/:id/proposals/:proposal': { body: true, answer: () => refuse(409, 'Workspace fixture not configured') },
+  'POST missions/:id/plan-request': { body: true, answer: () => refuse(409, 'Workspace fixture not configured') },
   'GET inbox': { query: ['offset', 'limit', 'filter', 'q'], answer: () => ({ items: [], nextOffset: null, unread: 0, questions: 0, review: 0 }) },
   'POST inbox': { body: true, answer: () => refuse(409, 'Use the runtime fixture to start work') },
   'GET inbox/:id': { query: ['before', 'limit'], answer: () => refuse(404, 'Conversation not found') },
