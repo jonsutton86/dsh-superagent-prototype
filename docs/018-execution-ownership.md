@@ -91,6 +91,13 @@ final build against Harness `0.2.1-rc.3` and `deepseek-official/deepseek-flash`:
 assignment, Session and call, and persisted through a real coordinator restart. This composition test uses the explicitly
 injected macOS test endpoint; native Linux confinement requires its own CI receipt.
 
+Native Linux qualification passed for code commit `5ca3cbce579c0a96208ec1276eedefefb2cc11e6` in
+[run 42517702121](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42517702121), job `128844243646`.
+Typechecking, all builds and 1,337 tests passed across 76 files, including the native remote mission with child/tool ownership,
+task receipt API, cancellation after task completion and revocation. The configured-model test and non-Linux refusal case
+were skipped. The Ubuntu 22.04 runner used bubblewrap 0.6.1 and ripgrep 13.0.0. This establishes the exercised Linux
+confinement and application integration; it does not establish cross-host deployment or whole-product completion.
+
 Cross-host transport deployment, endpoint credential bindings, operator enrollment, quotas, per-action worlds/personas,
 state backup/restore and failover remain separate work. These receipts do not certify external publication, grant a child
 independent authority, prove that an artifact fulfills its task, or eliminate the need for administrator investigation of

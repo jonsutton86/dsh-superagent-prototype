@@ -65,8 +65,12 @@ The [execution ownership increment](018-execution-ownership.md) records trusted 
 before command or file-effect dispatch, compares endpoint fingerprints, and recovers by observing original receipt IDs.
 Unresolved and recovered running effects block new work without blindly replaying it. The Environments and task views
 expose paginated metadata, read-only observation and same-ID command cancellation while keeping outcome and quiescence
-separate. The configured-model qualification has verified ownership through an actual Harness restart; full-suite and
-native Linux receipts are recorded below after checks complete.
+separate. On 2026-11-08, local `pnpm check` passed 1,336 tests, typechecking and all builds. The configured-model qualification
+verified ownership through an actual Harness restart on the final build. Code commit
+`5ca3cbce579c0a96208ec1276eedefefb2cc11e6` passed
+[Linux run 42517702121](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42517702121) with 1,337 tests,
+typechecking and all builds, including native confinement, child/tool ownership, receipt APIs and command cancellation.
+The full architecture remains in progress; endpoint credential bindings and operator enrollment/reconciliation are next.
 
 The [environment enrollment increment](015-execution-environments.md) implements local root proof, immutable task grant
 bindings, revocation, reauthorization, replacement and operator controls. Its generation is local authorization state;
