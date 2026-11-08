@@ -6,6 +6,14 @@ import { SETUP_PROBLEMS } from '../setup.ts'
 import { HEALTH_TEXT } from '../sources/host.ts'
 
 const TEXT = {
+  'setup.githubUnavailable': ['本地执行模式不使用 GitHub。GitHub 工作请使用仓库配置。', SETUP_PROBLEMS.githubUnavailable[1]],
+  'setup.localWorkspaceUnavailable': ['工作目录必须可写，且本地进程与文件系统服务必须能看到同一目录。', SETUP_PROBLEMS.localWorkspaceUnavailable[1]],
+  'setup.executionModeMismatch': ['未结束的工单使用另一种执行模式。请先停止它们，或恢复原配置。', SETUP_PROBLEMS.executionModeMismatch[1]],
+  executionMode: ['执行模式', 'Execution mode'],
+  executionModeLocal: ['本地工作空间', 'Local workspace'],
+  executionModeRepository: ['GitHub 仓库', 'GitHub repository'],
+  executionModeHint: ['本地模式无需 GitHub。更改模式会重启；请先完成或停止现有工单。', 'Local mode needs no GitHub account. Changing mode restarts the plugin; finish or stop existing tickets first.'],
+  localPrepareHint: ['本地任务使用空目录，不运行仓库准备命令。', 'Local tasks start in a task directory. The repository prepare command is not run.'],
   'library.staleSources': ['来源需要复核', 'Sources need review'],
   'tab.library': ['记忆与文档', 'Memory & artifacts'],
   'library.intro': ['保存成果，追溯来源，并在任务之间检索上下文。', 'Save results, trace their sources, and recall context across tasks.'],
@@ -598,6 +606,9 @@ const TEXT = {
   'promptPart.delivery': ['交付要求', 'Delivery requirements'],
   'promptPart.legacy': ['早期版本的完整配置（载入后是内置文本加它的技能）', 'A complete configuration of an earlier version (loading it gives the built-in text and its skills)'],
   'promptPart.runtime/shared': ['共享约定', 'Shared rules'],
+  'promptPart.runtime/local/shared': ['本地共享约定', 'Local shared rules'],
+  'promptPart.runtime/local/orchestrator': ['本地协调角色', 'Local coordinator role'],
+  'promptPart.runtime/local/worker': ['本地执行角色', 'Local worker role'],
   'promptPart.runtime/orchestrator': ['主 Session 角色', 'Main Session role'],
   'promptPart.runtime/worker': ['执行器角色', 'Executor role'],
   'promptPart.runtime/subscriptions': ['订阅', 'Subscriptions'],
@@ -635,7 +646,7 @@ const TEXT = {
   'promptRole.orchestrator': ['主 Session', 'Main Session'],
   'promptRole.worker': ['执行器 Session', 'Executor Session'],
   // Deployment
-  deploymentIntro: ['这台机器上的 dsh-superagent 设置，存放在 DSH 配置文件的 dsh-superagent 条目里；保存后立即生效，不会重启 dsh-superagent。', 'dsh-superagent\'s settings on this machine, kept in the dsh-superagent entry of the DSH configuration; a saved change applies at once, without restarting dsh-superagent.'],
+  deploymentIntro: ['这台机器上的 dsh-superagent 设置存放在 DSH 配置文件里。上限保存后立即生效；更改执行模式会重启 dsh-superagent。', 'Machine settings are stored in the DSH configuration. Saved limits apply immediately; changing execution mode restarts dsh-superagent.'],
   deploymentUnavailable: ['dsh-superagent 启动完成后才能修改这些值。', 'These values can be changed once dsh-superagent has started.'],
   deploymentDerived: ['仓库与账号', 'Repository and accounts'],
   deploymentDerivedHint: ['由来源设置里的仓库和 CLI 得出。', 'Derived from the repository and the CLIs in the Source settings.'],

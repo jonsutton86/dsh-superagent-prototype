@@ -48,7 +48,7 @@ refer to the same environment. Remote access requires authentication; do not exp
 | Requirement | Current evidence | Remaining implementation and acceptance |
 | --- | --- | --- |
 | Persistent missions | `workspace/service.ts`, SQLite mission/event/command tables, Missions panel, dependency acceptance invalidation | Editable/versioned plans, planner proposals, revisions, multi-workspace ownership |
-| Action execution | Operator dispatch into Engine/Harness; runtime and rendered-form tests | Live-provider acceptance, per-action workspace/persona bindings, onboarding independent of GitHub |
+| Action execution | Operator dispatch into Engine/Harness; local and repository modes; unit/DOM flows and one actual DeepSeek Flash mission | Broader provider/tool acceptance, per-action workspace/persona bindings and guided onboarding |
 | Human participation and completion | Human actions, reviewed dependencies; acceptance bound to ticket, library evidence and direct provenance state | Host-collected check evidence bound to Git/environment revisions; rejected results and revisions |
 | Conversations and steering | Harness conversations, mission links, human follow-ups, stop/retry, attempt history | Unified inbox, unread/question indicators and cross-workspace navigation |
 | Shared memory and recall | Immutable scoped capsules, typed/hash-bound provenance, FTS search, source freshness/conflict flags, worker tools and library UI | Host-enforced total recall budgets, transitive freshness, measured recall quality, import connectors and multi-workspace ownership |
@@ -56,10 +56,10 @@ refer to the same environment. Remote access requires authentication; do not exp
 | Personas and skills | Harness subagents/tools and prompt configuration | Versioned personas, model preferences, tool scopes, management UI and per-action assignment |
 | Schedules and reflection | Existing runtime passes | Persisted occurrences, deduplication, timezone/DST, missed-run policy, budgets and reviewable reflection proposals |
 | Usage and budgets | Worker concurrency and health | Provider usage, estimated/reported costs, durable reservations/limits and spend/workload UI |
-| Models and connectors | Harness configuration, GitHub/Feishu deployment | Local-first startup without GitHub, workspace enrollment, connector scope and explicit local/cloud data flow |
+| Models and connectors | Harness configuration, optional GitHub/Feishu, local profile without accounts, filesystem/process matching | Workspace enrollment, connector scope and explicit local/cloud data flow |
 | Voice | None | Optional input/output adapters, interruption, local/cloud modes and text fallback |
 | Supervision and recovery | Watchdog foundation in `009-supervision.md` | Incident UI, live failure tests, restore/failover and remote reconciliation from article tracker |
-| Whole-product qualification | Deterministic unit, management API and DOM flows | Browser/desktop layout, actual model/tool acceptance, backup/restart drills, accessibility and packaging |
+| Whole-product qualification | Deterministic unit, API/DOM flows, actual Harness restart, one live local model/tool mission | Browser/desktop layout, broader provider acceptance, backup/restore drills, accessibility and packaging |
 
 ## Missions increment
 
@@ -87,9 +87,10 @@ lists are paginated, and the activity view reads the latest 100 entries while ol
 | `POST missions/:id/actions/:action` | Run, steer, stop, retry or accept |
 | `PUT missions/:id` | Complete, archive or reopen against a revision |
 
-Planning works while deployment needs configuration. Execution currently requires the existing configured single-repository
-deployment and uses its preparation/delivery rules. This is an integration milestone, not standalone general-purpose
-execution. Tests use a simulated Harness host/provider; they do not prove a live deployment or full product completion.
+Planning works while deployment needs configuration. Execution supports the configured single-repository deployment or
+a standalone local profile without GitHub. `012-local-execution.md` documents local setup, task directories, prompt profiles,
+mode-change protection and the filesystem/process check. Local mode keeps the same Engine, worker Sessions, publication
+and review path. It does not supply OS isolation, remote environment enrollment or full product completion.
 
 ## Verification record
 
@@ -103,18 +104,24 @@ Sixteen tests were added for library persistence, scope boundaries, provenance, 
 rendered revision/archive flows and a worker-produced HTML artifact preview. Original orchestration prompt-size budgets
 remain unchanged; new library tools have separate ceilings of 2,200 router / 4,500 worker characters.
 
-The `dsh` CLI is not installed in this environment. No live provider, unattended deployment, or real-browser visual
-acceptance is claimed. The next implementation can proceed without those credentials; whole-product completion cannot.
+2026-11-08, local execution increment: `pnpm check` passed TypeScript, all 67 test files / 1,256 tests, and server/client
+builds. Tests cover a general mission with no accounts, filesystem/process mismatch and cleanup, mode mismatch, local
+prompt tool names, disabled repository preparation, and UI mode saves through the Harness configuration form.
+
+An isolated installation of `@deepseek-ai/dsh@0.2.1-rc.3` started the actual built bundle in local mode. Its loopback API
+created a mission and artifact; both identities, content/hash and idempotency receipts survived a real process restart.
+After the operator configured the DeepSeek provider, an actual `deepseek-official/deepseek-flash` worker computed
+sum/mean values, created and checked a local JSON file, published its exact bytes and reported ready. An independent
+file/content/hash check passed, then explicit API review accepted the action and completed the mission. See
+`012-local-execution.md` for the artifact hash and qualification limits. Browser/desktop acceptance remains outstanding.
 
 ## Next implementation order
 
 The durable memory/artifact increment is described in `011-library.md`; its application-level scope boundary does not
 replace the article's isolated execution environments. It uses the existing SQLite database and Harness tool registration.
 
-1. Local missions without mandatory GitHub setup: workspace roots, general-task prompt profiles, preserved GitHub behavior,
-   and a real configured Harness profile.
-2. Integrated workspace shell and conversation inbox; richer imports, large-file support and recall budgets over the library.
-3. Persona/skill management, durable schedules, budgeted reflection proposals and usage reporting.
-4. Article requirements: remote execution, recall, speculation, verification, recovery; optional voice.
-5. Actual model/tool user flows, process restarts, restore drills and browser/desktop acceptance. Record supported provider/OS
+1. Integrated workspace shell and conversation inbox; richer imports, large-file support and recall budgets over the library.
+2. Persona/skill management, durable schedules, budgeted reflection proposals and usage reporting.
+3. Article requirements: remote execution, recall, speculation, verification, recovery; optional voice.
+4. Actual model/tool user flows, process restarts, restore drills and browser/desktop acceptance. Record supported provider/OS
    combinations and audit every row above before declaring the goal achieved.

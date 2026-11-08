@@ -28,7 +28,7 @@
           - id: persona
             name: '@deepseek-ai/dsh-persona'
             config:
-              prefix: You are a coding agent powered by the {{model}} model.
+              prefix: You are an agent powered by the {{model}} model. Follow the task and execution profile supplied by dsh-superagent.
           - id: agent-instructions
             name: '@deepseek-ai/dsh-agent-instructions'
             config:

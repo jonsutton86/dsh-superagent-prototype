@@ -39,6 +39,12 @@ checkout environment, so no live-provider or unattended production acceptance is
 
 ## Target architecture
 
+The [local execution increment](012-local-execution.md) removes mandatory GitHub setup for general missions, retaining
+the same Engine/Harness dispatch and durable results. A real isolated Harness process has passed startup and persisted
+mission/artifact state across a restart. With the operator's configured DeepSeek provider, one live Flash mission created
+a local JSON file, published it, entered review and completed after independent content/hash checking. Remote enrollment,
+OS isolation, broader provider qualification and the remaining article work below are still required.
+
 The [durable library increment](011-library.md) implements worker publication, scoped memory/artifact search, immutable
 provenance and the operator library. These are candidate results: host-verified task success and external delivery remain
 separate requirements. The library's limits and local process trust boundary are explicit in that document.

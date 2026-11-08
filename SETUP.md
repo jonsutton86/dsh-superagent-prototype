@@ -2,6 +2,9 @@
 
 Instructions for an agent that sets up dsh-superagent with its operator. If you are a person, ask your coding agent to read this file and follow it.
 
+For standalone general-purpose missions without GitHub, use [docs/012-local-execution.md](docs/012-local-execution.md).
+The questions and prerequisites below apply to repository mode only; local mode needs no repository or GitHub account.
+
 ## How to run the setup
 
 The setup follows [docs/000-philosophy.md](docs/000-philosophy.md): it takes as little of the operator's attention as possible.

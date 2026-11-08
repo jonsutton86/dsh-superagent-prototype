@@ -1,0 +1,13 @@
+# Dedicated local profile. Replace stateDir with your absolute persistent path.
+- id: webserver
+  config:
+    host: 127.0.0.1
+    port: 3083
+- id: dsh-superagent
+  config:
+    stateDir: /absolute/path/to/agentic-os-state
+    executionMode: local
+- id: dsh-superagent-github
+  disabled: true
+- id: dsh-superagent-feishu
+  disabled: true

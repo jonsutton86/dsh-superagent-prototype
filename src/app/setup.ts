@@ -2,7 +2,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { UserError } from '../core/index.ts'
 import { SETUP_FIELDS, resolveDeployment, resolveFeishuBot, workerProbe, type Deployment, type Machine } from '../deployment.ts'
-import { agentVariables, applyEnvironment, verifyEnvironment, withoutDirectory, workerBin, writeEnvironment } from '../infra/environment.ts'
+import { agentVariables, applyEnvironment, verifyEnvironment, verifyLocalWorkspace, withoutDirectory, workerBin, writeEnvironment } from '../infra/environment.ts'
+import { executionRoot } from './execution-environment.ts'
 import type { Settings, SettingsBlock } from '../policy.ts'
 import { SetupError, type SetupProblem } from '../setup.ts'
 
@@ -11,6 +12,7 @@ export interface SetupHost {
   readonly machine: Machine
   readonly lifetime: AbortSignal
   restart(): void
+  incompatibleTickets?(): boolean
 }
 
 const setupFields = (settings: Settings) =>
@@ -43,7 +45,10 @@ export class Setup {
   configured(): boolean { return this.resolved !== undefined }
   /** Resolve deployment accounts and apply the worker environment, recording `SetupError` failures in `problem`/`feishuProblem` and rethrowing unexpected errors. */
   async run(settings: Settings): Promise<boolean> {
-    try { this.resolved = await this.resolve(settings); return true }
+    try {
+      if (this.host.incompatibleTickets?.()) throw new SetupError('executionModeMismatch')
+      this.resolved = await this.resolve(settings); return true
+    }
     catch (error) {
       if (!(error instanceof SetupError)) throw error
       this.problem = error.problem
@@ -60,6 +65,7 @@ export class Setup {
   /** Verify account CLIs for a modified source block before saving, ignoring setup errors belonging to other blocks. */
   async checkAccounts(block: SettingsBlock, settings: Settings): Promise<void> {
     const { machine } = this.host
+    if (machine.executionMode === 'local' && block === 'source:github') throw new SetupError('githubUnavailable')
     const check = block === 'source:feishu' ? resolveFeishuBot(machine, settings.sources.feishu?.config, this.probe())
       : resolveDeployment(machine, settings.sources.github?.config, this.probe())
     await check.catch((error: unknown) => { if (!(error instanceof SetupError) || error.place === block.slice(7)) throw error })
@@ -76,7 +82,8 @@ export class Setup {
   private async resolve(settings: Settings): Promise<Deployment> {
     const { context, machine, lifetime } = this.host
     const probe = this.probe()
-    const deployment = await resolveDeployment(machine, settings.sources.github?.config, probe)
+    const deployment: Deployment = machine.executionMode === 'local' ? { ...machine, executionMode: 'local' }
+      : await resolveDeployment(machine, settings.sources.github?.config, probe)
     const feishu = await resolveFeishuBot(machine, settings.sources.feishu?.config, probe).catch((error: unknown) => {
       if (!(error instanceof SetupError)) throw error
       this.feishuProblem = error.problem
@@ -90,7 +97,10 @@ export class Setup {
     }
     await writeEnvironment(resolved, settings.executor.blockedCommands).catch(machineProblem)
     this.restoreEnvironment = applyEnvironment(this.variables, machine.stateDir, this.path)
-    await verifyEnvironment(resolved, context.subprocess, lifetime).catch((error: unknown) => {
+    const verify = deployment.executionMode === 'local' ? verifyLocalWorkspace(executionRoot(settings, machine.stateDir), context.subprocess, lifetime)
+      .catch((error: unknown) => { throw error instanceof SetupError ? error : new SetupError('localWorkspaceUnavailable', { output: String(error) }) })
+      : verifyEnvironment(resolved, context.subprocess, lifetime)
+    await verify.catch((error: unknown) => {
       this.restore()
       machineProblem(error)
     })

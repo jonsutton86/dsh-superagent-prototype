@@ -3,6 +3,9 @@ import { fill } from './infra/text.ts'
 
 export type SetupPlace = 'deployment' | 'github' | 'feishu'
 export const SETUP_PROBLEMS = {
+  githubUnavailable: ['github', 'GitHub is unavailable in local execution mode. Use a repository profile for GitHub work.'],
+  localWorkspaceUnavailable: ['deployment', 'The configured workspace must be writable and visible to the same local process and filesystem providers.'],
+  executionModeMismatch: ['deployment', 'Open tickets use a different execution mode. Stop those tickets or restore their original profile before changing mode.'],
   foreignFile: ['deployment', '{file} was not written by dsh-superagent; move it, or choose another state directory.'],
   gitTooOld: ['deployment', 'git does not read the github.com credential configuration dsh-superagent writes; dsh-superagent needs git 2.32 or later.'],
   environmentFailed: ['deployment', 'Preparing the agent environment failed.'],

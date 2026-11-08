@@ -10,6 +10,9 @@ It is also a way of working with an agent: **take as little human attention as p
 
 ## Setup
 
+For standalone missions without a GitHub repository, follow [Local execution](docs/012-local-execution.md).
+The workflow below configures the repository-backed mode.
+
 Setup has many steps, so an agent does it with you. Ask your coding agent:
 
 > Read SETUP.md in this repository and set up dsh-superagent with me.
@@ -39,6 +42,8 @@ It is also building an [Agentic OS workspace](docs/010-agentic-os.md). The Missi
 human/agent actions, dependencies, actual Harness dispatch, steering, and reviewed completion. The
 [memory and artifact library](docs/011-library.md) adds scoped recall, immutable results, provenance, previews and worker
 publication tools. The workspace ledger distinguishes these increments from the remaining full product and live deployment requirements.
+The [local execution profile](docs/012-local-execution.md) runs general missions without mandatory GitHub setup, using
+the same Engine, Harness Sessions, library, and completion review.
 The [implementation tracker](docs/IMPLEMENTATION.md) distinguishes working code from remaining work.
 The first increment adds [independent watchdog supervision](docs/009-supervision.md), with a separate Harness profile,
 durable incident history, semantic progress assessment, and bounded, fenced progress requests.

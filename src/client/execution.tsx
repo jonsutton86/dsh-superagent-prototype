@@ -5,7 +5,7 @@ import { LIMITS } from '../limits.ts'
 import { usePoll, type SettingsView, type SourceView, type StateView } from './api.ts'
 import { DisclosureRow, Icon, InfoTip, Input, Pill } from './controls.tsx'
 import { SaveBar } from './draft.tsx'
-import { usePanel } from './provider.tsx'
+import { usePanel, usePanelData } from './provider.tsx'
 import { TicketLine } from './rows.tsx'
 import { ConfigHistory, Field, Fields, ModelField, numberOf, useBlockDraft, useSettings } from './settings-kit.tsx'
 import { localized } from './text.ts'
@@ -74,6 +74,7 @@ function EnvironmentVariables({ groups, sources,
 }
 export function ExecutionSettings() {
   const { t } = usePanel()
+  const local = usePanelData().state?.setup.executionMode === 'local'
   const { blocks, environment, sources } = useSettings().settings
   // Keep raw user text (such as separators between blocked commands) in the draft and parse only on save.
   const executor = blocks.executor.value
@@ -108,12 +109,12 @@ export function ExecutionSettings() {
             <Input className="dt-mono" value={value.directory} placeholder={t('executionDirectoryEmpty')} spellCheck={false} pattern="/.*"
               onChange={event => edit({ directory: event.target.value })} />
           </Field>
-          <Field label={t('prepareCommand')} hint={t('prepareCommandHint')}>
+          <Field label={t('prepareCommand')} hint={t(local ? 'localPrepareHint' : 'prepareCommandHint')}>
             <textarea ref={prepare} className="dt-textarea dt-mono" rows={3} maxLength={LIMITS.prepareCommand} spellCheck={false}
-              placeholder={t('prepareCommandEmpty')} value={value.prepare}
+              placeholder={t('prepareCommandEmpty')} value={value.prepare} disabled={local}
               onChange={event => edit({ prepare: event.target.value })} />
           </Field>
-          <EnvironmentVariables groups={environment.variables} sources={sources} onPick={insert} />
+          {!local && <EnvironmentVariables groups={environment.variables} sources={sources} onPick={insert} />}
           <Field label={t('blockedCommands')} hint={t('blockedCommandsHint')}>
             <Input className="dt-mono" value={value.blockedCommands} placeholder={t('blockedCommandsNone')} spellCheck={false}
               onChange={event => edit({ blockedCommands: event.target.value })} />
