@@ -5,6 +5,8 @@ import { RemoteClient, type RemoteConnection } from './client.ts'
 import { inside } from './journal.ts'
 import { RemoteError, Rpc, type EndpointIdentity, type GrantReceipt, type RemoteGrant, type RevocationReceipt, type EffectOwner } from './protocol.ts'
 import { WorldJournal, worldBinding, type WorldRecord } from './world-journal.ts'
+import { ownershipReady } from '../ownership/runtime.ts'
+import { requiresOwnership } from '../ownership/protocol.ts'
 
 export interface RemoteWorldConfig extends RemoteConnection { stateDir: string }
 export interface RemoteWorldStatus {
@@ -29,7 +31,10 @@ export class RemoteWorld {
   private maintaining?: Promise<void>
   constructor(private readonly config: RemoteWorldConfig, private readonly expected?: { grant: RemoteGrant; credentialReader: () => string }) {
     if (!isAbsolute(config.stateDir) || !isAbsolute(config.credentialFile)) throw new Error('Remote world state and credential paths must be absolute')
-    this.control = new RemoteClient({ ...config, lifetime: this.signal }, undefined, {
+    // Keep host-side receipt observation available after execution lifetime loss; close() still aborts all transport.
+    this.control = new RemoteClient({ ...config, lifetime: this.lifetime.signal }, request => {
+      if (requiresOwnership(request.op)) config.lifetime?.throwIfAborted()
+    }, {
       prepare: request => request,
       observed: (request, value) => this.journal.effects.observed(request, value),
       failed: (request, error, ambiguous) => this.journal.effects.failed(request, error, ambiguous),
@@ -46,6 +51,7 @@ export class RemoteWorld {
     if (!this.record) throw new Error('Remote world has not started')
     return structuredClone(this.record.grant)
   }
+  get ownershipBinding() { return this.config.ownership && { authorityId: this.config.ownership.authorityId, coordinatorId: this.config.ownership.coordinatorId } }
   /** Initialize once, refusing endpoint/credential replacement before renewing or exposing execution providers. */
   async start(): Promise<void> {
     if (this.record || this.closed) throw new Error('Remote world cannot be started twice')
@@ -136,9 +142,11 @@ export class RemoteWorld {
     if (this.closed || !this.record) return Promise.reject(new Error('Remote world is not open'))
     if (this.maintaining) return this.maintaining
     const run = async () => {
-      if (this.record!.revocation) { await this.flushRevocation(); return }
+      if (this.record!.revocation && !this.signal.aborted && ownershipReady(this.config.ownership)) { await this.flushRevocation(); return }
       const current = await this.control.call<{ grant: RemoteGrant; authorized: boolean }>({ op: 'grant.status' })
       this.observe(current)
+      // Dedicated providers are mounted before Runtime acquires its lease. Their read-only state remains inspectable.
+      if (this.signal.aborted || !ownershipReady(this.config.ownership)) { await this.refreshEffects(); return }
       if (this.record!.revocation) { await this.flushRevocation(); return }
       // Receipt recovery must not cause a healthy grant to expire while an operator observes or cancels old work.
       if (!this.observed?.authorized || this.record!.phase !== 'active') { await this.refreshEffects(); return }

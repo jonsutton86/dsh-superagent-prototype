@@ -31,7 +31,7 @@ export const KV = {
     /** The built-in text of a prompt part an override was edited from, by its `base`, which shows what an upgrade changed. */
     builtIn: family<string, [base: string]>('prompt-built-in:') },
   /** Runtime: the main Session's ID. */
-  runtime: { masterId: record<string>('master-id') },
+  runtime: { masterId: record<string>('master-id'), ownership: record<{ authorityId: string; coordinatorId: string }>('runtime:ownership') },
   /** Copying a staged checkpoint cannot make its data an execution owner. */
   recovery: { hold: record<{ checkpoint: string; at: string; state: 'staged' }>('recovery:restore-hold') },
   /** Supervision: acknowledged commands and the single status request allowed for each assignment. */

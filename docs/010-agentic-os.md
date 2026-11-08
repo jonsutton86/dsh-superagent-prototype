@@ -58,7 +58,7 @@ refer to the same environment. Remote access requires authentication; do not exp
 | Usage and budgets | Worker concurrency and health | Provider usage, estimated/reported costs, durable reservations/limits and spend/workload UI |
 | Models and connectors | Harness configuration, optional GitHub/Feishu, local grants, authenticated remote transport, paired Harness services, persistent remote authority/revocation and native Linux namespace/cancellation CI, whole-profile and per-action world binding, durable command/file ownership and operator receipts, endpoint-owned versioned credentials, real model artifact/restart qualification, endpoint enrollment/reconciliation and independent managed worlds | Managed endpoint/runtime launch, cross-host deployment qualification and connector scope |
 | Voice | None | Optional input/output adapters, interruption, local/cloud modes and text fallback |
-| Supervision and recovery | Watchdog foundation, encrypted checkpoints/held Session import, independent ownership authority and remote endpoint handoff fencing | Runtime/provider/publication ownership integration, clean-host activation/failover, incident UI and live failure tests |
+| Supervision and recovery | Watchdog foundation, encrypted checkpoints/held Session import, independent ownership authority, remote endpoint handoff fencing and owned Runtime/dedicated/managed provider lifecycle | Publication ownership integration, clean-host activation/failover, incident UI and broader live failure tests |
 | Whole-product qualification | Deterministic unit, API/DOM flows, actual Harness restarts, live local model/tool, inbox and planner-to-execution missions | Browser/desktop layout, broader provider acceptance, backup/restore drills, accessibility and packaging |
 
 ## Missions increment
@@ -190,5 +190,6 @@ as do clean-host activation and failover drills; the recovery hold is unchanged.
 Ownership qualification: code `7e2a33cc4ff662188eee52417056900b4c21e0c4` passed 1,400 local tests, both installed-Harness
 cases (including the independent authority process restart/handoff), and 1,402 Linux tests in
 [run 42535557440](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42535557440). Typechecking and all
-four builds passed. The model cases qualify existing coordinator workflows; full ownership-controlled Runtime and restored
-activation remain to be integrated.
+four builds passed. Those model cases qualified existing coordinator workflows. The subsequent Runtime increment in
+`025-runtime-ownership.md` connects managed and dedicated providers to a shared process lease, stops work on loss and
+refuses unfenced local execution. Publication integration and restored activation remain open.

@@ -18,8 +18,8 @@ export const Config: s<Partial<EndpointConfig>, EndpointConfig> = s.object({
   allowedEnv: s.array(s.string()).default([]).description('Additional non-credential environment variable names accepted from the coordinator.'),
   maxRunning: s.number().min(1).max(32).step(1).default(8),
   outputMaxBytes: s.number().min(65536).max(64 * 1024 * 1024).step(1).default(8 * 1024 * 1024),
-  ownership: s.object({ url: s.string().required(), authorityId: s.string().required(), coordinatorId: s.string().required(),
-    resourceId: s.string().required(), credentialFile: s.string().pattern(/^\//).required(), timeoutMs: s.number().min(100).max(60_000).default(5000) }),
+  ownership: s.union([s.object({ url: s.string().required(), authorityId: s.string().required(), coordinatorId: s.string().required(),
+    resourceId: s.string().required(), credentialFile: s.string().pattern(/^\//).required(), timeoutMs: s.number().min(100).max(60_000).default(5000) })]),
 })
 
 /** Mount on a dedicated Linux Harness host; TLS or an authenticated tunnel terminates outside the loopback listener. */

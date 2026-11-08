@@ -3,8 +3,8 @@
 An independent Harness authority now assigns one live execution owner to a coordinator identity. Every registered resource
 must drain prior work before that owner can execute. The endpoint enforces ownership separately from the immutable workspace
 grant described in [018 Execution ownership](018-execution-ownership.md). A successor retains the same grant, world binding,
-Sessions and original effect IDs; its ownership generation changes. This is a host API and endpoint increment. The normal
-coordinator Runtime, managed-world pool and publication paths are not yet attached to it, and the
+Sessions and original effect IDs; its ownership generation changes. This document describes the host API and endpoint
+increment; subsequent Runtime integration is tracked in the implementation ledger. External publication remains open, and the
 [checkpoint recovery hold](023-checkpoint-recovery.md) remains mandatory. It does not enable restored-coordinator activation.
 
 ## Authority and handoff
@@ -125,8 +125,8 @@ try {
 ```
 
 The example assumes prior operator enrollment, resource startup and private credential distribution. Configuration files
-cannot contain the in-memory `proof()` function. The standard provider schema and generated profiles do not yet acquire a
-coordinator lease automatically. This API must not be used to bypass a staged recovery hold. Source delivery and external
+cannot contain the in-memory `proof()` function. Subsequent Runtime integration injects that proof through the shared
+lease lifecycle. This API must not be used to bypass a staged recovery hold. Source delivery and external
 publication still need their own resource participation and fencing before full restored-coordinator operation is safe.
 
 ## Qualification and remaining integration
@@ -158,7 +158,7 @@ tests passed with native confinement enabled, alongside the existing namespace, 
 qualification. This combines native endpoint enforcement with separately exercised installed-Harness authority hosting;
 it does not establish a cross-host failover deployment.
 
-The full implementation still requires Runtime/managed-pool and dedicated-profile lifecycle wiring, fencing every external
+Beyond the subsequent Runtime/managed-pool and dedicated-profile lifecycle wiring, the full implementation requires fencing every external
 publication destination, held-restore validation/activation, credential/configuration remapping, endpoint/workspace recovery,
 clean-host drills and failures around each dispatch boundary. Authority replication and safe authority backup recovery are
 separate work. None is replaced by the current cooperative coordinator lock or by a successful endpoint handoff test.

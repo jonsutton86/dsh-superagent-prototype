@@ -30,7 +30,7 @@ flowchart TB
 
 `Runtime` is the composition root; it contains no domain rules. Its constructor locks the state directory, opens the Store and builds each component. If construction fails, it closes the Store and releases the lock.
 
-Startup registers management routes and runs Setup. After setup resolves, it installs Session and Executor hooks, ensures the main Session exists, starts Policy syncs, resumes interrupted Assignments, and starts passes and effects. `ready` marks completion of startup.
+Startup registers management routes, acquires configured independent ownership, and runs Setup. After setup resolves, it installs Session and Executor hooks, ensures the main Session exists, starts Policy syncs, resumes interrupted Assignments, and starts passes and effects. `ready` marks completion of startup. Ownership loss stops dispatch and turns while preserving read-only health and receipts; owned profiles require matching remote resources and refuse local worker fallback.
 
 Shutdown cancels turns, waits for passes, effects and agents, restores the process environment, closes the Store and releases the lock. Source plugins inject Runtime as the `orchestrator` service through the narrow `SourceHost` interface.
 
@@ -366,6 +366,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/ownership/http.ts`, `client.ts` | Bounded, identity-pinned ownership HTTP with private role credentials and original-ID intents |
 | `src/ownership/gate.ts` | Resource verification, durable generation floor, cancellation and quiescence acknowledgement |
 | `src/ownership/lease.ts` | Process-instance acquisition, conservative deadlines, renewal and terminal loss without silent reacquisition |
+| `src/ownership/runtime.ts` | Runtime configuration, durable authority/identity binding, workspace credential separation and shared ownership checks |
 | `src/ownership/authority-plugin.ts`, `index.ts` | Dedicated Harness authority host and public host-only lease/resource composition |
 | `src/app/setup.ts` | Setup, and `setupChanged`, whether a save changes a field setup reads |
 | `src/app/passes.ts` | Passes, the pass scheduler |
@@ -484,6 +485,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/recovery.spec.ts` | Official JSONL round trips, exclusive ownership, corruption/cancellation refusal, fork imports, missing references, held restore and preserved remote receipts |
 | `tests/remote-ownership.spec.ts` | Pre-dispatch persistence, concurrent attribution, lost responses, assignment fences, restart/cancel recovery and receipt mismatch refusal |
 | `tests/ownership.spec.ts` | Competing coordinators, all-resource barriers, monotonic expiry/restart, real endpoint handoff/outage, immutable receipt generations and durable binding/floor refusal |
+| `tests/ownership-runtime.spec.ts` | Profile compatibility, owned Runtime startup/loss, managed command attribution, competing writers, startup cleanup and held-restore refusal |
 | `tests/remote-credentials.spec.ts` | Private import validation, environment/file bindings, secret-free provider argv and receipts, rotation/rebind, restart, tamper refusal and native Linux mounts/cancellation |
 | `tests/execution-receipts-ui.spec.tsx` | Rendered receipt pagination, separate outcome/quiescence and same-ID cancellation retry after an ambiguous response |
 | `tests/watchdog.spec.ts` | Independent journal recovery, assessment budgets, service outages, bounded interventions and concurrent polling |

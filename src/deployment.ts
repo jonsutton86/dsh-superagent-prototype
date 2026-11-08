@@ -8,6 +8,8 @@ import { z } from 'zod'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import { runAsWorker, sameDirectory, withoutDirectory, workerBin } from './infra/environment.ts'
 import { SetupError } from './setup.ts'
+import { OwnershipConfig } from './ownership/runtime.ts'
+import type { CoordinatorOwnershipConfig } from './ownership/lease.ts'
 
 const reason = (error: unknown): string => error instanceof Error ? error.message : String(error)
 const absolute = (description: string) => s.string().pattern(/^\//).description(`${description} Absolute path.`)
@@ -16,6 +18,7 @@ export const Config = s.object({
   executionMode: s.union(['repository', 'local']).default('repository')
     .description('Repository mode uses a configured GitHub account. Local mode runs general missions without GitHub. Changing mode restarts the plugin.'),
   stateDir: absolute('Directory for the database, locks, worker shims, the agent\'s git configuration and, by default, the ticket directories.').required(),
+  ownership: s.union([OwnershipConfig]).description('Independent coordinator ownership. Execution must use endpoints enrolled with this authority.'),
   promptMaxChars: s.number().min(LIMITS.promptMaxChars.min).max(LIMITS.promptMaxChars.max).step(1).default(100000)
     .description('Largest saved prompt configuration, in characters.').volatile(),
   admissionContextMaxPages: s.number().min(LIMITS.admissionContextMaxPages.min).max(LIMITS.admissionContextMaxPages.max).step(1).default(10)
@@ -27,6 +30,7 @@ export type DeploymentConfig = ReturnType<typeof Config>
 export interface Machine {
   executionMode?: 'repository' | 'local'
   stateDir: string
+  ownership?: CoordinatorOwnershipConfig
   promptMaxChars: Volatile<number>
   admissionContextMaxPages: Volatile<number>
   admissionContextTimeoutMs: Volatile<number>
@@ -41,8 +45,8 @@ const MOVED: Record<string, string> = {
 export function machineOf(config: DeploymentConfig): Machine {
   const unknown = Object.keys(config).filter(key => !(key in (Config.dict ?? {})))
   if (unknown.length) throw new Error(`dsh-superagent configuration has keys it does not use: ${unknown.map(key => MOVED[key] ? `${key} (now ${MOVED[key]})` : key).join(', ')}; docs/006-deployment.md lists the keys`)
-  const { stateDir, promptMaxChars, admissionContextMaxPages, admissionContextTimeoutMs, executionMode } = config
-  return { stateDir, promptMaxChars, admissionContextMaxPages, admissionContextTimeoutMs, executionMode }
+  const { stateDir, promptMaxChars, admissionContextMaxPages, admissionContextTimeoutMs, executionMode, ownership } = config
+  return { stateDir, promptMaxChars, admissionContextMaxPages, admissionContextTimeoutMs, executionMode, ...(ownership ? { ownership } : {}) }
 }
 
 export const GithubAccountsSchema = z.object({

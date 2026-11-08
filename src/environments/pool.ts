@@ -15,6 +15,9 @@ import { EnvironmentError } from './model.ts'
 import { ActivateWorld, RevokeWorld, type WorldList, type WorldView } from './pool-model.ts'
 import { EndpointPage } from './endpoint-model.ts'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { OwnershipAccess } from '../ownership/protocol.ts'
+import type { CoordinatorOwnershipConfig } from '../ownership/lease.ts'
+import { assertOwnershipCredential } from '../ownership/runtime.ts'
 
 interface WorldRecord extends Omit<WorldView, 'ready' | 'problem' | 'status'>, EndpointWorld {
   revoke?: { requestId: string; reason: string }
@@ -23,7 +26,8 @@ export interface ManagedWorld {
   world: RemoteWorld; filesystem: FileSystem; subprocess: SubprocessRuntime; workspace: RemoteWorkspace; presets: RemotePresets
 }
 interface Entry extends ManagedWorld { context: Context; prepared: boolean }
-interface PoolHost { store: Store; endpoints: Pick<Endpoints, 'world'>; lifetime: AbortSignal; report(error: unknown): void; revoked?(id: string): void }
+interface PoolHost { store: Store; endpoints: Pick<Endpoints, 'world'>; lifetime: AbortSignal; ownership?: OwnershipAccess;
+  ownershipConfig?: CoordinatorOwnershipConfig; report(error: unknown): void; revoked?(id: string): void }
 declare module '@deepseek-ai/cordis' { interface Context { superagentWorlds: WorldPool } }
 const stamp = () => new Date().toISOString()
 
@@ -163,7 +167,8 @@ export class WorldPool extends Service {
     if (this.opened.has(record.id)) return
     let world: RemoteWorld | undefined, context: Context | undefined, presets: RemotePresets | undefined
     try {
-      world = new RemoteWorld({ ...record.config, lifetime: this.host.lifetime }, { grant: record.grant,
+      assertOwnershipCredential(this.host.ownershipConfig, [record.grant.root])
+      world = new RemoteWorld({ ...record.config, lifetime: this.host.lifetime, ownership: this.host.ownership }, { grant: record.grant,
         credentialReader: () => privateCredential(record.config.credentialFile, record.credentialPin) })
       await world.start()
       context = new Context()

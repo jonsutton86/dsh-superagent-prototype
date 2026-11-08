@@ -40,8 +40,12 @@ import type { RemoteWorld } from '../remote/world.ts'
 import type { Endpoints } from '../environments/endpoints.ts'
 import type { Personas } from '../personas/service.ts'
 import type { WorldPool } from '../environments/pool.ts'
+import type { CoordinatorOwnership } from '../ownership/lease.ts'
+import { OwnershipError } from '../ownership/protocol.ts'
 
 export interface HttpHost {
+  readonly ownership?: Pick<CoordinatorOwnership, 'status'>
+  authorizeMutation?(): void
   readonly remoteRoot?: string
   readonly remoteEffects?: Pick<RemoteWorld, 'effects' | 'refreshEffects' | 'cancelEffect' | 'status'>
   readonly environments: Environments
@@ -110,7 +114,7 @@ function failure(error: unknown): [number, Record<string, unknown>] {
   if (error instanceof RouteError) return [error.status, { error: error.message }]
   if (error instanceof WorkspaceError) return [error.status, { error: error.message }]
   if (error instanceof EnvironmentError) return [error.status, { error: error.message }]
-  if (error instanceof RemoteError) return [error.status, { error: error.message, code: error.code }]
+  if (error instanceof RemoteError || error instanceof OwnershipError) return [error.status, { error: error.message, code: error.code }]
   if (error instanceof UserError) return [error.missing ? 404 : 400, { error: error.message, code: error.code, values: error.values }]
   if (error instanceof SettingsConflict || error instanceof PromptConflict) return [409, { error: error.message }]
   return [500, { error: error instanceof Error ? error.message : String(error) }]
@@ -132,7 +136,8 @@ export function stateView(runtime: HttpHost) {
   const settings = runtime.store.settings()
   return { setup: setupView(runtime), load: { ...executorLoad(runtime.store, runtime.executor.activeCount()),
     maxWorkers: settings.executor.maxWorkers },
-    masterId: runtime.masterId, paused: settings.paused, environment: { ready: runtime.environments.ready() }, health: runtime.health }
+    masterId: runtime.masterId, paused: settings.paused, environment: { ready: runtime.environments.ready() }, health: runtime.health,
+    ...(runtime.ownership ? { ownership: runtime.ownership.status() } : {}) }
 }
 const views = (runtime: HttpHost): ViewHost => ({ store: runtime.store, sources: runtime.sources, links: runtime.links() })
 const setupState = (runtime: HttpHost): SetupState => ({ deployment: runtime.configured() ? runtime.deployment : undefined,
@@ -331,6 +336,13 @@ export function registerHttp(ctx: Context, runtime: HttpHost): () => void {
       if (!url.pathname.startsWith('/orchestrator/api/')) { res.writeHead(404); res.end(); return }
       if (!sameOrigin(req, ctx.webServer.port)) { json(res, 403, { error: 'Same-origin management request required' }); return }
       try {
+        // Receipt refresh writes observations locally but never sends an execution or cancellation intent.
+        const observation = req.method === 'POST' && /^\/orchestrator\/api\/(?:execution|tickets\/[^/]+\/execution|worlds\/[^/]+\/execution)\/refresh$/.test(url.pathname)
+        const mutation = req.method !== 'GET' && req.method !== 'HEAD' && !observation
+        if (mutation) runtime.authorizeMutation?.()
+        if (runtime.ownership && req.method === 'GET' && url.pathname === '/orchestrator/api/state') {
+          json(res, 200, stateView(runtime)); return
+        }
         // Independent supervision must remain observable even while normal startup has not finished.
         if (url.pathname === '/orchestrator/api/supervision' || url.pathname.startsWith('/orchestrator/api/supervision/')) {
           const supervisor = runtime.supervision
@@ -339,15 +351,19 @@ export function registerHttp(ctx: Context, runtime: HttpHost): () => void {
             json(res, 200, supervisor.snapshot(offset.parse(url.searchParams.get('offset') ?? 0))); return
           }
           if (req.method === 'POST' && url.pathname === '/orchestrator/api/supervision/intervene') {
-            json(res, 200, supervisor.intervene(InterventionSchema.parse(await readBody(req, 4096)))); return
+            const input = InterventionSchema.parse(await readBody(req, 4096)); runtime.authorizeMutation?.()
+            json(res, 200, supervisor.intervene(input)); return
           }
           throw new RouteError(404, 'Unknown supervision operation')
         }
         await runtime.ready
+        if (mutation) runtime.authorizeMutation?.()
         const route = match(table, req.method ?? 'GET', url.pathname.slice('/orchestrator/api/'.length).split('/'))
         if (!route) throw new RouteError(404, 'Unknown operation')
         const query = Object.fromEntries(url.searchParams)
-        json(res, 200, await route.run({ params: route.params as never, query, body: maxBytes => readBody(req, maxBytes) }))
+        json(res, 200, await route.run({ params: route.params as never, query, body: async maxBytes => {
+          const input = await readBody(req, maxBytes); if (mutation) runtime.authorizeMutation?.(); return input
+        } }))
       } catch (error) { json(res, ...failure(error)) }
     } })]
   return () => { for (const dispose of disposers) dispose() }

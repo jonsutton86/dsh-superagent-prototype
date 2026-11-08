@@ -1165,7 +1165,8 @@ describe('feishu event consumer', () => {
     await vi.advanceTimersByTimeAsync(45_000)
     await vi.waitFor(() => expect(health.feishu).toMatchObject({ state: 'error',
       detail: expect.stringContaining('did not become ready within 45 seconds') }), until)
-    expect(alive(pid)).toBe(false)
+    // Error reporting precedes OS process reaping; fake timer advancement cannot reap the child synchronously.
+    await vi.waitFor(() => expect(alive(pid)).toBe(false), until)
     controller.abort(); await running; store.close()
   }, 20_000)
   it('reports a warning the consumer prints as an error', async () => {

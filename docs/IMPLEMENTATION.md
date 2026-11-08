@@ -17,13 +17,21 @@ not a claim that the prototype already ships every feature or that the article s
 | Context and recall | Existing resources plus `src/workspace/library.ts`: immutable scoped records, provenance and FTS recall | Enforced total recall budgets, transitive freshness, measured retrieval and long-horizon validation |
 | Speculative work | Inferred mandates, observe/auto, configurable rules | Durable budgets, expiry and promotion/publication gates |
 | Full duplex | Harness job/subagent services, `src/executor/background.ts`, `src/app/delivery.ts`, remote receipts, durable assignment/tool ownership, receipt-only restart recovery and operator cancellation | Broader long-running job, process-failure and cross-host acceptance |
-| Compute/state separation | SQLite Store; Harness Session checkpoints and held import; independent ownership authority and endpoint handoff fencing | Runtime/pool and publication ownership integration, clean-host activation and failover qualification |
+| Compute/state separation | SQLite Store; Harness Session checkpoints and held import; independent ownership authority, endpoint handoff fencing and shared Runtime/pool/provider ownership lifecycle | Publication ownership integration, clean-host activation and failover qualification |
 | Remote environments | Paired local/remote providers, authenticated leased grants, durable revocation, mission/Session binding, endpoint-owned versioned credentials, remote profile and artifact/restart qualification, operator enrollment/reconciliation, generated profiles, managed world pool and exact per-action selection | Managed endpoint/machine launch, remote repository workflows, quotas and cross-host acceptance |
 | Watchdog | Existing health and bounded transient executor retry; now `src/supervision/*` | Live-provider and process-level acceptance, incident UI/alerts, retention, richer progress evidence and separately authorized recovery policies |
 | Delivery | Reports and PR binding/closure; content-addressed artifacts and stale mission-review invalidation | Host-collected check evidence, Git/environment revision binding and external publication receipts |
 | Operator control | Existing web panel, settings, pause/retry/stop and local/remote environment status and revocation, endpoint enrollment/reconciliation and private profile generation | Supervision, budgets and evidence surfaces |
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
+
+## Implemented increment: Runtime ownership
+
+[025 Runtime ownership](025-runtime-ownership.md) binds coordinator startup, dedicated providers, managed worlds,
+endpoint administration and Session/tool admission to the same independent lease. Loss stops dispatch and background work;
+separate-state competing coordinators cannot execute concurrently. Existing profiles remain compatible. Owned general
+missions require matching remote endpoints; external account publication requires its own fenced integration. Staged
+restore remains held before acquisition. Publication, clean-host activation/failover and the full product ledger stay open.
 
 ## Implemented increment: ownership authority and endpoint fencing
 
@@ -32,8 +40,8 @@ leases, all-resource preparation and endpoint cancellation/reconciliation before
 identity and original effect generations. Code `7e2a33cc4ff662188eee52417056900b4c21e0c4` passed 1,400 local tests,
 both installed-Harness cases, and 1,402 tests with native confinement enabled in
 [Linux run 42535557440](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42535557440).
-The live authority process restart/handoff is qualified separately from model missions. Runtime/pool and publication
-integration, restored activation and clean-host failover remain open; the staged restore hold is retained.
+The live authority process restart/handoff was qualified separately from model missions in that increment. Runtime/pool
+integration follows above; publication, restored activation and clean-host failover remain open. The staged hold is retained.
 
 ## Implemented increment: managed execution worlds
 
@@ -240,8 +248,8 @@ Implemented: `023-checkpoint-recovery.md` defines encrypted offline capture of t
 journals, full verification, execution-fenced staging and retryable Session import. It does not grant execution ownership.
 `024-ownership-fencing.md` adds an independent ownership authority, conservative process leases, all-resource handoff and
 real endpoint enforcement, preserving world identities and original effect generations across handoff. The authority is a
-single writer, not a replicated consensus service. Next: integrate ownership into Runtime, managed/dedicated provider
-lifecycle and external publication; reconcile original effects before activating a restored coordinator. The maintenance
+single writer, not a replicated consensus service. `025-runtime-ownership.md` connects the Runtime and managed/dedicated
+provider lifecycle to that authority. Next: integrate external publication and reconcile original effects before activating a restored coordinator. The maintenance
 hold stays in place. Keep clean-host recovery and failover open until that complete path is qualified.
 
 Acceptance: crash after every enqueue/dispatch/receipt boundary; recover a consistent task/Session pair; reject two active

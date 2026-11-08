@@ -12,6 +12,7 @@ export const EndpointProfile = z.object({ port: z.number().int().min(1024).max(6
 export const CredentialMetadata = z.object({ id: requestId, version: z.string().uuid(), variable: z.string().regex(/^[A-Z][A-Z0-9_]{0,99}$/),
   mode: z.enum(['env', 'file']), revision: z.number().int().positive(), enabled: z.boolean(), createdAt: z.string(), updatedAt: z.string() })
 export const IdentityMetadata = z.object({ protocol: z.literal(1), id: z.string().uuid(), platform: z.string(), confinement: z.string(),
+  ownership: z.object({ authorityId: z.string().uuid(), coordinatorId: requestId, resourceId: requestId }).optional(),
   capabilities: z.object({ filesystem: z.literal(true), process: z.literal(true), terminal: z.literal(false), interactiveStdin: z.literal(false), controlChannel: z.literal(false),
     outputWindow: z.number().int().positive(), effectOwnership: z.literal(true).optional(), credentialBindings: z.literal(true).optional(), administration: z.literal(true).optional() }) })
 export const GrantMetadata = z.object({ id: z.string().uuid(), owner: requestId, workspace: requestId,

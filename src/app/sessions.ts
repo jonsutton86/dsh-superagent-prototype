@@ -26,6 +26,8 @@ import type { RegisterTool, Tool } from './tools/tool.ts'
 import type { Personas } from '../personas/service.ts'
 import { bindPersona, personaDenial } from '../personas/runtime.ts'
 import type { WorldPool } from '../environments/pool.ts'
+import type { OwnershipAccess } from '../ownership/protocol.ts'
+import { ownershipReady } from '../ownership/runtime.ts'
 
 /** Host dependencies used by `Sessions`. */
 export interface SessionsHost {
@@ -41,6 +43,7 @@ export interface SessionsHost {
   readonly remote?: RemoteWorkspace
   readonly worlds?: WorldPool
   readonly personas?: Pick<Personas, 'verify'>
+  readonly ownership?: OwnershipAccess
   environmentAllowed?(ticket: Ticket): boolean
   closing(): boolean
   /** Execution environment variables for `ticket`, rendered into its worker's system prompt. */
@@ -153,6 +156,7 @@ export class Sessions {
   }
   /** Resolves or creates session `id` in workspace `cwd`, initializes its role model, decorates it with prompts/skills/tools, sets `danger-full-access` permissions, and renames it to `title`. */
   async ensure(id: string, cwd: string, title: string, role: 'orchestrator' | 'worker'): Promise<Agent> {
+    this.host.lifetime.throwIfAborted(); this.host.ownership?.proof()
     const ctx = this.ctx
     const ticketId = ticketOfSession(id), ticket = ticketId ? this.host.store.tickets.get(ticketId) : undefined
     const persona = this.pinPersona(id, ticket)
@@ -328,7 +332,7 @@ export class Sessions {
     for (const tool of host.tools(agent, ticket)) register(tool.name, tool.description, tool.schema, tool.execute)
     if (!master) this.bindRemoteSearch(agent, binding)
     if (master) {
-      binding.disposers.push(agent.ctx.tools.restrict({ allow: this.host.remote ? ['skill'] : ['skill', 'bash', 'read', 'read_image', 'job_output', 'job_list', 'job_kill'] }),
+      binding.disposers.push(agent.ctx.tools.restrict({ allow: this.host.remote || this.host.ownership ? ['skill'] : ['skill', 'bash', 'read', 'read_image', 'job_output', 'job_list', 'job_kill'] }),
         agent.ctx.tools.guard(execution => noWait(execution, () => this.routed(agent))))
     } else {
       // An Executor Session keeps the profile's work tools it has, which DSH requires to be known; its own tools are not masked.
@@ -400,7 +404,10 @@ export class Sessions {
     if (saved && saved !== current) throw new Error('Session belongs to another execution world')
   }
   private worldProblem(agent: Agent): string | undefined {
+    if (this.host.lifetime.aborted || this.host.closing()) return 'Coordinator is stopping or has lost ownership'
+    if (!ownershipReady(this.host.ownership)) return 'Coordinator execution ownership is unavailable'
     const recorded = remotePresetBinding(agent.session.header?.agentPreset), remote = this.remoteFor(agent.id, agent)
+    if (this.host.ownership && !remote && agent.id !== this.host.masterId) return 'Ownership-controlled work requires an enrolled endpoint world'
     const saved = this.host.store.get(KV.sessions.world(agent.id))
     if (recorded !== remote?.world.status().binding || saved && saved !== (remote?.world.status().binding ?? 'local'))
       return 'Session belongs to another execution world'
@@ -427,10 +434,11 @@ export class Sessions {
     this.guardedWorlds.add(agent)
     const saved = this.host.store.get(KV.sessions.world(agent.id))
     const remote = this.remoteFor(agent.id, agent)
-    if (!remote && !remotePresetBinding(agent.session.header?.agentPreset) && (!saved || saved === 'local')) return
+    if (!this.host.ownership && !remote && !remotePresetBinding(agent.session.header?.agentPreset) && (!saved || saved === 'local')) return
     agent.ctx.effect(() => agent.ctx.tools.guard(execution => execution.name === 'pwsh' ? 'This remote execution world does not provide PowerShell' : this.worldProblem(agent)))
     agent.ctx.effect(() => agent.ctx.systemPrompt.section({ name: 'dsh-superagent-execution-world', order: -10000, interpolate: false,
       text: () => { const problem = this.worldProblem(agent); if (problem) throw new Error(problem); return '' } }))
+    if (!remote) return
     agent.ctx.on('tools/execute', (execution, next) => {
       const problem = this.worldProblem(agent); if (problem) throw new Error(problem)
       const world = this.remoteFor(agent.id, agent)!.world, ticketId = this.ticketOf(agent)?.id ?? this.remoteOwners.get(agent)

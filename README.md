@@ -52,8 +52,9 @@ with exact per-action selection, paired worker/child providers, durable revocati
 The [checkpoint maintenance plugin](docs/023-checkpoint-recovery.md) captures encrypted coordinator, Session and world state,
 verifies backups, and imports Sessions into a staged restore that remains blocked from execution pending ownership reconciliation.
 The [ownership authority](docs/024-ownership-fencing.md) provides separate coordinator generations and endpoint handoff
-barriers, cancelling prior work and preserving its receipts before a successor can execute. Runtime and publication
-integration are still required before staged restore activation is supported.
+barriers, cancelling prior work and preserving its receipts before a successor can execute.
+[Runtime ownership](docs/025-runtime-ownership.md) connects dedicated and managed worlds to that lease and stops work on
+loss. Publication fencing and restored-state reconciliation are still required before staged restore activation is supported.
 Approved plans preserve execution history and invalidate affected results before they can be accepted again.
 
 The [Inbox](docs/013-inbox.md) brings conversations, unread updates, questions and review into one view. Start a task,

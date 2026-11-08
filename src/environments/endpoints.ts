@@ -12,12 +12,16 @@ import { ADMIN_ACTIONS, CredentialMetadata, EndpointCommand, EndpointPage, Endpo
 import { credentialDigest, privateCredential, privateDirectory, privateFile } from './endpoint-files.ts'
 import { remoteProfile } from './remote-profile.ts'
 import type { RemoteWorldConfig } from '../remote/world.ts'
+import type { OwnershipAccess } from '../ownership/protocol.ts'
+import { requiresOwnership } from '../ownership/protocol.ts'
+import type { CoordinatorOwnershipConfig } from '../ownership/lease.ts'
+import { assertOwnership } from '../ownership/runtime.ts'
 
 export interface EndpointWorld { config: RemoteWorldConfig; grant: RemoteGrant; credentialPin: string }
 
 interface Registration extends EndpointRegistration { credentialPin: string }
 interface Command extends OperatorCommand { fingerprint: string; registration: Registration; expectedEpoch?: number; previousGrant?: RemoteGrant; credentialPin?: string }
-interface EndpointHost { store: Store; stateDir: string; lifetime: AbortSignal; workerRoots(): string[] }
+interface EndpointHost { store: Store; stateDir: string; lifetime: AbortSignal; ownership?: OwnershipAccess; ownershipConfig?: CoordinatorOwnershipConfig; workerRoots(): string[] }
 const stamp = () => new Date().toISOString()
 const jobView = ({ id, grantId, epoch, phase, createdAt, updatedAt, cancelRequested, quiescent, reconciled }: EndpointJob): EndpointJob =>
   ({ id, grantId, epoch, phase, createdAt, updatedAt, cancelRequested, quiescent, reconciled })
@@ -65,7 +69,9 @@ export class Endpoints {
   private client(record: Registration): RemoteClient {
     this.separate(record.credentialFile)
     return new RemoteClient({ url: record.url, endpointId: record.id, credentialFile: record.credentialFile,
-      lifetime: AbortSignal.any([this.host.lifetime, this.stopped.signal]) }, undefined, undefined, () => {
+      ownership: this.host.ownership, lifetime: this.stopped.signal }, request => {
+      if (requiresOwnership(request.op)) this.host.lifetime.throwIfAborted()
+    }, undefined, () => {
       this.separate(record.credentialFile)
       const credential = privateCredential(record.credentialFile, record.credentialPin)
       if (!/^[A-Za-z0-9_-]{43,}$/.test(credential)) throw new EnvironmentError(409, 'Use the endpoint administrator credential file')
@@ -95,6 +101,7 @@ export class Endpoints {
         credentialPin: credentialDigest(privateCredential(credentialFile)), revision: request.revision + 1, createdAt: previous?.createdAt ?? at, updatedAt: at } as Registration
       const client = this.client(record)
       const identity = IdentityMetadata.parse(await client.call({ op: 'identity' }))
+      assertOwnership(this.host.ownership, identity.ownership)
       if (identity.protocol !== 1 || identity.id !== record.id || !identity.capabilities.administration)
         throw new EnvironmentError(409, 'Endpoint does not support pinned operator administration')
       await client.call({ op: 'grant.list', offset: 0 }) // An identity response alone does not establish the administrator role.
@@ -137,6 +144,7 @@ export class Endpoints {
       const registration = this.get(id)
       if (registration.revision !== parsed.revision) throw new EnvironmentError(409, 'Endpoint registration changed; refresh before submitting work')
       const client = this.client(registration), at = stamp()
+      assertOwnership(this.host.ownership, registration.identity.ownership)
       const command: Command = { id: request.requestId, endpointId: id, enrollmentRevision: parsed.revision, registration, request,
         fingerprint: digest, phase: 'pending', createdAt: at, updatedAt: at }
       if (request.op === 'grant.create') command.expectedEpoch = 1
@@ -192,6 +200,7 @@ export class Endpoints {
   private async deliver(command: Command, firstDelivery = false): Promise<OperatorCommand> {
     const request = command.request
     try {
+      assertOwnership(this.host.ownership, command.registration.identity.ownership)
       const value = await this.client(command.registration).call<unknown>(request)
       delete command.problem
       switch (request.op) {
@@ -213,7 +222,8 @@ export class Endpoints {
     const { port } = EndpointProfile.parse(input)
     return this.serial(async () => {
       const { config, grant } = await this.worldConnection(id, commandId)
-      const directory = dirname(config.stateDir), patch = remoteProfile({ ...config, directory, grant, port }), patchFile = join(directory, `profile-${port}.json`)
+      if (this.host.ownership && !this.host.ownershipConfig) throw new EnvironmentError(409, 'Ownership configuration is required to generate a dedicated profile')
+      const directory = dirname(config.stateDir), patch = remoteProfile({ ...config, directory, grant, port, ownership: this.host.ownershipConfig }), patchFile = join(directory, `profile-${port}.json`)
       privateFile(patchFile, JSON.stringify(patch, null, 2))
       return { endpointId: id, grantId: grant.id, epoch: grant.epoch, leaseUntil: grant.leaseUntil, port, patchFile, patch }
     })
@@ -225,6 +235,7 @@ export class Endpoints {
       if (!command || command.phase !== 'done' || !grant?.enabled || !command.credentialPin)
         throw new EnvironmentError(409, 'A confirmed enabled grant generation is required to compose a profile')
       const client = this.client(command.registration), identity = await client.call<EndpointIdentity>({ op: 'identity' })
+      assertOwnership(this.host.ownership, identity.ownership)
       if (identity.confinement !== 'linux-bubblewrap') throw new EnvironmentError(409, 'A Linux bubblewrap endpoint is required for an execution profile')
       const current = GrantMetadata.parse(await client.call({ op: 'grant.get', id: grant.id }))
       if (!current.enabled || current.epoch !== grant.epoch || current.leaseUntil <= Date.now() || current.root !== grant.root || current.rootIdentity !== grant.rootIdentity)

@@ -8,6 +8,8 @@ import type { Store } from '../app/store.ts'
 import { verifyLocalWorkspace } from '../infra/environment.ts'
 import type { RemoteWorkspace } from './remote-workspace.ts'
 import type { WorldPool } from './pool.ts'
+import type { OwnershipAccess } from '../ownership/protocol.ts'
+import { ownershipReady } from '../ownership/runtime.ts'
 import { EnrollEnvironment, EnvironmentCommand, EnvironmentError, type EnvironmentList, type EnvironmentRecord,
   type EnvironmentView, type ExecutionGrant } from './model.ts'
 
@@ -15,6 +17,7 @@ export interface EnvironmentHost {
   store: Store; filesystem: FileSystem; subprocess: SubprocessRuntime; lifetime: AbortSignal
   root(): string; mode(): 'local' | 'repository'; engine(): Pick<Engine, 'stopTicket'>
   remote?: RemoteWorkspace
+  ownership?: OwnershipAccess
   worlds?(): WorldPool
 }
 const stamp = () => new Date().toISOString()
@@ -73,7 +76,9 @@ export class Environments {
     return { items, currentRoot: resolve(this.host.root()), currentMode: this.host.mode(), currentKind: this.host.remote ? 'remote' : 'local', needsEnrollment: !items.some(record => record.current) }
   }
   ready(): boolean {
+    if (this.host.lifetime.aborted || !ownershipReady(this.host.ownership)) return false
     if (this.host.worlds?.().ready()) return true
+    if (this.host.ownership && !this.host.remote) return false
     if (this.host.remote && !this.host.remote.world.status().ready) return false
     return this.records().some(record => this.current(record) && record.enabled && this.checked.get(record.id)?.verifiedAt && !this.checked.get(record.id)?.problem)
   }
@@ -88,12 +93,14 @@ export class Environments {
   }
   /** The configured local profile already authorizes its first environment; subsequent new roots require explicit enrollment. */
   async initialize(): Promise<void> {
+    if (this.host.ownership && !this.host.remote) return
     if (!this.records().length) { await this.enroll({ requestId: 'initial-profile-enrollment', name: this.host.remote ? 'Remote execution' : 'Local execution', root: this.host.root(), mode: this.host.mode() }); return }
     const record = this.records().find(record => this.current(record))
     if (record?.kind === 'remote' && !record.enabled) { await this.stopRemote(record); return }
     if (record) await this.probe(record).catch(() => { /* The operator view retains the failed proof; admission stays closed. */ })
   }
   enroll(input: unknown): Promise<EnvironmentView> {
+    if (this.host.ownership && !this.host.remote) return Promise.reject(new EnvironmentError(409, 'Ownership-controlled execution requires an enrolled endpoint world'))
     const request = EnrollEnvironment.parse(input), configuredRoot = resolve(this.host.root()), mode = this.host.mode()
     if (resolve(request.root) !== configuredRoot || request.mode !== mode)
       return Promise.reject(new EnvironmentError(409, 'The execution profile changed. Refresh before enrolling.'))
@@ -167,11 +174,13 @@ export class Environments {
     }
   }
   allows(grant: ExecutionGrant | undefined): boolean {
+    if (this.host.lifetime.aborted || !ownershipReady(this.host.ownership)) return false
     if (grant?.world && grant.environmentId === grant.world) {
       try { const record = this.host.worlds?.().get(grant.world)
         return !!record?.ready && record.revision === grant.revision && record.epoch === grant.epoch && this.host.mode() === 'local'
       } catch { return false }
     }
+    if (this.host.ownership && !this.host.remote) return false
     if (!grant) return !this.host.remote // Legacy local work must never be adopted by a remote profile.
     const record = this.records().find(record => record.id === grant.environmentId)
     return !!record?.enabled && !record.retired && record.revision === grant.revision && record.epoch === grant.epoch && record.mode === this.host.mode()
@@ -197,11 +206,13 @@ export class Environments {
     return this.host.remote
   }
   bind(execution: Execution, binding?: string): ExecutionGrant {
+    if (this.host.lifetime.aborted || !ownershipReady(this.host.ownership)) throw new EnvironmentError(409, 'Coordinator ownership is unavailable')
     if (binding) {
       const remote = this.select(binding), record = this.host.worlds!().get(binding)
       if (resolve(dirname(execution.directory)) !== remote.world.grant.root) throw new EnvironmentError(409, 'Task directory is outside the selected execution world')
       return { environmentId: binding, revision: record.revision, epoch: record.epoch, world: binding }
     }
+    if (this.host.ownership && !this.host.remote) throw new EnvironmentError(409, 'Select an enrolled endpoint world for ownership-controlled execution')
     const record = this.records().find(record => this.current(record))
     if (!record?.enabled || !this.checked.get(record.id)?.verifiedAt || this.checked.get(record.id)?.problem
       || this.host.remote && !this.host.remote.world.status().ready)

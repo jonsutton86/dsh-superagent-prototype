@@ -56,6 +56,8 @@ import { Endpoints } from '../environments/endpoints.ts'
 import { Personas } from '../personas/service.ts'
 import { resolveRoleModel } from './role-models.ts'
 import { WorldPool } from '../environments/pool.ts'
+import { openRuntimeOwnership, assertOwnership, ownershipReady } from '../ownership/runtime.ts'
+import type { CoordinatorOwnership } from '../ownership/lease.ts'
 
 // Source plugins interact with dsh-superagent exclusively through the `SourceHost` service interface.
 declare module '@deepseek-ai/cordis' { interface Context { orchestrator: SourceHost } }
@@ -89,7 +91,9 @@ export class Runtime extends Service implements SourceHost {
   readonly personas: Personas
   readonly worlds: WorldPool
   readonly remoteWorkspace?: RemoteWorkspace
+  readonly ownership?: CoordinatorOwnership
   readonly ready: Promise<void>
+  private quiescing?: Promise<void>
   private readonly board = new HealthBoard()
   private readonly runtimeHealth = this.board.claim('runtime', { state: 'starting', detail: '' })
   private readonly environmentHealth = this.board.claim('environment')
@@ -119,13 +123,16 @@ export class Runtime extends Service implements SourceHost {
       const store = opened = this.store = new Store(join(machine.stateDir, 'orchestrator.sqlite'), report)
       if (store.get(KV.recovery.hold)) throw new Error('This is a staged checkpoint restore. Reconcile coordinator ownership, Sessions and external effects before enabling execution.')
       const world = remoteWorld(ctx)
+      if (machine.ownership && machine.executionMode !== 'local') throw new Error('Ownership-controlled repository publication requires a fenced publication service; use a general-mission profile until that integration is available')
+      if (world) assertOwnership(machine.ownership, world.ownershipBinding)
+      this.ownership = openRuntimeOwnership(store, machine.ownership, [executionRoot(store.settings(), machine.stateDir, world?.grant.root)])
       const remote = this.remoteWorkspace = world ? new RemoteWorkspace(world, ctx.fs, ctx.subprocess, this.lifetime) : undefined
       const environments = this.environments = new Environments({ store, filesystem: ctx.fs, subprocess: ctx.subprocess, lifetime: this.lifetime,
-        remote, worlds: () => runtime.worlds, root: () => executionRoot(store.settings(), machine.stateDir, world?.grant.root), mode: () => machine.executionMode ?? 'repository', engine: () => runtime.engine })
-      this.endpoints = new Endpoints({ store, stateDir: machine.stateDir, lifetime: this.lifetime,
+        remote, ownership: this.ownership, worlds: () => runtime.worlds, root: () => executionRoot(store.settings(), machine.stateDir, world?.grant.root), mode: () => machine.executionMode ?? 'repository', engine: () => runtime.engine })
+      this.endpoints = new Endpoints({ store, stateDir: machine.stateDir, lifetime: this.lifetime, ownership: this.ownership, ownershipConfig: machine.ownership,
         workerRoots: () => [...environments.list().items.filter(item => item.kind === 'local').flatMap(item => [item.root, item.configuredRoot]),
           ...(!world ? [executionRoot(store.settings(), machine.stateDir)] : [])] })
-      this.worlds = new WorldPool(ctx, { store, endpoints: this.endpoints, lifetime: this.lifetime, report,
+      this.worlds = new WorldPool(ctx, { store, endpoints: this.endpoints, lifetime: this.lifetime, ownership: this.ownership, ownershipConfig: machine.ownership, report,
         revoked: binding => { for (const ticket of store.tickets.open()) if (ticket.execution?.environment?.environmentId === binding && canStop(ticket)) runtime.engine.stopTicket(ticket.id, 'Managed execution world revoked by the operator') } })
       const library = this.library = new Library(store)
       const personas = this.personas = new Personas(store, async model => { await resolveRoleModel(ctx, model) })
@@ -155,7 +162,7 @@ export class Runtime extends Service implements SourceHost {
         if (kind.policy?.sync) void this.ready?.then(() => this.settings.syncable().includes(kind.kind) ? this.settings.sync(kind.kind) : undefined)
           .catch(() => { /* sync() records its failure in health. */ })
         return () => {}
-      }, id => id !== 'github' || machine.executionMode !== 'local')
+      }, id => this.ownership ? id === 'workspace' : id !== 'github' || machine.executionMode !== 'local')
       const links: LinkHost = { store, links: this.sourceLinks, commands, sources, lifetime: this.lifetime }
       this.disposers.push(sources.register(workspace.source))
       const link = (trigger: Trigger, signal?: AbortSignal) => sourceLink(links, trigger, signal)
@@ -164,7 +171,7 @@ export class Runtime extends Service implements SourceHost {
         promptVersion: id => this.sessions.promptVersion(id), mayRead: (id, revision) => this.sessions.mayRead(id, revision),
         feishuPageSize: () => feishuSettings(sources).readPageSize, sourceLink: link }
       const sessions = this.sessions = new Sessions({ context: ctx, store, prompts, effects, health: board.claim('models'), masterId,
-        lifetime: this.lifetime, remote, worlds: this.worlds, personas, environmentAllowed: ticket => environments.allows(ticket.execution?.environment),
+        lifetime: this.lifetime, remote, worlds: this.worlds, personas, ownership: this.ownership, environmentAllowed: ticket => environments.allows(ticket.execution?.environment),
         closing: () => this.closing(), environment,
         tools: (agent, ticket) => ticket ? executorTools(this.toolHost, ticket) : mainTools(this.toolHost, agent) })
       const policyChanged: EngineForSettings['policyChanged'] = (from, to, effects) => { this.engine.policyChanged(from, to, effects) }
@@ -210,8 +217,22 @@ export class Runtime extends Service implements SourceHost {
         get github() { return runtime.context({ kind: 'github', health: ['github'] }) },
         requestPass: () => { passes.request() }, sendReplies: () => outbox.sent(),
         quietly: run => { this.quiet++; try { return run() } finally { this.quiet-- } } }
-      this.ready = this.initialize().catch(error => {
-        if (!this.closing()) this.runtimeHealth.set({ state: 'error', detail: `Initialization failed: ${String(error)}`, at: now() })
+      if (this.ownership) {
+        const lost = () => {
+          if (this.closingFlag) return
+          this.initialized = false; this.stopped.abort(this.ownership!.signal.reason)
+          this.runtimeHealth.set({ state: 'error', detail: 'Coordinator ownership lost; execution is stopped. Restart only after inspecting receipts.', at: now() })
+          void this.passes.stop().catch(report)
+          for (const id of [this.masterId, ...store.tickets.list().map(ticket => workerSessionId(ticket.id))])
+            ctx.agents.get(id as SessionId)?.cancel({ kind: 'user' }, { keepInbox: true })
+          this.quiescing = this.executor.shutdown().catch(report)
+        }
+        this.ownership.signal.addEventListener('abort', lost, { once: true })
+        this.disposers.push(() => this.ownership!.signal.removeEventListener('abort', lost))
+      }
+      this.ready = this.initialize().catch(async error => {
+        await this.ownership?.close()
+        if (!this.closingFlag) this.runtimeHealth.set({ state: 'error', detail: `Initialization failed: ${String(error)}`, at: now() })
         throw error
       })
     } catch (error) {
@@ -250,12 +271,15 @@ export class Runtime extends Service implements SourceHost {
   idle(): Promise<void> { return this.passes.idle() }
   pump(): Promise<void> { return this.passes.pump() }
   sendReplies(): Promise<void> { return this.outbox.sent() }
-  private closing(): boolean { return this.closingFlag }
+  private closing(): boolean { return this.closingFlag || this.lifetime.aborted }
   /** Hold evaluation, dispatch, and outbound delivery while paused or awaiting setup; sources still record incoming triggers. */
-  private paused(): boolean { return !this.initialized || !this.setup.configured() || !this.environments.ready() || this.store.settings().paused }
+  private paused(): boolean { return !this.initialized || this.closing() || !ownershipReady(this.ownership) || !this.setup.configured() || !this.environments.ready() || this.store.settings().paused }
   private async initialize(): Promise<void> {
     // Register management HTTP routes before setup completes so operators can fix setup problems in the UI.
     this.disposers.push(registerHttp(this.ctx, this.httpHost()))
+    await this.ownership?.start()
+    this.lifetime.throwIfAborted()
+    if (this.ownership && this.remoteWorkspace) await this.remoteWorkspace.world.refresh()
     if (!await this.setup.run(this.store.settings())) {
       this.runtimeHealth.set({ ...health('paused', 'setupPending'), at: now() })
       return
@@ -280,8 +304,9 @@ export class Runtime extends Service implements SourceHost {
   }
   private httpHost(): HttpHost {
     const runtime = this
-    const { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, ready, sourceLinks, setup, passes } = this
-    return { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, ready, sourceLinks, remoteRoot: this.remoteWorkspace?.world.grant.root,
+    const { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, sourceLinks, setup, passes } = this
+    return { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, get ready() { return runtime.ready }, sourceLinks, remoteRoot: this.remoteWorkspace?.world.grant.root,
+      ownership: this.ownership, authorizeMutation: () => { this.ownership?.proof(); this.lifetime.throwIfAborted() },
       get health() { return runtime.health }, remoteEffects: this.remoteWorkspace?.world,
       supervision: this.supervision, workspace: this.workspace, library: this.library, inbox: this.inbox, environments: this.environments, endpoints: this.endpoints, personas: this.personas, worlds: this.worlds,
       get deployment() { return setup.deployment },
@@ -293,6 +318,8 @@ export class Runtime extends Service implements SourceHost {
   stop(): Promise<void> { return this.stopping ??= this.shutdown() }
   private async shutdown(): Promise<void> {
     this.closingFlag = true; const passes = this.passes.stop(); this.stopped.abort()
+    // Abort an acquisition wait before awaiting any startup-dependent work; loss is terminal for this instance.
+    const ownership = this.ownership?.close()
     try {
       await this.endpoints.stop()
       this.assessor.stop()
@@ -301,7 +328,7 @@ export class Runtime extends Service implements SourceHost {
       for (const agent of agents) agent.cancel({ kind: 'user' }, { keepInbox: true })
       await Promise.allSettled([passes, this.effects.drain(), ...agents.map(agent => agent.whenIdle())])
       // The workers' jobs and subagents stop too: their ends would start worker turns without the tool limits released below.
-      await this.executor.shutdown()
+      await (this.quiescing ??= this.executor.shutdown())
       this.executor.dispose()
       this.sessions.dispose()
       await this.worlds.stop()
@@ -310,6 +337,7 @@ export class Runtime extends Service implements SourceHost {
     } finally {
       // Close the database before releasing the directory lock so another process cannot open the database mid-write; a compromised lock may already be released.
       this.setup.restore()
+      await ownership
       try { this.store.close() } finally {
         const unreleased = (error: unknown) => { this.ctx.logger.warn('dsh-superagent could not release its state directory lock: %s',
           String(error)) }

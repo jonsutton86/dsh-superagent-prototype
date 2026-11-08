@@ -9,20 +9,31 @@ import { qualifyRecovery } from './fixtures/recovery.ts'
 import { qualifyOwnership } from './fixtures/ownership.ts'
 import { Store } from '../src/app/store.ts'
 import { Endpoints } from '../src/environments/endpoints.ts'
+import { ownershipAuthority } from './fixtures/ownership-authority.ts'
+import { CoordinatorOwnership } from '../src/ownership/lease.ts'
+import { RemoteClient } from '../src/remote/client.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { for (const dispose of cleanup.reverse()) await dispose(); cleanup.length = 0; vi.restoreAllMocks() })
 
 /** Opt-in qualification against the operator's installed Harness and configured model; never copies or prints credential values. */
-it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'managed'] as const)('runs persona-bound real Harness work through %s execution worlds', async mode => {
+it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'managed', 'owned-dedicated', 'owned-managed'] as const)('runs persona-bound real Harness work through %s execution worlds', async variant => {
+  const owned = variant.startsWith('owned-'), mode = variant.endsWith('dedicated') ? 'dedicated' : 'managed'
   const cli = process.env.DSH_QUALIFICATION_CLI!, home = process.env.DSH_QUALIFICATION_HOME!, source = process.env.DSH_QUALIFICATION_PROFILE!
   if (!cli || !home || !source) throw new Error('Supply the qualification CLI, DSH home and source profile paths')
-  const native = process.env.DSH_REMOTE_ISOLATION === '1', h = await remoteFixture(cleanup, { native })
+  const authority = owned ? await ownershipAuthority(cleanup) : undefined
+  const ownershipConfig = authority && { ...authority.config, leaseMs: 10_000, prepareTimeoutMs: 30_000 }
+  const bootstrap = ownershipConfig && new CoordinatorOwnership(ownershipConfig)
+  if (bootstrap) cleanup.push(() => bootstrap.close())
+  const native = process.env.DSH_REMOTE_ISOLATION === '1', h = await remoteFixture(cleanup, { native,
+    ownership: authority?.resource, access: bootstrap, beforeEnroll: async () => { await bootstrap?.start() } })
+  const stale = bootstrap && new RemoteClient({ ...h.connection, ownership: {
+    authorityId: bootstrap.authorityId, coordinatorId: bootstrap.coordinatorId, proof: (() => { const proof = bootstrap.proof(); return () => proof })() } })
   // Synthetic service credential exercises endpoint binding; the operator's inference credential remains on the coordinator.
   const secret = randomUUID(), secretDigest = createHash('sha256').update(secret).digest('hex')
   await writeFile(join(h.endpoint.credentials.imports, 'qualification'), secret, { mode: 0o600 })
   const store = new Store(join(h.directory, 'operator.sqlite')), endpoints = new Endpoints({ store, stateDir: join(h.directory, 'operator'),
-    lifetime: new AbortController().signal, workerRoots: () => [] })
+    lifetime: new AbortController().signal, workerRoots: () => [], ownership: bootstrap, ownershipConfig })
   cleanup.push(async () => { await endpoints.stop(); store.close() })
   const registration = await endpoints.register({ requestId: 'qualification-enrollment', endpointId: h.endpoint.journal.id,
     url: h.url, name: 'Qualification endpoint', credentialFile: h.connection.credentialFile, revision: 0 })
@@ -55,7 +66,7 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
   else {
     overlay = join(directory, 'managed-worlds.json')
     await writeFile(overlay, JSON.stringify([{ id: 'webserver', config: { host: '127.0.0.1', port } },
-      { id: 'dsh-superagent', config: { stateDir: join(h.directory, 'coordinator'), executionMode: 'local' } },
+      { id: 'dsh-superagent', config: { stateDir: join(h.directory, 'coordinator'), executionMode: 'local', ...(ownershipConfig ? { ownership: ownershipConfig } : {}) } },
       { id: 'session-title-llm', disabled: true }]))
   }
   let log = '', child: ChildProcess | undefined
@@ -80,14 +91,18 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     if (!response.ok) throw new Error(`HTTP ${response.status} at ${method} ${path}: ${JSON.stringify(value)}`)
     return value
   }
-  const ready = async () => vi.waitFor(async () => {
+  const ready = async (environment = true) => vi.waitFor(async () => {
     if (child?.exitCode !== null && child?.exitCode !== undefined) throw new Error('Harness exited during startup')
     const state = await api('state')
-    expect(state.environment.ready).toBe(true)
+    expect(state.environment.ready).toBe(environment)
     expect(state.health.runtime.state, state.health.runtime.detail).toBe('ready')
+    if (owned) expect(state.ownership.phase).toBe('active')
   }, { timeout: 40_000, interval: 250 })
   try {
-    start(); await ready()
+    await bootstrap?.close()
+    start(); await ready(!(owned && mode === 'managed'))
+    if (stale) await expect(stale.call({ op: 'grant.create', requestId: 'stale-bootstrap', owner: 'coordinator', workspace: 'must-not-exist',
+      operations: ['fs.read', 'process.spawn'], leaseMs: 300_000 })).rejects.toThrow()
     let managed: any, alternate: any
     if (mode === 'managed') {
       await api('endpoints', { requestId: 'managed-enrollment', endpointId: h.endpoint.journal.id, url: h.url,
@@ -148,6 +163,7 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     expect(command?.request.owner).toMatchObject({ kind: 'assignment', ticketId: task.id,
       assignmentId: ticket.assignments.at(-1).id, sessionId: ticket.sessionId, tool: 'bash' })
     expect(command?.credentials).toEqual(enrolled.grant.credentials)
+    if (owned) expect(command?.ownership).toEqual((await api('state')).ownership.owner)
     expect(h.endpoint.journal.jobs().some(job => job.request.cwd === ticket.directory
       && job.request.argv.some(arg => arg.includes('SERVICE_API_KEY')) && job.outcome?.exitCode === 0), 'credential check receipt').toBe(true)
     expect(JSON.stringify(h.endpoint.journal.jobs())).not.toContain(secret)
@@ -172,13 +188,19 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     const updated = await api(`personas/${persona.id}`, { requestId: 'persona-proof-update', revision: 1,
       definition: { ...definition, instructions: 'A future run uses this version.' } }, 'PUT')
     await api(`personas/${persona.id}/archive`, { requestId: 'persona-proof-archive', revision: updated.revision, archived: true, reason: 'Qualification finished; preserve original execution' })
+    const oldOwner = owned && (await api('state')).ownership.owner
     await stop(); start(); await ready()
+    if (owned) {
+      const nextOwner = (await api('state')).ownership.owner
+      expect(nextOwner.epoch).toBeGreaterThan(oldOwner.epoch)
+      expect(nextOwner.instanceId).not.toBe(oldOwner.instanceId)
+    }
     expect((await api(`tickets/${task.id}`)).executionEnvironment).toEqual(ticket.executionEnvironment)
     expect((await api(`tickets/${task.id}`)).executionPersona).toEqual(ticket.executionPersona)
     expect((await api(runPath, request)).actions[0].runs).toEqual([task.id])
     expect((await api(`tickets/${task.id}`)).assignments).toHaveLength(1)
     expect((await api(`tickets/${task.id}/execution`)).items.find((item: { id: string }) => item.id === command!.id)).toMatchObject({
-      owner: command!.request.owner, quiescent: true })
+      owner: command!.request.owner, quiescent: true, ...(owned ? { ownership: command!.ownership } : {}) })
     if (otherTask) {
       expect((await api('worlds')).items.find((item: any) => item.id === alternate.id).ready).toBe(true)
       expect((await api('worlds')).items.find((item: any) => item.id === managed.id)).toMatchObject({ enabled: false, ready: false })
@@ -200,7 +222,7 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     const worldDirectories = executionProfile.flatMap(entry => entry.insert ?? []).filter(entry => entry.id === 'operator-remote-world').map(entry => entry.config.stateDir)
     await qualifyRecovery({ cli, home, profile, directory, temporary: h.directory, port, stateDir, sessionRoot,
       worldDirectories, worker: ticket.sessionId, worlds: mode === 'managed' ? 2 : 1 })
-    if (mode === 'dedicated') await qualifyOwnership({ cli, home, profile, directory, temporary: h.directory, port, native })
+    if (mode === 'dedicated' && !owned) await qualifyOwnership({ cli, home, profile, directory, temporary: h.directory, port, native })
   } catch (error) {
     const diagnostics: unknown[] = []
     try {

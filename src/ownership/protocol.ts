@@ -29,7 +29,8 @@ export type OwnershipView = z.infer<typeof OwnershipView>
 const recoveryOperations = new Set(['identity', 'grant.get', 'grant.list', 'grant.status',
   'credential.list', 'job.catalog', 'operation.list', 'job.list', 'job.get', 'job.output', 'operation.get', 'job.reconcile', 'operation.reconcile'])
 export const requiresOwnership = (op: string): boolean => !recoveryOperations.has(op)
-export interface OwnershipAccess { authorityId: string; coordinatorId: string; proof(): string }
+export interface OwnershipBinding { authorityId: string; coordinatorId: string }
+export interface OwnershipAccess extends OwnershipBinding { proof(): string }
 export interface OwnershipClaim { lease: OwnershipView; credential: string }
 export interface OwnershipEnrollment { coordinatorId: string; credential: string; resources: { id: string; credential: string }[] }
 export type OwnershipPrincipal = { role: 'admin' } | { role: 'claimant'; coordinatorId: string }
