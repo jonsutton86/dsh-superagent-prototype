@@ -102,6 +102,20 @@ refusal, explicit recovery and revoked-journal reopening. Rendered UI checks cov
 preserved request IDs and revisions, exact generation selection and world-specific receipt routes. The opt-in Harness test
 covers both the existing dedicated profile and managed composition using the configured model.
 
+Qualification on 2026-11-08: code commit `cecfde32924209bca220bcf01fd9ac3b28aedabd` passed local `pnpm check` with
+1,376 tests, typechecking and all four builds. Five cases were skipped locally: three platform-dependent cases and the two
+opt-in Harness cases. The latter passed separately using Harness 0.2.1-rc.3 and `deepseek-official/deepseek-flash` (117.57s).
+Managed qualification restored both worlds before work, produced task-provenance-matched artifacts in each, proved a
+child-owned command under the second world without the first world's service credential, revoked only the first world,
+restarted again, inspected its old receipts and continued the second worker in its original Session/world with a new artifact.
+The dedicated-profile case also retained the existing persona, credential, artifact and restart checks.
+
+The same code commit passed [Linux run 42528377954](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42528377954):
+1,378 tests, typechecking and all four builds on Ubuntu 22.04/Node 24, including native filesystem/process confinement,
+remote mission dispatch and private credential mount/revocation cancellation. Three cases were skipped there, including
+the two separately qualified configured-model cases. Cross-host deployment and native Linux configured-model composition
+remain distinct from the local Harness qualification.
+
 Local endpoint fixtures on macOS use explicitly test-only unconfined providers. They qualify composition, transport and
 ownership; native Linux confinement is checked separately. Browser/desktop layout is not qualified by DOM tests.
 

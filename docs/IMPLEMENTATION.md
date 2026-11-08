@@ -34,6 +34,13 @@ Revocation closes only the selected world's admission and keeps original-ID reco
 The increment retains DeepSeek Harness and the existing Engine, Store and remote endpoint. Managed machine launch, remote
 repository workflows, distributed state ownership/failover, quotas and full product acceptance remain open.
 
+Code commit `cecfde32924209bca220bcf01fd9ac3b28aedabd` passed 1,376 local tests, typechecking and all four builds on
+2026-11-08. Both opt-in Harness/DeepSeek Flash cases passed separately: dedicated profile plus managed worlds with
+concurrent artifact publication, child-owned effects, independent revocation, revoked receipt recovery and resumed work
+after coordinator restart. The same commit passed
+[Linux run 42528377954](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42528377954) with 1,378 tests,
+typechecking, all four builds and all three native confinement cases. Cross-host deployment and distributed ownership remain open.
+
 ## Implemented increment: versioned execution personas
 
 [021 Personas](021-personas.md) adds operator-managed immutable instructions, model preferences, optional tool capabilities

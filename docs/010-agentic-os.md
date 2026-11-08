@@ -148,10 +148,11 @@ remain outstanding.
 The durable memory/artifact increment is described in `011-library.md`; its application-level scope boundary does not
 replace the article's isolated execution environments. It uses the existing SQLite database and Harness tool registration.
 
-1. Remote mission/world composition and operator endpoint enrollment; richer imports, large-file support and enforced recall budgets.
-2. Persona/skill management, durable schedules, budgeted reflection proposals and usage reporting.
-3. Article requirements: remote execution, recall, speculation, verification, recovery; optional voice.
-4. Actual model/tool user flows, process restarts, restore drills and browser/desktop acceptance. Record supported provider/OS
+1. Persistent state ownership, checkpoint/backup restore and failover that preserve Harness Sessions, world authority and original effect receipts.
+2. Managed endpoint/machine deployment, remote repository workflows, quotas and host-verified artifacts.
+3. Enforced recall budgets and transitive freshness, richer imports and large files, speculative reservations, durable schedules,
+   reviewable reflection and usage reporting; multi-workspace ownership and optional voice remain in scope.
+4. Supervision and incident UI, actual model/tool user flows, process/host failure, restore drills, packaging and browser/desktop acceptance. Record supported provider/OS
    combinations and audit every row above before declaring the goal achieved.
 
 Local environment increment: `015-execution-environments.md` records paired filesystem/process verification, persisted task grants,
@@ -163,4 +164,10 @@ provider path exercised a generation-1 question, revocation and refused admissio
 verification, and restart/replay with no duplicate assignments. The new artifact remains for operator review; this was a
 qualification driver, not a claim of human acceptance. `015-execution-environments.md` records identities and limits.
 
-Endpoint administration increment: `020-endpoint-administration.md` records pinned endpoint registration, durable original-ID administration, grant/credential controls, explicit reconciliation and generated dedicated Harness profiles. Per-action world/persona routing and managed runtime launch remain open.
+Endpoint administration increment: `020-endpoint-administration.md` records pinned endpoint registration, durable original-ID administration, grant/credential controls, explicit reconciliation and generated dedicated Harness profiles. The subsequent persona and managed-world increments add exact per-action routing; managed machine/endpoint launch remains open.
+
+Managed-world increment: `022-managed-worlds.md` records the independent registry, paired preset scopes, per-action selection,
+world lifecycle and restart contract. Code `cecfde32924209bca220bcf01fd9ac3b28aedabd` passed 1,376 local tests and both
+separate configured-model Harness cases, including delegated work, isolated revocation and continuation after restart.
+The same code passed 1,378 tests and all three native confinement cases in
+[Linux run 42528377954](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42528377954).
