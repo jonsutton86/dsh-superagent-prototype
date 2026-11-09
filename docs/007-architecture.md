@@ -489,6 +489,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/recovery/inputs.ts` | Transactional reconciliation of live input acknowledgements against authenticated worker consumption history |
 | `src/recovery/graph.ts` | Held Engine authority graph validation, transactional derived-index repair and retirement of proven obsolete effects |
 | `src/recovery/connectors.ts` | Read-only built-in cursor and conversation authority/deduplication verification without polling or activation |
+| `src/recovery/workspace.ts` | Read-only mission/plan/schedule authority, historical execution binding and exact occurrence/cursor verification |
 | `src/recovery/sources.ts` | Actual passive source catalog and authenticated settings qualification with repeated registration/default checks |
 | `src/recovery/crypto.ts` | Private inputs, separate key files and streaming authenticated checkpoint encryption |
 | `src/remote/scoped-plugin.ts` | Harness preset-owned paired providers borrowing one managed execution world |
@@ -552,6 +553,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/recovery-inputs.spec.ts` | Real Session consumption attribution, inherited boundaries, pending/ended state and rollback of contradictory input acknowledgements |
 | `tests/recovery-graph.spec.ts` | Actual Engine graph consistency, directed authority, expired history, stable live effects, derived-index repair, bounded records and cancellation rollback |
 | `tests/recovery-connectors.spec.ts` | Actual provider adapters, partial-page listener reconstruction, historical receipts, cursor/authority corruption, legacy families and cancellation |
+| `tests/recovery-workspace.spec.ts` | Original plan/action authority, proposal review, human follow-ups, schedule history/cursors, legacy stamps and corruption refusal |
 | `tests/recovery-sources.spec.ts` | Real passive source plugin lifecycle, shared eligibility, strict settings checks, registration changes, cancellation and safe failures |
 | `tests/remote-ownership.spec.ts` | Pre-dispatch persistence, concurrent attribution, lost responses, assignment fences, restart/cancel recovery and receipt mismatch refusal |
 | `tests/ownership.spec.ts` | Competing coordinators, all-resource barriers, claimant replacement/supersession, monotonic expiry/restart, endpoint handoff/outage and immutable receipt generations |

@@ -36,6 +36,11 @@ export const ReceiptImage = z.object({ version: z.literal(1), requestId: z.strin
   connectorState: z.object({ version: z.literal(1), records: z.number().int().nonnegative(), github: z.number().int().nonnegative(),
     feishu: z.number().int().nonnegative(), bindings: z.number().int().nonnegative(), messages: z.number().int().nonnegative(),
     nativeMessages: z.number().int().nonnegative(), legacyMessages: z.number().int().nonnegative(), cycles: z.number().int().nonnegative(), digest }).strict().optional(),
+  workspaceState: z.object({ version: z.literal(1), records: z.number().int().nonnegative(), missions: z.number().int().nonnegative(),
+    actions: z.number().int().nonnegative(), planVersions: z.number().int().nonnegative(), proposals: z.number().int().nonnegative(),
+    schedules: z.number().int().nonnegative(), scheduleVersions: z.number().int().nonnegative(), occurrences: z.number().int().nonnegative(),
+    executions: z.number().int().nonnegative(), scheduledExecutions: z.number().int().nonnegative(), routedExecutions: z.number().int().nonnegative(),
+    legacyPlanVersions: z.number().int().nonnegative(), legacyTriggers: z.number().int().nonnegative(), digest }).strict().optional(),
 }).strict()
 export type ReceiptImage = z.infer<typeof ReceiptImage>
 const envelope = z.object({ manifest: ReceiptImage, mac: digest }).strict()

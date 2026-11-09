@@ -8,13 +8,13 @@ export const inputMessage = (id: string): UserMessage => ({ role: 'user', id: me
   source: { kind: 'dsh-superagent', form: 'relay' }, content: [{ type: 'text', text: 'Original input' }] })
 export function inputTicket(id = 'ticket', inputs: TicketInput[] = [{ id: 'input', kind: 'trigger', triggerId: 'trigger', at: inputTime, readAt: null, deliveredTo: 'assignment' }]): Ticket {
   return { id, title: 'Recovery input fixture', decisionId: 'decision',
-    mandate: { strength: 'explicit', policyVersion: 'policy', basis: { via: 'addressed', addressed: 'direct' }, actor: { source: 'workspace', id: 'operator' }, scope: 'Original scope' },
+    mandate: { strength: 'explicit', policyVersion: 'policy', basis: { via: 'addressed', addressed: 'direct' }, actor: { source: 'chat', id: 'operator' }, scope: 'Original scope' },
     channels: [], assignments: [{ id: 'assignment', state: 'running', createdAt: inputTime, startedAt: inputTime }],
     inputs, undelivered: inputs.map(input => input.id), createdAt: inputTime, updatedAt: inputTime, origin: { triggerId: 'trigger', triggerIds: ['trigger'] } }
 }
 /** Give integration fixtures the same recorded causal history required of a real accepted ticket. */
 export function seedInputTicket(store: Store, ticket: Ticket): void {
-  const ref = { source: 'workspace', id: 'recovery-input' }, threadKey = 'workspace:recovery-input', evalId = 'input-evaluation'
+  const ref = { source: 'chat', id: 'recovery-input' }, threadKey = 'chat:recovery-input', evalId = 'input-evaluation'
   const triggers = new Set([...ticket.origin.triggerIds, ...ticket.inputs.flatMap(input => 'triggerId' in input ? [input.triggerId] : [])])
   for (const id of triggers) {
     const trigger: Trigger = { id, source: ref.source, threads: [ref], actor: ticket.mandate.actor, human: true, at: inputTime, text: 'Original request', meta: {} }

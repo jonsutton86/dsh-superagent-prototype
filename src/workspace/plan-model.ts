@@ -39,7 +39,9 @@ export type ProposePlanInput = z.input<typeof ProposePlan>
 export type ReviewPlanInput = z.input<typeof ReviewPlan>
 export type RequestPlanInput = z.input<typeof RequestPlan>
 export type PlanAuthor = { role: 'operator' } | { role: 'worker'; ticketId: string; sessionId: string }
-export interface PlanVersion { version: number; at: string; reason: string; proposalId?: string; plan: PlanDefinition }
+export interface PlanVersion { version: number; at: string; reason: string; proposalId?: string; plan: PlanDefinition;
+  /** Host-captured action authority at this immutable plan version; absent in older snapshots. */
+  authority?: { actionId: string; definitionRevision: number }[] }
 export interface PlanProposal {
   id: string; missionId: string; baseVersion: number; rationale: string; plan: PlanDefinition; author: PlanAuthor
   createdAt: string; revision: number; status: 'pending' | 'approved' | 'rejected'

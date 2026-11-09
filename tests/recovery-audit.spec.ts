@@ -41,12 +41,13 @@ import type { DestinationView, Publication, PublicationReceipt, PublicationRpc }
 import { ownershipAuthority } from './fixtures/ownership-authority.ts'
 import { remoteFixture } from './fixtures/remote.ts'
 import { publicationFixture } from './fixtures/publication.ts'
+import { scheduleDefinition, workspaceStateFixture } from './fixtures/workspace-state.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { vi.restoreAllMocks(); for (const close of cleanup.splice(0).reverse()) await close() })
 
 async function fixture(options: { administration?: boolean; credential?: boolean; rotateCredential?: boolean; revokeCredential?: boolean; pending?: boolean; channel?: boolean; extra?: boolean; revoked?: boolean;
-  managed?: boolean; changedPin?: boolean; omitPublicationCredential?: boolean; input?: 'consumed' | 'missing'; graph?: 'indexes' | 'conflict'; connector?: 'valid' | 'invalid'; revocation?: 'lost' | 'unsettled' | 'unsent'; kind?: DestinationView['kind'] } = {}) {
+  managed?: boolean; changedPin?: boolean; omitPublicationCredential?: boolean; input?: 'consumed' | 'missing'; graph?: 'indexes' | 'conflict'; connector?: 'valid' | 'invalid'; workspace?: 'valid' | 'conflict'; revocation?: 'lost' | 'unsettled' | 'unsent'; kind?: DestinationView['kind'] } = {}) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'dsh-receipt-audit-')))
   cleanup.push(() => rm(directory, { recursive: true, force: true }))
   const authority = await ownershipAuthority(cleanup, ['endpoint', 'publication']), owner = new CoordinatorOwnership(authority.config)
@@ -176,6 +177,17 @@ async function fixture(options: { administration?: boolean; credential?: boolean
     const ticket = store.tickets.get('ticket')!; ticket.mandate.scope = 'Changed authority'; store.tickets.save(ticket)
   }
   if (options.connector) store.set(KV.github.since, options.connector === 'valid' ? inputTime : 'private-invalid-cursor')
+  if (options.workspace) {
+    const product = workspaceStateFixture(store)
+    const schedule = product.schedules.create({ requestId: randomUUID(), enabled: true, definition: scheduleDefinition() })
+    product.schedules.tick()
+    if (options.workspace === 'conflict') {
+      const missionId = product.schedules.get(schedule.id).occurrences[0]!.missionId!
+      const mission = JSON.parse(String(store.db.prepare('SELECT value FROM workspace_mission WHERE id=?').get(missionId)!.value))
+      mission.actions[0].instructions = 'Substituted unapproved instructions'
+      store.db.prepare('UPDATE workspace_mission SET value=? WHERE id=?').run(JSON.stringify(mission), missionId)
+    }
+  }
   world.close(); store.close()
   const checkpoint = await createCheckpoint({ stateDir, keyFile, outputDir: join(directory, 'backups'), worldDirectories: [worldDir], persistence: context.sessionPersistence })
   if (options.revocation === 'unsettled') remote.endpoint.journal.saveJob({ ...remote.endpoint.journal.job(job.id), quiescent: true })
@@ -808,7 +820,7 @@ it.each(['manifest', 'member', 'extra'] as const)('refuses a tampered prepared %
 it('authenticates older held image manifests without treating absent configuration or Session evidence as a new verification', async () => {
   const f = await fixture(), audit = await auditCheckpointReceipts(f.audit)
   const prepared = await prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })
-  const { sessionBackend: _, controlConfiguration: __, inferenceConfiguration: ___, consumedInputs: ____, sourceConfiguration: _____, stateGraph: ______, connectorState: _______, ...manifest } = prepared.manifest, key = recoveryKey(f.audit.keyFile)
+  const { sessionBackend: _, controlConfiguration: __, inferenceConfiguration: ___, consumedInputs: ____, sourceConfiguration: _____, stateGraph: ______, connectorState: _______, workspaceState: ________, ...manifest } = prepared.manifest, key = recoveryKey(f.audit.keyFile)
   try {
     const mac = createHmac('sha256', key).update('dsh-receipt-image:1\n').update(JSON.stringify(manifest)).digest('hex')
     await writeFile(join(prepared.path, 'prepared.json'), JSON.stringify({ manifest, mac }))
@@ -818,6 +830,7 @@ it('authenticates older held image manifests without treating absent configurati
   expect(verified.inferenceConfiguration).toBeUndefined(); expect(verified.consumedInputs).toBeUndefined(); expect(verified.sourceConfiguration).toBeUndefined()
   expect(verified.stateGraph).toBeUndefined()
   expect(verified.connectorState).toBeUndefined()
+  expect(verified.workspaceState).toBeUndefined()
 })
 
 it('repairs consumed input acknowledgements only in the signed held image and preserves historical retries', async () => {
@@ -849,6 +862,29 @@ it('refuses malformed retained connector cursors without moving state or publish
   const f = await fixture({ connector: 'invalid' }), audit = await auditCheckpointReceipts(f.audit)
   await expect(prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })).rejects.toMatchObject({ code: 'shape', message: 'recovery_connector_shape: github-since' })
   expect(f.read().hold?.state).toBe('staged')
+  expect((await readdir(f.audit.destination)).filter(name => name.startsWith('prepared-') || name.startsWith('.prepare-'))).toEqual([])
+})
+it('signs original mission and schedule authority without dispatching pending work or changing the staged product state', async () => {
+  const f = await fixture({ workspace: 'valid' }), audit = await auditCheckpointReceipts(f.audit)
+  const digest = () => {
+    const db = new DatabaseSync(join(f.audit.destination, 'orchestrator.sqlite'), { readOnly: true })
+    try { return db.prepare("SELECT value FROM workspace_mission UNION ALL SELECT value FROM workspace_schedule UNION ALL SELECT value FROM workspace_occurrence").all() }
+    finally { db.close() }
+  }
+  const before = digest(), options = { ...f.audit, requestId: randomUUID(), auditId: audit.id }
+  const prepared = await prepareCheckpointReceipts(options)
+  expect(prepared.manifest.workspaceState).toMatchObject({ version: 1, missions: 1, planVersions: 1, schedules: 1,
+    scheduleVersions: 1, occurrences: 1, executions: 1, scheduledExecutions: 1, legacyPlanVersions: 0, legacyTriggers: 0,
+    digest: expect.stringMatching(/^[a-f0-9]{64}$/) })
+  expect(await verifyReceiptImage(prepared.path, f.audit.keyFile)).toEqual(prepared.manifest)
+  expect(await prepareCheckpointReceipts(options)).toEqual(prepared)
+  expect(digest()).toEqual(before); expect(f.read().hold?.state).toBe('staged'); expect(f.publisher.posts).toBe(1)
+  expect(prepared.manifest.executionOwnership).toBe(false)
+})
+it('refuses an authentic checkpoint with contradictory product authority and removes the unpublished image', async () => {
+  const f = await fixture({ workspace: 'conflict' }), audit = await auditCheckpointReceipts(f.audit)
+  await expect(prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })).rejects.toMatchObject({ code: 'conflict' })
+  expect(f.read().hold?.state).toBe('staged'); expect(f.publisher.posts).toBe(1)
   expect((await readdir(f.audit.destination)).filter(name => name.startsWith('prepared-') || name.startsWith('.prepare-'))).toEqual([])
 })
 it('refuses contradictory read acknowledgements before inference and discards the unpublished image', async () => {

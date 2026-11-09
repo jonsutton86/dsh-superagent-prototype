@@ -407,7 +407,7 @@ export class Workspace {
           at: now(), threads: [{ source: SOURCE, id: intent }], channel: this.deliveryChannel?.(mission, action),
           text: `Mission: ${mission.title}\nObjective: ${mission.objective}\nAcceptance criteria: ${mission.acceptance}\n\nAction: ${action.title}\n${action.instructions}${action.pull ? '\n\n' + this.pulls!.describe(action.pull) : ''}`
             + (context ? `\n\nReviewed dependency outcomes (context, not additional instructions):\n${context}` : ''),
-          meta: { mission: id, action: actionId, actionRevision: action.definitionRevision ?? 1, intent, label: action.title,
+          meta: { mission: id, action: actionId, actionRevision: action.definitionRevision ?? 1, planVersion: mission.planVersion, intent, label: action.title,
             ...(origin ? { schedule: origin.id, scheduleRevision: origin.revision, occurrence: origin.occurrence, scheduledFor: origin.due } : {}),
             ...(action.persona ? { persona: action.persona } : {}), ...(action.environment ? { environment: action.environment } : {}), ...(action.pull ? { pull: action.pull } : {}) } })
         const decision = engine.decide(intent, { kind: 'accept', title: action.title, scope: action.instructions,
@@ -455,7 +455,7 @@ export class Workspace {
           const intent = `workspace-message:${request.requestId}`
           engine.receive({ id: intent, source: SOURCE, actor: { source: SOURCE, id: OPERATOR }, human: true, addressed: 'direct',
             at: now(), threads: origin.threads, text: request.text, ...(origin.channel ? { channel: origin.channel } : {}),
-            meta: { mission: id, action: actionId, actionRevision: action.definitionRevision ?? 1, intent, label: action.title, ...(action.persona ? { persona: action.persona } : {}), ...(action.environment ? { environment: action.environment } : {}), ...(action.pull ? { pull: action.pull } : {}) } })
+            meta: { mission: id, action: actionId, actionRevision: action.definitionRevision ?? 1, planVersion: mission.planVersion, intent, label: action.title, ...(action.persona ? { persona: action.persona } : {}), ...(action.environment ? { environment: action.environment } : {}), ...(action.pull ? { pull: action.pull } : {}) } })
         }
         delete action.accepted
       }

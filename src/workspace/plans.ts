@@ -28,7 +28,8 @@ export class Planning {
   }
   snapshot(mission: Mission, reason: string, proposalId?: string): void {
     const value: PlanVersion = { version: mission.planVersion, at: new Date().toISOString(), reason,
-      ...(proposalId ? { proposalId } : {}), plan: definitionOf(mission) }
+      ...(proposalId ? { proposalId } : {}), plan: definitionOf(mission),
+      authority: mission.actions.map(action => ({ actionId: action.id, definitionRevision: action.definitionRevision ?? 1 })) }
     this.store.db.prepare('INSERT INTO workspace_plan_version VALUES (?,?,?)').run(mission.id, value.version, JSON.stringify(value))
   }
   version(id: string, version: number): PlanVersion {

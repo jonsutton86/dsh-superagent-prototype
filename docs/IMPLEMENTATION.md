@@ -25,6 +25,15 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: held mission and schedule authority
+
+[055 Workspace authority recovery](055-workspace-authority-recovery.md) checks original mission plans, proposal approvals,
+action/Trigger revision bindings, human follow-up routing and schedule occurrence/cursor continuity before signing a held
+image. New snapshots and Triggers preserve exact host-captured revision stamps; historical records without them remain
+explicit legacy evidence. Recovery does not dispatch, approve, reset cursors or remove the hold. Local verification passed
+1,884 tests, typechecking and all six builds; native Linux and installed-Harness qualification are pending. Other product-extension graphs, deployment binding/remapping,
+activation/handoff and clean-host failover remain open with the full architecture/product scope.
+
 ## Implemented increment: held connector state verification
 
 [054 Connector state recovery](054-connector-state-recovery.md) checks retained built-in cursor families and owned inbound

@@ -35,6 +35,7 @@ import { reconcileConsumedInputs, type InputStateReconciliation } from './inputs
 import { sourceConfigurationCheck, type RecoverySourceHost } from './sources.ts'
 import { reconcileStateGraph, type StateGraphReconciliation } from './graph.ts'
 import { verifyConnectorState, type ConnectorStateVerification } from './connectors.ts'
+import { verifyWorkspaceState, type WorkspaceStateVerification } from './workspace.ts'
 
 export interface PrepareCheckpointReceipts extends AuditCheckpointReceipts { requestId: string; auditId: string; persistence: SessionPersistence; inference: RecoveryInferenceHost; sources: RecoverySourceHost }
 export interface ReceiptPreparation {
@@ -147,7 +148,7 @@ export async function prepareCheckpointReceipts(options: PrepareCheckpointReceip
       const sourceCheck = sourceConfigurationCheck(options.sources, db, signal), sourceConfiguration = sourceCheck.verify()
       const inferenceCheck = await inferenceConfigurationCheck(options.inference, db, archive, manifest.sessions as unknown as SessionArchive[], manifest.masterId, signal)
       let inferenceConfiguration: Awaited<ReturnType<typeof inferenceCheck.verify>>, consumedInputs: InputStateReconciliation,
-        stateGraph: StateGraphReconciliation, connectorState: ConnectorStateVerification
+        stateGraph: StateGraphReconciliation, connectorState: ConnectorStateVerification, workspaceState: WorkspaceStateVerification
       const administration = { verified: 0, recovered: 0, superseded: 0 }
       const revocations = { verified: 0, recovered: 0 }
       const worlds: WorldRecord[] = []
@@ -237,6 +238,7 @@ export async function prepareCheckpointReceipts(options: PrepareCheckpointReceip
           }
           stateGraph = await reconcileStateGraph(store.db, signal)
           connectorState = await verifyConnectorState(store.db, signal)
+          workspaceState = await verifyWorkspaceState(store.db, signal)
           store.set(KV.recovery.hold, { checkpoint: manifest.id, at: new Date().toISOString(), state: 'prepared', requestId: intent.requestId })
           store.db.prepare('DELETE FROM kv WHERE key=?').run(KV.recovery.preparation)
           store.db.exec('PRAGMA wal_checkpoint(TRUNCATE); PRAGMA journal_mode=DELETE')
@@ -249,7 +251,7 @@ export async function prepareCheckpointReceipts(options: PrepareCheckpointReceip
         }
         const image = ReceiptImage.parse({ version: 1, requestId: intent.requestId, requestHash, checkpoint: manifest.id, digest: fingerprint(manifest),
           auditId: audit.id, at: new Date().toISOString(), recovery: audit.recovery, epoch: audit.epoch, resources: audit.resources, applied, files, executionOwnership: false, administration, revocations,
-          executionConfiguration: { worlds: configurationChecks.length, bindings: configurationChecks.reduce((total, check) => total + (check.original.grant.credentials?.length ?? 0), 0) }, sessionBackend, controlConfiguration, inferenceConfiguration, consumedInputs, sourceConfiguration, stateGraph, connectorState })
+          executionConfiguration: { worlds: configurationChecks.length, bindings: configurationChecks.reduce((total, check) => total + (check.original.grant.credentials?.length ?? 0), 0) }, sessionBackend, controlConfiguration, inferenceConfiguration, consumedInputs, sourceConfiguration, stateGraph, connectorState, workspaceState })
         const key = recoveryKey(options.keyFile)
         try { await writeFile(join(staging, 'prepared.json'), sealReceiptImage(image, key), { flag: 'wx', mode: 0o600 }) } finally { key.fill(0) }
         await syncRecoveryPath(join(staging, 'prepared.json')); await syncRecoveryPath(staging)

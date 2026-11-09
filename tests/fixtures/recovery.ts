@@ -162,6 +162,10 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
           expect(image.connectorState!.messages).toBeGreaterThan(0)
           expect(image.connectorState!.nativeMessages).toBe(image.connectorState!.messages)
           expect(image.connectorState!.legacyMessages).toBe(0)
+          expect(image.workspaceState).toMatchObject({ version: 1, legacyPlanVersions: 0, legacyTriggers: 0, digest: expect.stringMatching(/^[a-f0-9]{64}$/) })
+          expect(image.workspaceState!.missions).toBeGreaterThan(0)
+          expect(image.workspaceState!.schedules).toBeGreaterThan(0)
+          expect(image.workspaceState!.scheduledExecutions).toBeGreaterThan(0)
           expect(image.controlConfiguration).toEqual({ claimant: true, publication: true, destinations: input.expectedPublicationDestinations ?? 1 })
           expect(activeWorlds).toBeGreaterThan(0); expect(activeBindings).toBeGreaterThan(0)
           for (const [member, original] of revokedWorlds) {
