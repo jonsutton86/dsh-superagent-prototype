@@ -50,6 +50,8 @@ export async function reserveCheckpointOwnership(options: ReserveCheckpointOwner
       }
       const intent: RecoveryIntent = same ? saved : { authorityId: options.authority.authorityId, request, credentialFile, phase: 'requested' }
       const save = () => db.prepare('INSERT INTO kv VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(KV.recovery.reservation, JSON.stringify(intent))
+      // A previously refused request may now commit; persist uncertainty again before making that retry.
+      if (intent.phase !== 'reserved') { intent.phase = 'requested'; delete intent.problem }
       save(); signal.throwIfAborted()
       let claim: RecoveryClaim
       try { claim = await client.call<RecoveryClaim>(request, signal) }

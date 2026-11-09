@@ -25,7 +25,7 @@ import { reserveCheckpointOwnership } from '../src/recovery/ownership.ts'
 import { ownershipAuthority } from './fixtures/ownership-authority.ts'
 import { OwnershipClient } from '../src/ownership/client.ts'
 import { CoordinatorOwnership } from '../src/ownership/lease.ts'
-import type { OwnershipRequest, OwnershipView, RecoveryClaim } from '../src/ownership/protocol.ts'
+import type { OwnershipClaim, OwnershipRequest, OwnershipView, RecoveryClaim } from '../src/ownership/protocol.ts'
 import { OwnershipError } from '../src/ownership/protocol.ts'
 import { privateCredential } from '../src/environments/endpoint-files.ts'
 
@@ -116,6 +116,22 @@ it('retains the committed reservation when private credential publication fails 
   expect(held.get(KV.recovery.reservation)?.phase).toBe('requested'); expect(held.get(KV.recovery.hold)?.state).toBe('staged'); held.close()
   await rm(file)
   expect((await reserveCheckpointOwnership(f.options)).recovery?.generation).toBe(1)
+})
+
+it('persists uncertainty again when a previously refused request is retried and its commit acknowledgement is lost', async () => {
+  const f = await ownedCheckpoint(), options = { ...f.options, epoch: 1 }
+  const claim = await f.authority.claimant.call<OwnershipClaim>({ op: 'lease.acquire', requestId: randomUUID(), instanceId: randomUUID(), leaseMs: 3000 })
+  await expect(reserveCheckpointOwnership(options)).rejects.toThrow('vacant ownership')
+  await f.authority.admin.withCredential(claim.credential).call({ op: 'lease.release', requestId: randomUUID() })
+  const call = OwnershipClient.prototype.call; let lose = true
+  vi.spyOn(OwnershipClient.prototype, 'call').mockImplementation(async function<T>(this: OwnershipClient, request: OwnershipRequest, signal?: AbortSignal): Promise<T> {
+    const result = await call.call(this, request, signal)
+    if (request.op === 'coordinator.recover' && lose) { lose = false; throw new Error('Lost retried commit acknowledgement') }
+    return result as T
+  })
+  await expect(reserveCheckpointOwnership(options)).rejects.toThrow('Lost retried commit')
+  await expect(reserveCheckpointOwnership({ ...options, requestId: randomUUID(), generation: 1 })).rejects.toThrow('original recovery reservation')
+  expect((await reserveCheckpointOwnership(options)).recovery?.generation).toBe(1)
 })
 
 it('does not publish a credential after cancellation following committed reservation inspection', async () => {
