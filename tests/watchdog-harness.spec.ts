@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { expect, it, vi } from 'vitest'
+import { JSDOM } from 'jsdom'
 
 it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1')('keeps independent operator evidence through main and watchdog process failure with a configured model', async () => {
   const cli = process.env.DSH_QUALIFICATION_CLI!, home = process.env.DSH_QUALIFICATION_HOME!, source = process.env.DSH_QUALIFICATION_PROFILE!
@@ -76,11 +77,31 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1')('keeps independent opera
       incident = value.incidents.find((value: any) => value.observation.id === item.id)
       expect(incident?.assessment?.finding).toBe('blocked'); expect(incident.assessment.evidence.length).toBeGreaterThan(0)
     }, { timeout: 100000, interval: 500 })
-    const page = await fetch(`http://127.0.0.1:${watchPort}/watchdog`); expect(page.ok).toBe(true)
-    expect(await page.text()).toContain('/watchdog/ui.js')
+    const origin = `http://127.0.0.1:${watchPort}`
+    const page = await fetch(origin + '/watchdog'); expect(page.ok).toBe(true)
+    const html = await page.text(); expect(html).toContain('/watchdog/ui.js')
     const asset = await fetch(`http://127.0.0.1:${watchPort}/watchdog/ui.js`); expect(asset.ok).toBe(true)
     const js = await asset.text(); expect(js).toContain('Watchdog console'); expect(js).not.toMatch(/from ["'](?:react|react-dom)/)
-    const request = { requestId: `wd-${Date.now()}-${randomUUID()}`, incidentId: incident.id, revision: incident.viewRevision, note: 'Reviewed before the process-failure drill.' }
+    // Render the actual served bundle, not a source component; this exercises its standalone entry point and real API calls.
+    const dom = new JSDOM(html, { url: origin + '/watchdog', runScripts: 'outside-only' })
+    Object.assign(dom.window, { AbortController, AbortSignal, fetch: (path: string, init?: RequestInit) => fetch(new URL(path, origin), init) })
+    try {
+      dom.window.eval(js)
+      await vi.waitFor(() => expect(dom.window.document.querySelector('.wd-list li button')).not.toBeNull(), { timeout: 10000, interval: 50 })
+      expect(dom.window.document.querySelector('h1')?.textContent).toBe('Watchdog console')
+      ;(dom.window.document.querySelector('.wd-list li button') as HTMLButtonElement).click()
+      await vi.waitFor(() => {
+        expect(dom.window.document.querySelector('.wd-primary')).not.toBeNull()
+        expect((dom.window.document.querySelector('.wd-primary') as HTMLButtonElement).disabled).toBe(false)
+        expect(dom.window.document.body.textContent).toContain('Choose Linux or macOS.')
+      }, { timeout: 10000, interval: 50 })
+      ;(dom.window.document.querySelector('.wd-primary') as HTMLButtonElement).click()
+      await vi.waitFor(async () => {
+        incident = await api('watch', `incidents/${incident.id}`); expect(incident.acknowledged).toBe(true)
+      }, { timeout: 10000, interval: 50 })
+    } finally { dom.window.close() }
+    const request = { requestId: incident.acknowledgement.requestId, incidentId: incident.id,
+      revision: incident.acknowledgement.revision, note: incident.acknowledgement.note }
     const receipt = await api('watch', 'acknowledgements', request)
     await main.stop(true)
     await vi.waitFor(async () => {

@@ -118,5 +118,6 @@ profiles' Harness Session stores. This does not claim multi-host failover or a d
 
 Tests cover real loopback HTTP, token handling, process/ticket fencing, idempotent recovery, transaction rollback, independent
 journal restoration, assessment retry limits and actual Engine note delivery through the existing Runtime's worker effects.
-Cordis composition tests simulate provider inference. Live-provider diagnosis quality, host process termination/recovery,
-cross-platform deployment and long-duration operation still require deployment acceptance checks.
+Cordis composition tests simulate provider inference. The later `052-supervision-console.md` increment records actual
+configured-model worker/assessor inference, console acknowledgement and abrupt main/watchdog process-failure recovery.
+Broader diagnosis quality, process-failure coverage, cross-platform deployment and long-duration operation remain required.

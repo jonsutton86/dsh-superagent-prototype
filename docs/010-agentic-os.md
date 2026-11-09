@@ -58,7 +58,7 @@ refer to the same environment. Remote access requires authentication; do not exp
 | Usage and budgets | Worker concurrency, schedule run/open-mission reservations, managed Harness call/token ledger, versioned estimated pricing, scoped call/token/spend reservations, reconciliation and operator UI (`042-usage-budgets.md`) | Broader provider/adapter acceptance, invoice import, metadata generation binding, non-token fees, speculative admission integration, retention and multi-workspace ownership |
 | Models and connectors | Harness configuration, optional GitHub/Feishu, local grants, authenticated remote transport, paired Harness services, persistent remote authority/revocation and native Linux namespace/cancellation CI, whole-profile and per-action world binding, durable command/file ownership and operator receipts, endpoint-owned versioned credentials, real model artifact/restart qualification, endpoint enrollment/reconciliation and independent managed worlds | Managed endpoint/runtime launch, cross-host deployment qualification and connector scope |
 | Voice | None | Optional input/output adapters, interruption, local/cloud modes and text fallback |
-| Supervision and recovery | Watchdog foundation, encrypted checkpoints/held Session import, checkpoint-bound claimant replacement, revision-bound independent receipt audits and authenticated held execution/administrative receipt application, ownership authority, endpoint and artifact/mission publication fencing and owned Runtime/dedicated/managed provider lifecycle | Authoritative input/state recovery, private credential/runtime configuration validation, remapping, inbound connector/repository integration, clean-host activation/failover, incident UI and broader live failure tests |
+| Supervision and recovery | Independent watchdog console, evidence review receipts, bounded history/retention and real-model process-failure recovery; encrypted checkpoints/held Session import, checkpoint-bound claimant replacement, revision-bound independent receipt audits and authenticated held execution/administrative receipt application, ownership authority, endpoint and artifact/mission publication fencing and owned Runtime/dedicated/managed provider lifecycle | Authoritative input/state recovery, private credential/runtime configuration validation, remapping, inbound connector/repository integration, clean-host activation/failover, alert routing, diagnosis quality and broader live failure tests |
 | Whole-product qualification | Deterministic unit, API/DOM flows, actual Harness restarts, live local model/tool, inbox and planner-to-execution missions | Browser/desktop layout, broader provider acceptance, backup/restore drills, accessibility and packaging |
 
 ## Missions increment
@@ -153,7 +153,7 @@ replace the article's isolated execution environments. It uses the existing SQLi
 3. Speculative reservations/expiry/promotion, richer imports and large files, retrieval/reflection quality and long-horizon
    evaluation, broader provider accounting and retention. Recall budgets, transitive freshness, schedules, reviewed reflection
    and usage reporting now have implementation evidence; multi-workspace ownership and optional voice remain in scope.
-4. Supervision and incident UI, actual model/tool user flows, process/host failure, restore drills, packaging and browser/desktop acceptance. Record supported provider/OS
+4. Supervision alerts/quality and incident integration, actual model/tool user flows, broader process/host failure, restore drills, packaging and browser/desktop acceptance. Record supported provider/OS
    combinations and audit every row above before declaring the goal achieved.
 
 Local environment increment: `015-execution-environments.md` records paired filesystem/process verification, persisted task grants,
@@ -544,6 +544,11 @@ remain open; this increment does not complete the full Agentic OS objective.
 
 Independent operator supervision is implemented in `052-supervision-console.md`: the watchdog's own page, service health,
 incident/evidence review, original acknowledgement receipts, history pagination and bounded retention. It stays independent
-of main Runtime availability. Focused journal/HTTP/Cordis/DOM tests pass; complete local, Linux and real-Harness failure
-qualification is in progress. Alert routing, broader diagnosis quality and all other outstanding architecture/product
-requirements remain active.
+of main Runtime availability. Runtime `59ccd4b` passed 1,837 local tests and 1,844 Linux / Node 24 tests with native
+confinement, typechecking and all six builds; native evidence is
+[run 42647851217](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42647851217).
+The final installed-Harness / DeepSeek Flash drill passed in 53.23 seconds: the shipped bundle rendered against real APIs,
+UI acknowledgement, real worker/assessor inference, abrupt process failure, original receipt recovery and observed closure.
+052 records the human-answer observation gap found and corrected by the live drill and the replay-expiry clock guard.
+The original app remains running. Alert routing, broader diagnosis quality, cross-host/browser acceptance and all other
+outstanding architecture/product requirements remain active.

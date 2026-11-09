@@ -60,11 +60,27 @@ immediate filesystem shrinkage. Retained history is visible in the console and d
 
 ## Qualification and remaining scope
 
-Focused journal, real HTTP, Cordis lifecycle and rendered DOM tests pass, including schema-one migration, stale review,
-original-receipt retry after new evidence/restart, changed-page refusal, retention limits and untrusted text escaping.
-The installed-Harness qualification uses a real configured-model worker and independent model assessor, abruptly stops only
-its disposable main/watchdog processes, waits for their original locks to expire, and checks offline visibility, durable
-review receipts, re-observation and eventual closure. Final local, native Linux and live results will be recorded after execution.
+Runtime revision `59ccd4bc58d92b173ae33570671e5b7a95310606` passed typechecking, all six builds and the full local suite:
+1,837 tests passed with 14 skipped across 122 passing and three skipped files in 110.31 seconds. Focused journal, real HTTP,
+Cordis lifecycle and rendered DOM tests cover schema-one migration, stale review, original-receipt retry after new evidence
+and restart, changed-page refusal, retention limits, clock rollback and untrusted text escaping.
+
+The same runtime passed 1,844 tests with eight skipped across 122 passing and three skipped files on Linux / Node 24 with
+native confinement in 245.07 seconds, plus typechecking and all six builds, in
+[run 42647851217](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42647851217).
+
+The final installed-Harness / DeepSeek Flash qualification passed in 53.23 seconds. It runs a real worker and independent
+model assessor, renders the actual served console bundle in jsdom against the real loopback API, displays the original
+worker question and submits an acknowledgement through the console. It abruptly stops only its disposable main/watchdog
+processes, waits for their original locks to expire, and checks offline visibility, durable original receipts after restart,
+re-observation and eventual closure after a human reply. The shipped bundle is self-contained; no browser/CDN module
+resolution is needed. This additional live test exercises the already qualified runtime; no production code changed after
+`59ccd4b`. The original app process remained running.
+
+The initial live fixture incorrectly expected the inbox label `blocked` for a human question; that assertion was corrected
+to `question`. The next run then exposed the real missing `person/answer` observation filter, fixed in `36106b2` with source,
+monitor and UI regression coverage. These are distinct corrections. The final clock-expiry guard prevents a pruned request
+from regaining eligibility after rollback and is included in the local, native and final live runtime above.
 
 External alert routing, broader diagnosis quality, productive long-running-job evaluation, incident-driven recovery policy,
 cross-host transport/failover, browser/desktop visual acceptance and the remaining full Agentic OS architecture stay open.

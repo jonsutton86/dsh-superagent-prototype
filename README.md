@@ -70,8 +70,10 @@ Approved plans preserve execution history and invalidate affected results before
 The [Inbox](docs/013-inbox.md) brings conversations, unread updates, questions and review into one view. Start a task,
 send a follow-up, and open its mission or artifacts while keeping the same durable execution path.
 The [implementation tracker](docs/IMPLEMENTATION.md) distinguishes working code from remaining work.
-The first increment adds [independent watchdog supervision](docs/009-supervision.md), with a separate Harness profile,
-durable incident history, semantic progress assessment, and bounded, fenced progress requests.
+[Independent watchdog supervision](docs/009-supervision.md) runs in a separate Harness profile with durable incident history,
+semantic progress assessment and bounded, fenced progress requests. Its [operator console](docs/052-supervision-console.md)
+at `/watchdog` on that profile's port provides service health, evidence review, acknowledgements and paginated history even
+when the main app is unavailable. Acknowledging evidence does not resolve the incident or retry work.
 
 ## License
 

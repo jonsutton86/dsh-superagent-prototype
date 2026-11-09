@@ -19,19 +19,26 @@ not a claim that the prototype already ships every feature or that the article s
 | Full duplex | Harness job/subagent services, `src/executor/background.ts`, `src/app/delivery.ts`, remote receipts, durable assignment/tool ownership, receipt-only restart recovery and operator cancellation | Broader long-running job, process-failure and cross-host acceptance |
 | Compute/state separation | SQLite Store; Harness Session checkpoints, held import, checkpoint-bound claimant replacement, revision-bound receipt audits and authenticated held receipt application including original administration; ownership authority, endpoint handoff fencing, shared Runtime/pool/provider lifecycle and independently fenced artifact/mission delivery with directed inbound replies | Private credential/runtime configuration validation, authoritative input/state recovery, remapping, broader inbound discovery/admission and repository integration, clean-host activation and failover qualification |
 | Remote environments | Paired local/remote providers, authenticated leased grants, durable revocation, mission/Session binding, endpoint-owned versioned credentials, remote profile and artifact/restart qualification, operator enrollment/reconciliation, generated profiles, managed world pool and exact per-action selection | Managed endpoint/machine launch, remote repository workflows, quotas and cross-host acceptance |
-| Watchdog | Existing health and bounded transient executor retry; now `src/supervision/*` | Live-provider and process-level acceptance, incident UI/alerts, retention, richer progress evidence and separately authorized recovery policies |
+| Watchdog | Independent Harness assessor and journal, standalone incident console, evidence-bound operator review/replay, bounded retention and actual-model main/watchdog process-failure recovery | Alert routing, broader diagnosis/productive-job quality, cross-host/process-failure acceptance, richer progress evidence and separately authorized recovery policies |
 | Delivery | Reports and PR binding/closure; content-addressed artifacts, stale mission-review invalidation, reviewed artifacts and plan-authorized mission replies with independent receipts; exact participant/task inbound listeners; versioned checks, original assignment/environment bindings, host-captured file/Git snapshots, original-job evidence, selected-check acceptance/publication, explicit-commit PR reviews, plan-bound PR result targets and fresh all-action mission completion | CI/branch-policy and merge integration, continuous freshness, broader inbound discovery/admission, remote Git provisioning and broader speculative quality evaluation |
 | Operator control | Existing web panel, settings, pause/retry/stop, scoped usage/limits/prices and reconciliation, local/remote environment status and revocation, endpoint enrollment/reconciliation and private profile generation | Supervision, broader workload budgets and evidence surfaces |
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
-## Current increment: independent supervision console
+## Implemented increment: independent supervision console
 
 [052 Independent supervision console](052-supervision-console.md) adds an independent operator page, incident/evidence
 review, durable evidence-bound acknowledgement, paginated history and bounded retention to the existing Harness watchdog.
 The page remains available when the main Runtime is down. Acknowledgement never resolves work or suppresses monitoring;
-new evidence requires fresh review. Focused journal, HTTP, Cordis and DOM tests pass; complete local/Linux and separate
-installed-Harness process-failure qualification are in progress. Alert routing and the remaining full architecture stay open.
+new evidence requires fresh review. Final runtime `59ccd4b` passed 1,837 local tests, typechecking and all six builds. The
+same runtime passed 1,844 Linux / Node 24 tests with native confinement, typechecking and all builds in
+[run 42647851217](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42647851217).
+The final installed-Harness / DeepSeek Flash drill passed in 53.23 seconds, including the actual served console bundle
+rendered against real APIs, UI acknowledgement, separate worker/assessor inference, abrupt main/watchdog termination,
+durable original receipt recovery and closure after human input. The drill exposed and fixed missing human-answer
+incidents; acknowledgement expiry also resists clock rollback after retention. The original app remains running.
+Alert routing, broader diagnosis/productive-job evaluation, cross-host and real-browser acceptance, and the remaining
+full architecture stay open.
 
 ## Implemented increment: coordinator routing authority
 
@@ -668,8 +675,9 @@ Profiles or host scopes bound to an environment provide an initial isolation bou
 
 Current code provides independent observations, semantic assessments and one fenced progress request per assignment.
 Increment 052 adds independent incident UI, explicit evidence-bound acknowledgement, paginated history and bounded retention.
-Complete deployment acceptance with a configured provider, main-process kill/restart, watchdog-process restart, disconnected
-transport and a deliberately long but productive job. Add alert routing before calling the operational experience complete.
+It qualifies real configured-model worker/assessor inference, the served console bundle and abrupt main/watchdog restart
+with durable evidence through an outage. Broader provider/process-failure coverage and deliberately long productive jobs
+still need evaluation. Add alert routing before calling the operational experience complete.
 Process restarts or task retries require their own narrow,
 audited recovery policies; they must not be inferred from arbitrary worker text.
 
@@ -768,8 +776,9 @@ artifact and relevant evidence. Keep existing GitHub follow-up/PR ownership and 
 ### 7. Router authority and operator experience
 
 Implemented in 051: the router uses typed, bounded Source/resource operations with identity-based tool guards and no
-generic execution tools. Keep semantic batching, subscriptions, selective pass-through, many-to-many ownership and worker-local teams. Add
-task-centered views for timeline, artifacts, evidence, environments, budgets and incidents while retaining the working panel.
+generic execution tools. Keep semantic batching, subscriptions, selective pass-through, many-to-many ownership and worker-local teams.
+The independent incident/evidence console is implemented in 052. Continue integrating task-centered timeline, artifact,
+environment, budget and incident navigation while retaining the working panel.
 User steering remains asynchronous and reaches workers at safe inference boundaries. Channel adapters tailor the length and
 form of replies while decisions and authority remain centralized in the Engine.
 
