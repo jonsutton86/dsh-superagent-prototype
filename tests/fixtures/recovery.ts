@@ -20,7 +20,7 @@ import type { WorldRecord } from '../../src/remote/world-journal.ts'
 export async function qualifyRecovery(input: { cli: string; home: string; profile: string; directory: string; temporary: string;
   stateDir: string; sessionRoot: string; port: number; worldDirectories: string[]; worker: string; worlds: number;
   authority?: OwnershipConnection & { coordinatorId: string }; originalClaimantFile?: string;
-  audit?: Pick<AuditCheckpointReceipts, 'endpoints' | 'publication'>; unrecordedPublications?: string[]; expectedRecoveredRevocations?: number }) {
+  audit?: Pick<AuditCheckpointReceipts, 'endpoints' | 'worlds' | 'publication'>; unrecordedPublications?: string[]; expectedRecoveredRevocations?: number }) {
   const root = await realpath(input.temporary), keyFile = join(root, 'recovery-key'), outputDir = join(root, 'checkpoints')
   createRecoveryKey(keyFile)
   const destination = join(root, 'restored'), importedRoot = join(root, 'imported-sessions'), patch = join(input.directory, 'recovery.json')
@@ -97,7 +97,7 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
       if (input.audit) {
         await run('audit-receipts', checkpoint); await run('audit-receipts', checkpoint)
         const store = new Store(join(destination, 'orchestrator.sqlite'))
-        let auditId: string, administrative = 0
+        let auditId: string, administrative = 0, activeWorlds = 0, activeBindings = 0
         const revokedWorlds = new Map<string, WorldRecord>()
         try {
           const audit = store.get(KV.recovery.audit)!
@@ -115,6 +115,7 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
             try {
               const original = JSON.parse(String(world.prepare('SELECT value FROM execution_world WHERE id=1').get()!.value)) as WorldRecord
               if (original.revocation) revokedWorlds.set(file.member, original)
+              else { activeWorlds++; activeBindings += original.grant.credentials?.length ?? 0 }
               for (const row of world.prepare('SELECT id FROM execution_effect').all()) { originals.add(String(row.id)); commands++ }
             }
             finally { world.close() }
@@ -133,6 +134,8 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
           expect(image.executionOwnership).toBe(false); expect(image.applied.commands).toBeGreaterThan(0); expect(image.applied.publications).toBeGreaterThan(0)
           expect(image.administration?.verified).toBe(administrative); expect(administrative).toBeGreaterThan(0)
           expect(image.revocations).toEqual({ verified: revokedWorlds.size, recovered: input.expectedRecoveredRevocations ?? 0 })
+          expect(image.executionConfiguration).toEqual({ worlds: activeWorlds, bindings: activeBindings })
+          expect(activeWorlds).toBeGreaterThan(0); expect(activeBindings).toBeGreaterThan(0)
           for (const [member, original] of revokedWorlds) {
             const world = new DatabaseSync(join(preparedPath, member), { readOnly: true })
             try {

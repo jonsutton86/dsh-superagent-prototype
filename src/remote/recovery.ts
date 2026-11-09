@@ -1,6 +1,6 @@
 /** Read original administrative receipts without dispatching, issuing a credential or adopting a current generation. */
 import { z } from 'zod'
-import { CredentialMetadata, GrantMetadata } from '../environments/endpoint-model.ts'
+import { CredentialMetadata, GrantMetadata, IdentityMetadata } from '../environments/endpoint-model.ts'
 import { InventoryPage } from '../ownership/inventory.ts'
 import { AdministrationRead, RevocationRead, RemoteError } from './protocol.ts'
 import type { RemoteJournal } from './journal.ts'
@@ -22,6 +22,10 @@ export const RevocationObservation = z.object({ revision: InventoryPage.shape.re
   quiescent: z.boolean(), id: z.string(), requestHash: RevocationRead.shape.requestHash, found: z.boolean(),
   result: originalRevocation.optional(), current: GrantMetadata.optional(), generationQuiescent: z.boolean().optional() }).strict()
 export type RevocationObservation = z.infer<typeof RevocationObservation>
+export const WorldConfigurationObservation = z.object({ revision: InventoryPage.shape.revision, identity: InventoryPage.shape.identity,
+  endpoint: IdentityMetadata, quiescent: z.literal(true), grant: GrantMetadata, rootVerified: z.literal(true),
+  privateBindingsVerified: z.literal(true) }).strict()
+export type WorldConfigurationObservation = z.infer<typeof WorldConfigurationObservation>
 
 /** Observe the exact historical grant-principal receipt and stopped generation without invoking revocation or cancellation. */
 export function readRevocation(journal: RemoteJournal, request: z.infer<typeof RevocationRead>,

@@ -25,6 +25,15 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: execution configuration during recovery
+
+[034 Execution configuration](034-execution-configuration-recovery.md) checks original active-world grant credentials,
+managed private pins, root identity and endpoint-private credential integrity during audit and preparation. It repeats private
+file checks before final publication because those changes need not alter database revisions. Confirmed revoked worlds retain
+their non-executable history without requiring retired credential files. Reports/manifests exclude private values and digests.
+Inference, connector, publication and ownership-claimant configuration, external account permissions, authoritative state,
+Session-backend validation, remapping and activation remain required alongside the full architecture ledger.
+
 ## Implemented increment: original world-revocation recovery
 
 [033 Revocation recovery](033-revocation-recovery.md) confirms the original grant-principal receipt when its acknowledgement

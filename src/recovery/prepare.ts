@@ -15,6 +15,7 @@ import { RemoteClient } from '../remote/client.ts'
 import { AdministrationObservation, RevocationObservation } from '../remote/recovery.ts'
 import { administrationRequest, observeAdministration, type SavedAdministration } from './administration.ts'
 import { observeRevocation, revocationRequest } from './revocation.ts'
+import { worldConfigurations, verifyWorldConfiguration, type WorldConfigurationCheck } from './configuration.ts'
 import { EffectOwner, type AdministrationRead, type RevocationRead } from '../remote/protocol.ts'
 import { ExecutionEffects, type ExecutionReceipt } from '../remote/effects.ts'
 import { fingerprint, inside } from '../remote/journal.ts'
@@ -51,7 +52,7 @@ export async function prepareCheckpointReceipts(options: PrepareCheckpointReceip
   return withVerifiedStagedCheckpoint(options.checkpoint, options.keyFile, options.destination, bounded, async ({ root, archive, manifest, db, signal }) => {
     const requestHash = fingerprint({ requestId: options.requestId, auditId: options.auditId, digest: fingerprint(manifest),
       authority: options.authority, endpoints: options.endpoints.map(({ url, endpointId, credentialFile }) => ({ url, endpointId, credentialFile })).sort((a, b) => a.endpointId.localeCompare(b.endpointId)),
-      publication: options.publication }), target = join(root, 'prepared-' + options.requestId)
+      publication: options.publication, ...(options.worlds?.length ? { worlds: [...options.worlds].sort((a, b) => a.binding.localeCompare(b.binding)) } : {}) }), target = join(root, 'prepared-' + options.requestId)
     let intent = get<ReceiptPreparation>(db, KV.recovery.preparation)
     const save = () => db.prepare('INSERT INTO kv VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(KV.recovery.preparation, JSON.stringify(intent))
     if (intent && (intent.requestId !== options.requestId || intent.auditId !== options.auditId || intent.requestHash !== requestHash))
@@ -135,6 +136,8 @@ export async function prepareCheckpointReceipts(options: PrepareCheckpointReceip
     await validate()
     const administration = { verified: 0, recovered: 0, superseded: 0 }
     const revocations = { verified: 0, recovered: 0 }
+    const worlds: WorldRecord[] = []
+    let configurationChecks: WorldConfigurationCheck[] = []
     const staging = await mkdtemp(join(root, '.prepare-')), applied = { commands: 0, mutations: 0, publications: 0 }
     try {
       const storePath = join(staging, 'orchestrator.sqlite'); await backup(db, storePath); await chmod(storePath, 0o600)
@@ -143,6 +146,7 @@ export async function prepareCheckpointReceipts(options: PrepareCheckpointReceip
         const world = new DatabaseSync(join(staging, file.member)); world.exec('PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL')
         try {
           const record = JSON.parse(String(world.prepare('SELECT value FROM execution_world WHERE id=1').get()!.value)) as WorldRecord
+          worlds.push(record)
           if (record.revocation) {
             const resource = audit.resources.find(resource => resource.identity.id === record.endpointId), call = administrators.get(record.endpointId)
             if (!resource || !call) throw new Error('Original revocation lacks its audited resource')
@@ -176,6 +180,9 @@ export async function prepareCheckpointReceipts(options: PrepareCheckpointReceip
       }
       const store = new Store(storePath)
       try {
+        configurationChecks = worldConfigurations(options.worlds ?? [], store.db, worlds)
+        for (const check of configurationChecks) await verifyWorldConfiguration(check,
+          audit.resources.find(resource => resource.identity.id === check.original.endpointId), manifest.executionWorkspaces, signal)
         for (const original of rows<SavedAdministration>(store.db, 'operator_endpoint_command')) {
           const resource = audit.resources.find(resource => resource.identity.id === original.endpointId), call = administrators.get(original.endpointId)
           if (!resource || !call) throw new Error('Original administrative intent lacks its audited resource')
@@ -220,10 +227,13 @@ export async function prepareCheckpointReceipts(options: PrepareCheckpointReceip
         await syncRecoveryPath(join(staging, member))
       }
       const image = ReceiptImage.parse({ version: 1, requestId: intent.requestId, requestHash, checkpoint: manifest.id, digest: fingerprint(manifest),
-        auditId: audit.id, at: new Date().toISOString(), recovery: audit.recovery, epoch: audit.epoch, resources: audit.resources, applied, files, executionOwnership: false, administration, revocations })
+        auditId: audit.id, at: new Date().toISOString(), recovery: audit.recovery, epoch: audit.epoch, resources: audit.resources, applied, files, executionOwnership: false, administration, revocations,
+        executionConfiguration: { worlds: configurationChecks.length, bindings: configurationChecks.reduce((total, check) => total + (check.original.grant.credentials?.length ?? 0), 0) } })
       const key = recoveryKey(options.keyFile)
       try { await writeFile(join(staging, 'prepared.json'), sealReceiptImage(image, key), { flag: 'wx', mode: 0o600 }) } finally { key.fill(0) }
       await syncRecoveryPath(join(staging, 'prepared.json')); await syncRecoveryPath(staging)
+      for (const check of configurationChecks) await verifyWorldConfiguration(check,
+        audit.resources.find(resource => resource.identity.id === check.original.endpointId), manifest.executionWorkspaces, signal)
       await validate()
       await mkdir(target, { mode: 0o700 }); await rename(staging, target); await syncRecoveryPath(root)
       intent.phase = 'prepared'; intent.image = image; save()

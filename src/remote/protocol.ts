@@ -34,8 +34,9 @@ export const AdministrationRead = z.object({ op: z.literal('recovery.administrat
   id, action: AdministrationAction, requestHash: z.string().regex(/^[a-f0-9]{64}$/) }).strict()
 export const RevocationRead = z.object({ op: z.literal('recovery.revocation'), revision: InventoryPage.shape.revision,
   id, requestHash: z.string().regex(/^[a-f0-9]{64}$/) }).strict()
+export const WorldConfigurationRead = z.object({ op: z.literal('recovery.world'), revision: InventoryPage.shape.revision }).strict()
 export const Rpc = z.discriminatedUnion('op', [
-  InventoryRequest, ReceiptRequest, AdministrationRead, RevocationRead,
+  InventoryRequest, ReceiptRequest, AdministrationRead, RevocationRead, WorldConfigurationRead,
   z.object({ op: z.literal('identity') }).strict(),
   z.object({ op: z.literal('grant.list'), offset: z.number().int().nonnegative().default(0) }).strict(),
   z.object({ op: z.literal('grant.get'), id }).strict(),

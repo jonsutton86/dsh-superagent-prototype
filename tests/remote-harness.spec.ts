@@ -13,6 +13,7 @@ import { ownershipAuthority } from './fixtures/ownership-authority.ts'
 import { CoordinatorOwnership } from '../src/ownership/lease.ts'
 import { RemoteClient } from '../src/remote/client.ts'
 import { publicationFixture } from './fixtures/publication.ts'
+import { worldBinding } from '../src/remote/world-journal.ts'
 import { qualifyPublication } from './fixtures/publication-harness.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
@@ -270,6 +271,12 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     }
     let lostRevocation: ReturnType<typeof vi.spyOn> | undefined, revocationCalls = 0
     if (owned && otherTask) {
+      const spare = await api(`endpoints/${h.endpoint.journal.id}/commands`, { revision: 1, request: { op: 'grant.create', requestId: 'recovery-active-world',
+        owner: 'coordinator', workspace: 'recovery-active-world', operations: ['fs.read', 'fs.write', 'process.spawn'], leaseMs: 300_000,
+        credentials: [{ id: binding.id, version: binding.version }] } })
+      expect(spare.phase).toBe('done')
+      const active = await api('worlds', { requestId: 'activate-recovery-active', endpointId: h.endpoint.journal.id, commandId: spare.id, name: 'Recovery credential qualification' })
+      expect(active.ready, active.problem).toBe(true)
       const rpc = h.endpoint.rpc.bind(h.endpoint)
       lostRevocation = vi.spyOn(h.endpoint, 'rpc').mockImplementation(async (...args) => {
         const result = await rpc(...args), request = args[1] as { op: string; requestId?: string }
@@ -287,13 +294,16 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     const liveRevocationCalls = revocationCalls
     const executionProfile = JSON.parse(await readFile(overlay, 'utf8')) as any[]
     const stateDir = executionProfile.find(entry => entry.id === 'dsh-superagent').config.stateDir
-    const worldDirectories = executionProfile.flatMap(entry => entry.insert ?? []).filter(entry => entry.id === 'operator-remote-world').map(entry => entry.config.stateDir)
+    const dedicated = executionProfile.flatMap(entry => entry.insert ?? []).filter(entry => entry.id === 'operator-remote-world').map(entry => entry.config)
+    const worldDirectories = dedicated.map(config => config.stateDir)
+    const worldConnections = dedicated.map(config => ({ binding: worldBinding(config.endpointId, enrolled.grant), endpointId: config.endpointId,
+      url: config.url, credentialFile: config.credentialFile }))
     const unrecordedPublications = mode === 'dedicated' && publisher && ownershipConfig
       ? await qualifyPublication({ cli, home, profile, directory, port, publisher, ownership: ownershipConfig }) : []
     await qualifyRecovery({ cli, home, profile, directory, temporary: h.directory, port, stateDir, sessionRoot,
-      worldDirectories, worker: ticket.sessionId, worlds: mode === 'managed' ? 2 : 1, unrecordedPublications, expectedRecoveredRevocations: lostRevocation ? 1 : 0,
+      worldDirectories, worker: ticket.sessionId, worlds: mode === 'managed' ? owned ? 3 : 2 : 1, unrecordedPublications, expectedRecoveredRevocations: lostRevocation ? 1 : 0,
       ...(authority ? { authority: { ...authority.admin.connection, coordinatorId: authority.config.coordinatorId }, originalClaimantFile: authority.config.credentialFile,
-        audit: { endpoints: [{ url: h.url, endpointId: h.endpoint.journal.id, credentialFile: await realpath(h.connection.credentialFile) }], publication: publisher!.admin.config } } : {}) })
+        audit: { endpoints: [{ url: h.url, endpointId: h.endpoint.journal.id, credentialFile: await realpath(h.connection.credentialFile) }], worlds: worldConnections, publication: publisher!.admin.config } } : {}) })
     if (lostRevocation) { expect(revocationCalls).toBe(liveRevocationCalls); lostRevocation.mockRestore() }
     if (mode === 'dedicated' && !owned) await qualifyOwnership({ cli, home, profile, directory, temporary: h.directory, port, native })
   } catch (error) {

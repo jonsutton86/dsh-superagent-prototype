@@ -453,6 +453,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/recovery/ownership.ts` | Verified checkpoint reservation, durable original intent, independent claimant replacement and private credential publication without activation |
 | `src/recovery/administration.ts` | Historical endpoint-administration reconciliation without replay or replacement authority |
 | `src/recovery/revocation.ts` | Exact original grant-principal revocation proof, generation/quiescence comparison and held world-state reconciliation |
+| `src/recovery/configuration.ts` | Original managed/dedicated execution credential selection, pinned private-file checks and read-only endpoint/vault/root validation |
 | `src/recovery/prepare.ts` | Original-ID held receipt preparation, revision-bound observation application and atomic recovery image publication |
 | `src/recovery/image.ts` | Authenticated prepared-state manifests, private member hashing and complete image verification |
 | `src/recovery/audit.ts` | Complete resource coverage, original receipt comparison, divergence/quiescence findings and durable held audit reports |

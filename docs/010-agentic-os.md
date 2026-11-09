@@ -295,3 +295,9 @@ the original lost revocation without another revocation request, preserved the h
 preparation. The same code passed 1,523 tests with native confinement, typechecking and all builds in
 [Linux run 42559418182](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42559418182).
 Provider-message traffic stayed local; the original app remained running. This does not qualify restored activation.
+
+Execution configuration recovery: `034-execution-configuration-recovery.md` validates each active world's original grant
+credential, managed private pin, root identity and private endpoint credential snapshots. Audit and preparation recheck private
+files before finalizing; no work is dispatched, credentials renewed or authority acquired. Confirmed revoked worlds remain
+non-executable without requiring retired files. Broader runtime/private configuration, account permissions, authoritative state,
+Session-backend validation, remapping and activation remain required.

@@ -12,7 +12,7 @@ import type { ExecutionIsolation } from './isolation.ts'
 import { EndpointCredentials } from './credentials.ts'
 import { OwnershipGate, sameOwner, type ResourceOwnershipConfig, type OwnershipGuard, type OwnershipFloor } from '../ownership/gate.ts'
 import { OwnershipError, requiresOwnership, type OwnershipStamp } from '../ownership/protocol.ts'
-import { readAdministration, readRevocation } from './recovery.ts'
+import { readAdministration, readRevocation, WorldConfigurationObservation } from './recovery.ts'
 import { ResourceInventory } from '../ownership/inventory.ts'
 import { worldBinding } from './world-journal.ts'
 
@@ -416,6 +416,31 @@ export class RemoteEndpoint {
   private async dispatch(principal: Principal, request: RpcRequest): Promise<unknown> {
     switch (request.op) {
       case 'identity': return this.identity()
+      case 'recovery.world': {
+        if (principal.role !== 'grant') throw new RemoteError(403, 'grant_required', 'Recovery configuration requires the original workspace grant credential')
+        const endpoint = this.identity(), ownership = endpoint.ownership
+        if (!ownership) throw new OwnershipError(409, 'ownership_required', 'Recovery configuration requires independent ownership')
+        this.inventory.assertRevision(request.revision)
+        const grant = this.journal.grant(principal.id)
+        const available = () => {
+          if (!grant.enabled || grant.epoch !== principal.epoch || grant.leaseUntil <= Date.now()
+            || !grant.operations.includes('fs.read') || !grant.operations.includes('process.spawn'))
+            throw new RemoteError(409, 'grant_unavailable', 'Original paired execution grant is unavailable')
+        }
+        const verifyRoot = async () => {
+          try {
+            if (await realpath(grant.root) !== grant.root || await rootIdentity(grant.root) !== grant.rootIdentity) throw new Error('Changed root')
+          } catch { throw new RemoteError(409, 'root_changed', 'Original execution root identity or canonical path changed') }
+        }
+        available()
+        await verifyRoot()
+        await this.credentials.verify(grant.credentials ?? [])
+        await verifyRoot()
+        this.inventory.assertRevision(request.revision); available()
+        if (!this.ownershipQuiescent()) throw new RemoteError(409, 'recovery_busy', 'Recovery configuration requires quiescent execution')
+        return WorldConfigurationObservation.parse({ revision: request.revision, identity: { id: this.journal.id, kind: 'endpoint', ...ownership },
+          endpoint, quiescent: true, grant, rootVerified: true, privateBindingsVerified: true })
+      }
       case 'recovery.inventory':
       case 'recovery.receipt': {
         this.admin(principal)

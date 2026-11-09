@@ -3,7 +3,7 @@ import Jsonl from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { MessageId } from '@deepseek-ai/dsh-llm'
 import { randomUUID } from 'node:crypto'
-import { appendFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
+import { appendFile, chmod, copyFile, link, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { DatabaseSync } from 'node:sqlite'
 import { Runtime } from '../src/app/runtime.ts'
 import { testMachine } from './fixtures/deployment.ts'
@@ -14,11 +14,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { Endpoints } from '../src/environments/endpoints.ts'
+import { credentialDigest } from '../src/environments/endpoint-files.ts'
 import { administrationRequest } from '../src/recovery/administration.ts'
 import { revocationRequest } from '../src/recovery/revocation.ts'
 import { fingerprint } from '../src/remote/journal.ts'
 import type { EndpointCredential } from '../src/remote/protocol.ts'
-import { AdministrationObservation, RevocationObservation } from '../src/remote/recovery.ts'
+import { AdministrationObservation, RevocationObservation, WorldConfigurationObservation } from '../src/remote/recovery.ts'
 import { Store } from '../src/app/store.ts'
 import { KV } from '../src/kv.ts'
 import { createRecoveryKey } from '../src/recovery/crypto.ts'
@@ -41,7 +42,7 @@ const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { vi.restoreAllMocks(); for (const close of cleanup.splice(0).reverse()) await close() })
 
 async function fixture(options: { administration?: boolean; credential?: boolean; rotateCredential?: boolean; revokeCredential?: boolean; pending?: boolean; channel?: boolean; extra?: boolean; revoked?: boolean;
-  revocation?: 'lost' | 'unsettled' | 'unsent'; kind?: DestinationView['kind'] } = {}) {
+  managed?: boolean; changedPin?: boolean; revocation?: 'lost' | 'unsettled' | 'unsent'; kind?: DestinationView['kind'] } = {}) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'dsh-receipt-audit-')))
   cleanup.push(() => rm(directory, { recursive: true, force: true }))
   const authority = await ownershipAuthority(cleanup, ['endpoint', 'publication']), owner = new CoordinatorOwnership(authority.config)
@@ -59,6 +60,7 @@ async function fixture(options: { administration?: boolean; credential?: boolean
         bindings.push({ id: importedCredential.id, version: importedCredential.version })
       }
     } })
+  if (process.env.DSH_REMOTE_ISOLATION !== '1') vi.spyOn(remote.endpoint, 'identity').mockReturnValue({ ...remote.endpoint.identity(), confinement: 'linux-bubblewrap' })
   const stateDir = join(directory, 'state'), worldDir = join(directory, 'world'), keyFile = join(directory, 'key')
   await mkdir(stateDir, { mode: 0o700 }); createRecoveryKey(keyFile)
   const context = new Context(); cleanup.push(() => context.fiber.dispose())
@@ -140,6 +142,13 @@ async function fixture(options: { administration?: boolean; credential?: boolean
       world.acknowledge(receipt)
     }
   }
+  if (options.managed) {
+    store.db.exec('CREATE TABLE managed_world (id TEXT PRIMARY KEY, value TEXT NOT NULL)')
+    store.db.prepare('INSERT INTO managed_world VALUES (?,?)').run(scope.world, JSON.stringify({ id: scope.world, grant: remote.enrolled.grant,
+      enabled: !world.read()!.revocation, credentialPin: options.changedPin ? '0'.repeat(64) : credentialDigest(remote.enrolled.credential!),
+      config: { endpointId: remote.connection.endpointId, url: remote.url, credentialFile: await realpath(remote.client.connection.credentialFile), stateDir: worldDir },
+      ...(world.read()!.revocation ? { revoke: { requestId: 'revoke-world', reason: 'Qualification revocation' } } : {}) }))
+  }
   world.close(); store.close()
   const checkpoint = await createCheckpoint({ stateDir, keyFile, outputDir: join(directory, 'backups'), worldDirectories: [worldDir], persistence: context.sessionPersistence })
   if (options.revocation === 'unsettled') remote.endpoint.journal.saveJob({ ...remote.endpoint.journal.job(job.id), quiescent: true })
@@ -156,7 +165,9 @@ async function fixture(options: { administration?: boolean; credential?: boolean
   const reserved = await reserveCheckpointOwnership({ checkpoint: checkpoint.path, keyFile, destination: held, authority: connection,
     requestId: randomUUID(), epoch: 1, generation: 0 })
   const audit = { checkpoint: checkpoint.path, keyFile, destination: held, authority: connection,
-    endpoints: [{ ...remote.connection, ownership: undefined, credentialFile: await realpath(remote.connection.credentialFile) }], publication: publisher.admin.config }
+    endpoints: [{ ...remote.connection, ownership: undefined, credentialFile: await realpath(remote.connection.credentialFile) }], publication: publisher.admin.config,
+    worlds: [{ binding: worldBinding(remote.connection.endpointId, remote.enrolled.grant), endpointId: remote.connection.endpointId, url: remote.url,
+      credentialFile: await realpath(remote.client.connection.credentialFile) }] }
   const read = () => { const store = new Store(join(held, 'orchestrator.sqlite')); try { return { report: store.get(KV.recovery.audit), hold: store.get(KV.recovery.hold) } } finally { store.close() } }
   return { directory, checkpoint, reserved, audit, authority, remote, publisher, publication, job: settled, written, channel, importedCredential, read }
 }
@@ -383,6 +394,133 @@ it('checks staged world and Session bytes before inspecting independent receipts
   expect(f.read().hold?.state).toBe('staged')
 })
 
+it('proves an active original grant and private credential snapshot without dispatch or credential disclosure', async () => {
+  const f = await fixture({ credential: true }), before = f.remote.endpoint.journal.jobs(), rpc = vi.spyOn(f.remote.endpoint, 'rpc')
+  const audit = await auditCheckpointReceipts(f.audit)
+  expect(audit.status).toBe('matched')
+  const revision = audit.resources.find(resource => resource.identity.kind === 'endpoint')!.revision
+  const proof = WorldConfigurationObservation.parse(await f.remote.client.call({ op: 'recovery.world', revision }))
+  expect(proof).toMatchObject({ privateBindingsVerified: true, rootVerified: true, quiescent: true, grant: { id: f.remote.enrolled.grant.id, epoch: 1 } })
+  await expect(f.remote.admin.call({ op: 'recovery.world', revision })).rejects.toMatchObject({ code: 'grant_required' })
+  const prepared = await prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })
+  expect(prepared.manifest.executionConfiguration).toEqual({ worlds: 1, bindings: 1 })
+  expect(await verifyReceiptImage(prepared.path, f.audit.keyFile)).toEqual(prepared.manifest)
+  expect(f.remote.endpoint.journal.jobs()).toEqual(before)
+  expect(rpc.mock.calls.every(([, request]) => (request as RpcInput).op.startsWith('recovery.'))).toBe(true)
+  for (const value of [proof, audit, prepared.manifest]) {
+    expect(JSON.stringify(value)).not.toContain('synthetic-recovery-secret')
+    expect(JSON.stringify(value)).not.toContain('credential-vault')
+    expect(JSON.stringify(value)).not.toContain('credentialPin')
+  }
+})
+
+it.each(['missing-connection', 'missing-file', 'permissions', 'hardlink', 'symlink', 'wrong-token', 'workspace', 'expired', 'root-link'] as const)('blocks an active world with %s execution configuration', async mode => {
+  const f = await fixture(), worlds = [...f.audit.worlds], connection = { ...worlds[0]! }
+  worlds[0] = connection
+  if (mode === 'missing-connection') worlds.length = 0
+  if (mode === 'missing-file') await rm(connection.credentialFile)
+  if (mode === 'permissions') await chmod(connection.credentialFile, 0o644)
+  if (mode === 'hardlink') await link(connection.credentialFile, join(f.directory, 'extra-token-link'))
+  if (mode === 'symlink') { const source = connection.credentialFile; connection.credentialFile = join(f.directory, 'token-link'); await symlink(source, connection.credentialFile) }
+  if (mode === 'wrong-token') await writeFile(connection.credentialFile, 'grant.' + f.remote.enrolled.grant.id + '.1.' + 'x'.repeat(43))
+  if (mode === 'workspace') { const source = connection.credentialFile; connection.credentialFile = join(f.remote.enrolled.grant.root, 'private-token'); await copyFile(source, connection.credentialFile) }
+  if (mode === 'expired') f.remote.endpoint.journal.saveGrant({ ...f.remote.endpoint.journal.grant(f.remote.enrolled.grant.id), leaseUntil: Date.now() - 1 })
+  if (mode === 'root-link') { const root = f.remote.enrolled.grant.root; await rename(root, root + '-original'); await symlink(root + '-original', root) }
+  const audit = await auditCheckpointReceipts({ ...f.audit, worlds })
+  expect(audit.status).toBe('blocked')
+  expect(audit.issues).toContainEqual({ code: mode === 'missing-connection' ? 'configuration_missing' : 'configuration_unavailable',
+    kind: 'configuration', id: f.audit.worlds[0]!.binding, resource: f.remote.connection.endpointId })
+  expect(f.read().hold?.state).toBe('staged')
+})
+
+it.each(['missing', 'changed', 'permissions', 'hardlink', 'symlink', 'vault-link'] as const)('detects a %s private vault file even when the public catalog revision is unchanged', async mode => {
+  const f = await fixture({ credential: true }), file = join(f.remote.directory, 'control', 'credential-vault', f.importedCredential!.version)
+  const before = InventoryPage.parse(await f.remote.admin.call({ op: 'recovery.inventory', offset: 0 }))
+  if (mode === 'missing') await rm(file)
+  if (mode === 'changed') await writeFile(file, 'modified-private-value')
+  if (mode === 'permissions') await chmod(file, 0o644)
+  if (mode === 'hardlink') await link(file, join(f.directory, 'vault-hardlink'))
+  if (mode === 'symlink') { const target = join(f.directory, 'vault-link-target'); await copyFile(file, target); await rm(file); await symlink(target, file) }
+  if (mode === 'vault-link') { const vault = join(f.remote.directory, 'control', 'credential-vault'); await rename(vault, vault + '-original'); await symlink(vault + '-original', vault) }
+  expect(InventoryPage.parse(await f.remote.admin.call({ op: 'recovery.inventory', offset: 0 })).revision).toBe(before.revision)
+  const audit = await auditCheckpointReceipts(f.audit)
+  expect(audit.status).toBe('blocked')
+  expect(audit.issues.some(issue => issue.code === 'configuration_unavailable')).toBe(true)
+  await expect(prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })).rejects.toThrow('complete matched audit')
+})
+
+it('rechecks private files at the end of audit when their bytes change without a catalog revision', async () => {
+  const f = await fixture({ credential: true }), call = RemoteClient.prototype.call; let changed = false
+  vi.spyOn(RemoteClient.prototype, 'call').mockImplementation(async function<T>(this: RemoteClient, request: RpcInput, signal?: AbortSignal): Promise<T> {
+    const result = await call.call(this, request, signal)
+    if (request.op === 'recovery.world' && !changed) {
+      changed = true; await writeFile(join(f.remote.directory, 'control', 'credential-vault', f.importedCredential!.version), 'changed-during-audit')
+    }
+    return result as T
+  })
+  const audit = await auditCheckpointReceipts(f.audit)
+  expect(audit.status).toBe('blocked')
+  expect(audit.issues.some(issue => issue.code === 'configuration_unavailable')).toBe(true)
+})
+
+it('rejects an inventory change during asynchronous private credential verification', async () => {
+  const f = await fixture({ credential: true }), verify = f.remote.endpoint.credentials.verify.bind(f.remote.endpoint.credentials)
+  vi.spyOn(f.remote.endpoint.credentials, 'verify').mockImplementationOnce(async bindings => {
+    await verify(bindings)
+    f.remote.endpoint.journal.remember(randomUUID(), '0'.repeat(64), 'changed-while-verifying')
+  })
+  await expect(auditCheckpointReceipts(f.audit)).rejects.toThrow()
+  expect(f.read().report).toMatchObject({ phase: 'failed', status: 'blocked', complete: false })
+})
+
+it.each(['after-audit', 'during-preparation'] as const)('rechecks private vault integrity %s before publishing a held image', async mode => {
+  const f = await fixture({ credential: true }), audit = await auditCheckpointReceipts(f.audit)
+  const file = join(f.remote.directory, 'control', 'credential-vault', f.importedCredential!.version)
+  if (mode === 'after-audit') await writeFile(file, 'changed-after-audit')
+  else {
+    const call = RemoteClient.prototype.call; let changed = false
+    vi.spyOn(RemoteClient.prototype, 'call').mockImplementation(async function<T>(this: RemoteClient, request: RpcInput, signal?: AbortSignal): Promise<T> {
+      const result = await call.call(this, request, signal)
+      if (request.op === 'recovery.world' && !changed) { changed = true; await writeFile(file, 'changed-during-preparation') }
+      return result as T
+    })
+  }
+  await expect(prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })).rejects.toThrow('configuration_unavailable')
+  expect((await readdir(f.audit.destination)).some(name => name.startsWith('prepared-'))).toBe(false)
+  expect(f.read().hold?.state).toBe('staged')
+})
+
+it('does not require retired private credentials for an independently confirmed revoked world', async () => {
+  const f = await fixture({ credential: true, revoked: true })
+  await rm(f.audit.worlds[0]!.credentialFile)
+  await rm(join(f.remote.directory, 'control', 'credential-vault', f.importedCredential!.version))
+  const audit = await auditCheckpointReceipts(f.audit)
+  expect(audit.status).toBe('matched')
+  const prepared = await prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })
+  expect(prepared.manifest.executionConfiguration).toEqual({ worlds: 0, bindings: 0 })
+  expect(savedWorld(f, prepared.path).phase).toBe('revoked')
+})
+
+it('resolves managed execution credentials from the authenticated catalog and enforces its original private pin', async () => {
+  const f = await fixture({ managed: true, credential: true }), options = { ...f.audit, worlds: undefined }
+  const audit = await auditCheckpointReceipts(options)
+  expect(audit.status).toBe('matched')
+  expect((await prepareCheckpointReceipts({ ...options, requestId: randomUUID(), auditId: audit.id })).manifest.executionConfiguration).toEqual({ worlds: 1, bindings: 1 })
+  const changed = await fixture({ managed: true, changedPin: true })
+  const blocked = await auditCheckpointReceipts({ ...changed.audit, worlds: undefined })
+  expect(blocked.status).toBe('blocked')
+  expect(blocked.issues.some(issue => issue.code === 'configuration_unavailable')).toBe(true)
+})
+
+it('rejects unrelated or duplicated execution credential selections instead of probing another world', async () => {
+  const f = await fixture()
+  await expect(auditCheckpointReceipts({ ...f.audit, worlds: [...f.audit.worlds, ...f.audit.worlds] })).rejects.toThrow('unique original worlds')
+  await expect(auditCheckpointReceipts({ ...f.audit, worlds: [{ ...f.audit.worlds[0]!, binding: '0'.repeat(64) }] })).rejects.toThrow('unique original worlds')
+  const audit = await auditCheckpointReceipts({ ...f.audit, worlds: [{ ...f.audit.worlds[0]!, endpointId: randomUUID() }] })
+  expect(audit.status).toBe('blocked')
+  expect(audit.issues.some(issue => issue.code === 'configuration_mismatch')).toBe(true)
+})
+
 it.each(['github-comment', 'github-review', 'feishu-reply'] as const)('prepares missing execution and %s acknowledgements in an authenticated held image', async kind => {
   const f = await fixture({ kind, pending: true, channel: true }), audit = await auditCheckpointReceipts(f.audit)
   const source = new DatabaseSync(join(f.audit.destination, 'orchestrator.sqlite'), { readOnly: true })
@@ -593,6 +731,8 @@ it('blocks an active world whose credential was rotated after capture and keeps 
 it('blocks credential revocation even when the original credential version and grant are unchanged', async () => {
   const f = await fixture({ credential: true, revokeCredential: true })
   // Fault injection: a stale grant row must not hide the independently disabled credential catalog entry.
+  // Freeze the periodic correction of that injected row so this tests catalog evidence, not a concurrent revision change.
+  vi.spyOn(f.remote.endpoint as unknown as { sweep(): void }, 'sweep').mockImplementation(() => {})
   f.remote.endpoint.journal.saveGrant(f.remote.enrolled.grant)
   const audit = await auditCheckpointReceipts(f.audit)
   expect(audit.status).toBe('blocked')

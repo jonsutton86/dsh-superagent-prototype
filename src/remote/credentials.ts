@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { constants, chmodSync, mkdirSync, realpathSync } from 'node:fs'
+import { constants, chmodSync, lstatSync, mkdirSync, realpathSync } from 'node:fs'
 import { open, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { RemoteJournal, fingerprint, timestamp } from './journal.ts'
@@ -110,15 +110,27 @@ export class EndpointCredentials {
       this.journal.audit({ action: request.op, credential: record.id, version: record.version, revision: record.revision, reason: request.reason }) })
     return publicRecord(record)
   }
-  /** Validate private snapshots before mounting; the command launcher receives only the selected files. */
-  async mounts(bindings: readonly CredentialBinding[]) {
+  /** Read and validate original private snapshots without mounting them, executing work or returning their content/digests. */
+  async verify(bindings: readonly CredentialBinding[]): Promise<void> {
+    const directory = () => {
+      try {
+        const stat = lstatSync(this.vault)
+        if (!stat.isDirectory() || stat.isSymbolicLink() || stat.uid !== process.getuid?.() || stat.mode & 0o077 || realpathSync(this.vault) !== this.vault) throw new Error('Invalid private vault')
+      } catch { throw new RemoteError(409, 'credential_file', 'Private credential vault must remain an owned private directory without symbolic links') }
+    }
+    if (bindings.length) directory()
     if (!this.valid(bindings)) throw new RemoteError(409, 'credential_unavailable', 'Credential binding changed before dispatch')
-    const mounts = []
     for (const item of bindings) {
       const source = join(this.vault, item.version), bytes = await this.read(source)
-      if (digest(bytes) !== this.get(item.id)?.digest) throw new RemoteError(409, 'credential_integrity', 'Private credential snapshot changed; import a new version')
-      mounts.push({ source, target: `/run/dsh-credentials/${item.id}`, variable: item.variable, mode: item.mode })
+      try { if (digest(bytes) !== this.get(item.id)?.digest) throw new RemoteError(409, 'credential_integrity', 'Private credential snapshot changed; import a new version') }
+      finally { bytes.fill(0) }
     }
-    return mounts
+    if (bindings.length) directory()
+    if (!this.valid(bindings)) throw new RemoteError(409, 'credential_unavailable', 'Credential binding changed during validation')
+  }
+  /** Validate private snapshots before mounting; the command launcher receives only the selected files. */
+  async mounts(bindings: readonly CredentialBinding[]) {
+    await this.verify(bindings)
+    return bindings.map(item => ({ source: join(this.vault, item.version), target: `/run/dsh-credentials/${item.id}`, variable: item.variable, mode: item.mode }))
   }
 }
