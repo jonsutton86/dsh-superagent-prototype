@@ -9,6 +9,8 @@ import type { SourceStatusView } from './views/sources.ts'
 import type { DecisionListView, SearchView, ThreadDetailView, ThreadListView } from './views/threads.ts'
 import type { TicketListView } from './views/tickets.ts'
 import type { ActionCommandInput, AddActionInput, CreateMissionInput, MissionCommandInput, MissionList, MissionView } from '../workspace/model.ts'
+import type { ConfigureMissionPull, MissionPullState } from '../workspace/pull-model.ts'
+import type { CompletionAttempt } from '../workspace/completion.ts'
 import type { ArchiveRecordInput, CreateRecordInput, LibraryContent, LibraryEntry, LibraryList, LibraryQueryInput, LibraryRead } from '../workspace/library-model.ts'
 import type { CreateCheckInput, SaveCheckInput, ConfigureCheckInput, RequestCheckInput, CheckRecord, CheckVersion, CheckRun, CheckRunSummary } from '../verification/contracts.ts'
 import type { EvidenceBinding, EvidenceReview } from '../verification/review-model.ts'
@@ -145,6 +147,11 @@ export interface Api {
   'POST missions/:id/actions': { body: AddActionInput; response: MissionView }
   'POST missions/:id/actions/:action': { body: ActionCommandInput; response: MissionView }
   'PUT missions/:id': { body: MissionCommandInput; response: MissionView }
+  'PUT missions/:id/actions/:action/pull': { body: ConfigureMissionPull; response: MissionView }
+  'POST missions/:id/actions/:action/pull/inspect': { response: PullObservation }
+  'GET missions/:id/completions': { response: { items: CompletionAttempt[] } }
+  'POST mission-completions/:id/retry': { response: MissionView }
+  'GET mission-pull-targets/:id': { response: MissionPullState }
   'GET state': { response: StateView }
   'GET overview': { response: OverviewView }
   'GET search': { query: { q: string }; response: SearchView }

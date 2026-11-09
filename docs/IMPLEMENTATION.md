@@ -20,10 +20,21 @@ not a claim that the prototype already ships every feature or that the article s
 | Compute/state separation | SQLite Store; Harness Session checkpoints, held import, checkpoint-bound claimant replacement, revision-bound receipt audits and authenticated held receipt application including original administration; ownership authority, endpoint handoff fencing, shared Runtime/pool/provider lifecycle and independently fenced artifact/mission delivery with directed inbound replies | Private credential/runtime configuration validation, authoritative input/state recovery, remapping, broader inbound discovery/admission and repository integration, clean-host activation and failover qualification |
 | Remote environments | Paired local/remote providers, authenticated leased grants, durable revocation, mission/Session binding, endpoint-owned versioned credentials, remote profile and artifact/restart qualification, operator enrollment/reconciliation, generated profiles, managed world pool and exact per-action selection | Managed endpoint/machine launch, remote repository workflows, quotas and cross-host acceptance |
 | Watchdog | Existing health and bounded transient executor retry; now `src/supervision/*` | Live-provider and process-level acceptance, incident UI/alerts, retention, richer progress evidence and separately authorized recovery policies |
-| Delivery | Reports and PR binding/closure; content-addressed artifacts, stale mission-review invalidation, reviewed artifacts and plan-authorized mission replies with independent receipts; exact participant/task inbound listeners; versioned checks, original assignment/environment bindings, host-captured file/Git snapshots, original-job evidence, operator controls, selected-check mission acceptance/publication and explicit-commit PR reviews with captured Git tree proof | Mission-level repository/PR closure, CI/branch-policy and merge integration, continuous freshness/fresh whole-mission closure, broader inbound discovery/admission, remote Git provisioning and broader speculative quality evaluation |
+| Delivery | Reports and PR binding/closure; content-addressed artifacts, stale mission-review invalidation, reviewed artifacts and plan-authorized mission replies with independent receipts; exact participant/task inbound listeners; versioned checks, original assignment/environment bindings, host-captured file/Git snapshots, original-job evidence, selected-check acceptance/publication, explicit-commit PR reviews, plan-bound PR result targets and fresh all-action mission completion | CI/branch-policy and merge integration, continuous freshness, broader inbound discovery/admission, remote Git provisioning and broader speculative quality evaluation |
 | Operator control | Existing web panel, settings, pause/retry/stop, scoped usage/limits/prices and reconciliation, local/remote environment status and revocation, endpoint enrollment/reconciliation and private profile generation | Supervision, broader workload budgets and evidence surfaces |
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
+
+## Current increment: PR-bound results and fresh mission completion
+
+[050 Mission PR targets and fresh completion](050-mission-pull-completion.md) binds operator-inspected PR identities into
+approved plans and worker mandates. Acceptance requires checks of the current observed head. Whole-mission completion
+freshly captures every accepted checked result in its original world and rereads required PR heads before the final
+transaction. Durable completion attempts preserve original per-action review/capture IDs through interruption and restart.
+The UI supports binding, head inspection, completion receipts and original-attempt recovery. Qualification is in progress;
+results and exact revision are recorded after the full local, native Linux and installed-Harness checks.
+This point-in-time completion decision does not implement remote Git provisioning, branch policy, CI, merging or continuous
+freshness. Every remaining full architecture requirement stays active.
 
 ## Implemented increment: checked PR review submission
 
@@ -710,11 +721,11 @@ quality/waste measurement, scaling, multi-workspace ownership and stronger confi
 
 ### 6. Verified artifacts and delivery
 
-Implemented through 049: host-captured bounded file/Git inputs, copied-source checks through endpoint/Harness jobs,
+Implemented through 050: host-captured bounded file/Git inputs, copied-source checks through endpoint/Harness jobs,
 revision preconditions, durable outcomes and unknown-aware cleanup; coordinator definitions, local/remote checks,
 evidence UI, checked acceptance/publication and explicit-commit PR reviews bound to provider-observed heads and actual
-captured Git trees. Mission-level repository/PR closure, CI/branch-policy and merge integration, remote Git provisioning,
-continuous freshness and a fresh whole-mission closure policy remain open.
+captured Git trees; plan-bound PR results and fresh whole-mission completion with original-attempt recovery.
+CI/branch-policy and merge integration, remote Git provisioning and continuous freshness remain open.
 
 Persist artifacts and verification results bound to exact source/workspace revisions: commit/tree IDs, content hashes,
 command or check identities, exit outcomes and timestamps. Verification evidence is collected by host integrations;

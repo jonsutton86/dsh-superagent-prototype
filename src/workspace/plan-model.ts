@@ -3,17 +3,18 @@ import { z } from 'zod'
 import type { Mission } from './model.ts'
 import { PersonaRef } from '../personas/model.ts'
 import { WorldRef } from '../environments/pool-model.ts'
+import { PullTargetRef } from './pull-model.ts'
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/)
 const text = z.string().trim().min(1).max(12000)
 const title = z.string().trim().min(1).max(160)
 export const PlanDefinition = z.object({ title, objective: text, acceptance: text,
   actions: z.array(z.object({ id, title, instructions: text, owner: z.enum(['person', 'agent']),
-    dependsOn: z.array(id).max(200), persona: PersonaRef.optional(), environment: WorldRef.optional() }).strict()).max(200) }).strict().superRefine((plan, ctx) => {
+    dependsOn: z.array(id).max(200), persona: PersonaRef.optional(), environment: WorldRef.optional(), pull: PullTargetRef.optional() }).strict()).max(200) }).strict().superRefine((plan, ctx) => {
   const actions = new Map(plan.actions.map(action => [action.id, action]))
   const error = (message: string) => ctx.addIssue({ code: 'custom', message })
   if (actions.size !== plan.actions.length) error('Action IDs must be unique')
-  if (plan.actions.some(action => action.owner === 'person' && (action.persona || action.environment))) error('Only agent actions can select a persona or execution environment')
+  if (plan.actions.some(action => action.owner === 'person' && (action.persona || action.environment || action.pull))) error('Only agent actions can select a persona, execution environment or PR target')
   if (JSON.stringify(plan).length > 128000) error('A plan must fit within 128,000 characters')
   const visiting = new Set<string>(), visited = new Set<string>()
   const visit = (id: string): boolean => {
@@ -50,6 +51,6 @@ export interface PlanIndex {
 }
 export const definitionOf = (mission: Pick<Mission, 'title' | 'objective' | 'acceptance' | 'actions'>): PlanDefinition => ({
   title: mission.title, objective: mission.objective, acceptance: mission.acceptance,
-  actions: mission.actions.map(({ id, title, instructions, owner, dependsOn, persona, environment }) => ({ id, title, instructions, owner, dependsOn,
-    ...(persona ? { persona } : {}), ...(environment ? { environment } : {}) })),
+  actions: mission.actions.map(({ id, title, instructions, owner, dependsOn, persona, environment, pull }) => ({ id, title, instructions, owner, dependsOn,
+    ...(persona ? { persona } : {}), ...(environment ? { environment } : {}), ...(pull ? { pull } : {}) })),
 })

@@ -349,7 +349,15 @@ function routes(runtime: HttpHost): Routes {
     'POST missions': async ({ body }) => runtime.workspace.create(await body()),
     'POST missions/:id/actions': async ({ params, body }) => runtime.workspace.add(params.id, await body()),
     'POST missions/:id/actions/:action': async ({ params, body }) => runtime.workspace.actReviewed(params.id, params.action, await body()),
-    'PUT missions/:id': async ({ params, body }) => runtime.workspace.update(params.id, await body()),
+    'PUT missions/:id': async ({ params, body }) => runtime.workspace.updateReviewed(params.id, await body()),
+    'PUT missions/:id/actions/:action/pull': async ({ params, body }) => runtime.workspace.configurePull(params.id, params.action, await body()),
+    'POST missions/:id/actions/:action/pull/inspect': ({ params }) => runtime.workspace.inspectPull(params.id, params.action),
+    'GET missions/:id/completions': ({ params }) => { runtime.workspace.get(params.id, false); return runtime.workspace.completions.list(params.id) },
+    'POST mission-completions/:id/retry': ({ params }) => runtime.workspace.retryCompletion(params.id),
+    'GET mission-pull-targets/:id': ({ params }) => {
+      if (!runtime.workspace.pulls) throw new WorkspaceError(409, 'Mission PR targets are unavailable')
+      return runtime.workspace.pulls.state(params.id)
+    },
     'GET state': () => stateView(runtime),
     'GET overview': () => overview(views(runtime), runtime.health, policyVersion(store.settings()),
       executorLoad(store, runtime.executor.activeCount()), runtime.setupProblem ?? runtime.feishuProblem),

@@ -71,6 +71,7 @@ import { ConversationInbox } from '../publication/inbound.ts'
 import { Verification } from '../verification/service.ts'
 import { VerificationReviews } from '../verification/reviews.ts'
 import { MissionReviews } from '../verification/missions.ts'
+import { MissionPulls } from '../workspace/pulls.ts'
 
 // Source plugins interact with dsh-superagent exclusively through the `SourceHost` service interface.
 declare module '@deepseek-ai/cordis' { interface Context { orchestrator: SourceHost } }
@@ -189,7 +190,7 @@ export class Runtime extends Service implements SourceHost {
       const personas = this.personas = new Personas(store, async model => { await resolveRoleModel(ctx, model) })
       const workspace = this.workspace = new Workspace(store, () => runtime.engine, () => !this.paused() && !this.closing(),
         id => library.evidenceRevision(id), ticket => environments.allows(ticket.execution?.environment), reference => personas.snapshot(reference), reference => environments.select(reference),
-        (mission, action) => runtime.channelPublications?.channel(mission, action), new MissionReviews(store, library, verification, reviews))
+        (mission, action) => runtime.channelPublications?.channel(mission, action), new MissionReviews(store, library, verification, reviews), new MissionPulls(store, this.publications))
       const reflections = this.reflections = new Reflections(store, workspace, library, () => !this.paused())
       const schedules = this.schedules = new Schedules(store, workspace, () => !this.paused(), Date.now,
         (occurrence, missionId, spec) => reflections.prepare(occurrence, missionId, spec))
@@ -415,6 +416,8 @@ export class Runtime extends Service implements SourceHost {
       await reviews; await verification
       await this.endpoints.stop()
       await this.publications.stop()
+      await this.workspace.pulls?.stop()
+      await this.workspace.completions.stop()
       await this.channelPublications.stop()
       await this.conversations.stop()
       this.assessor.stop()

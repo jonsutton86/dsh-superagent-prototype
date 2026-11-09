@@ -395,6 +395,11 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
   'POST missions/:id/actions': { body: true, answer: () => refuse(409, 'Workspace fixture not configured') },
   'POST missions/:id/actions/:action': { body: true, answer: () => refuse(409, 'Workspace fixture not configured') },
   'PUT missions/:id': { body: true, answer: () => refuse(409, 'Workspace fixture not configured') },
+  'PUT missions/:id/actions/:action/pull': { body: true, answer: () => refuse(409, 'PR target fixture not configured') },
+  'POST missions/:id/actions/:action/pull/inspect': { answer: () => refuse(409, 'PR target fixture not configured') },
+  'GET missions/:id/completions': { answer: () => ({ items: [] }) },
+  'POST mission-completions/:id/retry': { answer: () => refuse(409, 'Mission completion fixture not configured') },
+  'GET mission-pull-targets/:id': { answer: () => refuse(404, 'Mission PR target not found') },
   'GET state': { answer: stateView },
   'GET overview': { answer: overviewView },
   'GET search': { query: ['q'], answer: async ({ query }) => {

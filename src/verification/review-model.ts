@@ -17,7 +17,7 @@ export const EvidenceSeal = EvidenceBinding.extend({ capture: z.object({ id: Che
   validUntil: z.string().datetime() }).strict()
 export type EvidenceSeal = z.infer<typeof EvidenceSeal>
 export const FRESHNESS_WINDOW_MS = 60_000
-export const ReviewRequest = z.object({ id: CheckCommandId, purpose: z.enum(['publication', 'acceptance']), target: digest, checks: CheckSelections }).strict()
+export const ReviewRequest = z.object({ id: CheckCommandId, purpose: z.enum(['publication', 'acceptance', 'closure']), target: digest, checks: CheckSelections }).strict()
 export type ReviewRequest = z.infer<typeof ReviewRequest>
 export interface EvidenceReview {
   id: string; purpose: ReviewRequest['purpose']; target: string; checks: CheckSelection[]; createdAt: string; updatedAt: string

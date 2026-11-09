@@ -7,7 +7,7 @@ import { startRuntime, type Host } from './host.ts'
 import { workerSessionId } from '../../src/executor/dsh.ts'
 
 /** Owned Runtime, managed execution world and independent publication service, with local provider HTTP only. */
-export async function channelPublicationFixture(cleanup: (() => Promise<unknown>)[], kind: 'github-comment' | 'github-review' | 'feishu-reply' = 'github-comment') {
+export async function channelPublicationFixture(cleanup: (() => Promise<unknown>)[], kind: 'github-comment' | 'github-review' | 'github-pr-review' | 'feishu-reply' = 'github-comment') {
   const authority = await ownershipAuthority(cleanup, ['endpoint', 'publication'])
   const publisher = await publicationFixture(cleanup, authority.resourceFor('publication'), undefined, kind)
   let host: Host

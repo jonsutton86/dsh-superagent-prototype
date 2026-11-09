@@ -518,3 +518,10 @@ The dedicated and owned dedicated live Harness scenarios passed; owned managed p
 correction `ca58691` accounted for the new destination. This is a review path, not an
 atomic latest-head approval or merge implementation. Mission-level repository/PR closure, merge and branch-policy
 integration, continuous freshness and every other remaining architecture/product requirement stay open.
+
+Mission repository results and fresh whole-mission completion are implemented in `050-mission-pull-completion.md`:
+operator-selected PR identities become plan/mandate requirements, acceptance binds exact checked heads, and mission
+completion freshly captures every accepted checked result and rereads required heads. Durable completion attempts retain
+original evidence-review IDs across interruption/restart; the UI exposes binding, current-head review and attempt recovery.
+Qualification is in progress. These are point-in-time checks, not continuous monitoring, CI/branch-policy enforcement or
+merge receipts. Remote Git provisioning and all other remaining product/architecture requirements stay open.

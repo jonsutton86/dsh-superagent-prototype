@@ -6,6 +6,7 @@ import { WorkspaceError, type MissionAction, type ReviewRequirements, type Works
 import type { CheckSelection, EvidenceSeal } from './review-model.ts'
 import type { Verification } from './service.ts'
 import type { VerificationReviews } from './reviews.ts'
+import { matchesPullEvidence, type PullBinding } from '../publication/pull-model.ts'
 
 /** Bind all current artifact outputs of the completed assignment to operator-selected host checks. */
 export class MissionReviews implements WorkspaceReview {
@@ -20,21 +21,23 @@ export class MissionReviews implements WorkspaceReview {
       .map(({ id, title, revision, hash }) => ({ id, title, revision, hash }))
     return { artifacts: artifacts.slice(0, 32), ...(artifacts.length > 32 ? { problem: 'One result review supports at most 32 current artifacts; consolidate the output' } : {}) }
   }
-  validate(ticketId: string | undefined, kind: 'operator' | 'checks' | undefined, selections: readonly CheckSelection[]): void {
+  validate(ticketId: string | undefined, kind: 'operator' | 'checks' | undefined, selections: readonly CheckSelection[], pull?: PullBinding): void {
     const required = ticketId ? this.requirements(ticketId) : { artifacts: [] }
     if (required.problem) throw new WorkspaceError(409, required.problem)
+    if (pull && !required.artifacts.length) throw new WorkspaceError(409, 'PR-bound results require checked file artifacts from the completed assignment')
     if (required.artifacts.length) {
       if (kind !== 'checks' || !selections.length) throw new WorkspaceError(409, 'Select successful host checks for every current artifact before accepting this result')
       const actual = new Set<string>()
       for (const selection of selections) {
         const binding = this.checks.approval(selection.runId, selection), artifact = required.artifacts.find(item => item.id === binding.artifact.id)
         if (!artifact || artifact.revision !== binding.artifact.revision || artifact.hash !== binding.artifact.hash) throw new WorkspaceError(409, 'Selected check does not cover the current assignment artifacts')
+        if (pull && !matchesPullEvidence(binding, pull)) throw new WorkspaceError(409, 'Every selected check must cover the mission PR head and captured Git tree')
         actual.add(artifact.id)
       }
       if (actual.size !== required.artifacts.length) throw new WorkspaceError(409, 'Every current artifact needs at least one successful host check')
     } else if (kind !== 'operator' || selections.length) throw new WorkspaceError(409, 'This result has no current file artifacts; explicitly acknowledge human review without claiming host verification')
   }
-  prepare(id: string, target: string, checks: readonly CheckSelection[]) { return this.reviews.prepare({ id, purpose: 'acceptance', target, checks }) }
+  prepare(id: string, target: string, checks: readonly CheckSelection[], purpose: 'acceptance' | 'closure' = 'acceptance') { return this.reviews.prepare({ id, purpose, target, checks }) }
   assert(evidence: readonly EvidenceSeal[], checks: readonly CheckSelection[]) { this.reviews.assert(evidence, checks) }
   current(ticketId: string, accepted: NonNullable<MissionAction['accepted']>): boolean {
     try {

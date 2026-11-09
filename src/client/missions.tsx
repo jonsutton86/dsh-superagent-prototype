@@ -10,6 +10,9 @@ import type { PersonaRef } from '../personas/model.ts'
 import { WorldSelector } from './worlds.tsx'
 import { MissionDeliveryCard } from './mission-delivery.tsx'
 import { ArtifactCheckPicker } from './verification.tsx'
+import { MissionPullCard, MissionPullObservation } from './mission-pulls.tsx'
+import { MissionCompletionCard } from './mission-completion.tsx'
+import type { PullObservation } from '../publication/pull-model.ts'
 import type { CheckSelection } from '../verification/review-model.ts'
 
 /** Retain a request ID after an ambiguous response; identical retries cannot duplicate an execution. */
@@ -88,7 +91,7 @@ function MissionDetail({ id }: { id: string }) {
     const body = { revision: mission.revision, status }
     void command.run({ id, body }, requestId => call('PUT missions/:id', { id, body: { ...body, requestId } }))
   }
-  const act = (action: ActionView, operation: ActionCommandInput['command'], text = '', review?: Pick<ActionCommandInput, 'reviewKind' | 'checks'>) => {
+  const act = (action: ActionView, operation: ActionCommandInput['command'], text = '', review?: Pick<ActionCommandInput, 'reviewKind' | 'checks' | 'pullHash'>) => {
     if (!mission) return
     const body = { revision: mission.revision, command: operation, text, ticketRevision: action.ticket?.revision, ...review }
     void command.run({ id, action: action.id, body }, requestId => call('POST missions/:id/actions/:action', {
@@ -105,6 +108,7 @@ function MissionDetail({ id }: { id: string }) {
       <div className="dt-mission-criteria"><h3>{t('mission.acceptance')}</h3><p className="dt-mission-prose">{mission.acceptance}</p></div>
       <MissionPlans mission={mission} changed={() => { void reload() }} />
       <MissionDeliveryCard key={`${mission.id}:${mission.planVersion}`} mission={mission} />
+      <MissionCompletionCard mission={mission} changed={value => { setSaved(value); void reload() }} />
       <Button onClick={() => navigate({ page: 'library', query: { scope: `mission:${mission.id}` } })}>{t('library.missionRecords')}</Button>
       {(state?.paused || state?.setup.problem || (state && !state.environment?.ready)) && <p role="status">{t('mission.executionUnavailable')}</p>}
       <div className="dt-mission-buttons">
@@ -132,15 +136,15 @@ function MissionDetail({ id }: { id: string }) {
       </form>}
       {!mission.actions.length && <div className="dt-mission-empty"><h3>{t('mission.noActions')}</h3><p>{t('mission.actionsHint')}</p></div>}
       <div className="dt-mission-actions">{mission.actions.map(action => <Action key={action.id} action={action} mission={mission}
-        busy={command.busy} runnable={!!state && !state.paused && !state.setup.problem && state.environment?.ready} act={act} />)}</div>
+        busy={command.busy} runnable={!!state && !state.paused && !state.setup.problem && state.environment?.ready} act={act} changed={value => { setSaved(value); void reload() }} />)}</div>
       <details className="dt-mission-history"><summary>{t('mission.activity')}</summary><ol>{mission.events.map(event =>
         <li key={event.id}><time dateTime={event.at}>{new Date(event.at).toLocaleString()}</time><p>{event.text}</p></li>)}</ol></details>
     </>}
   </section>
 }
 
-function Action({ action, mission, busy, runnable, act }: { action: ActionView; mission: MissionView; busy: boolean; runnable: boolean
-  act: (action: ActionView, operation: ActionCommandInput['command'], text?: string, review?: Pick<ActionCommandInput, 'reviewKind' | 'checks'>) => void }) {
+function Action({ action, mission, busy, runnable, act, changed }: { action: ActionView; mission: MissionView; busy: boolean; runnable: boolean; changed(value: MissionView): void
+  act: (action: ActionView, operation: ActionCommandInput['command'], text?: string, review?: Pick<ActionCommandInput, 'reviewKind' | 'checks' | 'pullHash'>) => void }) {
   const { t, navigate, openSession, notify } = usePanel(), [message, setMessage] = useState('')
   const mutable = mission.status === 'active', ticket = action.ticket
   const complete = action.status === 'review' || (action.owner === 'person' && ['todo', 'outdated'].includes(action.status))
@@ -151,6 +155,7 @@ function Action({ action, mission, busy, runnable, act }: { action: ActionView; 
     <p className="dt-mission-prose">{action.instructions}</p>
     {action.persona && <p className="dt-hint">{t('persona.select')}: <code>{action.persona.id}</code> · {t('persona.version', { version: action.persona.version })}</p>}
     {action.environment && <p className="dt-hint">{t('world.select')}: <code>{action.environment}</code></p>}
+    <MissionPullCard mission={mission} action={action} changed={changed} />
     {!!dependencies.length && <p className="dt-hint">{t('mission.after', { actions: dependencies.join(', ') })}</p>}
     {ticket?.summary && <blockquote className="dt-mission-prose">{ticket.summary}</blockquote>}
     {action.status === 'done' && <p className="dt-mission-prose">{action.accepted?.note}</p>}
@@ -166,7 +171,7 @@ function Action({ action, mission, busy, runnable, act }: { action: ActionView; 
         <Button disabled={busy} onClick={() => act(action, 'stop')}>{t('stop')}</Button>
       </>}
     </div>
-    {mutable && complete && <ResultAcceptance key={ticket?.revision ?? action.id} action={action} busy={busy} act={act} />}
+    {mutable && complete && <ResultAcceptance key={`${ticket?.revision ?? action.id}:${action.pull ?? ''}`} missionId={mission.id} action={action} busy={busy} act={act} />}
     {mutable && !complete && ticket && !ticket.ended && <form className="dt-mission-form" onSubmit={event => {
       event.preventDefault(); act(action, 'steer', message)
     }}><label>{t('mission.message')}
@@ -176,18 +181,27 @@ function Action({ action, mission, busy, runnable, act }: { action: ActionView; 
   </article>
 }
 
-function ResultAcceptance({ action, busy, act }: { action: ActionView; busy: boolean;
-  act(action: ActionView, operation: ActionCommandInput['command'], text: string, review: Pick<ActionCommandInput, 'reviewKind' | 'checks'>): void }) {
-  const { t } = usePanel(), [message, setMessage] = useState(''), [manual, setManual] = useState(false), [selected, setSelected] = useState<Record<string, CheckSelection[]>>({})
+function ResultAcceptance({ missionId, action, busy, act }: { missionId: string; action: ActionView; busy: boolean;
+  act(action: ActionView, operation: ActionCommandInput['command'], text: string, review: Pick<ActionCommandInput, 'reviewKind' | 'checks' | 'pullHash'>): void }) {
+  const { call, t } = usePanel(), [message, setMessage] = useState(''), [manual, setManual] = useState(false), [selected, setSelected] = useState<Record<string, CheckSelection[]>>({})
+  const [pull, setPull] = useState<PullObservation>(), [inspecting, setInspecting] = useState(false), [error, setError] = useState(''), inspection = useRef(false)
   const artifacts = action.review?.artifacts ?? [], checked = artifacts.length > 0
   const selections = artifacts.flatMap(artifact => selected[artifact.id] ?? []).sort((a, b) => a.runId.localeCompare(b.runId))
-  const ready = !action.review?.problem && (checked ? artifacts.every(artifact => selected[artifact.id]?.length) : action.owner === 'person' || manual)
+  const pullReady = !action.pull || !!pull && !action.pullState?.problem && (pull.binding.state === 'open' || pull.binding.merged)
+  const ready = !action.review?.problem && pullReady && !inspecting && (checked ? artifacts.every(artifact => selected[artifact.id]?.length) : !action.pull && (action.owner === 'person' || manual))
   return <form className="dt-mission-form" onSubmit={event => {
-    event.preventDefault(); if (ready) act(action, 'complete', message, { reviewKind: checked ? 'checks' : 'operator', ...(checked ? { checks: selections } : {}) })
+    event.preventDefault(); if (ready) act(action, 'complete', message, { reviewKind: checked ? 'checks' : 'operator', ...(checked ? { checks: selections } : {}), ...(action.pull && pull ? { pullHash: pull.hash } : {}) })
   }}>
+    {error && <p role="alert">{error}</p>}
+    {action.pull && <><p>{t('missionPull.acceptHint')}</p><Button disabled={busy || inspecting} onClick={() => {
+      if (inspection.current) return
+      inspection.current = true; setInspecting(true); setSelected({}); setPull(undefined); setError('')
+      void call('POST missions/:id/actions/:action/pull/inspect', { id: missionId, action: action.id }).then(setPull).catch(failure => setError(errorText(failure)))
+        .finally(() => { inspection.current = false; setInspecting(false) })
+    }}>{t('publication.inspectPull')}</Button>{pull && <MissionPullObservation observation={pull} />}</>}
     {action.review?.problem && <p role="alert">{action.review.problem}</p>}
     {artifacts.map(artifact => <div key={`${artifact.id}:${artifact.revision}:${artifact.hash}`}><h4>{artifact.title}</h4>
-      <ArtifactCheckPicker artifactId={artifact.id} selected={selected[artifact.id] ?? []} disabled={busy}
+      <ArtifactCheckPicker artifactId={artifact.id} selected={selected[artifact.id] ?? []} disabled={busy || inspecting || !pullReady} pull={action.pull ? pull?.binding : undefined}
         onChange={value => setSelected(previous => ({ ...previous, [artifact.id]: value }))} />
     </div>)}
     {!checked && action.owner === 'agent' && <label><input type="checkbox" checked={manual} onChange={event => setManual(event.target.checked)} />{t('verification.manualReview')}</label>}

@@ -74,7 +74,9 @@ it('requires selected checks for every artifact, commits acceptance atomically a
   h.advance(FRESHNESS_WINDOW_MS + 1)
   expect((await h.workspace.actReviewed(mission.id, action.id, input)).actions[0]!.accepted).toEqual(accepted.actions[0]!.accepted)
   expect(h.store.db.prepare('SELECT count(*) AS n FROM verification_run').get()!.n).toBe(captures)
-  const complete = h.workspace.update(mission.id, { requestId: rid(), revision: accepted.revision, status: 'completed' })
+  // Fresh capture timestamps come from the actual host clock; the historical-expiry probe above is complete.
+  h.advance(-FRESHNESS_WINDOW_MS - 1)
+  const complete = await h.workspace.updateReviewed(mission.id, { requestId: rid(), revision: accepted.revision, status: 'completed' })
   expect(complete.completed).toBe(1)
   await writeFile(join(h.source, 'changed.txt'), 'source changed after historical acceptance')
   const changed = await h.verification.freshness(first.run.id, rid()); expect((await h.settled(changed.id)).status).toBe('failed')

@@ -8,6 +8,7 @@ import { errorText } from './text.ts'
 import { When } from './widgets.tsx'
 import { PersonaSelector } from './personas.tsx'
 import { WorldSelector } from './worlds.tsx'
+import { MissionPullReference } from './mission-pulls.tsx'
 
 /** Retain the exact request closure across ambiguous responses, including its original revision. */
 function usePlanCommand() {
@@ -27,7 +28,7 @@ function usePlanCommand() {
   return { busy, error, run }
 }
 const definition = (mission: MissionView): PlanDefinition => ({ title: mission.title, objective: mission.objective, acceptance: mission.acceptance,
-  actions: mission.actions.map(({ id, title, instructions, owner, dependsOn, persona, environment }) => ({ id, title, instructions, owner, dependsOn, ...(persona ? { persona } : {}), ...(environment ? { environment } : {}) })) })
+  actions: mission.actions.map(({ id, title, instructions, owner, dependsOn, persona, environment, pull }) => ({ id, title, instructions, owner, dependsOn, ...(persona ? { persona } : {}), ...(environment ? { environment } : {}), ...(pull ? { pull } : {}) })) })
 
 export function MissionPlans({ mission, changed }: { mission: MissionView; changed: () => void }) {
   const { call, t, notify, navigate } = usePanel(), { state } = usePanelData(), id = mission.id
@@ -105,6 +106,7 @@ function PlanPreview({ plan }: { plan: PlanDefinition }) {
     <ol>{plan.actions.map(action => <li key={action.id}><strong>{action.title} · {t(`mission.${action.owner}`)}</strong><p>{action.instructions}</p>
       {action.persona && <p>{t('persona.select')}: <code>{action.persona.id}</code> · {t('persona.version', { version: action.persona.version })}</p>}
       {action.environment && <p>{t('world.select')}: <code>{action.environment}</code></p>}
+      {action.pull && <MissionPullReference id={action.pull} />}
       {!!action.dependsOn.length && <p>{t('mission.after', { actions: action.dependsOn.map(id => plan.actions.find(item => item.id === id)?.title ?? id).join(', ') })}</p>}</li>)}</ol>
   </div>
 }
@@ -122,10 +124,11 @@ function PlanEditor({ initial, busy, submit, cancel }: { initial: PlanDefinition
       <label>{t('mission.actionTitle')}<input required maxLength={160} value={action.title} onChange={event => change(action.id, { title: event.target.value })} /></label>
       <label>{t('mission.instructions')}<textarea required maxLength={12000} rows={3} value={action.instructions} onChange={event => change(action.id, { instructions: event.target.value })} /></label>
       <label>{t('mission.owner')}<select value={action.owner} onChange={event => change(action.id, { owner: event.target.value as 'person' | 'agent',
-        ...(event.target.value === 'person' ? { persona: undefined, environment: undefined } : {}) })}>
+        ...(event.target.value === 'person' ? { persona: undefined, environment: undefined, pull: undefined } : {}) })}>
         <option value="agent">{t('mission.agent')}</option><option value="person">{t('mission.person')}</option></select></label>
       {action.owner === 'agent' && <PersonaSelector value={action.persona} change={persona => change(action.id, { persona })} />}
       {action.owner === 'agent' && <WorldSelector value={action.environment} change={environment => change(action.id, { environment })} />}
+      {action.pull && <MissionPullReference id={action.pull} />}
       <fieldset><legend>{t('mission.dependencies')}</legend>{plan.actions.filter(item => item.id !== action.id).map(dependency =>
         <label className="dt-mission-check" key={dependency.id}><input type="checkbox" checked={action.dependsOn.includes(dependency.id)}
           onChange={event => change(action.id, { dependsOn: event.target.checked ? [...action.dependsOn, dependency.id] : action.dependsOn.filter(id => id !== dependency.id) })} />{dependency.title}</label>)}</fieldset>

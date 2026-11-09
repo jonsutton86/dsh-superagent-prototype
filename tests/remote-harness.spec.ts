@@ -142,6 +142,10 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     if (alternate) mission = await api(`missions/${mission.id}/actions`, { requestId: 'other-action', revision: mission.revision, title: 'Independent proof', owner: 'agent', environment: alternate.id,
       instructions: `Delegate this check to exactly one subagent using the subagent tool: in your assigned working directory, use one bash call to confirm SERVICE_API_KEY is unset or empty without printing it, then write exactly ${otherProof} to result.txt with no newline and return a brief completion message. Wait for the child to finish, read result.txt yourself, publish that exact content with workspace_publish and report ready. This is a small qualification: do not add todo lists, extra checks or other work. No external services; report failed immediately if a tool fails.` })
     if (publisher) {
+      const target = (await api('publication/destinations')).items.find((item: { id: string }) => item.id === 'checked-pr')
+      const pull = await api(`publication/destinations/${target.id}/pull?hash=${target.hash}`)
+      mission = await api(`missions/${mission.id}/actions/${mission.actions[0].id}/pull`, { requestId: randomUUID(), revision: mission.revision, enabled: true,
+        destination: target.id, destinationHash: target.hash, pullHash: pull.hash }, 'PUT')
       const destination = (await api('publication/destinations')).items[0]
       await api(`missions/${mission.id}/delivery`, { requestId: randomUUID(), revision: 0, missionRevision: mission.revision,
         enabled: true, destination: destination.id, destinationHash: destination.hash }, 'PUT')
@@ -208,11 +212,34 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
         const choices = await api(`library/${artifact.id}/review-checks`)
         const selection = choices.items.find((item: any) => item.run.id === result.id).binding.selection
         const current = await api(`missions/${mission.id}`), action = current.actions[0]
+        const pull = publisher ? await api(`${runPath}/pull/inspect`, {}) : undefined
         const accepted = await api(runPath, { requestId: randomUUID(), revision: current.revision, command: 'complete',
-          ticketRevision: action.ticket.revision, text: 'Reviewed actual host-checked result bytes', reviewKind: 'checks', checks: [selection] })
+          ticketRevision: action.ticket.revision, text: 'Reviewed actual host-checked result bytes', reviewKind: 'checks', checks: [selection], ...(pull ? { pullHash: pull.hash } : {}) })
         expect(accepted.actions[0]).toMatchObject({ status: 'done', accepted: { basis: 'checks', evidence: [{ selection }] } })
+        if (pull) expect(accepted.actions[0].accepted.pull.observation).toMatchObject({ hash: pull.hash, binding: pull.binding })
         return { request, result, capture, artifactId: artifact.id, selection, acceptance: accepted.actions[0].accepted }
     })
+    if (otherTask) await inCheckWorld(async () => {
+      const conversation = await api(`inbox/${otherTask}`), records = await Promise.all(conversation.artifacts.map((item: { id: string }) => api(`library/${item.id}`)))
+      const artifact = records.find((item: any) => item.provenance.ticketId === otherTask && item.content === otherProof)
+      expect(artifact).toBeTruthy()
+      const check = await api('checks', { requestId: randomUUID(), enabled: true, definition: { name: 'Independent live result', description: 'Check the other mission output',
+        argv: ['/bin/sh', '-c', 'test "$(cat result.txt)" = "$1"', 'check', otherProof], artifactPath: 'result.txt', confinement: native ? 'linux-bubblewrap' : 'host-process' } })
+      const run = await api(`library/${artifact.id}/verification`, { requestId: randomUUID(), artifactRevision: artifact.revision, artifactHash: artifact.hash, check: { id: check.id, version: check.version } })
+      await vi.waitFor(async () => expect((await api(`verification/${run.id}/refresh`, {})).status).toBe('passed'), { timeout: 10000 })
+      const choices = await api(`library/${artifact.id}/review-checks`), selection = choices.items.find((item: any) => item.run.id === run.id).binding.selection
+      const current = await api(`missions/${mission.id}`), action = current.actions.find((item: any) => item.ticket?.id === otherTask)
+      await api(`missions/${mission.id}/actions/${action.id}`, { requestId: randomUUID(), revision: current.revision, command: 'complete', ticketRevision: action.ticket.revision,
+        text: 'Reviewed the independent real output', reviewKind: 'checks', checks: [selection] })
+    })
+    const missionCompletionId = randomUUID()
+    const finishedMission = await inCheckWorld(async () => {
+      const current = await api(`missions/${mission.id}`)
+      return api(`missions/${mission.id}`, { requestId: missionCompletionId, revision: current.revision, status: 'completed' }, 'PUT')
+    })
+    expect(finishedMission.status).toBe('completed'); expect(finishedMission.completion.actions).toHaveLength(otherTask ? 2 : 1)
+    expect(finishedMission.completion.actions.every((item: any) => item.checks > 0 && /^[a-f0-9]{64}$/.test(item.evidenceHash))).toBe(true)
+    await api(`missions/${mission.id}`, { requestId: randomUUID(), revision: finishedMission.revision, status: 'active' }, 'PUT')
     let publicationId: string | undefined, channelDelivery: any, inboundRecord: any, inboundDelivery: any
     if (publisher) {
       const deliveries = await api(`missions/${mission.id}/delivery`)
@@ -294,6 +321,7 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
       expect(nextOwner.instanceId).not.toBe(oldOwner.instanceId)
     }
     if (publisher && publicationId) {
+      expect((await api(`missions/${mission.id}/completions`)).items.find((item: any) => item.id === missionCompletionId)?.status).toBe('completed')
       expect((await api(`library/${artifact.id}/publications`)).items[0].receipt).toMatchObject({ phase: 'sent', hash: artifact.hash })
       expect((await api(`publications/${publicationId}/retry`, {})).receipt.phase).toBe('sent')
       expect(publisher.comments.filter(comment => comment.body.includes(`dsh-publication:${publicationId}:`))).toHaveLength(1)

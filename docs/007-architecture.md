@@ -302,6 +302,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/client/library.tsx` | Library search, authoring, immutable revisions, inert previews, downloads and source history |
 | `src/client/verification.tsx` | Operator check definition/authority forms, artifact requests, original evidence/output, freshness captures and quiescence review |
 | `src/workspace/model.ts` | Mission, action and activity contracts, validated commands and workspace errors |
+| `src/workspace/pull-model.ts`, `pulls.ts`, `completion.ts` | Immutable mission PR targets, revision-ordered provider observations and durable whole-mission completion attempts with original evidence-review IDs |
 | `src/workspace/plan-model.ts` | Complete plan definitions, dependency validation, immutable version and proposal contracts |
 | `src/workspace/plans.ts` | Plan history, legacy migration, session-bound proposals, operator review and atomic planner requests |
 | `src/app/tools/planning.ts` | Mission-scoped worker plan reading and proposal tools, with no approval or dispatch tool |
@@ -322,6 +323,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/personas/runtime.ts` | Harness scoped persona instructions, embedded skills and monotonic optional-tool guards |
 | `src/client/personas.tsx` | Persona catalog, version editing/history, archive/restore and exact-version action selectors |
 | `src/client/missions.tsx` | Mission workspace: creation, action ownership, dependencies, execution controls and reviewed completion |
+| `src/client/mission-pulls.tsx`, `mission-completion.tsx` | Plan-visible PR target consent, current-head result review, completion receipts and original-attempt recovery |
 | `src/supervision/service.ts` | Main-process supervision observations and transactional, idempotent, assignment-bounded progress requests |
 | `src/supervision/client.ts` | Authenticated loopback transport, bounded responses, consistent pagination and restart fencing |
 | `src/supervision/journal.ts` | Independent SQLite incident history, assessment delivery reservations and intervention audit |
@@ -549,6 +551,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/ownership-runtime.spec.ts` | Profile compatibility, owned Runtime startup/loss, managed command attribution, competing writers, startup cleanup and held-restore refusal |
 | `tests/publication.spec.ts` | Provider/service acknowledgement loss, late commits, ownership barriers, account checks, exact intents and independent reconciliation |
 | `tests/publication-pull.spec.ts`, `tests/publication-pull-ui.spec.tsx`, `tests/fixtures/pull-review.ts` | Actual Git/check evidence, PR identity/head races, three review events, restart/dismissal recovery and rendered exact-head consent |
+| `tests/mission-pull.spec.ts`, `tests/mission-pull-ui.spec.tsx`, `tests/fixtures/mission-pull.ts` | PR-bound mission authorization, fresh all-action closure, changed-head/source/plan holds, original capture recovery, shutdown and rendered managed-world completion |
 | `tests/publication-runtime.spec.ts` | Management approval, stale artifact/destination refusal, duplicate prevention and observation after ownership loss |
 | `tests/publication-ui.spec.tsx` | Rendered content/destination review, unchanged approval IDs after lost responses and unknown receipt recovery |
 | `tests/channel-publication.spec.ts` | Owned managed execution through acknowledgements/results, exact grants, revoked/withdrawn unknown sends and ordered Outbox recovery |
@@ -625,6 +628,7 @@ One SQLite file, `<stateDir>/orchestrator.sqlite`, which only the Store opens.
 | `outbox` | The receipt of each message for a Channel, by id, with the Ticket it is for and its `status`, `pending`, `sent` or `dropped`, kept so an id is never queued twice; for a dropped message, when and why, as the generated column `dropped`, its time, and a reason code. A message that waits has a `reply` effect, which holds its attempts | The Outbox |
 | `delivery_grant`, `channel_publication` | Historical exact-plan destination consent and original mission message intents/receipts; attempted withdrawals retain unresolved delivery evidence | ChannelPublications |
 | `conversation_binding`, `conversation_message` | Historical participant/task authority, durable provider cursors, native deduplication and received/unsupported message receipts | ConversationInbox |
+| `mission_pull_target`, `mission_completion` | Immutable PR identities and latest ordered observations; original whole-mission completion commands and per-action review IDs | MissionPulls, MissionCompletions |
 | `workspace_schedule`, `workspace_schedule_version`, `workspace_occurrence`, `workspace_schedule_command` | Versioned standing authorizations, due cursors, lifetime run reservations, immutable occurrence identities and operator command receipts | Schedules |
 | `kv` | Every other record, by key | The part that names it |
 
