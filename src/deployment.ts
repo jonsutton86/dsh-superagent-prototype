@@ -14,6 +14,8 @@ import { PublicationConfig, type PublicationConnection } from './publication/cli
 
 const reason = (error: unknown): string => error instanceof Error ? error.message : String(error)
 const absolute = (description: string) => s.string().pattern(/^\//).description(`${description} Absolute path.`)
+const RestoreConfig: s<{ directory: string; keyFile: string }> = s.object({ directory: absolute('Authenticated recovery installation directory.').required(),
+  keyFile: absolute('Private checkpoint authentication key.').required() })
 /** Plugin configuration. Volatile limits apply on each use; changing `stateDir` or `executionMode` remounts the plugin. */
 export const Config = s.object({
   executionMode: s.union(['repository', 'local']).default('repository')
@@ -21,6 +23,7 @@ export const Config = s.object({
   stateDir: absolute('Directory for the database, locks, worker shims, the agent\'s git configuration and, by default, the ticket directories.').required(),
   ownership: s.union([OwnershipConfig]).description('Independent coordinator ownership. Execution must use endpoints enrolled with this authority.'),
   publication: s.union([PublicationConfig]).description('Independent ownership-fenced publication service for approved artifacts.'),
+  restore: s.union([RestoreConfig]).description('Start an installed checkpoint through verified Session and ownership handoff.'),
   promptMaxChars: s.number().min(LIMITS.promptMaxChars.min).max(LIMITS.promptMaxChars.max).step(1).default(100000)
     .description('Largest saved prompt configuration, in characters.').volatile(),
   admissionContextMaxPages: s.number().min(LIMITS.admissionContextMaxPages.min).max(LIMITS.admissionContextMaxPages.max).step(1).default(10)
@@ -34,6 +37,7 @@ export interface Machine {
   stateDir: string
   ownership?: CoordinatorOwnershipConfig
   publication?: PublicationConnection
+  restore?: { directory: string; keyFile: string }
   promptMaxChars: Volatile<number>
   admissionContextMaxPages: Volatile<number>
   admissionContextTimeoutMs: Volatile<number>
@@ -48,8 +52,8 @@ const MOVED: Record<string, string> = {
 export function machineOf(config: DeploymentConfig): Machine {
   const unknown = Object.keys(config).filter(key => !(key in (Config.dict ?? {})))
   if (unknown.length) throw new Error(`dsh-superagent configuration has keys it does not use: ${unknown.map(key => MOVED[key] ? `${key} (now ${MOVED[key]})` : key).join(', ')}; docs/006-deployment.md lists the keys`)
-  const { stateDir, promptMaxChars, admissionContextMaxPages, admissionContextTimeoutMs, executionMode, ownership, publication } = config
-  return { stateDir, promptMaxChars, admissionContextMaxPages, admissionContextTimeoutMs, executionMode, ...(ownership ? { ownership } : {}), ...(publication ? { publication } : {}) }
+  const { stateDir, promptMaxChars, admissionContextMaxPages, admissionContextTimeoutMs, executionMode, ownership, publication, restore } = config
+  return { stateDir, promptMaxChars, admissionContextMaxPages, admissionContextTimeoutMs, executionMode, ...(ownership ? { ownership } : {}), ...(publication ? { publication } : {}), ...(restore ? { restore } : {}) }
 }
 
 export const GithubAccountsSchema = z.object({

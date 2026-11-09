@@ -98,7 +98,7 @@ export interface SessionBackendVerification { sessions: number; events: number }
 
 /** Hold every restored writer while comparing the actual backend with authenticated logical history. */
 export async function withVerifiedSessionBackend<T>(persistence: SessionPersistence, directory: string, expected: readonly SessionArchive[], signal: AbortSignal,
-  action: (verified: SessionBackendVerification, recheck: () => Promise<void>) => Promise<T>): Promise<T> {
+  action: (verified: SessionBackendVerification, recheck: () => Promise<void>) => Promise<T>, allowContinuation = false): Promise<T> {
   const selected = new Map(expected.map(session => [session.id, session])), identity = persistence.identity
   if (!expected.length || selected.size !== expected.length) throw new Error('Destination Session verification requires a unique nonempty checkpoint set')
   const recheck = async () => {
@@ -111,7 +111,7 @@ export async function withVerifiedSessionBackend<T>(persistence: SessionPersiste
         if (found.has(header.id) || !isDeepStrictEqual(comparableHeader(header), comparableHeader(original.header)))
           throw new Error('Destination Session immutable metadata differs from the checkpoint')
         found.add(header.id)
-      } else if (header.parentSession && selected.has(header.parentSession))
+      } else if (!allowContinuation && header.parentSession && selected.has(header.parentSession))
         throw new Error('Destination Session backend contains an extra related descendant')
     }
     if (found.size !== selected.size) throw new Error('Destination Session backend is missing checkpoint history')
@@ -143,7 +143,7 @@ export async function withVerifiedSessionBackend<T>(persistence: SessionPersiste
           index += actual.length
         }
       })
-      if ((await handle.read(session.eventCount, 1, { signal })).events.length) throw new Error('Destination Session history is newer than the checkpoint')
+      if (!allowContinuation && (await handle.read(session.eventCount, 1, { signal })).events.length) throw new Error('Destination Session history is newer than the checkpoint')
     }
     await recheck()
     return await action({ sessions: expected.length, events: expected.reduce((total, session) => total + session.eventCount, 0) }, recheck)

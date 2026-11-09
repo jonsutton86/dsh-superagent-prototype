@@ -71,6 +71,6 @@ it('lets the Host Loader settle while runtime restoration is pending and reports
     expect(ctx.logger.info).not.toHaveBeenCalled()
     fail(new Error('Restoration failed'))
     await vi.waitFor(() => expect(ctx.logger.error).toHaveBeenCalledWith('dsh-superagent initialization failed: %s', 'Error: Restoration failed'))
-    expect(ctx.effect).toHaveBeenCalledTimes(1)
+    expect(ctx.effect).toHaveBeenCalledTimes(2)
   } finally { initialization.pending = undefined }
 })

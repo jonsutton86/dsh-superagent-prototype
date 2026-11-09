@@ -637,3 +637,10 @@ The exact revision passed installed-Harness / DeepSeek Flash owned-managed recov
 publications and mission delivery, no unresolved/legacy publication gaps and original-ID held-image retrieval. The original
 app remains running. Deployment binding/remapping, restored activation/handoff, clean-host failover and every remaining full
 product/architecture requirement stay open. The prepared image does not acquire execution authority.
+
+Installed recovery and Runtime handoff are implemented in `060-installed-recovery.md`: a private authenticated installation
+retains original state/Session identities and historical authority while relocating operational files. First startup checks
+original history, journals and independent resources, acquires ownership, then hands its exclusive lock and active lease to
+the real Harness Runtime. Restart preserves legitimate continued history. Subsequent backup/recovery resolves relocated
+journals and requires a new reservation. Final local, native and installed-Harness qualification is pending; cross-machine
+failover, dedicated-profile live startup and all remaining full product/architecture requirements remain open.

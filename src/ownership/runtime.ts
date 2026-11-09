@@ -27,12 +27,13 @@ export function assertOwnershipCredential(config: CoordinatorOwnershipConfig | u
   if (roots.some(root => { let canonical = resolve(root); try { canonical = realpathSync(root) } catch { /* Check future roots too. */ }; return inside(canonical, credential) }))
     throw new Error('Coordinator ownership credential must be outside every execution workspace')
 }
-export function openRuntimeOwnership(store: Store, config: CoordinatorOwnershipConfig | undefined, roots: string[]): CoordinatorOwnership | undefined {
+export function openRuntimeOwnership(store: Store, config: CoordinatorOwnershipConfig | undefined, roots: string[], acquired?: CoordinatorOwnership): CoordinatorOwnership | undefined {
   const stored = store.get(KV.runtime.ownership)
   if (stored && !sameOwnership(stored, config)) throw new Error('Persisted coordinator ownership binding cannot be removed or replaced')
   if (!config) return
   assertOwnershipCredential(config, roots)
-  const ownership = new CoordinatorOwnership(config, store.get(KV.recovery.reservation)?.recovery)
+  if (acquired) { assertOwnership(config, acquired); acquired.proof() }
+  const ownership = acquired ?? new CoordinatorOwnership(config, store.get(KV.recovery.reservation)?.recovery)
   store.set(KV.runtime.ownership, { authorityId: config.authorityId, coordinatorId: config.coordinatorId, credentialFile: config.credentialFile })
   return ownership
 }

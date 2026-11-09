@@ -25,6 +25,16 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: installed recovery and Runtime handoff
+
+[060 Installed recovery](060-installed-recovery.md) binds the prepared Store, original Session backend, relocated private
+credentials and world journals to an authenticated deployment. Startup checks the held state and independent resources,
+acquires the recovery lease, and transfers its exclusive Store lock and ownership into the actual Harness Runtime.
+Restart permits legitimate Session continuation while retaining the original prefix. Operational bindings also support a
+second complete checkpoint/recovery cycle without rewriting historical approvals or commands. Final local, native and
+installed-Harness qualification is pending. Cross-machine failover, dedicated-profile live startup and the remaining full
+product/architecture requirements remain open.
+
 ## Implemented increment: held publication authority
 
 [059 Publication authority recovery](059-publication-authority-recovery.md) links independent outcomes to original artifact

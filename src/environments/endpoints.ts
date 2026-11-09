@@ -23,6 +23,7 @@ export interface EndpointWorld { config: RemoteWorldConfig; grant: RemoteGrant; 
 interface Registration extends EndpointRegistration { credentialPin: string }
 interface Command extends OperatorCommand { fingerprint: string; registration: Registration; expectedEpoch?: number; previousGrant?: RemoteGrant; credentialPin?: string }
 interface EndpointHost { store: Store; stateDir: string; lifetime: AbortSignal; ownership?: OwnershipAccess; ownershipConfig?: CoordinatorOwnershipConfig;
+  restoreRegistration?(record: Registration): Registration;
   publicationConfig?: PublicationConnection; workerRoots(): string[] }
 const stamp = () => new Date().toISOString()
 const jobView = ({ id, grantId, epoch, phase, createdAt, updatedAt, cancelRequested, quiescent, reconciled }: EndpointJob): EndpointJob =>
@@ -44,7 +45,10 @@ export class Endpoints {
     if (!row) throw new EnvironmentError(404, 'Endpoint registration not found')
     return JSON.parse(String(row.value)) as Registration
   }
-  private registrationView({ credentialPin: _, ...record }: Registration): EndpointRegistration { return record }
+  private registrationView(original: Registration): EndpointRegistration {
+    const { credentialPin: _, ...record } = this.host.restoreRegistration?.(original) ?? original
+    return record
+  }
   private commandView({ fingerprint: _, registration: __, expectedEpoch: ___, previousGrant: ____, credentialPin: _____, ...record }: Command): OperatorCommand { return record }
   private page<T>(table: 'operator_endpoint' | 'operator_endpoint_command', input: unknown, endpoint?: string): EndpointList<T> {
     const { offset } = EndpointPage.parse(input)
@@ -69,6 +73,7 @@ export class Endpoints {
     })) throw new EnvironmentError(409, 'Keep endpoint administration files outside every local execution workspace')
   }
   private client(record: Registration): RemoteClient {
+    record = this.host.restoreRegistration?.(record) ?? record
     this.separate(record.credentialFile)
     return new RemoteClient({ url: record.url, endpointId: record.id, credentialFile: record.credentialFile,
       ownership: this.host.ownership, lifetime: this.stopped.signal }, request => {
@@ -247,7 +252,7 @@ export class Endpoints {
         throw new EnvironmentError(409, 'This grant and endpoint must support the paired Harness execution world and its credential bindings')
       const directory = this.directory(command, grant), credentialFile = join(directory, 'grant.token')
       privateCredential(credentialFile, command.credentialPin)
-      return { config: { url: command.registration.url, endpointId: id, credentialFile, stateDir: join(directory, 'world') },
+      return { config: { url: (this.host.restoreRegistration?.(command.registration) ?? command.registration).url, endpointId: id, credentialFile, stateDir: join(directory, 'world') },
         grant: current, credentialPin: command.credentialPin }
   }
   /** Drain administrative writes before Runtime closes its SQLite connection. In-flight requests remain recoverable. */

@@ -3,6 +3,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-settings'
 import { Runtime } from './app/runtime.ts'
 import { Config, machineOf, type DeploymentConfig } from './deployment.ts'
+import { prepareRuntimeActivation } from './recovery/activation.ts'
 
 export const name = 'dsh-superagent'
 export const inject = ['agents', 'sessionController', 'sessionPersistence', 'workspaceRegistry', 'permissionPresets', 'tools', 'systemPrompt', 'skills', 'webServer', 'llm', 'subprocess', 'fs']
@@ -18,7 +19,11 @@ export async function apply(ctx: Context, config: DeploymentConfig): Promise<voi
   const restart = (): void => {
     ctx.fiber.restart().then(() => { ctx.get('settings')?.describe() }).catch((error: unknown) => { ctx.logger.error('dsh-superagent restart failed: %s', String(error)) })
   }
-  const runtime = new Runtime(ctx, machine, restart)
+  const lifetime = new AbortController(); ctx.effect(() => () => lifetime.abort())
+  const handoff = machine.restore ? await prepareRuntimeActivation(ctx, machine, lifetime.signal) : undefined
+  let runtime: Runtime
+  try { runtime = new Runtime(ctx, machine, restart, handoff) }
+  catch (error) { await handoff?.ownership.close(); handoff?.release(); throw error }
   ctx.effect(() => async () => { await runtime.stop() })
   // Preset restoration may wait for the Host Loader tree to settle. Do not hold this row's activation open while it waits
   // for that same tree. SourceHost.ready and Runtime's admission gate retain the actual initialization boundary.

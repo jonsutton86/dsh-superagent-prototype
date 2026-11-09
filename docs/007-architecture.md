@@ -481,6 +481,9 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/recovery/configuration.ts` | Original managed/dedicated execution credential selection, pinned private-file checks and read-only endpoint/vault/root validation |
 | `src/recovery/prepare.ts` | Original-ID held receipt preparation, revision-bound observation application and atomic recovery image publication |
 | `src/recovery/image.ts` | Authenticated prepared-state manifests, private member hashing and complete image verification |
+| `src/recovery/installation.ts` | Private checkpoint installation, copied credential pins, authenticated deployment paths and preserved historical requests |
+| `src/recovery/activation.ts` | Verified Session startup, independent resource checks and exclusive lock/ownership handoff to the real Runtime |
+| `src/recovery/bindings.ts` | Operational path resolution retained across subsequent checkpoint and restore cycles |
 | `src/recovery/audit.ts` | Complete resource coverage, original receipt comparison, divergence/quiescence findings and durable held audit reports |
 | `src/recovery/state.ts` | Incremental logical SQLite comparison of held and authenticated state, excluding only hold/reservation/audit metadata |
 | `src/recovery/sessions.ts` | Public Harness logical export/import and exact destination-backend verification under held Session writers |
@@ -565,6 +568,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/recovery-registries.spec.ts` | Actual persona/environment/world history, deep Session ancestry, revoked grants, corruption refusal and incomplete legacy bindings |
 | `tests/recovery-resources.spec.ts` | Actual reflection/recall/model/speculation history, uncertain charges, approvals, corruption refusal, legacy evidence and cancellation |
 | `tests/recovery-publications.spec.ts` | Historical artifact/grant authority, exact original destinations, uncertain withdrawn delivery, receipt substitution refusal and legacy publication evidence |
+| `tests/recovery-installation.spec.ts` | Private installation, changed-state refusal, ownership interruption/retry, continued Session history and repeated recovery cycles |
 | `tests/recovery-sources.spec.ts` | Real passive source plugin lifecycle, shared eligibility, strict settings checks, registration changes, cancellation and safe failures |
 | `tests/remote-ownership.spec.ts` | Pre-dispatch persistence, concurrent attribution, lost responses, assignment fences, restart/cancel recovery and receipt mismatch refusal |
 | `tests/ownership.spec.ts` | Competing coordinators, all-resource barriers, claimant replacement/supersession, monotonic expiry/restart, endpoint handoff/outage and immutable receipt generations |

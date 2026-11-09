@@ -16,9 +16,11 @@ import { privateCredential } from '../../src/environments/endpoint-files.ts'
 import { randomUUID } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import type { WorldRecord } from '../../src/remote/world-journal.ts'
+import { readInstallation, installationProfile } from '../../src/recovery/installation.ts'
 
 export async function qualifyRecovery(input: { cli: string; home: string; profile: string; directory: string; temporary: string;
   stateDir: string; sessionRoot: string; port: number; worldDirectories: string[]; worker: string; worlds: number;
+  executionProfile: any[];
   authority?: OwnershipConnection & { coordinatorId: string }; originalClaimantFile?: string;
   audit?: Pick<AuditCheckpointReceipts, 'endpoints' | 'worlds' | 'publication'>; unrecordedPublications?: string[]; expectedRecoveredRevocations?: number; expectedPublicationDestinations?: number }) {
   const root = await realpath(input.temporary), keyFile = join(root, 'recovery-key'), outputDir = join(root, 'checkpoints')
@@ -31,11 +33,13 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
     running.kill('SIGINT'); const timer = setTimeout(() => running.kill('SIGKILL'), 8000)
     try { await exited } finally { clearTimeout(timer) }
   }
-  const run = async (mode: 'checkpoint' | 'verify' | 'stage' | 'import-sessions' | 'reserve-ownership' | 'audit-receipts' | 'prepare-receipts', checkpoint?: string,
-    reservation?: Pick<ReserveCheckpointOwnership, 'requestId' | 'epoch' | 'generation' | 'authority'>, preparation?: { requestId: string; auditId: string }) => {
+  const run = async (mode: 'checkpoint' | 'verify' | 'stage' | 'import-sessions' | 'reserve-ownership' | 'audit-receipts' | 'prepare-receipts' | 'install', checkpoint?: string,
+    reservation?: Pick<ReserveCheckpointOwnership, 'requestId' | 'epoch' | 'generation' | 'authority'>, preparation?: { requestId: string; auditId: string },
+    installation?: { requestId: string; preparationId: string; target: string }) => {
     const receiptFile = join(root, 'maintenance-receipt-' + invocation++ + '.json')
     const config = { mode, keyFile, outputDir, stateDir: input.stateDir, worldDirectories: input.worldDirectories, checkpoint, destination, receiptFile,
-      ...(reservation ? { reservation } : {}), ...(preparation ? { preparation } : {}), ...(mode === 'audit-receipts' || mode === 'prepare-receipts' ? { audit: { authority: input.authority, ...input.audit } } : {}) }
+      ...(reservation ? { reservation } : {}), ...(preparation ? { preparation } : {}), ...(installation ? { installation } : {}),
+      ...(['audit-receipts', 'prepare-receipts', 'install'].includes(mode) ? { audit: { authority: input.authority, ...input.audit } } : {}) }
     await writeFile(patch, JSON.stringify([
       { id: 'webserver', config: { host: '127.0.0.1', port: input.port } },
       { id: 'dsh-superagent', disabled: true },
@@ -218,6 +222,56 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
               expect(command.recovery).toMatchObject({ originalPhase: 'done', requestHash: expect.stringMatching(/^[a-f0-9]{64}$/) })
             }
           } finally { prepared.close() }
+          const installation = { requestId: randomUUID(), preparationId: preparation.requestId, target: join(root, 'installed') }
+          await run('install', checkpoint, undefined, undefined, installation)
+          await run('install', checkpoint, undefined, undefined, installation)
+          const installed = await readInstallation(installation.target, keyFile, new AbortController().signal)
+          const overlay = structuredClone(input.executionProfile)
+          for (const entry of overlay) {
+            if (entry.id === 'dsh-superagent') { entry.config = { ...entry.config, ...installationProfile(installed, keyFile) }; delete entry.disabled }
+            for (const child of entry.insert ?? []) if (child.id === 'operator-remote-world')
+              child.config = { ...installed.worlds.find(item => !item.managed)!.config, ownership: { authorityId: installed.ownership.authorityId, coordinatorId: installed.ownership.coordinatorId } }
+          }
+          overlay.push({ id: 'session-persistence-jsonl', config: { root: importedRoot, compression: 'none' } })
+          const api = async (path: string, body?: unknown) => {
+            const response = await fetch(`http://127.0.0.1:${input.port}/orchestrator/api/${path}`, { method: body ? 'POST' : 'GET',
+              headers: { 'x-orchestrator-request': '1', 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(5000) })
+            if (!response.ok) throw new Error(`Restored Runtime HTTP ${response.status} at ${path}`)
+            return await response.json() as any
+          }
+          const start = async () => {
+            await writeFile(patch, JSON.stringify(overlay), { mode: 0o600 }); log = ''
+            child = spawn(input.cli, ['--profile', input.profile, '--patch', patch, '--no-open'], { cwd: resolve('.'), env: { ...process.env, DSH_HOME: input.home }, stdio: ['ignore', 'pipe', 'pipe'] })
+            child.stdout!.on('data', bytes => { log = (log + bytes.toString()).slice(-100_000) })
+            child.stderr!.on('data', bytes => { log = (log + bytes.toString()).slice(-100_000) })
+            try {
+              await vi.waitFor(async () => {
+                const state = await api('state')
+                expect(state.health.runtime.state, state.health.runtime.detail).toBe('ready')
+                expect(state.ownership.phase).toBe('active'); expect(state.environment.ready).toBe(true)
+              }, { timeout: 45_000, interval: 250 })
+            } catch (error) {
+              throw new Error('Restored startup failed: ' + String(error) + '\n' + log.split('\n').filter(line => !/api.?key|authorization|secret|credential|token/i.test(line)).slice(-50).join('\n'))
+            }
+          }
+          await start()
+          const available = (await api('worlds')).items.find((item: any) => item.enabled && item.ready)
+          let mission = await api('missions', { requestId: 'restored-mission', title: 'Restored execution proof', objective: 'Execute through the restored Harness world', acceptance: 'Verified artifact' })
+          mission = await api(`missions/${mission.id}/actions`, { requestId: 'restored-action', revision: mission.revision, title: 'Write recovery proof', owner: 'agent',
+            ...(available ? { environment: available.id } : {}), instructions: 'Use bash in your assigned directory to write exactly recovery-complete to restored.txt with no newline. Read the file back and publish that exact content with workspace_publish as an artifact, then report ready. Do not use external services or background work.' })
+          const running = await api(`missions/${mission.id}/actions/${mission.actions[0].id}`, { requestId: 'restored-run', revision: mission.revision, command: 'run' })
+          const task = running.actions[0].ticket.id
+          await vi.waitFor(async () => expect((await api(`inbox/${task}`)).item.status).toBe('review'), { timeout: 90_000, interval: 500 })
+          const conversation = await api(`inbox/${task}`)
+          const artifacts = await Promise.all(conversation.artifacts.map((item: { id: string }) => api(`library/${item.id}`)))
+          expect(artifacts.some((item: any) => item.content === 'recovery-complete')).toBe(true)
+          const active = new DatabaseSync(join(installed.stateDir, 'orchestrator.sqlite'), { readOnly: true })
+          try { expect(active.prepare('SELECT value FROM kv WHERE key=?').get(KV.recovery.hold)).toBeUndefined(); expect(active.prepare('SELECT value FROM kv WHERE key=?').get(KV.recovery.activation)).toBeDefined() }
+          finally { active.close() }
+          await stop(); await start()
+          expect((await api(`missions/${mission.id}`)).actions[0].ticket.id).toBe(task)
+          expect((await api(`inbox/${task}`)).item.status).toBe('review')
+          await stop()
         } else expect((await readdir(destination)).some(name => name.startsWith('prepared-'))).toBe(false)
       }
     }

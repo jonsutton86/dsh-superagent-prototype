@@ -54,6 +54,11 @@ export class RemoteWorld {
     return structuredClone(this.record.grant)
   }
   get ownershipBinding() { return this.config.ownership && { authorityId: this.config.ownership.authorityId, coordinatorId: this.config.ownership.coordinatorId } }
+  /** Public deployment paths and endpoint identity, without the ownership capability or credential contents. */
+  configuration(): Pick<RemoteWorldConfig, 'url' | 'endpointId' | 'credentialFile' | 'stateDir'> {
+    const { url, endpointId, credentialFile, stateDir } = this.config
+    return { url, endpointId, credentialFile, stateDir }
+  }
   /** Sibling Sessions share live command ownership; a restarted world always begins with an empty scope. */
   get commands(): RemoteCommandScope { return this.commandScope ??= new RemoteCommandScope(this.status().binding) }
   /** Initialize once, refusing endpoint/credential replacement before renewing or exposing execution providers. */

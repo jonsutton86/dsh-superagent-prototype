@@ -17,6 +17,7 @@ import { privateDirectory } from '../environments/endpoint-files.ts'
 import { privateInput, recoveryKey, seal, unseal } from './crypto.ts'
 import { exportSession, importSession, inspectSession, ownSessions, type SessionArchive } from './sessions.ts'
 import { recoveryStateDigest } from './state.ts'
+import { readRecoveryBindings, resolveRecoveryRegistration } from './bindings.ts'
 
 const member = z.string().regex(/^[a-z0-9-]+\.bin$/), digest = z.string().regex(/^[a-f0-9]{64}$/)
 const sealed = z.object({ member, iv: z.string().regex(/^[a-f0-9]{24}$/), tag: z.string().regex(/^[a-f0-9]{32}$/),
@@ -97,14 +98,16 @@ export async function createCheckpoint(options: CheckpointOptions): Promise<{ pa
     const masterId = identity(store)
     if (kv(store, RESTORE_HOLD)) throw new Error('A staged restore cannot become the source of a new checkpoint')
     const tickets = values<Ticket>(store, 'ticket')
+    const bindings = readRecoveryBindings(store)
     const managed = values<{ id: string; config: { stateDir: string; credentialFile: string } }>(store, 'managed_world')
+      .map(item => ({ ...item, config: bindings?.worlds.find(world => world.binding === item.id)?.config ?? item.config }))
     const workspaces = [...new Set([...tickets.flatMap(ticket => ticket.execution?.directory ? [ticket.execution.directory] : []),
       ...values<EnvironmentRecord>(store, 'execution_environment').flatMap(item => [item.root, item.configuredRoot])])]
     if (workspaces.some(path => inside(path, output) || inside(path, resolve(options.keyFile)))) throw new Error('Checkpoint output and its key must stay outside execution workspaces')
     if (inside(output, resolve(options.keyFile)) || inside(root, resolve(options.keyFile))) throw new Error('Recovery key must be separate from checkpoint output and coordinator state')
     const worlds = new Map<string, { db: DatabaseSync; source: string }>()
     const directories = new Set<string>()
-    for (const directory of [...new Set([...managed.map(item => item.config.stateDir), ...options.worldDirectories ?? []])].sort()) {
+    for (const directory of [...new Set([...managed.map(item => item.config.stateDir), ...bindings?.worlds.filter(item => !item.managed).map(item => item.config.stateDir) ?? [], ...options.worldDirectories ?? []])].sort()) {
       try { await lstat(join(directory, 'world.sqlite')) } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
         throw error
@@ -148,7 +151,8 @@ export async function createCheckpoint(options: CheckpointOptions): Promise<{ pa
       return binding?.credentialFile ? [binding.credentialFile] : []
     })
     const requiredFiles = [...new Set([...controlFiles, ...managed.map(item => item.config.credentialFile),
-      ...values<{ credentialFile: string }>(store, 'operator_endpoint').map(item => item.credentialFile)])]
+      ...values<{ url: string; credentialFile: string }>(store, 'operator_endpoint').map(item => resolveRecoveryRegistration(bindings, item).credentialFile),
+      ...bindings?.registrations.map(item => item.credentialFile) ?? []])]
     const manifest = manifestSchema.parse({ version: 1, id, createdAt: new Date().toISOString(), sourceRoot: root, schema: SCHEMA_VERSION,
       masterId, files, sessions, requiredFiles, executionWorkspaces: workspaces, recovery: 'fenced-until-ownership-reconciled' })
     const manifestFile = join(plain, 'manifest.json'); await writeFile(manifestFile, JSON.stringify(manifest), { mode: 0o600 })
@@ -273,7 +277,11 @@ export async function stageCheckpoint(path: string, keyFile: string, destination
     const store = verified.manifest.files.find(file => file.kind === 'store')!
     await copyFile(join(verified.directory, store.member), join(staging, 'orchestrator.sqlite'))
     const db = new DatabaseSync(join(staging, 'orchestrator.sqlite'))
-    try { db.prepare('INSERT INTO kv(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value')
+    try {
+      // A new checkpoint begins a new recovery attempt; the previous deployment's completed handoff is history,
+      // not authority to reuse its claimant or audit. Operational locations remain part of the authenticated state.
+      for (const key of [KV.recovery.reservation, KV.recovery.audit, KV.recovery.preparation, KV.recovery.activation]) db.prepare('DELETE FROM kv WHERE key=?').run(key)
+      db.prepare('INSERT INTO kv(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value')
       .run(RESTORE_HOLD, JSON.stringify({ checkpoint: verified.manifest.id, at: new Date().toISOString(), state: 'staged' })); db.exec('PRAGMA wal_checkpoint(TRUNCATE)') } finally { db.close() }
     for (const file of verified.manifest.files.filter(file => file.kind !== 'store')) await copyFile(join(verified.directory, file.member), join(staging, file.member))
     await writeFile(join(staging, 'restore-manifest.json'), JSON.stringify(verified.manifest), { mode: 0o600 })

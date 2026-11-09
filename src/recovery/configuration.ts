@@ -10,6 +10,7 @@ import { WorldConfigurationObservation } from '../remote/recovery.ts'
 import { fingerprint, inside } from '../remote/journal.ts'
 import { worldBinding, type WorldRecord } from '../remote/world-journal.ts'
 import type { InventoryPage } from '../ownership/inventory.ts'
+import { readRecoveryBindings } from './bindings.ts'
 
 export const RecoveryWorldConnection = z.object({ binding: z.string().regex(/^[a-f0-9]{64}$/), endpointId: z.string().uuid(),
   url: z.string().min(1).max(2048), credentialFile: z.string().min(1).max(4096).refine(value => value.startsWith('/')),
@@ -23,6 +24,7 @@ export class ConfigurationMismatch extends Error {
   constructor(readonly code: 'configuration_missing' | 'configuration_mismatch' | 'configuration_unavailable') { super(code) }
 }
 export function worldConfigurations(inputs: readonly RecoveryWorldConnection[], db: DatabaseSync, worlds: readonly WorldRecord[]): WorldConfigurationCheck[] {
+  const installed = readRecoveryBindings(db)
   const selected = new Map<string, RecoveryWorldConnection>(), originals = new Map(worlds.map(world => [worldBinding(world.endpointId, world.grant), world]))
   if (inputs.length > 20000) throw new Error('Recovery world connection catalog exceeds its bound')
   for (const input of inputs) {
@@ -43,7 +45,7 @@ export function worldConfigurations(inputs: readonly RecoveryWorldConnection[], 
       managed.set(value.id, value)
     }
   return [...originals].filter(([, world]) => !world.revocation).map(([binding, original]) => {
-    const record = managed.get(binding), config = record?.config
+    const record = managed.get(binding), config = installed?.worlds.find(item => item.binding === binding)?.config ?? record?.config
     return { original, binding, connection: selected.get(binding) ?? (config ? RecoveryWorldConnection.parse({ binding,
       endpointId: config.endpointId, url: config.url, credentialFile: config.credentialFile, ...(config.timeoutMs ? { timeoutMs: config.timeoutMs } : {}) }) : undefined),
     ...(record ? { pin: record.credentialPin } : {}) }

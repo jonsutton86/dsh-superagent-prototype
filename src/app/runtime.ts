@@ -27,6 +27,7 @@ import { DshExecutor, sourceTrigger, triggerMessage, workerSessionId, ticketOfSe
 import { ticketCard } from './cards.ts'
 import { MasterAssessor } from './assessment.ts'
 import { KV } from '../kv.ts'
+import { consumeRuntimeBootstrap, type RuntimeBootstrap } from '../recovery/activation.ts'
 import { Store } from './store.ts'
 import { evalsHealth } from './views/overview.ts'
 import { TextCache } from './cache.ts'
@@ -132,13 +133,20 @@ export class Runtime extends Service implements SourceHost {
   private readonly toolHost: MainToolsHost & ExecutorToolsHost
   /** Non-zero while a main-Session tool is executing an Engine command, suppressing self-triggered domain event notices. */
   private quiet = 0
-  constructor(ctx: Context, readonly machine: Machine, restart: () => void) {
+  constructor(ctx: Context, readonly machine: Machine, restart: () => void, handoff?: RuntimeBootstrap) {
     super(ctx, 'orchestrator')
     const runtime = this
     // Lock the state directory before opening the database so another process cannot migrate or write concurrently.
     mkdirSync(machine.stateDir, { recursive: true, mode: 0o700 })
     const compromised = (error: Error) => { this.runtimeHealth.set({ state: 'error', detail: error.message }); this.stopped.abort() }
-    const release = lockSync(machine.stateDir, { stale: 30_000, onCompromised: compromised })
+    const bootstrap = handoff && consumeRuntimeBootstrap(handoff, machine)
+    if (machine.restore && !bootstrap) throw new Error('Installed recovery must start through the verified Runtime handoff')
+    const release = bootstrap?.release ?? lockSync(machine.stateDir, { stale: 30_000, onCompromised: compromised })
+    if (bootstrap) {
+      const lost = () => compromised(new Error('Installed Runtime handoff or state lock was lost'))
+      bootstrap.signal.addEventListener('abort', lost, { once: true })
+      this.disposers.push(() => bootstrap.signal.removeEventListener('abort', lost))
+    }
     this.releaseLock = async () => { release() }
     let opened: Store | undefined
     try {
@@ -150,6 +158,9 @@ export class Runtime extends Service implements SourceHost {
           if (existing.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='kv'").get()
             && JSON.parse(String(existing.prepare('SELECT value FROM kv WHERE key=?').get(KV.recovery.hold)?.value ?? 'null')))
             throw new Error('This is a staged checkpoint restore. Reconcile coordinator ownership, Sessions and external effects before enabling execution.')
+          if (!bootstrap && existing.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='kv'").get()
+            && existing.prepare('SELECT value FROM kv WHERE key=?').get(KV.recovery.activation))
+            throw new Error('Installed recovery requires its authenticated Runtime configuration')
         } finally { existing.close() }
       }
       const report = (error: unknown) => { ctx.logger.warn('dsh-superagent: %s', String(error)) }
@@ -158,15 +169,17 @@ export class Runtime extends Service implements SourceHost {
       const world = remoteWorld(ctx)
       if (machine.ownership && machine.executionMode !== 'local') throw new Error('Ownership-controlled repository publication requires a fenced publication service; use a general-mission profile until that integration is available')
       if (world) assertOwnership(machine.ownership, world.ownershipBinding)
-      this.ownership = openRuntimeOwnership(store, machine.ownership, [executionRoot(store.settings(), machine.stateDir, world?.grant.root)])
+      this.ownership = openRuntimeOwnership(store, machine.ownership, [executionRoot(store.settings(), machine.stateDir, world?.grant.root)], bootstrap?.ownership)
       const remote = this.remoteWorkspace = world ? new RemoteWorkspace(world, ctx.fs, ctx.subprocess, this.lifetime) : undefined
       const environments = this.environments = new Environments({ store, filesystem: ctx.fs, subprocess: ctx.subprocess, lifetime: this.lifetime,
         remote, ownership: this.ownership, worlds: () => runtime.worlds, root: () => executionRoot(store.settings(), machine.stateDir, world?.grant.root), mode: () => machine.executionMode ?? 'repository', engine: () => runtime.engine })
       this.endpoints = new Endpoints({ store, stateDir: machine.stateDir, lifetime: this.lifetime, ownership: this.ownership, ownershipConfig: machine.ownership,
+        restoreRegistration: bootstrap?.bindings.registration,
         publicationConfig: machine.publication,
         workerRoots: () => [...environments.list().items.filter(item => item.kind === 'local').flatMap(item => [item.root, item.configuredRoot]),
           ...(!world ? [executionRoot(store.settings(), machine.stateDir)] : [])] })
       this.worlds = new WorldPool(ctx, { store, endpoints: this.endpoints, lifetime: this.lifetime, ownership: this.ownership, ownershipConfig: machine.ownership, report,
+        restoreWorld: bootstrap?.bindings.world,
         controlFiles: machine.publication ? [machine.publication.credentialFile] : [],
         revoked: binding => { for (const ticket of store.tickets.open()) if (ticket.execution?.environment?.environmentId === binding && canStop(ticket)) runtime.engine.stopTicket(ticket.id, 'Managed execution world revoked by the operator') } })
       const library = this.library = new Library(store)
@@ -322,7 +335,7 @@ export class Runtime extends Service implements SourceHost {
       })
     } catch (error) {
       // Release the database and state lock if initialization fails so an in-process restart can reacquire them.
-      try { opened?.close() } finally { release() }
+      try { opened?.close(); void bootstrap?.ownership.close() } finally { release() }
       throw error
     }
   }
