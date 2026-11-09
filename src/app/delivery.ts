@@ -62,9 +62,9 @@ export class AgentDelivery {
     const id = messageId(requestId)
     return (await this.history(agent)).ids.has(id) || [...agent.inbox.nextTurn, ...agent.inbox.nextStep].some(message => deliveryId(message) === id)
   }
-  /** Delivers once to the selected inbox, or injects into history without waking the agent, and flushes Session persistence before acknowledging the producer. */
+  /** Deliver once and flush before acknowledging; returns whether history already contains the input, including a deduplicated retry. */
   async send(agent: Agent, requestId: string, text: string, mode: 'queue' | 'steer' | { inject: string }, signal: AbortSignal, authorize?: () => void,
-    accepted?: () => void): Promise<void> {
+    accepted?: () => void): Promise<boolean> {
     signal.throwIfAborted()
     const seen = await this.history(agent)
     signal.throwIfAborted()
@@ -82,5 +82,6 @@ export class AgentDelivery {
     }
     accepted?.()
     await this.ctx.sessionPersistence.flush()
+    return seen.ids.has(id)
   }
 }

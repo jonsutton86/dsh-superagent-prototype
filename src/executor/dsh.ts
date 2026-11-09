@@ -368,7 +368,9 @@ export class DshExecutor implements Executor {
     const message = inputMessage(input, trigger, ticket.execution?.mode === 'local')
     if (message === undefined) return
     const text = message.length > ASSIGNMENT_CHARS ? JSON.stringify(capped(message, ASSIGNMENT_CHARS, inputResource(ticket.id, input.id))) : message
-    await this.host.sessions.prompt(workerSessionId(ticket.id), input.id, text, 'steer', live)
+    const consumed = await this.host.sessions.prompt(workerSessionId(ticket.id), input.id, text, 'steer', live)
+    // A previous attempt may have committed history before the Store's acknowledgement. Deduplication must repair that acknowledgement too.
+    if (consumed) this.host.engine.inputsRead(ticket.id, [input.id])
   }
   /** Formats a trigger on `ticket` for the worker, including a preview of the replied-to message when the worker has not yet seen it. */
   private async triggerCard(ticket: Ticket, triggerId: string, note?: string): Promise<object | undefined> {
@@ -551,7 +553,7 @@ export class DshExecutor implements Executor {
       if (event.type !== 'user/message' || ticketId === undefined || event.data.source.kind !== 'dsh-superagent' || this.host.closing()) return
       const message = event.data
       void this.background(Promise.resolve().then(() => {
-        const read = this.host.store.tickets.get(ticketId)?.inputs.filter(input => input.kind === 'trigger' && !input.readAt
+        const read = this.host.store.tickets.get(ticketId)?.inputs.filter(input => input.kind !== 'reopen' && !input.readAt
           && this.host.sessions.promptedId(input.id) === message.id).map(input => input.id) ?? []
         if (read.length) this.host.engine.inputsRead(ticketId, read)
       }))
@@ -590,7 +592,7 @@ export class DshExecutor implements Executor {
     }
   }
   /** Runs background worker event handling and updates the `worker` health entry on failure or recovery. */
-  private background(work: Promise<void>): Promise<void> {
+  private background(work: Promise<unknown>): Promise<void> {
     const { health } = this.host
     return work.then(() => { if (health.get()?.state === 'error') health.set({ state: 'ready', detail: 'Worker events are handled', at: now() }) },
       (error: unknown) => { health.set({ state: 'error', detail: String(error), at: now() }) })

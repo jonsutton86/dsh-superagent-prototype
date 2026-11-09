@@ -119,7 +119,7 @@ export class Sessions {
     if (host.remote) this.remotePresets = new RemotePresets(this.ctx, host.remote.world)
     this.agentDelivery = new AgentDelivery(host.context)
     // Deliver relays and notices to the main Session in the order they were queued.
-    host.effects.handle('relay', ({ text }, requestId) => this.prompt(host.masterId, requestId, text, 'steer'), { ordered: true })
+    host.effects.handle('relay', async ({ text }, requestId) => { await this.prompt(host.masterId, requestId, text, 'steer') }, { ordered: true })
     host.effects.handle('notice', ({ value, summary }, name) => this.inject(name, value, summary), { ordered: true })
   }
   /** Subscribes to host agent and session events so newly created sessions are decorated and model-budget retries are reflected in health. Call once at startup. */
@@ -224,13 +224,13 @@ export class Sessions {
     const result = await this.ctx.sessionController.resolveAgent(sessionId as SessionId)
     return !('error' in result) && await this.agentDelivery.holds(result.agent, key(requestId))
   }
-  /** Deliver a message once per request id: to the next turn, the current one, or `inject`ed with its label without waking the agent. */
+  /** Deliver once per request id and return whether history contains it after flushing, including a deduplicated retry. */
   async prompt(sessionId: string, requestId: string, text: string, mode: 'queue' | 'steer' | { inject: string }, authorize?: () => void,
-    accepted?: () => void): Promise<void> {
+    accepted?: () => void): Promise<boolean> {
     this.assertSavedWorld(sessionId)
     const result = await this.ctx.sessionController.resolveAgent(sessionId as SessionId)
     if ('error' in result) throw result.error
-    await this.agentDelivery.send(result.agent, key(requestId), text, mode, this.host.lifetime, () => {
+    return this.agentDelivery.send(result.agent, key(requestId), text, mode, this.host.lifetime, () => {
       const problem = this.worldProblem(result.agent); if (problem) throw new Error(problem)
       authorize?.()
     }, accepted)

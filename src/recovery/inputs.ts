@@ -28,7 +28,7 @@ export async function reconcileConsumedInputs(db: DatabaseSync, archive: string,
       if (!ticket || ticket.id !== row.id || !Array.isArray(ticket.inputs) || !Array.isArray(ticket.undelivered)) throw new InputStateError('input_state_invalid')
       if (ticket.inputs.some(input => !input || typeof input.id !== 'string' || !input.id
         || !['trigger', 'policy-changed', 'reopen', 'resumed', 'text', 'note'].includes(input.kind)
-        || input.kind === 'trigger' && input.readAt !== undefined && input.readAt !== null
+        || input.readAt !== undefined && input.readAt !== null
           && (typeof input.readAt !== 'string' || !Number.isFinite(Date.parse(input.readAt))))) throw new InputStateError('input_state_invalid')
       const inputs = new Map<string, Ticket['inputs'][number]>(ticket.inputs.map(input => [messageId(key(input.id)), input]))
       const inputIds = new Set(ticket.inputs.map(input => input.id))
@@ -52,7 +52,7 @@ export async function reconcileConsumedInputs(db: DatabaseSync, archive: string,
       report.consumed += consumed.size
       let changed = false
       for (const input of ticket.inputs) {
-        if (input.kind !== 'trigger') continue
+        if (input.kind === 'reopen') continue
         const at = consumed.get(input.id)
         // Undefined is the legacy unknown state; null is modern queued/unread state. Neither is proof of consumption.
         if (input.readAt !== undefined && input.readAt !== null && !at) throw new InputStateError('input_read_missing')

@@ -326,13 +326,14 @@ export class Tickets extends EnginePart {
     this.options.executor.start(ticket, assignment)
   }
   /**
-   * Put back, ahead of what waits, the Trigger Inputs delivered to `replaced` that no step of its worker took: a cancel may
+   * Put back, ahead of what waits, the Inputs delivered to `replaced` that no step of its worker took: a cancel may
    * have dropped them, or a step that claimed them was cut off, and the new Assignment's launch takes a copy still waiting
    * in the Session out, so its delivery is the only one. An earlier end let go of what earlier Assignments left.
+   * A settled interruption can keep automated inputs held while the worker waits for a person.
    */
-  private requeueUntaken(ticket: Ticket, replaced: Assignment): void {
-    const untaken = ticket.inputs.filter(input => input.kind === 'trigger' && input.readAt === null && input.deliveredTo === replaced.id
-      && !ticket.undelivered.includes(input.id))
+  requeueUntaken(ticket: Ticket, replaced: Assignment, holdAutomatic = false): void {
+    const untaken = ticket.inputs.filter(input => input.kind !== 'reopen' && input.readAt === null && input.deliveredTo === replaced.id
+      && !(holdAutomatic && automatic(input)) && !ticket.undelivered.includes(input.id))
     ticket.undelivered.unshift(...untaken.map(input => input.id))
   }
   /**

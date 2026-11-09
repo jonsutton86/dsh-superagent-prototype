@@ -35,7 +35,7 @@ function fixture(history: UserMessage[] = []) {
 
 it.each(['queue', 'steer'] as const)('delivers %s as an orchestrator relay, deduplicating pending and consumed messages', async mode => {
   const f = fixture()
-  await f.send('request', mode)
+  expect(await f.send('request', mode)).toBe(false)
   const target = mode === 'queue' ? f.followup : f.steer
   expect(target).toHaveBeenCalledOnce()
   const message = target.mock.calls[0]![0]
@@ -44,12 +44,12 @@ it.each(['queue', 'steer'] as const)('delivers %s as an orchestrator relay, dedu
   expect(Object.isFrozen(message)).toBe(true)
   await f.send('request', mode)
   f.consume(message)
-  await f.send('request', mode)
+  expect(await f.send('request', mode)).toBe(true)
   expect(target).toHaveBeenCalledOnce()
   expect(f.open).toHaveBeenCalledOnce()
   expect(f.close).toHaveBeenCalledOnce()
   const restored = fixture([message])
-  await restored.send('request', mode)
+  expect(await restored.send('request', mode)).toBe(true)
   expect(restored.steer).not.toHaveBeenCalled()
   expect(restored.followup).not.toHaveBeenCalled()
 })

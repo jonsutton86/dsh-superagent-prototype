@@ -529,6 +529,8 @@ describe('a worker whose work runs in the background', () => {
   it('keeps an Input a restart found handed over to a settled worker, and delivers a waiting one once its subagents stopped', async () => {
     const one = await h.acceptedTicket(feishu('1', '@bot 修一'))
     const agent = h.agents.get(one.sessionId)!, ticket = () => h.runtime.store.tickets.get(one.ticket.id)!
+    const consumed: string[] = []
+    h.ctx.on('session/event', (_session, event) => { if (event.type === 'user/message' && event.data.id === 'taken-later') consumed.push(event.data.id) })
     idle(one.sessionId)
     await vi.waitFor(() => expect(latestAssignment(ticket())?.report?.state).toBe('waiting'))
     // A subagent still runs, whose release is slow; one Input waits in the Session's inbox, another in the ticket.
@@ -550,7 +552,7 @@ describe('a worker whose work runs in the background', () => {
     gate.resolve()
     await vi.waitFor(() => expect(h.deliveries).toHaveBeenCalledWith(late))
     expect(agent.cancel).not.toHaveBeenCalledWith({ kind: 'user' }, { keepInbox: false })
-    expect(agent.inbox.nextStep.map(message => message.id)).toContain('taken-later')
+    expect(consumed).toEqual(['taken-later'])
     // The turn the subagent's end woke and the release cancelled reports nothing.
     await h.runtime.idle()
     expect(reports()).toBe(reported)
@@ -678,17 +680,43 @@ describe('what a worker read', () => {
     h.claim(one.sessionId); await h.runtime.idle(); await later()
     expect(input().readAt).toBe(null)
   })
-  it('keeps a note waiting in a worker\'s Session across an in-process restart, for the next Assignment\'s first step', async () => {
+  it('preserves one unread note across restart by replacing its queued copy before the next assignment consumes it', async () => {
     const one = await h.acceptedTicket(feishu('1', '@bot 修一'))
     h.runtime.engine.note(one.ticket.id, 'Ticket B changes the same page.'); await h.runtime.idle()
     const copies = () => h.deliveries.mock.calls.filter(([call]) => call.sessionId === one.sessionId && call.text.includes('Ticket B changes the same page.'))
     await vi.waitFor(() => expect(copies()).toHaveLength(1))
     const claimed: string[] = []
     h.ctx.on('agent/inbox/claimed', ({ message }) => { claimed.push(message.id) })
-    // The restart cancels the worker's turn and keeps its inbox, where the note waits.
+    // The replacement launch removes the retained copy before replaying the input once under the new assignment.
     h.runtime.executor.resume()
+    await vi.waitFor(() => expect(copies()).toHaveLength(2))
+    h.step(one.sessionId); await h.runtime.idle(); await later()
     await vi.waitFor(() => expect(claimed).toContain(copies()[0]![0].id))
-    expect(copies()).toHaveLength(1)
+    expect(claimed.filter(id => id === copies()[0]![0].id)).toHaveLength(1)
+    expect(h.runtime.store.tickets.get(one.ticket.id)!.inputs.find(input => input.kind === 'note')?.readAt).toEqual(expect.any(String))
+  })
+  it('replays a note claimed by a cut-off step and records its later consumption', async () => {
+    const one = await h.acceptedTicket(feishu('1', '@bot 修一'))
+    h.runtime.engine.note(one.ticket.id, 'Do not overwrite the shared configuration.'); await h.runtime.idle()
+    const input = () => h.runtime.store.tickets.get(one.ticket.id)!.inputs.find(item => item.kind === 'note')!
+    const sent = () => h.deliveries.mock.calls.filter(([call]) => call.sessionId === one.sessionId && call.text.includes('Do not overwrite')).length
+    await vi.waitFor(() => expect(sent()).toBe(1)); expect(input().readAt).toBeNull()
+    h.claim(one.sessionId); h.runtime.executor.resume()
+    await vi.waitFor(() => expect(sent()).toBe(2))
+    h.step(one.sessionId); await h.runtime.idle(); await later()
+    expect(input().readAt).toEqual(expect.any(String)); expect(sent()).toBe(2)
+  })
+  it('repairs a lost Store read acknowledgement when delivery deduplicates a consumed note', async () => {
+    const one = await h.acceptedTicket(feishu('1', '@bot 修一'))
+    h.runtime.engine.note(one.ticket.id, 'Preserve the accepted configuration.'); await h.runtime.idle()
+    h.step(one.sessionId); await h.runtime.idle(); await later()
+    const stored = h.runtime.store.tickets.get(one.ticket.id)!, note = stored.inputs.find(input => input.kind === 'note')!
+    expect(note.readAt).toEqual(expect.any(String))
+    note.readAt = null; stored.undelivered.push(note.id); h.runtime.store.tickets.save(stored)
+    h.runtime.engine.assignmentStarted(stored.id, latestAssignment(stored)!.id)
+    await h.runtime.idle(); await later()
+    expect(h.runtime.store.tickets.get(stored.id)!.inputs.find(input => input.id === note.id)?.readAt).toEqual(expect.any(String))
+    expect(h.deliveries.mock.calls.filter(([call]) => call.sessionId === one.sessionId && call.text.includes('Preserve the accepted configuration.'))).toHaveLength(1)
   })
   it('delivers once a message a crash left waiting in a worker\'s Session, which the restart puts back for the next Assignment', async () => {
     const one = await h.acceptedTicket(feishu('1', '@bot 修一'))

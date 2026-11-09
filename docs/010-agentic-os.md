@@ -387,3 +387,9 @@ on retry. The dedicated case retained its expected refusal for unrecorded public
 passed 184 cases; bundle tests passed all three cases after their expected plugin list was updated. Provider-message traffic
 stayed local and the original app remained running. Deployment binding, authoritative pending-work/cursor reconciliation,
 supported activation, clean-host failover and the remaining architecture/product scope remain open.
+
+Pending input recovery: `040-pending-input-recovery.md` extends delivery/read provenance to every current input kind,
+requeues accepted unread work on restart/retry, and preserves the held-automation rule beside settled reports. A delivery
+retry that finds consumed history now repairs its Store acknowledgement without sending again. Held image reconciliation
+also checks non-trigger read markers. Legacy delivery ambiguity, broader state and cursor reconciliation, deployment
+binding, supported activation, clean-host failover and the remaining full architecture/product scope remain open.

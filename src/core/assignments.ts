@@ -1,7 +1,7 @@
 /** What the Executor and its workers report about the Assignments that run tickets. */
 import { key } from './ids.ts'
 import { UserError } from './errors.ts'
-import { latestAssignment, liveTicket, runningAssignment } from './model.ts'
+import { latestAssignment, liveTicket, runningAssignment, waitsForPerson } from './model.ts'
 import type { ReportState, Ticket } from './model.ts'
 import { EnginePart, type EngineOptions } from './part.ts'
 import type { Replies } from './replies.ts'
@@ -51,7 +51,8 @@ export class Assignments extends EnginePart {
     ticket.undelivered = ticket.undelivered.filter(id => !inputIds.includes(id)); ticket.updatedAt = this.now()
     runningAssignment(ticket)!.deliveredAt = ticket.updatedAt
     for (const input of ticket.inputs) {
-      if (input.kind === 'trigger' && inputIds.includes(input.id)) { input.readAt ??= null; input.deliveredTo = assignmentId }
+      // Legacy reopen records are historical only and deliberately produce no worker message.
+      if (input.kind !== 'reopen' && inputIds.includes(input.id)) { input.readAt ??= null; input.deliveredTo = assignmentId }
     }
     delete ticket.delivery
     this.repo.tickets.save(ticket)
@@ -60,7 +61,7 @@ export class Assignments extends EnginePart {
   read(ticketId: string, inputIds: string[]): void {
     const ticket = this.require(ticketId)
     if (!liveTicket(ticket)) return
-    for (const input of ticket.inputs) if (input.kind === 'trigger' && inputIds.includes(input.id)) input.readAt ||= this.now()
+    for (const input of ticket.inputs) if (input.kind !== 'reopen' && inputIds.includes(input.id)) input.readAt ||= this.now()
     this.repo.tickets.save(ticket)
   }
   turnEnded(ticketId: string, assignmentId: string): void {
@@ -78,7 +79,7 @@ export class Assignments extends EnginePart {
   /**
    * Handles a running assignment interrupted by a host restart: restarts it with a recovery note unless its latest report is
    * `waiting`, `ready`, `blocked`, or `failed` and no input was delivered after that report, in which case it keeps its
-   * session and flushes any waiting undelivered inputs.
+   * session and recovers unread accepted inputs without releasing automated work held for a person.
    */
   interrupted(ticketId: string, assignmentId: string): void {
     const ticket = this.running(ticketId, assignmentId)
@@ -88,7 +89,11 @@ export class Assignments extends EnginePart {
     const busy = !!running.deliveredAt && !!report && running.deliveredAt >= report.at
     const settled = !!report && ['waiting', 'ready', 'blocked', 'failed'].includes(report.state) && !busy
     if (!settled) this.tickets.restart(ticket, running, 'hostRestarted', RECOVERY_NOTE)
-    else if (ticket.undelivered.length) this.options.executor.deliver(ticket, running)
+    else {
+      this.tickets.requeueUntaken(ticket, running, waitsForPerson(ticket))
+      this.repo.tickets.save(ticket)
+      if (ticket.undelivered.length) this.options.executor.deliver(ticket, running)
+    }
   }
   /**
    * Records a worker status report on an open ticket's current assignment, updating `attention`, `answers`, held automated

@@ -25,6 +25,17 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: pending input recovery across all current kinds
+
+[040 Pending inputs](040-pending-input-recovery.md) extends accepted/read acknowledgement tracking to policy changes,
+resume notices, notes and text inputs. Restart/retry preserves accepted unread inputs with assignment provenance; settled
+reports recover eligible inputs while keeping automation held for a person. Delivery deduplication now returns consumed
+evidence after flush so the executor can repair a lost Store read acknowledgement without another send. Held recovery
+reconciles read markers for every current kind and keeps historical reopen records and ended outcomes unchanged.
+
+Legacy inputs without delivery provenance, broader authoritative state, connector cursors, deployment binding, supported
+activation and clean-host failover remain open with all other architecture/product requirements below.
+
 ## Implemented increment: passive source contracts and settings recovery
 
 [039 Source contracts](039-source-contract-recovery.md) separates loaded source schemas from polling and Runtime startup.

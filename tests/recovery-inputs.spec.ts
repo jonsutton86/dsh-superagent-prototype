@@ -100,7 +100,7 @@ it('preserves ended ticket outcomes and acknowledgements even with missing ackno
   await f.archive('worker-ticket', session => consume(session, inputMessage('input')))
   expect(await f.run()).toMatchObject({ consumed: 1, readMarkers: 0, undelivered: 0 }); expect(f.read()).toEqual(original)
 })
-it('reconciles all input kinds, including legacy reopen, without adding read fields to non-triggers', async () => {
+it('reconciles consumption for all current input kinds while retaining historical reopen records', async () => {
   const f = await fixture(), original = inputTicket('ticket', [
     { id: 'policy', kind: 'policy-changed', from: 'a', to: 'b', at: inputTime },
     { id: 'reopen', kind: 'reopen', decisionId: 'decision', at: inputTime },
@@ -108,8 +108,17 @@ it('reconciles all input kinds, including legacy reopen, without adding read fie
     { id: 'text', kind: 'text', text: 'Task input', at: inputTime }, { id: 'note', kind: 'note', text: 'Context only', at: inputTime },
   ]); f.save(original)
   await f.archive('worker-ticket', session => { for (const input of original.inputs) consume(session, inputMessage(input.id)) })
-  expect(await f.run()).toMatchObject({ consumed: 5, readMarkers: 0, undelivered: 5 })
-  expect(f.read()).toEqual({ ...original, undelivered: [] })
+  expect(await f.run()).toMatchObject({ consumed: 5, readMarkers: 4, undelivered: 5 })
+  expect(f.read()).toEqual({ ...original, inputs: original.inputs.map(input => input.kind === 'reopen' ? input : { ...input, readAt: expect.any(String) }), undelivered: [] })
+})
+it.each([
+  { id: 'policy', kind: 'policy-changed' as const, from: 'a', to: 'b', at: inputTime },
+  { id: 'resume', kind: 'resumed' as const, triggerId: 'trigger', at: inputTime },
+  { id: 'text', kind: 'text' as const, text: 'Original input', at: inputTime },
+  { id: 'note', kind: 'note' as const, text: 'Context only', at: inputTime },
+])('refuses a $kind consumption marker without durable worker evidence', async input => {
+  const f = await fixture(), ticket = inputTicket('ticket', [{ ...input, readAt: inputTime }]); f.save(ticket)
+  await expect(f.run()).rejects.toMatchObject({ code: 'input_read_missing' }); expect(f.read()).toEqual(ticket)
 })
 it.each(['tamper', 'contradiction', 'cancel'] as const)('rolls back earlier ticket repairs on a later %s', async failure => {
   const f = await fixture(), first = inputTicket('a'), second = inputTicket('z'); f.save(first)

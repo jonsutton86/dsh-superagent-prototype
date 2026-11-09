@@ -212,7 +212,7 @@ export class Runtime extends Service implements SourceHost {
         repliedTo: trigger => repliedTo({ store, sources }, trigger) })
       this.assessor = new MasterAssessor({ get engine() { return runtime.engine }, commands, get deployment() { return setup.deployment }, effects,
         settings: () => store.settings(), paused: () => this.paused(), threadContext: trigger => sources.threadContext(trigger),
-        deliver: (id, text) => sessions.prompt(masterId, id, text, 'steer'), candidateCard: candidate => candidateCard(links, candidate) })
+        deliver: async (id, text) => { await sessions.prompt(masterId, id, text, 'steer') }, candidateCard: candidate => candidateCard(links, candidate) })
       const outbox = this.outbox = new Outbox({ store, effects, sources, commands, publication: this.channelPublications, paused: () => this.paused() })
       const { assessor, executor } = this
       const policy = () => environments.policy(this.conversations.policy(workspace.policy(settingsPolicy(store.settings(), sources))))

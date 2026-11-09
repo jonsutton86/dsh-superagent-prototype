@@ -195,13 +195,11 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
         }) }
       // A step claims each message once, all that wait for a step and, as a turn starts, the next queued one, and takes them into
       // the Session's history, unless it is `cut` off before, as a cancel in its pre-step does; DSH says each.
-      const taken = new Set<string>()
       let turn = 0
       const take = (starts: boolean, cut = false) => {
         const agent = agents.get(sessionId)!
-        const queued = starts ? inbox.nextTurn.filter(message => !taken.has(message.id)).slice(0, 1) : []
-        for (const message of [...inbox.nextStep.filter(item => !taken.has(item.id)), ...queued]) {
-          taken.add(message.id)
+        const queued = starts ? inbox.nextTurn.splice(0, 1) : []
+        for (const message of [...inbox.nextStep.splice(0), ...queued]) {
           ctx.emit('agent/inbox/claimed', { agent, message, turn } as never)
           if (!cut) ctx.emit('session/event', session as never, { type: 'user/message', data: message } as never)
         }
