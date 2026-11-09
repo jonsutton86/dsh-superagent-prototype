@@ -27,11 +27,14 @@ image objects from their checkpoint-contained sources and checks the original no
 normalizer fails closed; use the matching backend for histories containing those references.
 
 `workspace_attachment_copy` copies any file type into the worker's already-bound execution directory through its existing
-Harness subprocess service. Both persona write and command capabilities are required. Fixed Node code receives bounded
+Harness subprocess service. Both persona write and command capabilities are required. The actual mounted preset service is resolved explicitly and its
+execution binding must match the task; an unavailable remote service cannot fall back to local execution. Fixed Node code receives bounded
 chunks, verifies each digest and the final source, resumes matching partial writes, rejects links and conflicting files,
 and publishes using create-if-absent linking. It checks file identity around publication and handles the link-before-cleanup
 crash window. Remote copies use the existing owned process receipts and confinement boundary; no coordinator host path is
-sent to workers. Node must be available in that execution environment. The resulting file is a task-owned working copy;
+sent to workers. Node must be available in that execution environment; remote endpoints require it under their mounted
+system runtime paths. The serialized helper receives the child process’s CommonJS loader explicitly, avoiding capture of a
+bundler-local require helper. The resulting file is a task-owned working copy;
 its initial read-only mode is not an immutable-storage guarantee. The original Store bytes remain authoritative.
 
 ## Limits and lifecycle
@@ -65,10 +68,23 @@ preview cleanup. Native Linux runs additionally exercise the copy through the re
 a CSV and image through an idempotent inbox reply, copies the CSV through an owned remote subprocess, verifies its sum,
 and produces the existing checked artifact. Downloads/previews/history are checked before and after deletion of the private
 native cache, Runtime restart, and installed checkpoint recovery. The selected DeepSeek Flash route is text-only; this drill
-does not claim model vision acceptance. The final local `pnpm check` passed typechecking, all six builds and 1,981 tests (16 skipped) in 127.59 seconds
-for the test phase. Installed-Harness and native Linux results are pending. The attachment model-tool surface has a
+does not claim model vision acceptance. The macOS composition fixture maps a synthetic system Node path to the existing
+Homebrew Node without changing the host or production endpoint policy. Actual OS confinement is qualified separately on Linux. The final local `pnpm check` passed typechecking, all six builds and 1,981 tests (16 skipped) in 127.59 seconds
+for the test phase. The installed Harness / DeepSeek Flash owned-managed drill passed at revision
+`ba44a813777991f59a9b8e355dd7827b0dc8f949`: one passed, four skipped, 253.21 seconds. It exercised actual remote CSV
+copy/processing, checked artifact delivery, duplicate input/reply receipts, deleted native caches, restart, original-state
+retirement and installed checkpoint recovery with original input history/downloads/previews. The same revision passed native Linux / Node 24 typechecking, all six builds and 1,989 tests (10 skipped;
+284.29 seconds) in [run 42707238123](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42707238123).
+The integration fixes also passed 26 focused local tests, repeated typechecking/builds and an actual byte-copy execution of
+the helper extracted from the production bundle. The attachment model-tool surface has a
 separate 2,200-character ceiling; the existing orchestration, library and check ceilings are unchanged.
 
 Real browser file-picker/download acceptance, vision-provider qualification, PDF/office extraction quality, very large file
 stress, storage retention/GC and cross-machine deployment remain open. The full article/product architecture remains the
 objective; this increment does not declare it complete.
+
+Qualification development exposed and corrected the Agent-context subprocess injection assumption and the bundled-helper
+loader capture. The live fixture was also corrected to wait for the inbox’s human-question state, finalize uploads with POST,
+and include its synthetic input files in the PR tree checked against the full captured workspace. No production verification
+precondition was weakened. One intermediate native run hit an existing recovery-audit timeout; a subsequent unchanged suite
+passed all 1,989 tests without weakening its assertions. The final exact-revision run above passed those same assertions. The original running application was not restarted.

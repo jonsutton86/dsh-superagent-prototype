@@ -672,5 +672,8 @@ open alongside the rest of this full architecture. The original running applicat
 
 Conversation attachments are implemented in `063-attachments.md`: resumable uploads, atomic input/reply binding, authenticated
 previews/downloads, task-scoped reads and native Harness copies into local/remote execution directories. Canonical bytes
-live in the checkpointed Store; bound image objects are reconstructed before resumed Sessions. Local verification passed 1,981 tests, typechecking and six builds. Native/live qualification is in progress;
-real browser/vision-provider acceptance, large-file stress and retention/GC remain open alongside the full architecture.
+live in the checkpointed Store; bound image objects are reconstructed before resumed Sessions. Local verification passed 1,981 tests, typechecking and six builds; integration fixes passed 26 focused checks and actual
+bundled-helper execution. Exact revision `ba44a813777991f59a9b8e355dd7827b0dc8f949` passed installed-Harness / DeepSeek Flash
+input delivery, checked artifact, deleted-cache restart and installed checkpoint recovery (253.21 seconds), plus native Linux
+typecheck, six builds and 1,989 tests (10 skipped; run 42707238123). Real browser/vision-provider acceptance, large-file stress
+and retention/GC remain open alongside the full architecture. The original app remains running.

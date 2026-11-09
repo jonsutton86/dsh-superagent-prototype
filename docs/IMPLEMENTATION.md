@@ -2,8 +2,12 @@
 
 [063 Conversation attachments](063-attachments.md) adds resumable file uploads, exact task/reply bindings, native Harness image
 projection and verified copies through the existing scoped subprocess service. Source bytes reside in the checkpointed Store.
-Local verification passed 1,981 tests (16 skipped), typechecking and six builds. Native Linux and installed-Harness recovery qualification are pending; the remaining architecture
-and product requirements below are unchanged.
+Revision `ba44a813777991f59a9b8e355dd7827b0dc8f949` passed the installed Harness / DeepSeek Flash input-to-checked-artifact,
+restart and installed-recovery drill (one passed, four skipped; 253.21 seconds), and native Linux typechecking, six builds
+and 1,989 tests (10 skipped; 284.29 seconds) in [run 42707238123](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42707238123).
+Local verification passed 1,981 tests; integration fixes passed 26 focused tests, typechecking/builds and execution of the
+actual bundled copy helper. Browser/vision-provider acceptance, attachment retention/GC and the remaining full architecture
+and product requirements below remain open. The original app was left running.
 
 [062 Voice](062-voice.md) adds optional local/cloud speech adapters, editable inbox dictation, reply playback,
 interruption and durable request/restart handling while preserving DeepSeek Harness execution. Qualification revision
