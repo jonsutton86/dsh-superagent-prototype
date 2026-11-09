@@ -224,3 +224,9 @@ provider reads, atomic Engine admission, durable cursors and native deduplicatio
 rescan and pause, and shows unsupported messages. Replies remain restricted to the original task through routing and worker
 context access. Repository-wide discovery and admission, rich content, Git/PR mutations, retention, live-account acceptance
 and restored-state activation remain required; this increment does not complete the full architecture.
+
+Inbound qualification: code `a558cdd5f6bf2de59512afb60373cff2465fb74b` passed 1,457 local tests and both owned
+installed-Harness/DeepSeek Flash scenarios, including actual task resumption and acknowledgement from a provider reply,
+artifact preservation, restart and native-message deduplication. It also passed 1,459 native Linux tests, typechecking and
+all builds in [run 42546908912](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42546908912).
+Provider traffic remained local; live tenant/account acceptance and the broader product requirements remain open.

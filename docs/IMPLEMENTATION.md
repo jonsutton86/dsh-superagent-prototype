@@ -35,7 +35,11 @@ reads. The mission panel exposes consent, lost-save recovery, polling/rescans, p
 This covers incoming replies to operator-selected existing tasks. Repository-wide discovery, source-originated admission,
 rich content, Git/PR mutations, retention and restore activation/failover still require implementation. The full article and
 Agentic OS ledger remain active. Local `pnpm check` on 2026-11-08 passed 1,457 tests, typechecking and all four builds.
-Installed-Harness model qualification and exact-revision native Linux evidence are recorded after their final runs finish.
+Both owned installed-Harness/DeepSeek Flash scenarios passed on the final build (191.45 seconds), including an external
+reply resuming the same task, an actual worker acknowledgement, unchanged artifact content and retained receipts/deduplication
+after coordinator restart. Provider traffic stayed on local contract servers. Code revision
+`a558cdd5f6bf2de59512afb60373cff2465fb74b` passed 1,459 tests with native Linux confinement, typechecking and all four builds
+in [run 42546908912](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42546908912).
 
 ## Implemented increment: mission reply delivery
 

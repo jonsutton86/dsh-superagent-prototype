@@ -95,7 +95,11 @@ rendered consent/retry, current receipt display, polling/rescans and stopping in
 `tests/remote-harness.spec.ts` extends the opt-in installed-Harness qualification to resume the same task from a provider
 reply, acknowledge through the publisher, retain its artifact, and preserve receipts/deduplication across coordinator restart.
 
-Qualification results are recorded in the implementation tracker after execution. Local provider servers do not certify
-live GitHub, Feishu or Lark account permissions. macOS Harness composition and native Linux confinement are separate checks.
+Qualification on 2026-11-08: local `pnpm check` passed 1,457 tests, typechecking and all four builds. Both owned installed
+Harness/DeepSeek Flash scenarios passed on the final build in 191.45 seconds. Code revision
+`a558cdd5f6bf2de59512afb60373cff2465fb74b` passed 1,459 tests, typechecking and all builds with native Linux confinement in
+[run 42546908912](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42546908912).
+Local provider servers do not certify live GitHub, Feishu or Lark account permissions. macOS Harness composition and native
+Linux confinement are separate checks.
 Repository-wide event discovery, source-originated task admission, attachments/rich content, Git/PR mutations, provider event
 subscriptions, retention, restored-state activation and the remaining full product capabilities remain open.
