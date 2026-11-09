@@ -315,3 +315,11 @@ logical events, rejects newer/divergent/short/missing history, and rechecks rela
 Signed images record only Session/event counts. No history is repaired, no hold is removed, and historical retry evidence
 does not authorize activation. Runtime/account configuration, authoritative state, remapping, coordinated live ownership
 handoff, clean-host failure qualification and the full article/product ledger remain open.
+
+Destination-Session code `915cfc28f6b2ca10425a185376f85ae3d3c6b4e0` passed 1,562 local tests, typechecking and all
+four builds. The focused recovery run passed 108 tests, and the complete suite also covers older manifests without the new
+Session summary. Authentication of historical evidence does not clear a recovery hold.
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 192.86 seconds, including preparation against the separately
+imported destination and signed Session/event counts. Linux passed 1,564 tests with native confinement, typechecking and all
+builds in [run 42562981301](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42562981301).
+Provider-message traffic stayed local; the original app remained running. Broader configuration and activation remain open.

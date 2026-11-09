@@ -75,3 +75,17 @@ the signed Session/event counts through the actual maintenance plugin and instal
 
 This increment does not complete clean-host activation, authoritative input/state reconciliation, broader private runtime
 and account configuration, remapping, failover drills or the full article and Agentic OS requirements.
+
+Code `915cfc28f6b2ca10425a185376f85ae3d3c6b4e0` passed 1,562 local tests (seven skipped), typechecking and all four
+builds. The focused recovery run passed 108 tests; the complete run also includes the older-manifest authentication case.
+The two tests that retain unrelated durable Sessions passed separately after their empty fixtures were explicitly flushed.
+
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 192.86 seconds. The managed scenario imported into a
+separate destination backend, prepared through that backend, verified the signed Session/event counts and authenticated an
+original-ID retry. The dedicated scenario retained its expected refusal for intentionally unrecorded publication probes.
+Provider-message traffic used local contract servers; inference used the configured model API.
+
+The same code passed 1,564 tests with native Linux confinement (five skipped), typechecking and all builds in
+[run 42562981301](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42562981301). The original app
+remained running. These checks qualify destination verification during held preparation, not restored activation or a
+cross-host catalog lock.

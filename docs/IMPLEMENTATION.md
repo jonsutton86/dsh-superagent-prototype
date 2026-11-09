@@ -34,8 +34,15 @@ and records only verified Session/event counts. No history is created, appended 
 their historical meaning; the per-Session writer API supplies no global catalog lock or future activation permit.
 
 Broader private runtime/account configuration, authoritative input/state reconciliation, remapping, coordinated activation,
-clean-host failure qualification and the full article/product ledger remain open. Qualification evidence is recorded below
-after the local, installed-Harness and native Linux checks complete.
+clean-host failure qualification and the full article/product ledger remain open.
+
+Code `915cfc28f6b2ca10425a185376f85ae3d3c6b4e0` passed 1,562 local tests, typechecking and all four builds. The focused
+recovery run passed 108 tests; the complete suite also covers authentication of older manifests without Session evidence.
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 192.86 seconds. Managed preparation used the separately
+imported backend and authenticated its Session/event counts and original-ID retry; the dedicated case retained the expected
+refusal for unrecorded publication probes. Linux passed 1,564 tests with native confinement, typechecking and all builds in
+[run 42562981301](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42562981301).
+Provider-message traffic stayed local; the original app remained running. Restored activation remains unqualified.
 
 ## Implemented increment: execution configuration during recovery
 
