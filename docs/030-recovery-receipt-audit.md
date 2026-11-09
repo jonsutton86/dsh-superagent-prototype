@@ -23,8 +23,8 @@ The resources retain their existing read-only receipt APIs and explicit independ
 | Execution endpoint | Grants, commands and file mutations | Immutable world binding, original request fingerprint, grant/epoch, owner, known terminal phase and recorded command outcome |
 | Publication service | Destinations and publication receipts | Normalized original publication intent, destination hash, recorded ownership attempts, known terminal phase and external receipt hash |
 
-The source checkpoint includes both reviewed artifact publications and mission-channel replies. Publication intents pass
-through the shared schema before hashing, so equivalent JSON field ordering does not create a false mismatch. World journals
+The source checkpoint includes both reviewed artifact publications and mission-channel replies. Publication intents and
+external receipts pass through their shared schemas before hashing, so equivalent JSON field ordering does not create a false mismatch. World journals
 are read directly through read-only SQLite connections; constructing a live world would change recovery state and is avoided.
 A settled remote receipt can be observed even when its original acknowledgement was absent from the checkpoint. This is
 recorded in the audit's observation count; the checkpoint's original effect history is retained.

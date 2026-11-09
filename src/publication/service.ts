@@ -1,7 +1,7 @@
 import { fingerprint, timestamp } from '../remote/journal.ts'
 import { OwnershipGate, sameOwner, type OwnershipFloor, type ResourceOwnershipConfig } from '../ownership/gate.ts'
 import { PublicationJournal } from './journal.ts'
-import { ConversationPage, Destination, DestinationConfig, PublicationError, PublicationRpc, type PublicationIdentity, type PublicationReceipt } from './protocol.ts'
+import { ConversationPage, Destination, DestinationConfig, ExternalReceipt, Publication, PublicationError, PublicationRpc, type PublicationIdentity, type PublicationReceipt } from './protocol.ts'
 import { contentHash, DeliveryRefused, type PublicationAdapter } from './github.ts'
 import { PublicationProviders } from './providers.ts'
 import { ResourceInventory } from '../ownership/inventory.ts'
@@ -33,8 +33,8 @@ export class PublicationService {
         { kind: 'destination', table: 'publication_destination', project: value => ({ kind: 'destination', id: value.id,
           requestHash: fingerprint(value), phase: 'configured', settled: true }) },
         { kind: 'publication', table: 'publication_receipt', project: ({ request, receipt }) => ({ kind: 'publication', id: receipt.id,
-          requestHash: fingerprint(request), phase: receipt.phase, settled: !['accepted', 'started', 'unknown'].includes(receipt.phase),
-          ownership: receipt.ownership, resultHash: fingerprint(receipt.external ?? null) }) },
+          requestHash: fingerprint(Publication.parse(request)), phase: receipt.phase, settled: !['accepted', 'started', 'unknown'].includes(receipt.phase),
+          ownership: receipt.ownership, resultHash: fingerprint(receipt.external ? ExternalReceipt.parse(receipt.external) : null) }) },
       ])
       this.gate = new OwnershipGate(config.ownership, {
         floor: () => { const value = this.journal.meta('floor'); return value ? JSON.parse(value) as OwnershipFloor : undefined },

@@ -71,5 +71,13 @@ export async function qualifyPublication(input: { cli: string; home: string; pro
       expect(await restarted.call({ op: 'publish', publication })).toEqual(receipt)
     }
     expect(publisher.posts).toBe(before + 4)
-  } finally { try { await owner?.close() } finally { await stop() } }
+    return proofs.map(({ publication }) => publication.id)
+  } finally {
+    try { await owner?.close() }
+    finally {
+      await stop()
+      // Later recovery inspection needs the independent resource online, with its complete persisted destination catalog.
+      await publisher.restart(destinations)
+    }
+  }
 }

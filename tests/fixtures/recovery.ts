@@ -13,11 +13,12 @@ import type { ReserveCheckpointOwnership } from '../../src/recovery/ownership.ts
 import type { AuditCheckpointReceipts } from '../../src/recovery/audit.ts'
 import { privateCredential } from '../../src/environments/endpoint-files.ts'
 import { randomUUID } from 'node:crypto'
+import { DatabaseSync } from 'node:sqlite'
 
 export async function qualifyRecovery(input: { cli: string; home: string; profile: string; directory: string; temporary: string;
   stateDir: string; sessionRoot: string; port: number; worldDirectories: string[]; worker: string; worlds: number;
   authority?: OwnershipConnection & { coordinatorId: string }; originalClaimantFile?: string;
-  audit?: Pick<AuditCheckpointReceipts, 'endpoints' | 'publication'> }) {
+  audit?: Pick<AuditCheckpointReceipts, 'endpoints' | 'publication'>; unrecordedPublications?: string[] }) {
   const root = await realpath(input.temporary), keyFile = join(root, 'recovery-key'), outputDir = join(root, 'checkpoints')
   createRecoveryKey(keyFile)
   const destination = join(root, 'restored'), importedRoot = join(root, 'imported-sessions'), patch = join(input.directory, 'recovery.json')
@@ -93,7 +94,19 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
           const audit = store.get(KV.recovery.audit)!
           expect(audit).toMatchObject({ phase: 'complete', complete: true, executionOwnership: false })
           expect(audit.resources).toHaveLength(2); expect(audit.matched).toBeGreaterThan(0)
+          expect(audit.resources.every(resource => resource.quiescent)).toBe(true)
           expect(audit.issues.filter(issue => issue.code !== 'unrecorded_effect')).toEqual([])
+          const publications = ['workspace_publication', 'channel_publication'].flatMap(table => store.db.prepare(`SELECT id FROM ${table}`).all().map(row => String(row.id)))
+          expect(publications.length).toBeGreaterThan(0)
+          const originals = new Set(publications); let commands = 0
+          for (const file of manifest.files.filter(file => file.kind === 'world')) {
+            const world = new DatabaseSync(join(destination, file.member), { readOnly: true })
+            try { for (const row of world.prepare('SELECT id FROM execution_effect').all()) { originals.add(String(row.id)); commands++ } }
+            finally { world.close() }
+          }
+          expect(commands).toBeGreaterThan(0)
+          expect(audit.issues.filter(issue => originals.has(issue.id ?? ''))).toEqual([])
+          expect(audit.issues.filter(issue => issue.kind === 'publication').map(issue => issue.id).sort()).toEqual([...(input.unrecordedPublications ?? [])].sort())
           expect(audit.status).toBe(audit.issueCount ? 'blocked' : 'matched')
           expect(store.get(KV.recovery.hold)?.state).toBe('staged')
         } finally { store.close() }

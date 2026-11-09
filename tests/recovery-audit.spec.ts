@@ -28,12 +28,12 @@ import { publicationFixture } from './fixtures/publication.ts'
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { vi.restoreAllMocks(); for (const close of cleanup.splice(0).reverse()) await close() })
 
-async function fixture(options: { pending?: boolean; extra?: boolean; revoked?: boolean } = {}) {
+async function fixture(options: { pending?: boolean; extra?: boolean; revoked?: boolean; kind?: DestinationView['kind'] } = {}) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'dsh-receipt-audit-')))
   cleanup.push(() => rm(directory, { recursive: true, force: true }))
   const authority = await ownershipAuthority(cleanup, ['endpoint', 'publication']), owner = new CoordinatorOwnership(authority.config)
   cleanup.push(() => owner.close())
-  const publisher = await publicationFixture(cleanup, authority.resourceFor('publication'), owner)
+  const publisher = await publicationFixture(cleanup, authority.resourceFor('publication'), owner, options.kind)
   const remote = await remoteFixture(cleanup, { native: process.env.DSH_REMOTE_ISOLATION === '1', ownership: authority.resource,
     access: owner, beforeEnroll: async () => { await owner.start() } })
   const stateDir = join(directory, 'state'), worldDir = join(directory, 'world'), keyFile = join(directory, 'key')
@@ -83,8 +83,8 @@ async function fixture(options: { pending?: boolean; extra?: boolean; revoked?: 
   return { directory, checkpoint, reserved, audit, authority, remote, publisher, publication, job: settled, written, read }
 }
 
-it('matches authentic execution and publication receipts without payloads, replay or removing the hold', async () => {
-  const f = await fixture(), before = f.publisher.posts, report = await auditCheckpointReceipts(f.audit)
+it.each(['github-comment', 'github-review', 'feishu-reply'] as const)('matches authentic execution and %s receipts without payloads, replay or removing the hold', async kind => {
+  const f = await fixture({ kind }), before = f.publisher.posts, report = await auditCheckpointReceipts(f.audit)
   expect(report).toMatchObject({ phase: 'complete', status: 'matched', complete: true, issueCount: 0, matched: 5, observed: 0, executionOwnership: false })
   expect(report.resources).toHaveLength(2); expect(f.read().report).toEqual(report); expect(f.read().hold?.state).toBe('staged')
   const repeated = await auditCheckpointReceipts(f.audit); expect(repeated.status).toBe('matched'); expect(repeated.id).not.toBe(report.id)

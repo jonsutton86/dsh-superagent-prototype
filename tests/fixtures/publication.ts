@@ -124,6 +124,9 @@ export async function publicationFixture(cleanup: (() => Promise<unknown>)[], ow
         ...(kind === 'github-review' ? { pull_request_url: 'https://api.github.com/repos/acme/project/pulls/7', in_reply_to_id: 11 } : {}) })
       return String(id)
     },
-    restart: async () => { await service.close(); service = new PublicationService(config, new PublicationProviders(fetcher)); service.start() },
+    restart: async (destinations = config.destinations) => {
+      await service.close(); config.destinations = destinations
+      service = new PublicationService(config, new PublicationProviders(fetcher)); service.start()
+    },
   }
 }

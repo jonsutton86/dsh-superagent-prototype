@@ -7,12 +7,13 @@ import { credentialDigest, privateCredential } from '../environments/endpoint-fi
 import { OwnershipClient, type OwnershipConnection } from '../ownership/client.ts'
 import { OwnershipView, type RecoveryReservation, type OwnershipStamp } from '../ownership/protocol.ts'
 import { InventoryPage, type InventoryItem, type InventoryRequest } from '../ownership/inventory.ts'
+import { sameOwner } from '../ownership/gate.ts'
 import { RemoteClient, type RemoteConnection } from '../remote/client.ts'
 import { fingerprint, inside } from '../remote/journal.ts'
 import { worldBinding, type WorldRecord } from '../remote/world-journal.ts'
 import type { ExecutionReceipt } from '../remote/effects.ts'
 import { PublicationClient, type PublicationConnection } from '../publication/client.ts'
-import { Publication, type PublicationReceipt } from '../publication/protocol.ts'
+import { ExternalReceipt, Publication, type PublicationReceipt } from '../publication/protocol.ts'
 import { withVerifiedStagedCheckpoint } from './checkpoint.ts'
 
 export interface AuditCheckpointReceipts {
@@ -103,7 +104,7 @@ export async function auditCheckpointReceipts(options: AuditCheckpointReceipts):
           if (intent.id !== item.id) throw new Error('Checkpoint publication intent is invalid')
           add(publication.serviceId, { kind: 'publication', id: item.id, requestHash: fingerprint(intent), attempts: item.attempts,
             ...(item.receipt && !['accepted', 'started', 'unknown'].includes(item.receipt.phase) ? { phase: item.receipt.phase } : {}),
-            ...(item.receipt?.external ? { resultHash: fingerprint(item.receipt.external) } : {}) })
+            ...(item.receipt?.external ? { resultHash: fingerprint(ExternalReceipt.parse(item.receipt.external)) } : {}) })
           add(publication.serviceId, { kind: 'destination', id: intent.destination, requestHash: intent.destinationHash })
         }
         const clients: { id: string; kind: 'endpoint' | 'publication'; call(request: InventoryRequest): Promise<unknown> }[] = options.endpoints.map(config => {
@@ -141,8 +142,8 @@ export async function auditCheckpointReceipts(options: AuditCheckpointReceipts):
               const different = !revoked && (item.requestHash !== saved.requestHash || saved.epoch !== undefined && item.epoch !== saved.epoch)
                 || saved.grantId !== undefined && item.grantId !== saved.grantId || saved.phase !== undefined && item.phase !== saved.phase
                 || saved.resultHash !== undefined && item.resultHash !== saved.resultHash
-                || saved.ownership && fingerprint(item.ownership) !== fingerprint(saved.ownership)
-                || saved.attempts && !saved.attempts.some(owner => fingerprint(owner) === fingerprint(item.ownership))
+                || saved.ownership && (!item.ownership || !sameOwner(item.ownership, saved.ownership))
+                || saved.attempts && (!item.ownership || !saved.attempts.some(owner => sameOwner(owner, item.ownership!)))
               const effect = item.kind !== 'grant' && item.kind !== 'destination'
               if (different || effect && (!item.ownership || item.ownership.coordinatorId !== options.authority.coordinatorId || item.ownership.epoch > report.epoch))
                 issue('receipt_mismatch', client.id, item)
