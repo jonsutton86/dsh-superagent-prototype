@@ -76,5 +76,12 @@ image retrieval and cleanup after an authentic checkpoint contains contradictory
 requires nonempty artifact, successful-check, review and mission-completion evidence with zero legacy review seals.
 
 Local verification passed 1,893 tests (14 conditional skips), typechecking and all six builds. The final persisted-field
-normalization regression passed with all 18 focused result/reflection tests. Native Linux and installed-Harness
-qualification are pending for this increment.
+normalization regression passed with all 18 focused result/reflection tests. Runtime/test revision
+`3731d1800633b6d2d6bf2fea8d7b0730ef383112` passed 1,900 tests (eight conditional skips), typechecking and all six builds
+on Linux / Node 24 with native confinement in
+[run 42669190774](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42669190774).
+The exact revision passed the installed-Harness / DeepSeek Flash owned-managed recovery scenario in 206.85 seconds. Its
+signed image contained nonempty artifact, successful-check, review and completed-mission evidence, with zero legacy review
+seals. Original-ID retry retrieved the same authenticated held image. Inference used the configured real API; external
+provider operations stayed on local contract servers. The original app remained running. These results qualify held
+artifact/result evidence, not restored activation or completion of the full architecture/product objective.

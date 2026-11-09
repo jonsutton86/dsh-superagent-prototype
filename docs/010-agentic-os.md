@@ -58,7 +58,7 @@ refer to the same environment. Remote access requires authentication; do not exp
 | Usage and budgets | Worker concurrency, schedule run/open-mission reservations, managed Harness call/token ledger, versioned estimated pricing, scoped call/token/spend reservations, reconciliation and operator UI (`042-usage-budgets.md`) | Broader provider/adapter acceptance, invoice import, metadata generation binding, non-token fees, speculative admission integration, retention and multi-workspace ownership |
 | Models and connectors | Harness configuration, optional GitHub/Feishu, local grants, authenticated remote transport, paired Harness services, persistent remote authority/revocation and native Linux namespace/cancellation CI, whole-profile and per-action world binding, durable command/file ownership and operator receipts, endpoint-owned versioned credentials, real model artifact/restart qualification, endpoint enrollment/reconciliation and independent managed worlds | Managed endpoint/runtime launch, cross-host deployment qualification and connector scope |
 | Voice | None | Optional input/output adapters, interruption, local/cloud modes and text fallback |
-| Supervision and recovery | Independent watchdog console, evidence review receipts, bounded history/retention and real-model process-failure recovery; encrypted checkpoints/held Session import, checkpoint-bound claimant replacement, configuration/receipt/input validation, core Engine/connector/mission/plan/schedule authority checks and authenticated held receipt application, ownership authority, endpoint and artifact/mission publication fencing and owned Runtime/dedicated/managed provider lifecycle | Remaining product authority graphs, deployment binding/remapping, broader inbound connector/repository integration, clean-host activation/failover, alert routing, diagnosis quality and broader live failure tests |
+| Supervision and recovery | Independent watchdog console, evidence review receipts, bounded history/retention and real-model process-failure recovery; encrypted checkpoints/held Session import, checkpoint-bound claimant replacement, configuration/receipt/input validation, core Engine/connector/mission/plan/schedule authority and artifact/check/review/completion evidence checks, authenticated held receipt application, ownership authority, endpoint and artifact/mission publication fencing and owned Runtime/dedicated/managed provider lifecycle | Remaining product authority graphs, deployment binding/remapping, broader inbound connector/repository integration, clean-host activation/failover, alert routing, diagnosis quality and broader live failure tests |
 | Whole-product qualification | Deterministic unit, API/DOM flows, actual Harness restarts, live local model/tool, inbox and planner-to-execution missions | Browser/desktop layout, broader provider acceptance, backup/restore drills, accessibility and packaging |
 
 ## Missions increment
@@ -589,3 +589,16 @@ The exact revision passed installed-Harness / DeepSeek Flash owned-managed recov
 mission/schedule/execution evidence, no legacy stamps and original-ID image retrieval. The original app remains running.
 Artifact/check/completion and other product graphs, deployment binding/remapping, activation/failover, broader connector
 admission and all remaining architecture/product requirements stay active. These checks retain the execution hold.
+
+Artifact and result evidence recovery is implemented in `056-result-evidence-recovery.md`: original library bytes and scoped
+provenance, check-version/configuration history, host commands/receipts, snapshot evidence, review captures/seals and mission
+completion are checked before signing. Successful review attempts retain immutable historical seals after a later explicit
+capture, and reflection-approved plans resolve through their original proposal journal. Historical revoked/expired records
+remain data rather than renewed authority. Local verification passed 1,893 tests, typechecking and all six builds, plus the
+18-test final result/reflection regression. Runtime/test revision `3731d18` passed 1,900 Linux / Node 24 tests with native
+confinement, typechecking and all builds in
+[run 42669190774](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42669190774).
+The exact revision passed installed-Harness / DeepSeek Flash owned-managed recovery in 206.85 seconds with nonempty signed
+artifact/check/review/completion evidence, no legacy review seals and original-ID image retrieval. The original app remains
+running. Other product graphs, deployment binding/remapping, activation/failover, broader connector admission and every
+remaining architecture/product requirement stay active. The restore hold remains in place.
