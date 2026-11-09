@@ -67,4 +67,13 @@ world/workspace remapping, restored activation and clean-host crash/failover acc
 and Agentic OS ledger. A local intent with no independently committed receipt remains held for explicit resolution.
 
 Local verification passed 1,521 tests, typechecking and all four builds, with seven opt-in/platform cases skipped.
-The focused recovery suite covers 49 cases. Installed-Harness and native Linux qualification are pending.
+The focused recovery suite covers 49 cases; the final recovery/documentation run passed all 56 cases.
+Code `8c1a66445b89b328ebcbdad61260b147505a10a2` passed both owned installed-Harness / DeepSeek Flash scenarios
+in 195.07 seconds. The managed case lost the original revocation acknowledgements after commit, prepared the held world
+as revoked, authenticated and retried the same image, and verified no further revocation requests occurred during recovery.
+The dedicated case retained its expected refusal for unrecorded publication effects.
+
+The same code passed 1,523 tests with native Linux confinement (five skipped), typechecking and all four builds in
+[run 42559418182](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42559418182).
+Provider-message traffic used local contract servers. The original app remained running. Restored activation, private
+configuration and authoritative state recovery remain unqualified by this increment.

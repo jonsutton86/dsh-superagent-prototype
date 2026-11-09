@@ -288,3 +288,10 @@ exact disabled-successor binding validation and separate original-generation qui
 proof blocks recovery; confirmed acknowledgements are applied only to held world copies without replay. Original source
 state, old grant identity and all execution holds remain intact. Private configuration, input/state recovery, Session/backend
 validation, remapping, activation and the broader article/product ledger remain open.
+
+Revocation-recovery qualification: `8c1a66445b89b328ebcbdad61260b147505a10a2` passed 1,521 local tests, typechecking,
+all four builds and both owned installed-Harness / DeepSeek Flash scenarios in 195.07 seconds. Managed recovery confirmed
+the original lost revocation without another revocation request, preserved the held source and authenticated repeated
+preparation. The same code passed 1,523 tests with native confinement, typechecking and all builds in
+[Linux run 42559418182](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42559418182).
+Provider-message traffic stayed local; the original app remained running. This does not qualify restored activation.

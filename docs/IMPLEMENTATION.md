@@ -33,6 +33,12 @@ binding, applies only the held world copy, and preserves the original request an
 lease or credential operation is sent during recovery. Missing/conflicting proof keeps preparation blocked. Private
 configuration, authoritative input/state recovery, Session/backend validation, remapping and activation remain required.
 
+Qualified code `8c1a66445b89b328ebcbdad61260b147505a10a2` passed 1,521 local tests, typechecking and all four builds.
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 195.07 seconds, including lost revocation acknowledgements
+and confirmation that recovery did not resend them. The same code passed 1,523 tests with native confinement, typechecking
+and all four builds in [Linux run 42559418182](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42559418182).
+Provider-message traffic stayed on local contract servers; the original app stayed running. Restored activation remains open.
+
 ## Implemented increment: administrative recovery
 
 [032 Administrative recovery](032-administrative-recovery.md) reconciles the coordinator's original endpoint commands
