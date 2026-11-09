@@ -16,6 +16,7 @@ import { publicationFixture } from './fixtures/publication.ts'
 import { worldBinding } from '../src/remote/world-journal.ts'
 import { qualifyPublication } from './fixtures/publication-harness.ts'
 import { qualifySchedules } from './fixtures/schedules.ts'
+import type { RemoteJob } from '../src/remote/protocol.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { for (const dispose of cleanup.reverse()) await dispose(); cleanup.length = 0; vi.restoreAllMocks() })
@@ -168,6 +169,26 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     expect(ticket.executionPersona).toMatchObject({ id: persona.id, version: 1, digest: persona.digest, definition })
     expect(await readFile(join(ticket.directory, 'result.txt'), 'utf8')).toBe(proof)
     expect(artifact?.content).toBe(proof)
+    let verification: { client: RemoteClient; request: any; result: RemoteJob } | undefined
+    if (!owned && mode === 'dedicated') {
+      // Host-authored check of an actual model-created artifact. No inference or service credential enters the check.
+      const connected = await endpoints.world(registration.id, enrollment.id), client = new RemoteClient(connected.config)
+      h.host.snapshotHelper = resolve('lib/verification-snapshot-worker.js')
+      const request = { op: 'job.spawn' as const, requestId: randomUUID(), revision: connected.grant.revision, cwd: ticket.directory,
+        owner: { kind: 'host' as const, purpose: 'qualification-artifact-check' }, env: {}, graceMs: 100,
+        argv: ['/bin/sh', '-c', 'test "$(cat result.txt)" = "$1" && test -z "${SERVICE_API_KEY:-}" && printf verified', 'check', proof],
+        verification: { kind: 'check' as const, artifact: { path: 'result.txt', hash: artifact.hash } } }
+      await client.intent(request)
+      let result: RemoteJob | undefined
+      await vi.waitFor(async () => {
+        result = await client.call<RemoteJob>({ op: 'job.get', id: request.requestId }); expect(result.quiescent).toBe(true)
+      }, { timeout: 10000 })
+      expect(result, result?.error).toMatchObject({ phase: 'settled', outcome: { exitCode: 0 }, verification: { kind: 'check', stage: 'finished',
+        artifactHash: artifact.hash, snapshotUnchanged: true, storageReleased: true, output: { stdout: { bytes: 8 } } } })
+      expect(result!.credentials).toBeUndefined()
+      expect(result!.verification!.snapshot!.source).toBe(ticket.directory)
+      verification = { client, request, result: result! }
+    }
     let publicationId: string | undefined, channelDelivery: any, inboundRecord: any, inboundDelivery: any
     if (publisher) {
       const deliveries = await api(`missions/${mission.id}/delivery`)
@@ -251,6 +272,7 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     }
     expect((await api(`tickets/${task.id}`)).executionEnvironment).toEqual(ticket.executionEnvironment)
     expect((await api(`tickets/${task.id}`)).executionPersona).toEqual(ticket.executionPersona)
+    if (verification) expect(await verification.client.intent(verification.request)).toEqual(verification.result)
     expect((await api(runPath, request)).actions[0].runs).toEqual([task.id])
     expect((await api(`tickets/${task.id}`)).assignments).toHaveLength(publisher ? 2 : 1)
     expect((await api(`tickets/${task.id}/execution`)).items.find((item: { id: string }) => item.id === command!.id)).toMatchObject({

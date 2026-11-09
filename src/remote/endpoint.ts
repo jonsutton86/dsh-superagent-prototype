@@ -15,11 +15,14 @@ import { OwnershipError, requiresOwnership, type OwnershipStamp } from '../owner
 import { readAdministration, readRevocation, WorldConfigurationObservation } from './recovery.ts'
 import { ResourceInventory } from '../ownership/inventory.ts'
 import { worldBinding } from './world-journal.ts'
+import { runCapturedCheck, discardSnapshot } from '../verification/runner.ts'
+import { snapshotReservation } from '../verification/model.ts'
 
 export interface EndpointHost {
   filesystem: FileSystem; subprocess: SubprocessRuntime; isolation: ExecutionIsolation; stateDir: string; root: string
   allowedEnv?: string[]; outputMaxBytes?: number; maxRunning?: number; shutdownMs?: number
   commandHelper?: string
+  snapshotHelper?: string
   ownership?: ResourceOwnershipConfig
   report?(error: unknown): void
   filesystemRpc?(grant: RemoteGrant, request: RpcRequest, signal: AbortSignal): Promise<unknown>
@@ -39,6 +42,7 @@ export class RemoteEndpoint {
   private readonly lifetime = new AbortController()
   private readonly live = new Map<string, SubprocessHandle>()
   private readonly pending = new Map<string, Promise<void>>()
+  private readonly snapshotCleanup = new Map<string, Promise<void>>()
   private readonly grants = new Map<string, AbortController>()
   private adminQueue: Promise<unknown> = Promise.resolve()
   private fileQueue: Promise<unknown> = Promise.resolve()
@@ -133,6 +137,7 @@ export class RemoteEndpoint {
     return { protocol: 1, id: this.journal.id, platform: process.platform, confinement: this.host.isolation.name,
       ...(this.host.ownership ? { ownership: { authorityId: this.host.ownership.authorityId, coordinatorId: this.host.ownership.coordinatorId, resourceId: this.host.ownership.resourceId } } : {}),
       capabilities: { filesystem: true, process: true, terminal: false, interactiveStdin: false, controlChannel: false, outputWindow: MAX_WINDOW, effectOwnership: true, administration: true,
+        ...(this.host.snapshotHelper ? { snapshotVerification: true as const } : {}),
         ...(this.host.commandHelper ? { credentialBindings: true as const } : {}) } }
   }
   private admin(principal: Principal): void { if (principal.role !== 'admin') throw new RemoteError(403, 'admin_required', 'Endpoint administration credential required') }
@@ -233,6 +238,7 @@ export class RemoteEndpoint {
     return this.view(grant)
   }
   private sweep(): void {
+    this.cleanSnapshots()
     if (this.closing) return
     for (const grant of this.journal.grants()) if (grant.enabled && (grant.leaseUntil <= Date.now() || !this.credentials.valid(grant.credentials))) {
       const epoch = grant.epoch
@@ -291,6 +297,14 @@ export class RemoteEndpoint {
     const digest = fingerprint({ principal, request }), replay = this.journal.findJob(request.requestId)
     if (replay) { this.owned(principal, replay); if (replay.fingerprint !== digest) throw new RemoteError(409, 'request_conflict', 'Command ID already used'); return replay }
     const grant = this.grant(principal, 'process.spawn'); this.noUnknown()
+    if (request.verification) {
+      this.grant(principal, 'fs.read')
+      if (!this.host.snapshotHelper) throw new RemoteError(409, 'verification_unavailable', 'This endpoint has no snapshot verification runner')
+      const reserved = this.journal.jobs().filter(job => job.request.verification && (!job.quiescent || job.verification && !job.verification.storageReleased))
+        .reduce((sum, job) => sum + snapshotReservation(job.request.verification!.snapshot), 0)
+      if (reserved + snapshotReservation(request.verification.snapshot) > 2 * 1024 * 1024 * 1024)
+        throw new RemoteError(429, 'verification_storage', 'Snapshot reservations exceed the endpoint 2 GiB allowance')
+    }
     if (grant.revision !== request.revision) throw new RemoteError(409, 'stale_revision', 'Grant revision changed before dispatch')
     if (this.journal.jobs().filter(job => !job.quiescent && job.phase !== 'unknown').length >= (this.host.maxRunning ?? 8))
       throw new RemoteError(429, 'capacity', 'Endpoint process capacity is reserved')
@@ -301,7 +315,7 @@ export class RemoteEndpoint {
     if (Object.keys(request.env).length > 100 || denied.length)
       throw new RemoteError(403, 'environment_denied', `Only explicitly allowed non-credential environment overrides may be forwarded; rejected names: ${denied.join(', ')}`)
     const at = timestamp(), job: RemoteJob = { id: request.requestId, grantId: grant.id, epoch: grant.epoch, revision: grant.revision,
-      fingerprint: digest, request, ...(grant.credentials?.length ? { credentials: grant.credentials } : {}),
+      fingerprint: digest, request, ...(!request.verification && grant.credentials?.length ? { credentials: grant.credentials } : {}),
       ...(this.ownershipScope.getStore() ? { ownership: this.ownershipScope.getStore()!.stamp } : {}),
       phase: 'accepted', createdAt: at, updatedAt: at, cancelRequested: false, quiescent: false }
     this.journal.atomic(() => { this.journal.saveJob(job); this.journal.audit({ job: job.id, grant: grant.id, epoch: grant.epoch, action: 'accepted' }) })
@@ -327,6 +341,7 @@ export class RemoteEndpoint {
   private async launch(id: string): Promise<void> {
     let job = this.journal.job(id)
     if (job.phase !== 'accepted' || this.closing) return
+    if (job.request.verification) return this.verifyJob(id)
     try {
       const principal: Principal = { role: 'grant', id: job.grantId, epoch: job.epoch }, grant = this.grant(principal, 'process.spawn')
       this.noUnknown()
@@ -367,6 +382,51 @@ export class RemoteEndpoint {
       if (job.phase === 'accepted') { job.phase = 'settled'; job.quiescent = true }
       else { job.phase = 'unknown'; job.quiescent = null; this.live.get(id)?.terminate() }
       job.error = message(error).slice(0, 4000); this.journal.saveJob(job)
+    }
+  }
+  /** Capture/check stages share the original durable job identity, ownership and managed process range. */
+  private async verifyJob(id: string): Promise<void> {
+    let job = this.journal.job(id)
+    try {
+      const principal: Principal = { role: 'grant', id: job.grantId, epoch: job.epoch }, grant = this.grant(principal, 'fs.read')
+      const target = await this.target(grant, job.request.cwd), source = this.host.filesystem.processPath(target)
+      const result = await runCapturedCheck({ id, source, root: grant.root, argv: job.request.argv, env: job.request.env,
+        stdin: job.request.stdin, spec: job.request.verification! }, {
+        subprocess: this.host.subprocess, isolation: this.host.isolation, helper: this.host.snapshotHelper!, storageRoot: join(this.host.stateDir, 'verification'),
+        signal: this.signal(grant), lifetime: this.lifetime.signal,
+        authorize: async () => {
+          await this.verifyRoot(grant); await this.verifyOwnership(); this.grant(principal, 'fs.read'); this.grant(principal, 'process.spawn'); this.noUnknown()
+          const current = this.journal.job(id)
+          if (this.closing || current.cancelRequested || !['accepted', 'started'].includes(current.phase)) throw new Error('Verification job is no longer authorized')
+        },
+        checkpoint: evidence => { const current = this.journal.job(id); current.phase = 'started'; current.verification = evidence; this.journal.saveJob(current) },
+        live: handle => { if (handle) this.live.set(id, handle); else this.live.delete(id) },
+        output: (stream, bytes) => { if (!this.closed) this.journal.append(id, stream, bytes, this.host.outputMaxBytes ?? 8 * 1024 * 1024) },
+      })
+      if (this.closed) return
+      job = this.journal.job(id); job.phase = result.quiescent ? 'settled' : 'unknown'; job.quiescent = result.quiescent
+      job.verification = result.evidence; job.outcome = result.outcome; job.error = result.problem
+      this.journal.saveJob(job)
+    } catch (error) {
+      if (this.closed) return
+      job = this.journal.job(id)
+      if (job.quiescent) return // A pre-dispatch cancellation already has a complete stopped receipt.
+      if (job.phase === 'accepted') { job.phase = 'settled'; job.quiescent = true }
+      else { job.phase = 'unknown'; job.quiescent = null }
+      job.error = message(error).slice(0, 4000); this.journal.saveJob(job)
+    }
+  }
+  /** A reconciled process can release its retained private copy, without turning an unknown check into success. */
+  private cleanSnapshots(): void {
+    if (this.closing) return
+    for (const job of this.journal.jobs().filter(job => job.quiescent && job.verification && !job.verification.storageReleased).slice(0, 8)) {
+      if (this.snapshotCleanup.has(job.id) || this.pending.has(job.id) || this.live.has(job.id)) continue
+      const pending = discardSnapshot(join(this.host.stateDir, 'verification', job.id)).then(() => {
+        if (this.closed) return
+        const current = this.journal.job(job.id); current.verification!.storageReleased = true; this.journal.saveJob(current)
+      }).catch(() => { /* A failed cleanup continues reserving disk until a later sweep succeeds. */ })
+        .finally(() => this.snapshotCleanup.delete(job.id))
+      this.snapshotCleanup.set(job.id, pending)
     }
   }
   private cancel(job: RemoteJob): RemoteJob {
@@ -495,7 +555,14 @@ export class RemoteEndpoint {
       case 'job.spawn': return this.spawn(principal, request)
       case 'job.list': {
         const all = this.journal.jobs().filter(job => principal.role === 'admin' || (job.grantId === principal.id && job.epoch === principal.epoch))
-        return { items: all.slice(request.offset, request.offset + 100), nextOffset: request.offset + 100 < all.length ? request.offset + 100 : null }
+        const items: RemoteJob[] = []; let bytes = 0
+        for (const job of all.slice(request.offset, request.offset + 100)) {
+          const size = Buffer.byteLength(JSON.stringify(job))
+          if (items.length && bytes + size > 6 * 1024 * 1024) break
+          items.push(job); bytes += size
+        }
+        const next = request.offset + items.length
+        return { items, nextOffset: next < all.length ? next : null }
       }
       case 'job.get': case 'job.output': case 'job.cancel': case 'job.reconcile': {
         const job = this.journal.job(request.id); this.owned(principal, job)
@@ -585,7 +652,7 @@ export class RemoteEndpoint {
     if (!timer.aborted) await new Promise<void>(resolve => {
       const finish = () => { timer.removeEventListener('abort', finish); resolve() }
       timer.addEventListener('abort', finish, { once: true })
-      void Promise.allSettled([this.adminQueue, this.fileQueue, ...this.pending.values()]).then(finish)
+      void Promise.allSettled([this.adminQueue, this.fileQueue, ...this.pending.values(), ...this.snapshotCleanup.values()]).then(finish)
     })
     this.closed = true; this.journal.close()
   }

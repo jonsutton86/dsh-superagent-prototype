@@ -25,6 +25,16 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: host-captured verification execution
+
+[046 Host verification](046-host-verification.md) adds bounded file/Git manifests, private copied inputs, artifact and
+source-revision preconditions, read-only credential-free/network-isolated checks on Linux, output digests and durable
+original-job recovery. It uses the existing endpoint and Harness process provider. Capture-only and unknown/reconciled
+receipts cannot become successful check results. Admission and cleanup retain snapshot reservations until quiescence.
+Operator definitions, coordinator APIs/evidence UI, local support, library/publication freshness gates and exact PR-head
+binding remain required; this execution layer does not itself mark artifacts verified or authorize publication.
+Qualification is in progress. The full architecture/product objective remains active.
+
 ## Implemented increment: speculative preparation and review
 
 [045 Speculative preparation](045-speculative-preparation.md) adds assignment-bound durable owner/provider/environment
@@ -645,6 +655,10 @@ repeat completed work. Provider usage reporting and enforceable limits remain di
 quality/waste measurement, scaling, multi-workspace ownership and stronger confinement still require acceptance evidence.
 
 ### 6. Verified artifacts and delivery
+
+Implemented execution foundation in 046: host-captured bounded file/Git inputs, copied-source checks through existing
+endpoint/Harness jobs, revision preconditions, durable output/outcome evidence and unknown-aware cleanup. Coordinator
+check definitions and observations, local support, evidence UI and publication/PR-head enforcement remain open.
 
 Persist artifacts and verification results bound to exact source/workspace revisions: commit/tree IDs, content hashes,
 command or check identities, exit outcomes and timestamps. Verification evidence is collected by host integrations;

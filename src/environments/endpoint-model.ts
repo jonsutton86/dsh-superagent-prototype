@@ -14,7 +14,7 @@ export const CredentialMetadata = z.object({ id: requestId, version: z.string().
 export const IdentityMetadata = z.object({ protocol: z.literal(1), id: z.string().uuid(), platform: z.string(), confinement: z.string(),
   ownership: z.object({ authorityId: z.string().uuid(), coordinatorId: requestId, resourceId: requestId }).optional(),
   capabilities: z.object({ filesystem: z.literal(true), process: z.literal(true), terminal: z.literal(false), interactiveStdin: z.literal(false), controlChannel: z.literal(false),
-    outputWindow: z.number().int().positive(), effectOwnership: z.literal(true).optional(), credentialBindings: z.literal(true).optional(), administration: z.literal(true).optional() }) })
+    outputWindow: z.number().int().positive(), effectOwnership: z.literal(true).optional(), credentialBindings: z.literal(true).optional(), administration: z.literal(true).optional(), snapshotVerification: z.literal(true).optional() }) })
 export const GrantMetadata = z.object({ id: z.string().uuid(), owner: requestId, workspace: requestId,
   root: z.string().min(1).max(4096).refine(value => value.startsWith('/') && !value.includes('\0')),
   rootIdentity: z.string().min(1).max(2000), operations: z.array(Operations).min(1).max(4),

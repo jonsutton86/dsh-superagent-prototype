@@ -469,3 +469,10 @@ Long-horizon quality, confinement, retention/scaling and all remaining full arch
 Both owned installed-Harness / DeepSeek Flash scenarios passed against the final built artifact in 262.56 seconds,
 including managed-world scheduled reflection, usage refusal/retry, artifacts and held recovery. The original app process
 remained running. These checks qualify this increment; they do not close the remaining full Agentic OS requirements.
+
+Host verification execution: `046-host-verification.md` adds bounded host-collected file/Git manifests and checks against
+private copied inputs through the existing endpoint and Harness process provider. It records revision preconditions,
+command outcomes, full output digests and durable unknown/reconciliation state. Linux checks receive read-only source,
+isolated networking and no endpoint credentials. Operator check definitions, coordinator observation and evidence UI,
+local support, library/publication freshness gates and exact PR-head binding remain in scope, along with every remaining
+full architecture/product requirement. Qualification of this execution layer is in progress.

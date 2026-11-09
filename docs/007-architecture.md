@@ -364,6 +364,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/remote/journal.ts` | Independent single-writer SQLite state, HMAC credentials, intent deduplication, output offsets and restart uncertainty |
 | `src/remote/endpoint.ts`, `http.ts` | Authenticated execution admission, lease expiry, process supervision, mutation serialization and browser-request refusal |
 | `src/remote/isolation.ts`, `filesystem-runner.ts`, `fs-worker.ts` | Linux bubblewrap process worlds and standalone confined filesystem operations |
+| `src/verification/model.ts`, `snapshot.ts`, `snapshot-worker.ts`, `runner.ts` | Bounded host-captured file/Git manifests, private copied inputs, revision-pinned checks, output digests and quiescence-bound cleanup through Harness |
 | `src/remote/credentials.ts`, `command-worker.ts` | Endpoint-private immutable credential snapshots, version binding/revocation and credential loading inside the command namespace without secret argv |
 | `src/remote/client.ts`, `admin.ts` | Pinned host-side RPC, same-ID retry, reconnect observation and explicit uncertain outcomes |
 | `src/remote/world.ts`, `world-journal.ts` | Persistent execution-world authority binding, serialized lease maintenance, durable self-revocation and independent quiescence observations |
@@ -505,6 +506,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | Test | Covers |
 | --- | --- |
 | `tests/speculation.spec.ts`, `tests/speculation-runtime.spec.ts`, `tests/speculation-ui.spec.tsx`, `tests/speculation-harness.spec.ts` | Reservation races, preemption, recovery, promotion/publication, HTTP/DOM and opt-in installed-Harness qualification. |
+| `tests/verification-snapshot.spec.ts`, `tests/verification-endpoint.spec.ts` | Actual file/Git evidence, copied-input checks, revision changes, output retention, timeout/cancellation, unknown restart and native Linux read-only/network isolation |
 | `tests/core-engine.spec.ts` | Domain rules on in-memory repositories: receiving, Eval, fan-out, resume and stop, interrupted Assignments, the pause, Policy changes, reports and outcomes, attaching, replies, failed deliveries and dismissed problems |
 | `tests/environments.spec.ts` | Runtime/API enrollment, persistent grants, paired-provider proof, races, revocation, replacement and legacy task binding |
 | `tests/environments-ui.spec.tsx` | Rendered enrollment/recovery and exact mutation retry after response loss and polling |

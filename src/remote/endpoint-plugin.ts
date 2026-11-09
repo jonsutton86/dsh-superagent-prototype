@@ -29,6 +29,7 @@ export async function apply(ctx: Context, config: EndpointConfig): Promise<void>
   const endpoint = new RemoteEndpoint({ stateDir: config.stateDir, root: config.workspaceRoot, filesystem: ctx.fs, subprocess: ctx.subprocess,
     isolation, filesystemRpc: confinedFilesystem(ctx.subprocess, isolation, fileURLToPath(new URL('./remote-fs-worker.js', import.meta.url))),
     commandHelper: fileURLToPath(new URL('./remote-command-worker.js', import.meta.url)),
+    snapshotHelper: fileURLToPath(new URL('./verification-snapshot-worker.js', import.meta.url)),
     allowedEnv: config.allowedEnv, maxRunning: config.maxRunning, outputMaxBytes: config.outputMaxBytes, ownership: config.ownership,
     report: error => ctx.logger.warn('Endpoint ownership monitor: %s', error instanceof Error ? error.message : String(error)) })
   ctx.effect(() => () => endpoint.stop())

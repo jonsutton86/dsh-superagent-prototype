@@ -1,12 +1,13 @@
 import { access, realpath } from 'node:fs/promises'
-import { dirname, parse } from 'node:path'
+import { dirname, parse, isAbsolute, relative } from 'node:path'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import { RemoteError } from './protocol.ts'
 
 export interface ExecutionIsolation {
   readonly name: string
   wrap(argv: readonly string[], root: string, cwd: string, network: boolean, signal: AbortSignal,
-    env?: Record<string, string | null>, helper?: string, mounts?: readonly { source: string; target: string }[]): Promise<readonly string[]>
+    env?: Record<string, string | null>, helper?: string, mounts?: readonly { source: string; target: string }[],
+    options?: { readOnly?: boolean; writableSnapshot?: string }): Promise<readonly string[]>
 }
 
 /** Linux process worlds expose only system runtime files and one granted workspace, never endpoint control state. */
@@ -16,7 +17,8 @@ export class BubblewrapIsolation implements ExecutionIsolation {
     if (process.platform !== 'linux') throw new RemoteError(503, 'isolation_unavailable', 'The remote endpoint requires Linux with bubblewrap and user namespaces')
   }
   async wrap(argv: readonly string[], root: string, cwd: string, network: boolean, signal: AbortSignal,
-    env: Record<string, string | null> = {}, helper?: string, mounts: readonly { source: string; target: string }[] = []): Promise<readonly string[]> {
+    env: Record<string, string | null> = {}, helper?: string, mounts: readonly { source: string; target: string }[] = [],
+    options: { readOnly?: boolean; writableSnapshot?: string } = {}): Promise<readonly string[]> {
     const program = await this.subprocess.resolveExecutable('bwrap', undefined, signal)
     const args = [program, '--unshare-all', '--unshare-user', '--die-with-parent', '--new-session', '--cap-drop', 'ALL']
     if (network) args.push('--share-net')
@@ -31,8 +33,14 @@ export class BubblewrapIsolation implements ExecutionIsolation {
       if (await access(path).then(() => true, () => false)) args.push('--ro-bind', path, path)
     args.push('--proc', '/proc', '--dev', '/dev', '--tmpfs', '/tmp')
     const parents: string[] = []
-    for (let value = dirname(root); value !== parse(value).root; value = dirname(value)) parents.unshift(value)
-    for (const parent of parents) if (!['/tmp', '/usr', '/etc', '/bin', '/sbin', '/lib', '/lib64', '/proc', '/dev'].includes(parent)) args.push('--dir', parent)
+    const snapshot = options.writableSnapshot
+    if (snapshot) {
+      const contains = (parent: string, child: string) => { const value = relative(parent, child); return !isAbsolute(value) && value !== '..' && !value.startsWith('../') }
+      if (!helper || !options.readOnly || !isAbsolute(snapshot) || await realpath(snapshot) !== snapshot || contains(root, snapshot) || contains(snapshot, root))
+        throw new RemoteError(400, 'snapshot_mount', 'Snapshot output must be host-created outside the read-only source')
+    }
+    for (const path of [root, ...snapshot ? [snapshot] : []]) for (let value = dirname(path); value !== parse(value).root; value = dirname(value)) parents.unshift(value)
+    for (const parent of new Set(parents)) if (!['/tmp', '/usr', '/etc', '/bin', '/sbin', '/lib', '/lib64', '/proc', '/dev'].includes(parent)) args.push('--dir', parent)
     if (helper || mounts.length) args.push('--dir', '/run')
     if (helper) args.push('--ro-bind', helper, '/run/dsh-filesystem.mjs')
     if (mounts.length) {
@@ -43,7 +51,8 @@ export class BubblewrapIsolation implements ExecutionIsolation {
         args.push('--ro-bind', mount.source, mount.target)
       }
     }
-    args.push('--bind', root, root, '--chdir', cwd, '--clearenv', '--setenv', 'PATH', '/usr/local/bin:/usr/bin:/bin',
+    if (snapshot) args.push('--bind', snapshot, snapshot)
+    args.push(options.readOnly ? '--ro-bind' : '--bind', root, root, '--chdir', cwd, '--clearenv', '--setenv', 'PATH', '/usr/local/bin:/usr/bin:/bin',
       '--setenv', 'HOME', root, '--setenv', 'TMPDIR', '/tmp')
     for (const [key, value] of Object.entries(env)) args.push(...(value === null ? ['--unsetenv', key] : ['--setenv', key, value]))
     args.push('--', ...argv)

@@ -39,6 +39,7 @@ export async function remoteFixture(cleanup: (() => Promise<unknown>)[], options
   const host = { stateDir: join(directory, 'control'), root: join(directory, 'work'), filesystem: fs, subprocess: process,
     isolation, filesystemRpc: confinedFilesystem(process, isolation, fileURLToPath(new URL(options.native ? '../../lib/remote-fs-worker.js' : '../../src/remote/fs-worker.ts', import.meta.url))),
     commandHelper: fileURLToPath(new URL(options.native ? '../../lib/remote-command-worker.js' : '../../src/remote/command-worker.ts', import.meta.url)),
+    snapshotHelper: fileURLToPath(new URL(options.native ? '../../lib/verification-snapshot-worker.js' : '../../src/verification/snapshot-worker.ts', import.meta.url)),
     outputMaxBytes: options.outputMaxBytes, shutdownMs: 2000, ownership: options.ownership }
   let endpoint = new RemoteEndpoint(host)
   try { await endpoint.start() }

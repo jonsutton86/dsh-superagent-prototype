@@ -17,4 +17,5 @@ export default defineConfig([
   // A separate one-entry build keeps the confined helper self-contained: no host shared chunks are mounted into workers.
   { entry: { 'remote-fs-worker': 'src/remote/fs-worker.ts' }, outDir: 'lib', format: 'esm', fixedExtension: false, platform: 'node', target: 'es2024', dts: false, clean: false },
   { entry: { 'remote-command-worker': 'src/remote/command-worker.ts' }, outDir: 'lib', format: 'esm', fixedExtension: false, platform: 'node', target: 'es2024', dts: false, clean: false },
+  { entry: { 'verification-snapshot-worker': 'src/verification/snapshot-worker.ts' }, outDir: 'lib', format: 'esm', fixedExtension: false, platform: 'node', target: 'es2024', dts: false, clean: false, deps: { alwaysBundle: ['zod'] } },
 ])

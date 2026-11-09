@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { FsEditOutcome, FsWriteOutcome } from '@deepseek-ai/dsh-fs'
 import type { OwnershipStamp } from '../ownership/protocol.ts'
 import { InventoryPage, InventoryRequest, ReceiptRequest } from '../ownership/inventory.ts'
+import { VerificationJob, type CheckEvidence } from '../verification/model.ts'
 
 export const REMOTE_VERSION = 1
 export const RPC_PATH = '/execution/v1'
@@ -55,6 +56,7 @@ export const Rpc = z.discriminatedUnion('op', [
   z.object({ op: z.literal('grant.revoke'), ...request, reason: z.string().trim().min(1).max(2000) }).strict(),
   z.object({ op: z.literal('grant.status') }).strict(),
   z.object({ op: z.literal('job.spawn'), ...request, ...ownership, revision, argv: z.array(z.string().max(MAX_TEXT).refine(value => !value.includes('\0'))).min(1).max(256),
+    verification: VerificationJob.optional(),
     cwd: path, stdin: z.string().max(MAX_TEXT).optional(), graceMs: z.number().int().min(1).max(30_000),
     env: z.record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.string().max(8192).refine(value => !value.includes('\0')).nullable()).default({}) }).strict(),
   z.object({ op: z.literal('job.get'), id }).strict(),
@@ -91,13 +93,14 @@ export interface RevocationReceipt { grantId: string; epoch: number; at: string;
 export interface EndpointIdentity {
   protocol: 1; id: string; platform: string; confinement: string
   ownership?: { authorityId: string; coordinatorId: string; resourceId: string }
-  capabilities: { filesystem: true; process: true; terminal: false; interactiveStdin: false; controlChannel: false; outputWindow: number; effectOwnership?: true; credentialBindings?: true; administration?: true }
+  capabilities: { filesystem: true; process: true; terminal: false; interactiveStdin: false; controlChannel: false; outputWindow: number; effectOwnership?: true; credentialBindings?: true; administration?: true; snapshotVerification?: true }
 }
 export interface RemoteJob {
   id: string; grantId: string; epoch: number; revision: number; fingerprint: string
   phase: 'accepted' | 'started' | 'settled' | 'unknown'; createdAt: string; updatedAt: string
   request: Extract<RpcRequest, { op: 'job.spawn' }>; cancelRequested: boolean; quiescent: boolean | null
   credentials?: CredentialBinding[]
+  verification?: CheckEvidence
   ownership?: OwnershipStamp
   outcome?: { exitCode: number | null; signal: string | null }; error?: string; reconciled?: { at: string; note: string }
 }
