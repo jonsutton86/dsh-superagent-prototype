@@ -210,7 +210,9 @@ export class WatchdogJournal {
         return JSON.parse(previous.result as string) as AcknowledgementReceipt
       }
       const issued = Number(request.requestId.slice(3, 16))
-      if (issued > now + 60_000 || now - issued > ACK_WINDOW_MS) throw new WatchdogOperatorError(410, 'acknowledgement_request_expired')
+      // Cleanup's durable clock floor prevents a clock rollback from making an already-pruned request valid again.
+      if (issued > now + 60_000 || Math.max(now, this.operatorState().prunedAt) - issued > ACK_WINDOW_MS)
+        throw new WatchdogOperatorError(410, 'acknowledgement_request_expired')
       const incident = this.get(request.incidentId)
       if (!incident) throw new WatchdogOperatorError(404, 'incident_not_found')
       if (incident.closedAt !== undefined || this.view(incident).viewRevision !== request.revision)

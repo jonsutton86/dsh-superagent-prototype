@@ -26,6 +26,7 @@ request ID. Receipt lookup precedes current-evidence checks, so a lost response 
 new evidence or resolution. Reusing a request ID with different content fails. New requests more than 24 hours old or more
 than one minute in the future fail. A receipt is eligible for cleanup only after its request has expired; a removed receipt
 can therefore never turn an old request into a new acknowledgement. No model text creates this authority.
+The persisted cleanup time also forms an expiry floor, so moving the host clock backwards cannot revive a pruned request.
 
 The browser stores the original command in session storage before sending. Unconfirmed responses retain its exact request
 ID, revision and note through refresh/remount, and expose an explicit retry. The browser never automatically resubmits a

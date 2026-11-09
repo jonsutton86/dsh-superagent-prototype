@@ -80,6 +80,7 @@ it('bounds retention, preserves all active incidents, expires replay before prun
   expect(() => h.journal.acknowledge(input, later)).toThrow('acknowledgement_request_expired')
   const restore = new WatchdogJournal(h.file); cleanup.push(() => restore.close())
   expect(() => restore.acknowledge(input, later)).toThrow('acknowledgement_request_expired')
+  expect(() => restore.acknowledge(input, h.now)).toThrow('acknowledgement_request_expired') // Wall-clock rollback cannot revive a pruned identity.
   expect(restore.maintain(later, DEFAULT_RETENTION)).toEqual({ incidents: 0, audit: 0, receipts: 0 })
 })
 
