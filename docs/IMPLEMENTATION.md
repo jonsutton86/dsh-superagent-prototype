@@ -34,6 +34,14 @@ Active-world credential versions/status are included in the resource audit. Prep
 counts and preserve source state. Private credential/runtime configuration validation, authoritative input/state recovery,
 pending world-revocation acknowledgement recovery, actual Session validation, remapping and activation remain required, alongside the complete article and Agentic OS ledgers.
 
+Qualified code `3f2d4ba2ee7058fc8f037fb4c666e074b8ac3ca3` also corrects false abandoned-command refusals across sibling
+providers and delayed catalog observations, with shared uncertainty fencing and preserved restart reconciliation. The final
+local suite passed 1,508 tests; typechecking and all four builds passed. Both owned installed-Harness / DeepSeek Flash cases
+passed in 201.96 seconds, including actual managed subagent work and repeated authenticated administrative receipt preparation.
+Linux passed 1,510 tests with native confinement, typechecking and all builds in
+[run 42558234881](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42558234881).
+Provider-message traffic used local contract servers. The original app remained running; no restored activation was performed.
+
 ## Implemented increment: held receipt preparation
 
 [031 Receipt preparation](031-recovery-receipt-preparation.md) applies revision-bound original command/file/publication

@@ -273,3 +273,12 @@ cancellation and reconciliation commands without resending them. Recovered grant
 credential validation; later generations/versions are not substituted for historical results. Active-world credential
 version/status comparisons detect rotation and revocation. The execution hold and the remaining full architecture ledger
 stay in place, including authoritative input/state recovery, configuration validation, Session/world remapping and activation.
+
+Administrative-recovery qualification: code `3f2d4ba2ee7058fc8f037fb4c666e074b8ac3ca3` passed 1,508 local tests,
+typechecking and all four builds. Both owned installed-Harness / DeepSeek Flash cases passed in 201.96 seconds, including
+managed subagent work and authenticated administrative receipt preparation. The live run exposed and regression tests
+reproduced false abandoned-command refusals; providers now share live command ownership within one world and retain that
+ownership through delayed catalog observations. Unknown dispatch still fences siblings until receipt reconciliation.
+The same code passed 1,510 tests with native confinement, typechecking and all builds in
+[Linux run 42558234881](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42558234881).
+The original app remained running. Provider-message traffic stayed local; restored activation and the full product remain open.

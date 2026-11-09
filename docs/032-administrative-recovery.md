@@ -101,4 +101,13 @@ requires reconciliation for untracked commands. Unknown dispatch fences every si
 quiescence; no command is replayed. Outcome and managed-process quiescence remain separate observations.
 
 Regression tests cover overlapping parent/child providers, commands starting before or during a delayed catalog request,
-and uncertain-dispatch fencing/reconciliation across siblings. Final live qualification of this correction remains pending.
+and uncertain-dispatch fencing/reconciliation across siblings.
+
+Code `3f2d4ba2ee7058fc8f037fb4c666e074b8ac3ca3` passed the final local suite with 1,508 tests (seven opt-in/platform
+cases skipped), typechecking and all four builds. The focused remote suite passed 34 tests. Both owned installed-Harness /
+DeepSeek Flash scenarios passed in 201.96 seconds, including managed subagent execution, original administrative receipt
+verification and repeated authenticated held preparation. The dedicated case refused the intentionally unrecorded publication
+effects. Linux passed 1,510 tests (five skipped), typechecking and all four builds in
+[run 42558234881](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42558234881).
+Provider-message traffic used local contract servers. The original app remained running; restored activation and the
+remaining architecture ledger are not qualified by these checks.

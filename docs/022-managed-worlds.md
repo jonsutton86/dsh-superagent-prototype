@@ -45,6 +45,12 @@ Other Harness services, model routing, persistence, tool execution, compaction a
 The pool checks the actual mounted services using the public `agentPresets.serviceFor` API, in addition to checking the
 persisted preset label. Managed activation requires this API; this composition is qualified against Harness 0.2.1-rc.3.
 
+All process providers borrowed from one live world share an ephemeral, binding-checked command registry. Parent, child
+and host commands can overlap without being mistaken for abandoned work. Catalog observations retain ownership of commands
+active at any point during the request, so a delayed response cannot turn a completed command into an orphan. Each provider
+still cancels only its own handles on disposal. Unknown dispatch fences every sibling until the original receipt confirms
+quiescence. Restart creates an empty registry and preserves the requirement to reconcile untracked active commands.
+
 The mission definition and source authorization compare the exact environment reference. The executor reads selection only
 from the authorized workspace trigger, stores the world's revision and epoch in the execution, and creates a directory below
 that grant's root. Generic model text cannot change the selection. `workspace_environments` exposes bounded metadata for
