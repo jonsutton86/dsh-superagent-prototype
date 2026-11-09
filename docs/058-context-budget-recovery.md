@@ -79,7 +79,17 @@ signed-image retrieval, legacy evidence, corruption refusal, cancellation and bo
 qualification requires nonempty signed recall/model evidence and, for the managed-world reflection scenario, captured
 snapshots, proposals and read charges, without legacy accounting gaps.
 
-Full local, native Linux and installed-Harness qualification results will be recorded after verification. Remaining
-publication and registry cross-references, deployment binding/remapping, actual restored activation/ownership handoff and
-clean-host failover remain open, alongside every other uncompleted architecture/product requirement. The full standalone
-Agentic OS objective is unchanged.
+Runtime/test revision `77a7aa0` passed full local `pnpm check`: 1,915 tests, typechecking and all six builds. Native Linux /
+Node 24 with bubblewrap passed 1,922 tests, typechecking and all six builds in
+[run 42677535071](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42677535071).
+The exact revision passed two installed-Harness / DeepSeek Flash scenarios:
+
+- Owned-managed recovery in 200.27 seconds, including nonempty signed recall/model evidence, reflection snapshots,
+  candidates and read charges, zero legacy accounting gaps, and original-ID held-image retrieval.
+- Speculative preparation, separate result/message approval and restart without duplicate synthetic delivery in 21.43 seconds.
+
+Provider operations stayed on local contract servers or the synthetic message sink; inference used the configured real API.
+The original app remained running. These scenarios do not establish cross-host activation or long-horizon deployment capacity.
+Remaining publication and registry cross-references, deployment binding/remapping, actual restored activation/ownership
+handoff and clean-host failover remain open, alongside every other uncompleted architecture/product requirement. The full
+standalone Agentic OS objective is unchanged.

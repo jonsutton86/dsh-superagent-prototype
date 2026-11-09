@@ -617,6 +617,11 @@ binding/remapping, activation/handoff/failover and the full architecture/product
 
 Context and budget recovery is implemented in `058-context-budget-recovery.md`: original reflection snapshots/candidates and
 read counters, cumulative recall charges, model accounting/lineage and speculative allocations/approvals are checked without
-replaying or refunding work. New requests and timing/policy references are retained; legacy gaps remain explicit. Qualification
-is pending. Remaining publication/registry cross-references, deployment binding/remapping, activation/handoff/failover and
-every other uncompleted architecture/product requirement remain in the full objective.
+replaying or refunding work. New requests and timing/policy references are retained; legacy gaps remain explicit. Runtime/test
+revision `77a7aa0` passed 1,915 local tests and 1,922 Linux / Node 24 tests with native confinement, typechecking and all six
+builds in [run 42677535071](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42677535071).
+The exact revision passed installed-Harness / DeepSeek Flash owned-managed recovery in 200.27 seconds with nonempty signed
+recall/model/reflection evidence, zero legacy accounting gaps and original-ID held-image retrieval. Live speculative
+preparation, separate publication approval and restart without duplicate synthetic delivery passed in 21.43 seconds.
+The original app remains running. Remaining publication/registry cross-references, deployment binding/remapping,
+activation/handoff/failover and every other uncompleted architecture/product requirement remain in the full objective.

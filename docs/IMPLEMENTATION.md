@@ -30,8 +30,15 @@ No new runtime, orchestration database, or workflow framework is assumed. Work i
 [058 Context and budget recovery](058-context-budget-recovery.md) verifies original reflection evidence and read charges,
 cumulative recall reservations, model accounting/lineage and speculative holds, policies and approvals. New commands retain
 their request bodies and new captures/allocations retain exact timing/policy references; older evidence gaps remain visible.
-Pending and unknown work retains its charges. Qualification is pending. Remaining publication/registry cross-references,
-deployment binding/remapping, restored activation, handoff and clean-host failover stay open under the full architecture objective.
+Pending and unknown work retains its charges. Runtime/test revision `77a7aa0` passed 1,915 local tests and 1,922 Linux /
+Node 24 tests with native confinement, typechecking and all six builds. Native evidence is
+[run 42677535071](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42677535071).
+The exact revision passed installed-Harness / DeepSeek Flash owned-managed recovery in 200.27 seconds with nonempty signed
+recall/model/reflection evidence, zero legacy accounting gaps and original-ID held-image retrieval. Live speculative
+preparation, separate publication approval and restart without duplicate delivery also passed in 21.43 seconds. Provider
+operations stayed on local contract servers or a synthetic sink; the original app remained running. Remaining
+publication/registry cross-references, deployment binding/remapping, restored activation, handoff and clean-host failover
+stay open under the full architecture objective.
 
 ## Implemented increment: held registry authority
 
