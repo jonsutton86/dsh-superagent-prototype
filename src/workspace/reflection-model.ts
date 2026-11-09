@@ -52,6 +52,7 @@ export interface ReflectionSnapshot {
 export interface ReflectionRun {
   id: string; missionId: string; scheduleId: string; scheduleRevision: number; capturedAt: string
   snapshotHash: string; bytes: number; snapshot: ReflectionSnapshot
+  captureVersion?: 1
 }
 export interface ReflectionProposal {
   id: string; runId: string; revision: number; status: 'pending' | 'approved' | 'rejected'; createdAt: string

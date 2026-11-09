@@ -15,6 +15,7 @@ import { startRuntime } from './fixtures/host.ts'
 import { workerSessionId } from '../src/executor/dsh.ts'
 import { verifyWorkspaceState } from '../src/recovery/workspace.ts'
 import { verifyResultState } from '../src/recovery/results.ts'
+import { verifyContextState } from '../src/recovery/context.ts'
 
 const cleanup: (() => void | Promise<void>)[] = []
 afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close(); vi.restoreAllMocks() })
@@ -49,7 +50,7 @@ const memory = (evidence: { missions?: string[]; records?: string[] }, requestId
   evidence, candidate: { kind: 'memory', title: 'Reusable lesson', summary: 'A practical lesson', content: 'Keep a record of the evidence.' } })
 const review = (decision = 'approve', requestId = 'review') => ({ requestId, revision: 1, decision, note: 'Evidence and intended scope reviewed' })
 
-it('captures bounded selected context before dispatch, excludes unrelated private records, and preserves snapshots across reopen', () => {
+it('captures bounded selected context before dispatch, excludes unrelated private records, and preserves snapshots across reopen', async () => {
   const f = fixture(), selected = f.mission(), other = f.mission('other'), record = f.record(), privateRecord = f.record('private', `mission:${selected.id}`)
   const hidden = f.library.publish({ requestId: 'hidden', scope: `mission:${other.id}`, kind: 'memory', title: 'Hidden', summary: 'Private relationship',
     content: 'Secret', sources: [{ id: record.id, relation: 'contradicts' }] })
@@ -70,6 +71,7 @@ it('captures bounded selected context before dispatch, excludes unrelated privat
   f.close(); const g = fixture(f.directory)
   g.schedules.tick(); expect(g.started).not.toHaveBeenCalled()
   expect(g.reflections.get(captured.id)).toEqual(captured)
+  expect(await verifyContextState(g.store.db, new AbortController().signal)).toMatchObject({ reflectionRuns: 1, capturedMissions: 1, capturedRecords: 2, readOwners: 1 })
 })
 
 it('publishes a memory only on idempotent review and retains agent authorship and source provenance', async () => {
@@ -88,6 +90,7 @@ it('publishes a memory only on idempotent review and retains agent authorship an
   expect(g.reflections.review(run.id, proposal.id, review())).toEqual(approved)
   expect(g.library.list().items).toHaveLength(2)
   expect(await verifyResultState(g.store.db, new AbortController().signal)).toMatchObject({ memories: 2, reflectionPromotions: 1 })
+  expect(await verifyContextState(g.store.db, new AbortController().signal)).toMatchObject({ reflectionRuns: 1, proposals: 1 })
 })
 
 it('applies existing-plan changes and new drafts through Workspace without dispatching, with atomic approval receipts', async () => {
@@ -107,6 +110,7 @@ it('applies existing-plan changes and new drafts through Workspace without dispa
   expect(f.started).toHaveBeenCalledTimes(before + 1)
   await verifyWorkspaceState(f.store.db, new AbortController().signal)
   expect(await verifyResultState(f.store.db, new AbortController().signal)).toMatchObject({ reflectionPromotions: 2 })
+  expect(await verifyContextState(f.store.db, new AbortController().signal)).toMatchObject({ reflectionRuns: 2, proposals: 2 })
 })
 
 it('refuses changed mission evidence and transitive stale library evidence while allowing rejection', () => {

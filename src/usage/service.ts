@@ -39,6 +39,8 @@ export class Usage {
       CREATE INDEX IF NOT EXISTS usage_call_speculation ON usage_call(json_extract(value,'$.owner.speculationId'),at);
       CREATE TABLE IF NOT EXISTS usage_command (id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS usage_session (id TEXT PRIMARY KEY, root TEXT NOT NULL);`)
+    if (!store.db.prepare('PRAGMA table_info(usage_command)').all().some(row => row.name === 'request'))
+      store.db.exec('ALTER TABLE usage_command ADD COLUMN request TEXT')
     if (!store.db.prepare('SELECT 1 FROM usage_configuration LIMIT 1').get()) {
       const at = this.now(); this.store.db.prepare('INSERT INTO usage_configuration VALUES (0,?)')
         .run(JSON.stringify({ revision: 0, at, trackingSince: at, prices: [], budgets: [] } satisfies UsageConfiguration))
@@ -66,7 +68,7 @@ export class Usage {
     this.store.atomic(() => {
       const fingerprint = key(JSON.stringify(input)), receipt = this.store.db.prepare('SELECT fingerprint FROM usage_command WHERE id=?').get(requestId)
       if (receipt) { if (receipt.fingerprint !== fingerprint) throw new UsageError(409, 'This request ID was already used for another operation'); return }
-      operation(); this.store.db.prepare('INSERT INTO usage_command VALUES (?,?)').run(requestId, fingerprint)
+      operation(); this.store.db.prepare('INSERT INTO usage_command(id,fingerprint,request) VALUES (?,?,?)').run(requestId, fingerprint, JSON.stringify(input))
     })
   }
   configure(input: unknown): UsageConfiguration {

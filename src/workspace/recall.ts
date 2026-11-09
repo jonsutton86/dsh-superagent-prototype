@@ -19,6 +19,8 @@ export class Recall {
       CREATE TABLE IF NOT EXISTS workspace_recall_command (id TEXT PRIMARY KEY,fingerprint TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS workspace_recall_attempt (id TEXT PRIMARY KEY,owner TEXT NOT NULL,value TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS workspace_recall_owner ON workspace_recall_attempt(owner);`)
+    if (!store.db.prepare('PRAGMA table_info(workspace_recall_command)').all().some(row => row.name === 'request'))
+      store.db.exec('ALTER TABLE workspace_recall_command ADD COLUMN request TEXT')
     if (!store.db.prepare('SELECT 1 FROM workspace_recall_config LIMIT 1').get()) store.db.prepare('INSERT INTO workspace_recall_config VALUES (0,?)')
       .run(JSON.stringify({ revision: 0, at: this.now(), policy: DEFAULT_RECALL } satisfies RecallConfiguration))
   }
@@ -37,7 +39,7 @@ export class Recall {
       if (current.revision !== request.revision) throw new WorkspaceError(409, 'Recall limits changed; reload before editing')
       const next = { revision: current.revision + 1, at: this.now(), policy: request.policy }
       this.store.db.prepare('INSERT INTO workspace_recall_config VALUES (?,?)').run(next.revision, JSON.stringify(next))
-      this.store.db.prepare('INSERT INTO workspace_recall_command VALUES (?,?)').run(request.requestId, fingerprint)
+      this.store.db.prepare('INSERT INTO workspace_recall_command(id,fingerprint,request) VALUES (?,?,?)').run(request.requestId, fingerprint, JSON.stringify(request))
     })
     return this.configuration()
   }

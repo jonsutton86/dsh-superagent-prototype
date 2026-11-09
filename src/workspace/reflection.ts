@@ -22,6 +22,8 @@ export class Reflections {
       CREATE TABLE IF NOT EXISTS workspace_reflection_command (actor TEXT NOT NULL, id TEXT NOT NULL, fingerprint TEXT NOT NULL,
         proposal TEXT NOT NULL, PRIMARY KEY(actor,id));
       CREATE TABLE IF NOT EXISTS workspace_reflection_read (owner TEXT PRIMARY KEY, calls INTEGER NOT NULL, bytes INTEGER NOT NULL);`)
+    if (!store.db.prepare('PRAGMA table_info(workspace_reflection_command)').all().some(row => row.name === 'request'))
+      store.db.exec('ALTER TABLE workspace_reflection_command ADD COLUMN request TEXT')
   }
   private run(id: string): ReflectionRun {
     const row = this.store.db.prepare('SELECT value FROM workspace_reflection WHERE id=?').get(id)
@@ -47,7 +49,7 @@ export class Reflections {
   /** Called inside the occurrence transaction before any executor effect can escape. Retries never recapture context. */
   prepare(occurrence: ScheduleOccurrence, missionId: string, spec: ReflectionSpec): void {
     if (this.store.db.prepare('SELECT id FROM workspace_reflection WHERE id=?').get(occurrence.id)) return
-    const at = new Date(this.clock()).toISOString(), since = new Date(this.clock() - spec.lookbackHours * 3600000).toISOString()
+    const at = new Date(this.clock()).toISOString(), since = new Date(Date.parse(at) - spec.lookbackHours * 3600000).toISOString()
     const snapshot: ReflectionSnapshot = { capturedAt: at, since, guidance: spec.guidance, missions: [], records: [], contextOnly: true,
       omissions: { missions: 0, records: 0, unavailable: 0, partialRecords: 0, selectionStopped: false } }
     const deadline = performance.now() + 200, fits = () => Buffer.byteLength(JSON.stringify(snapshot)) <= spec.maxBytes
@@ -90,7 +92,7 @@ export class Reflections {
     }
     if (!fits()) throw new WorkspaceError(409, 'Reflection guidance exceeds the selected context byte limit')
     const serialized = JSON.stringify(snapshot), run: ReflectionRun = { id: occurrence.id, missionId, scheduleId: occurrence.scheduleId,
-      scheduleRevision: occurrence.revision, capturedAt: at, bytes: Buffer.byteLength(serialized), snapshotHash: key(serialized), snapshot }
+      scheduleRevision: occurrence.revision, capturedAt: at, bytes: Buffer.byteLength(serialized), snapshotHash: key(serialized), snapshot, captureVersion: 1 }
     this.store.db.prepare('INSERT INTO workspace_reflection VALUES (?,?,?)').run(run.id, missionId, JSON.stringify(run))
   }
   forTicket(ticketId: string): boolean {
@@ -135,7 +137,8 @@ export class Reflections {
         return this.proposal(String(old.proposal))
       }
       const result = apply()
-      this.store.db.prepare('INSERT INTO workspace_reflection_command VALUES (?,?,?,?)').run(actor, id, fingerprint, result.id)
+      this.store.db.prepare('INSERT INTO workspace_reflection_command(actor,id,fingerprint,proposal,request) VALUES (?,?,?,?,?)')
+        .run(actor, id, fingerprint, result.id, JSON.stringify(input))
       return result
     })
   }

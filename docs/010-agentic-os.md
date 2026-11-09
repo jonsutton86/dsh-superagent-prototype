@@ -614,3 +614,9 @@ The exact revision passed installed-Harness / DeepSeek Flash owned-managed recov
 persona/version/worker/world history, historical revoked grants, zero legacy task-grant gaps and original-ID image retrieval.
 The original app remains running. Remaining product graphs and registry/publication cross-references, deployment
 binding/remapping, activation/handoff/failover and the full architecture/product scope remain open. The restore hold stays in place.
+
+Context and budget recovery is implemented in `058-context-budget-recovery.md`: original reflection snapshots/candidates and
+read counters, cumulative recall charges, model accounting/lineage and speculative allocations/approvals are checked without
+replaying or refunding work. New requests and timing/policy references are retained; legacy gaps remain explicit. Qualification
+is pending. Remaining publication/registry cross-references, deployment binding/remapping, activation/handoff/failover and
+every other uncompleted architecture/product requirement remain in the full objective.

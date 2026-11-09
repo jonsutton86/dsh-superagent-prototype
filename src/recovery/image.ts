@@ -53,6 +53,20 @@ export const ReceiptImage = z.object({ version: z.literal(1), requestId: z.strin
     historicalGrants: z.number().int().nonnegative(), legacyGrants: z.number().int().nonnegative(), sessions: z.number().int().nonnegative(),
     personaPins: z.number().int().nonnegative(), worldPins: z.number().int().nonnegative(), pendingPins: z.number().int().nonnegative(),
     legacySessionPins: z.number().int().nonnegative(), digest }).strict().optional(),
+  contextState: z.object({ version: z.literal(1), records: z.number().int().nonnegative(), recallConfigurations: z.number().int().nonnegative(),
+    recallAttempts: z.number().int().nonnegative(), reservedRecall: z.number().int().nonnegative(), failedRecall: z.number().int().nonnegative(),
+    recallOwners: z.number().int().nonnegative(), elapsedOverruns: z.number().int().nonnegative(), recallBytes: z.number().int().nonnegative(),
+    reflectionRuns: z.number().int().nonnegative(), snapshotBytes: z.number().int().nonnegative(), capturedMissions: z.number().int().nonnegative(),
+    capturedRecords: z.number().int().nonnegative(), proposals: z.number().int().nonnegative(), readOwners: z.number().int().nonnegative(),
+    readCalls: z.number().int().nonnegative(), readBytes: z.number().int().nonnegative(), legacySnapshots: z.number().int().nonnegative(),
+    legacyCommands: z.number().int().nonnegative(), digest }).strict().optional(),
+  budgetState: z.object({ version: z.literal(1), records: z.number().int().nonnegative(), usageConfigurations: z.number().int().nonnegative(),
+    calls: z.number().int().nonnegative(), pendingCalls: z.number().int().nonnegative(), unknownCalls: z.number().int().nonnegative(), reconciledCalls: z.number().int().nonnegative(),
+    usageBindings: z.number().int().nonnegative(), legacyAssignments: z.number().int().nonnegative(), missingSessionHeaders: z.number().int().nonnegative(),
+    tokens: z.number().int().nonnegative(), cost: z.number().int().nonnegative(), reservedTokens: z.number().int().nonnegative(), reservedCost: z.number().int().nonnegative(),
+    speculationConfigurations: z.number().int().nonnegative(), speculativeRuns: z.number().int().nonnegative(), heldAllocations: z.number().int().nonnegative(),
+    releasedAllocations: z.number().int().nonnegative(), promotedRuns: z.number().int().nonnegative(), approvedMessages: z.number().int().nonnegative(),
+    legacyPolicies: z.number().int().nonnegative(), legacyCommands: z.number().int().nonnegative(), digest }).strict().optional(),
 }).strict()
 export type ReceiptImage = z.infer<typeof ReceiptImage>
 const envelope = z.object({ manifest: ReceiptImage, mac: digest }).strict()

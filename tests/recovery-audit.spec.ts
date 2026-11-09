@@ -44,12 +44,13 @@ import { publicationFixture } from './fixtures/publication.ts'
 import { scheduleDefinition, workspaceStateFixture } from './fixtures/workspace-state.ts'
 import { Library } from '../src/workspace/library.ts'
 import { Personas } from '../src/personas/service.ts'
+import { Usage } from '../src/usage/service.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { vi.restoreAllMocks(); for (const close of cleanup.splice(0).reverse()) await close() })
 
 async function fixture(options: { administration?: boolean; credential?: boolean; rotateCredential?: boolean; revokeCredential?: boolean; pending?: boolean; channel?: boolean; extra?: boolean; revoked?: boolean;
-  managed?: boolean; changedPin?: boolean; omitPublicationCredential?: boolean; input?: 'consumed' | 'missing'; graph?: 'indexes' | 'conflict'; connector?: 'valid' | 'invalid'; workspace?: 'valid' | 'conflict'; results?: 'valid' | 'conflict'; registries?: 'valid' | 'conflict'; revocation?: 'lost' | 'unsettled' | 'unsent'; kind?: DestinationView['kind'] } = {}) {
+  managed?: boolean; changedPin?: boolean; omitPublicationCredential?: boolean; input?: 'consumed' | 'missing'; graph?: 'indexes' | 'conflict'; connector?: 'valid' | 'invalid'; workspace?: 'valid' | 'conflict'; results?: 'valid' | 'conflict'; registries?: 'valid' | 'conflict'; resources?: 'valid' | 'context-conflict' | 'budget-conflict'; revocation?: 'lost' | 'unsettled' | 'unsent'; kind?: DestinationView['kind'] } = {}) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'dsh-receipt-audit-')))
   cleanup.push(() => rm(directory, { recursive: true, force: true }))
   const authority = await ownershipAuthority(cleanup, ['endpoint', 'publication']), owner = new CoordinatorOwnership(authority.config)
@@ -194,6 +195,17 @@ async function fixture(options: { administration?: boolean; credential?: boolean
       description: 'Original identity', instructions: 'Preserve original evidence.', model: null, capabilities: ['read'], skills: [] } })
     personas.archive(persona.id, { requestId: randomUUID(), revision: 1, archived: true, reason: 'Retired for new work' })
     if (options.registries === 'conflict') store.db.exec('DELETE FROM persona_version')
+  }
+  if (options.resources) {
+    const library = new Library(store), record = library.publish({ requestId: randomUUID(), kind: 'memory', title: 'Recall evidence', summary: 'Original context', content: 'Original context bytes' })
+    library.recall.read({ id: record.id }, { role: 'router' }, new AbortController().signal)
+    const usage = new Usage(store), owner = { sessionId: 'audit-master', root: 'audit-master', role: 'orchestrator' as const }
+    usage.bind(owner.sessionId, owner.root)
+    usage.configure({ requestId: randomUUID(), revision: 0, budgets: [], prices: [{ provider: 'fixture', model: 'current', input: 1000000, output: 2000000,
+      cacheRead: 100000, cacheWrite: 1000000, note: 'Synthetic qualification rates' }] })
+    usage.begin(owner, 'fixture', 'current', 'conversation', 100)
+    if (options.resources === 'context-conflict') store.db.exec("UPDATE workspace_recall_attempt SET value=json_set(value,'$.charged.calls',0)")
+    if (options.resources === 'budget-conflict') store.db.exec("UPDATE usage_call SET value=json_set(value,'$.reservedCost',0)")
   }
   if (options.workspace) {
     const product = workspaceStateFixture(store)
@@ -838,7 +850,8 @@ it.each(['manifest', 'member', 'extra'] as const)('refuses a tampered prepared %
 it('authenticates older held image manifests without treating absent configuration or Session evidence as a new verification', async () => {
   const f = await fixture(), audit = await auditCheckpointReceipts(f.audit)
   const prepared = await prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })
-  const { sessionBackend: _, controlConfiguration: __, inferenceConfiguration: ___, consumedInputs: ____, sourceConfiguration: _____, stateGraph: ______, connectorState: _______, workspaceState: ________, resultState: _________, registryState: __________, ...manifest } = prepared.manifest, key = recoveryKey(f.audit.keyFile)
+  const { sessionBackend: _, controlConfiguration: __, inferenceConfiguration: ___, consumedInputs: ____, sourceConfiguration: _____, stateGraph: ______, connectorState: _______, workspaceState: ________, resultState: _________, registryState: __________,
+    contextState: ___________, budgetState: ____________, ...manifest } = prepared.manifest, key = recoveryKey(f.audit.keyFile)
   try {
     const mac = createHmac('sha256', key).update('dsh-receipt-image:1\n').update(JSON.stringify(manifest)).digest('hex')
     await writeFile(join(prepared.path, 'prepared.json'), JSON.stringify({ manifest, mac }))
@@ -851,6 +864,7 @@ it('authenticates older held image manifests without treating absent configurati
   expect(verified.workspaceState).toBeUndefined()
   expect(verified.resultState).toBeUndefined()
   expect(verified.registryState).toBeUndefined()
+  expect(verified.contextState).toBeUndefined(); expect(verified.budgetState).toBeUndefined()
 })
 
 it('repairs consumed input acknowledgements only in the signed held image and preserves historical retries', async () => {
@@ -940,6 +954,24 @@ it('signs archived persona authority and returns the same original prepared imag
 it('refuses a missing original persona version before inference and removes the unpublished image', async () => {
   const f = await fixture({ registries: 'conflict' }), audit = await auditCheckpointReceipts(f.audit)
   await expect(prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })).rejects.toMatchObject({ code: 'reference', relation: 'persona_snapshot' })
+  expect(f.inference.adapter.calls).toEqual([])
+  expect(f.read().hold?.state).toBe('staged'); expect(f.publisher.posts).toBe(1)
+  expect((await readdir(f.audit.destination)).filter(name => name.startsWith('prepared-') || name.startsWith('.prepare-'))).toEqual([])
+})
+it('signs original context charges and pending model reservations without settling or refunding them', async () => {
+  const f = await fixture({ resources: 'valid' }), audit = await auditCheckpointReceipts(f.audit)
+  const options = { ...f.audit, requestId: randomUUID(), auditId: audit.id }, prepared = await prepareCheckpointReceipts(options)
+  expect(prepared.manifest.contextState).toMatchObject({ version: 1, recallAttempts: 1, recallOwners: 1, digest: expect.stringMatching(/^[a-f0-9]{64}$/) })
+  expect(prepared.manifest.budgetState).toMatchObject({ version: 1, calls: 1, pendingCalls: 1, reservedTokens: 100, reservedCost: 200, legacyCommands: 0 })
+  expect(await verifyReceiptImage(prepared.path, f.audit.keyFile)).toEqual(prepared.manifest)
+  expect(await prepareCheckpointReceipts(options)).toEqual(prepared)
+  const image = new DatabaseSync(join(prepared.path, 'orchestrator.sqlite'), { readOnly: true })
+  try { expect(image.prepare('SELECT phase FROM usage_call').get()!.phase).toBe('pending') } finally { image.close() }
+  expect(f.read().hold?.state).toBe('staged'); expect(f.publisher.posts).toBe(1)
+})
+it.each(['context-conflict', 'budget-conflict'] as const)('refuses inconsistent %s evidence before inference and cleans the unpublished image', async resources => {
+  const f = await fixture({ resources }), audit = await auditCheckpointReceipts(f.audit)
+  await expect(prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })).rejects.toMatchObject({ code: 'conflict' })
   expect(f.inference.adapter.calls).toEqual([])
   expect(f.read().hold?.state).toBe('staged'); expect(f.publisher.posts).toBe(1)
   expect((await readdir(f.audit.destination)).filter(name => name.startsWith('prepared-') || name.startsWith('.prepare-'))).toEqual([])

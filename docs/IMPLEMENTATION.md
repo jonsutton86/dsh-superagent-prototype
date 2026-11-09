@@ -25,6 +25,14 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: held context and budget state
+
+[058 Context and budget recovery](058-context-budget-recovery.md) verifies original reflection evidence and read charges,
+cumulative recall reservations, model accounting/lineage and speculative holds, policies and approvals. New commands retain
+their request bodies and new captures/allocations retain exact timing/policy references; older evidence gaps remain visible.
+Pending and unknown work retains its charges. Qualification is pending. Remaining publication/registry cross-references,
+deployment binding/remapping, restored activation, handoff and clean-host failover stay open under the full architecture objective.
+
 ## Implemented increment: held registry authority
 
 [057 Registry authority recovery](057-registry-authority-recovery.md) verifies persona definitions and command history,

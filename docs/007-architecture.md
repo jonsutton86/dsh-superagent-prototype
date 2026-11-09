@@ -492,6 +492,9 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/recovery/workspace.ts` | Read-only mission/plan/schedule authority, historical execution binding and exact occurrence/cursor verification |
 | `src/recovery/results.ts` | Recorded artifact content/provenance, check/receipt history, review seals and mission-completion authority in held images |
 | `src/recovery/registries.ts` | Read-only persona history, original execution generations and immutable worker/Session ownership in held images |
+| `src/recovery/reader.ts` | Bounded read-only product-state scanning, normalized persisted-value checks and static diagnostics |
+| `src/recovery/context.ts` | Original reflection snapshots/proposals/read charges and cumulative recall reservations in held images |
+| `src/recovery/budgets.ts` | Recorded model liabilities, original accounting lineage and speculative policy/approval evidence without release |
 | `src/verification/evidence.ts` | Shared pure predicates for completed host checks and immutable evidence bindings |
 | `src/recovery/sources.ts` | Actual passive source catalog and authenticated settings qualification with repeated registration/default checks |
 | `src/recovery/crypto.ts` | Private inputs, separate key files and streaming authenticated checkpoint encryption |
@@ -559,6 +562,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/recovery-workspace.spec.ts` | Original plan/action authority, proposal review, human follow-ups, schedule history/cursors, legacy stamps and corruption refusal |
 | `tests/recovery-results.spec.ts` | Actual local/remote checks, historical approvals, original captures, content/evidence corruption, legacy records and cancellation |
 | `tests/recovery-registries.spec.ts` | Actual persona/environment/world history, deep Session ancestry, revoked grants, corruption refusal and incomplete legacy bindings |
+| `tests/recovery-resources.spec.ts` | Actual reflection/recall/model/speculation history, uncertain charges, approvals, corruption refusal, legacy evidence and cancellation |
 | `tests/recovery-sources.spec.ts` | Real passive source plugin lifecycle, shared eligibility, strict settings checks, registration changes, cancellation and safe failures |
 | `tests/remote-ownership.spec.ts` | Pre-dispatch persistence, concurrent attribution, lost responses, assignment fences, restart/cancel recovery and receipt mismatch refusal |
 | `tests/ownership.spec.ts` | Competing coordinators, all-resource barriers, claimant replacement/supersession, monotonic expiry/restart, endpoint handoff/outage and immutable receipt generations |

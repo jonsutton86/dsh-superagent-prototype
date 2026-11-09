@@ -27,6 +27,8 @@ export class Speculation {
       CREATE INDEX IF NOT EXISTS speculation_run_ticket ON speculation_run(ticket);
       CREATE TABLE IF NOT EXISTS speculation_command (id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, result TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS speculation_message (id TEXT PRIMARY KEY, run TEXT NOT NULL, fingerprint TEXT NOT NULL, note TEXT NOT NULL);`)
+    if (!host.store.db.prepare('PRAGMA table_info(speculation_command)').all().some(row => row.name === 'request'))
+      host.store.db.exec('ALTER TABLE speculation_command ADD COLUMN request TEXT')
     if (!host.store.db.prepare('SELECT 1 FROM speculation_configuration LIMIT 1').get())
       host.store.db.prepare('INSERT INTO speculation_configuration VALUES (0,?)').run(JSON.stringify({ revision: 0, at: this.now(), policy: defaultSpeculation }))
     // A restart is not evidence that local processes or provider calls stopped.
@@ -79,7 +81,7 @@ export class Speculation {
         return JSON.parse(String(previous.result)) as T
       }
       const value = apply()
-      this.host.store.db.prepare('INSERT INTO speculation_command VALUES (?,?,?)').run(id, digest, JSON.stringify(value))
+      this.host.store.db.prepare('INSERT INTO speculation_command(id,fingerprint,result,request) VALUES (?,?,?,?)').run(id, digest, JSON.stringify(value), JSON.stringify(input))
       return value
     })
   }
@@ -113,10 +115,10 @@ export class Speculation {
     if (this.host.store.db.prepare('SELECT id FROM speculation_run WHERE assignment=?').get(assignment.id)) return
     if (Number(this.host.store.db.prepare('SELECT count(*) AS n FROM speculation_run').get()!.n) >= 10000)
       throw new WorkspaceError(409, 'Speculative preparation history capacity reached')
-    const policy = this.configuration().policy
+    const configuration = this.configuration(), policy = configuration.policy, createdAt = this.now()
     this.save({ id: key('speculation', ticket.id, assignment.id), ticketId: ticket.id, assignmentId: assignment.id, revision: 1,
       title: ticket.title, owner: `${ticket.mandate.actor.source}:${ticket.mandate.actor.id}`, environment: ticket.execution?.environment?.environmentId ?? 'local',
-      createdAt: this.now(), expiresAt: new Date(this.at() + policy.ttlMinutes * 60000).toISOString(), state: 'proposed', providers: [] })
+      createdAt, expiresAt: new Date(Date.parse(createdAt) + policy.ttlMinutes * 60000).toISOString(), queuedPolicyRevision: configuration.revision, state: 'proposed', providers: [] })
   }
   held(): string[] { return [...new Set(this.all().filter(run => run.admittedAt && !run.releasedAt).map(run => run.ticketId))] }
   private explicitDemand(): Ticket[] {
@@ -216,7 +218,7 @@ export class Speculation {
       this.capacity(run, provider)
       run.state = 'admitted'; run.providers = [provider]; run.policyRevision = policy.revision; run.allowance = policy.policy.run
       run.execution = current.execution
-      run.admittedAt = this.now(); run.deadline = new Date(this.at() + run.allowance.seconds * 1000).toISOString(); delete run.problem
+      run.admittedAt = this.now(); run.deadline = new Date(Date.parse(run.admittedAt) + run.allowance.seconds * 1000).toISOString(); delete run.problem
       this.changed(run)
     })
   }

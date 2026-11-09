@@ -24,6 +24,7 @@ export interface SpeculationRun {
   id: string; ticketId: string; assignmentId: string; revision: number; title: string; owner: string; environment: string
   createdAt: string; expiresAt: string; state: 'proposed' | 'admitted' | 'ready' | 'promoted' | 'expired' | 'cancelled'
   providers: string[]; policyRevision?: number; allowance?: SpeculationAllowance; admittedAt?: string; deadline?: string
+  queuedPolicyRevision?: number
   execution?: Ticket['execution']
   releasedAt?: string; releaseEvidence?: string; recovered?: boolean; attestation?: { at: string; note: string }; problem?: string
   evidence?: string; report?: string; review?: { at: string; note: string }
