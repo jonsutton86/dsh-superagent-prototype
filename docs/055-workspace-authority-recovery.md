@@ -66,5 +66,12 @@ Checkpoint pipeline tests require signed nonempty mission/schedule evidence, ori
 authentic checkpoint contains contradictory product authority. The installed-Harness recovery fixture requires nonempty
 mission/schedule/execution evidence and zero legacy stamps from its actual managed workload.
 
-Local verification passed 1,884 tests (14 conditional skips), typechecking and all six builds. Native Linux and real
-installed-Harness qualification are pending for this increment.
+Local verification passed 1,884 tests (14 conditional skips), typechecking and all six builds. Runtime/test revision
+`4079a49df726133256143adbafc4fe7ad4973418` passed 1,891 tests (eight conditional skips), typechecking and all six builds on
+Linux / Node 24 with native confinement in
+[run 42664952945](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42664952945).
+The same revision passed the installed-Harness / DeepSeek Flash owned-managed recovery scenario in 195.68 seconds. Its
+signed prepared image contained nonempty mission, schedule and scheduled-execution evidence, with zero legacy plan or
+Trigger stamps. Original-ID retry retrieved the same authenticated held image. Inference used the configured real API;
+external provider operations stayed on local contract servers. The original app remained running. These results qualify
+held product-authority verification, not restored activation or completion of the full architecture/product objective.
