@@ -39,6 +39,9 @@ ledger remain open. Qualification and deployment boundaries are recorded in the 
 
 Local qualification on 2026-11-08: `pnpm check` passed 1,437 tests, typechecking and all four builds. Both owned
 installed-Harness/DeepSeek Flash scenarios passed, including actual acknowledgements and retained delivery receipts.
+Exact code revision `3bf6a280f992c2e8621f6ec388879785f7827598` also passed 1,439 tests with native Linux confinement,
+typechecking and all four builds in
+[run 42543761724](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42543761724).
 
 ## Implemented increment: artifact publication
 

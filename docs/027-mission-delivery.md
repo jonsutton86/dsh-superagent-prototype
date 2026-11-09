@@ -123,3 +123,9 @@ Node 25.9.0. Both owned installed-Harness/DeepSeek Flash scenarios passed separa
 acknowledgements, retained receipts after coordinator restart and the dedicated publication plugin's four-destination
 restart checks. The live qualification on macOS substitutes the endpoint confinement identity; native Linux confinement
 requires its separate CI result. The user's existing application process was not restarted or replaced.
+
+Exact code revision `3bf6a280f992c2e8621f6ec388879785f7827598` subsequently passed typechecking, all four builds and
+1,439 tests (5 opt-in tests skipped) under native Linux confinement in
+[run 42543761724](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42543761724).
+That result includes the managed execution, mission delivery and rendered-control tests. Live external account deployment,
+inbound connector integration and the rest of the full architecture remain unqualified by this increment.

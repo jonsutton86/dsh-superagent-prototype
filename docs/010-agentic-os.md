@@ -213,3 +213,8 @@ Mission delivery increment: `027-mission-delivery.md` adds plan-bound standing c
 existing Outbox, immutable original intents and unknown receipt recovery after revocation, withdrawal or ownership loss.
 GitHub review and Feishu/Lark root replies extend the independent service. Owned inbound connectors, repository mutations,
 live tenant/account qualification, host verification and restored activation/failover remain open.
+
+Mission delivery qualification: code `3bf6a280f992c2e8621f6ec388879785f7827598` passed 1,437 local tests and both owned
+installed-Harness/DeepSeek Flash scenarios. It also passed 1,439 native Linux tests, typechecking and all four builds in
+[run 42543761724](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42543761724).
+Provider traffic stayed on synthetic local servers; this is implementation evidence, not a live-account deployment claim.
