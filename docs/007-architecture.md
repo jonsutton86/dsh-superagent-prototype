@@ -326,9 +326,11 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/client/mission-pulls.tsx`, `mission-completion.tsx` | Plan-visible PR target consent, current-head result review, completion receipts and original-attempt recovery |
 | `src/supervision/service.ts` | Main-process supervision observations and transactional, idempotent, assignment-bounded progress requests |
 | `src/supervision/client.ts` | Authenticated loopback transport, bounded responses, consistent pagination and restart fencing |
-| `src/supervision/journal.ts` | Independent SQLite incident history, assessment delivery reservations and intervention audit |
+| `src/supervision/journal.ts` | Independent SQLite incident history, assessment reservations, operator review receipts, consistent pages and bounded retention |
 | `src/supervision/monitor.ts` | Continuous monitoring, bounded semantic assessments, timeout cancellation and incident reconciliation |
-| `src/supervision/plugin.ts` | Separate Harness profile/Session lifecycle, restricted tools and local watchdog status endpoint |
+| `src/supervision/plugin.ts` | Separate Harness profile/Session lifecycle, restricted tools, local console and periodic retention |
+| `src/supervision/http.ts` | Same-origin standalone console assets and bounded operator incident/history/acknowledgement APIs |
+| `src/supervision/console.tsx`, `console-entry.tsx`, `console.css` | Independent operator console, service health, evidence review, durable ambiguous-response retry and paginated history |
 | `src/deployment.ts` | The plugin `Config` and `Machine`; `resolveDeployment` and `resolveFeishuBot` read the repository and the accounts from the Source settings, each CLI run as Executor shells run it; `SETUP_FIELDS` lists the Source fields setup reads. The code names no person, account or organization |
 | `src/setup.ts` | Setup problems: `SetupError`, with a code, the place that fixes it and the English text the log, the main Session and the panel share |
 | `src/policy.ts` | The Policy: the settings schemas by block, the Policy version, the gate and Mandate revalidation |
@@ -563,6 +565,9 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/execution-receipts-ui.spec.tsx` | Rendered receipt pagination, separate outcome/quiescence and same-ID cancellation retry after an ambiguous response |
 | `tests/watchdog.spec.ts` | Independent journal recovery, assessment budgets, service outages, bounded interventions and concurrent polling |
 | `tests/watchdog-runtime.spec.ts` | Independent Cordis/Harness composition with simulated inference: restricted tools, Session creation, state ownership and shutdown |
+| `tests/watchdog-console.spec.ts`, `tests/fixtures/watchdog.ts` | Journal migration, review fencing/replay, consistent pages, bounded retention and real HTTP access controls |
+| `tests/watchdog-ui.spec.tsx` | Rendered standalone console, outage evidence, response-loss retry after remount, stale review refusal and pagination |
+| `tests/watchdog-harness.spec.ts` | Opt-in real-model, two-process Harness supervision with abrupt main/watchdog failure, receipt recovery and observed resolution |
 | `tests/policy.spec.ts` | Source scope, the gate, the admission table, Mandate revalidation, the Policy version, settings migrations and assessment outcomes |
 | `tests/registry.spec.ts` | `SourceRegistry`: instances, validation, Policy parts, Channels and Thread context |
 | `tests/sources.spec.ts` | The Feishu and GitHub Sources on a `SourceContext`: translation, polls and read positions, the pull request rules, health |

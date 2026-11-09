@@ -108,9 +108,10 @@ curl -fsS -H 'x-orchestrator-request: 1' http://127.0.0.1:3083/watchdog/api/stat
 ```
 
 The result contains monitor health, the dedicated Session ID, up to 100 open incidents and the 30 latest audit entries.
-The Harness UI can show the watchdog's assessment Session. A dedicated incident panel, pagination of operator history,
-alert routing and automatic retention are still pending. Back up both state directories and both profiles' Harness Session
-stores. This increment does not claim multi-host failover or a distributed exactly-once guarantee.
+The Harness UI can show the watchdog's assessment Session. The subsequent `052-supervision-console.md` increment adds an
+independent console at `http://127.0.0.1:3083/watchdog`, paginated incident/audit APIs, evidence-bound operator acknowledgement,
+lost-response retry and bounded automatic retention. Alert routing remains open. Back up both state directories and both
+profiles' Harness Session stores. This does not claim multi-host failover or a distributed exactly-once guarantee.
 
 ## Verification boundary
 

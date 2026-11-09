@@ -31,6 +31,11 @@
         reviewEveryMs: 3600000
         retryMs: 300000
         assessmentTimeoutMs: 90000
+        retention:
+          closedDays: 30
+          auditDays: 90
+          maxClosed: 5000
+          maxAudit: 50000
         # Omit to inherit this independent profile's default model.
         # model:
         #   provider: <configured provider>

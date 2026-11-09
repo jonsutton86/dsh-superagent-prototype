@@ -6,7 +6,7 @@ import type {} from '@deepseek-ai/dsh-api-session-controller'
 import type {} from '@deepseek-ai/dsh-workspace'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import s from '@deepseek-ai/schemastery'
-import { mkdirSync, realpathSync } from 'node:fs'
+import { mkdirSync, realpathSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { lockSync } from 'proper-lockfile'
 import { z } from 'zod'
@@ -17,12 +17,13 @@ import type { RoleModel } from '../policy.ts'
 import { SupervisionClient } from './client.ts'
 import { WatchdogJournal } from './journal.ts'
 import { WatchdogMonitor, type MonitorOptions } from './monitor.ts'
-import { AssessmentSchema } from './protocol.ts'
+import { AssessmentSchema, DEFAULT_RETENTION, type RetentionPolicy } from './protocol.ts'
+import { watchdogHttp } from './http.ts'
 
 export const name = 'dsh-superagent-watchdog'
 export const inject = ['agents', 'sessionController', 'sessionPersistence', 'workspaceRegistry', 'tools', 'systemPrompt', 'llm', 'webServer']
 const absolute = () => s.string().pattern(/^\//).required()
-export interface WatchdogConfig extends MonitorOptions { stateDir: string; tokenFile: string; url: string; model?: RoleModel | null }
+export interface WatchdogConfig extends MonitorOptions { stateDir: string; tokenFile: string; url: string; model?: RoleModel | null; retention: RetentionPolicy }
 export const Config: s<Partial<WatchdogConfig>, WatchdogConfig> = s.object({
   stateDir: absolute().description('Independent watchdog state directory; different from the main agent.'),
   tokenFile: absolute().description('Main agent state directory/watchdog.token. Never included in model context.'),
@@ -32,6 +33,12 @@ export const Config: s<Partial<WatchdogConfig>, WatchdogConfig> = s.object({
   reviewEveryMs: s.number().min(60000).max(86400000).step(1).default(3600000),
   retryMs: s.number().min(1000).max(3600000).step(1).default(300000),
   assessmentTimeoutMs: s.number().min(1000).max(300000).step(1).default(90000),
+  retention: s.object({
+    closedDays: s.number().min(1).max(3650).step(1).default(DEFAULT_RETENTION.closedDays),
+    auditDays: s.number().min(1).max(3650).step(1).default(DEFAULT_RETENTION.auditDays),
+    maxClosed: s.number().min(100).max(100000).step(1).default(DEFAULT_RETENTION.maxClosed),
+    maxAudit: s.number().min(1000).max(1000000).step(1).default(DEFAULT_RETENTION.maxAudit),
+  }).default(DEFAULT_RETENTION),
   model: s.union([s.const(null), s.object({ provider: s.string().required(), model: s.string().required(), reasoningEffort: s.string() })]).default(null),
 })
 const ACTION = z.object({ incidentId: z.string().min(1).max(200), incidentRevision: z.string().min(1).max(100) }).strict()
@@ -91,16 +98,11 @@ export class HarnessWatchdog {
         await this.delivery.send(agent, id, text, 'queue', this.lifetime.signal)
       },
     }, this.config as MonitorOptions)
-    this.disposers.push(this.ctx.webServer.register({ kind: 'prefix', path: '/watchdog', handler: (req, res) => {
-      const allowed = req.headers.host === `127.0.0.1:${this.ctx.webServer.port}`
-        && req.headers['x-orchestrator-request'] === '1'
-        && (!req.headers.origin || req.headers.origin === `http://${req.headers.host}`)
-      res.setHeader('content-type', 'application/json'); res.setHeader('cache-control', 'no-store')
-      if (!allowed) { res.writeHead(403); res.end(JSON.stringify({ error: 'Local management request required' })); return }
-      if (req.method !== 'GET' || req.url !== '/watchdog/api/status') { res.writeHead(404); res.end('{}'); return }
-      res.end(JSON.stringify({ sessionId: this.sessionId, monitor: this.journal.status() ?? null,
-        incidents: this.journal.open().slice(0, 100), recent: this.journal.recent(30) }))
-    } }))
+    this.disposers.push(this.ctx.webServer.register({ kind: 'prefix', path: '/watchdog', handler: watchdogHttp(this.journal, {
+      port: this.ctx.webServer.port, sessionId: this.sessionId, mainUrl: new URL(this.config.url).origin,
+      pollMs: this.config.pollMs, retention: this.config.retention, active: () => !this.lifetime.signal.aborted,
+      asset: () => readFileSync(new URL('./watchdog-ui.js', import.meta.url), 'utf8'),
+    }) }))
     this.journal.unavailable(Date.now(), 'Awaiting first observation')
     try { await this.ensure() }
     catch (error) { if (!this.lifetime.signal.aborted) this.journal.modelError(String(error)) }
@@ -146,7 +148,9 @@ export class HarnessWatchdog {
   }
   private schedule(delay: number): void {
     this.timer = setTimeout(() => {
-      this.polling = this.monitor!.poll().catch(error => {
+      this.polling = this.monitor!.poll().then(() => {
+        if (!this.lifetime.signal.aborted) this.journal.maintain(Date.now(), this.config.retention)
+      }).catch(error => {
         this.ctx.logger.error('watchdog poll failed: %s', String(error))
       }).finally(() => { if (!this.lifetime.signal.aborted) this.schedule(this.config.pollMs) })
     }, delay)
@@ -172,5 +176,5 @@ export async function apply(ctx: Context, config: WatchdogConfig): Promise<void>
   const watchdog = new HarnessWatchdog(ctx, config)
   ctx.effect(() => () => watchdog.stop())
   try { await watchdog.start() } catch (error) { await watchdog.stop(); throw error }
-  ctx.logger.info('Independent superagent watchdog ready; local status at /watchdog/api/status')
+  ctx.logger.info('Independent superagent watchdog ready; operator console at /watchdog')
 }

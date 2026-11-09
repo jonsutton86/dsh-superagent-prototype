@@ -28,3 +28,21 @@ export const AssessmentSchema = z.object({
   evidence: z.string().min(1).max(2000),
 }).strict()
 export type Assessment = z.infer<typeof AssessmentSchema>
+
+/** Timestamp is part of the immutable request ID, so expired receipts can be pruned without enabling a replay. */
+export const AcknowledgeSchema = z.object({
+  requestId: z.string().regex(/^wd-[0-9]{13}-[a-f0-9-]{36}$/),
+  incidentId: z.string().min(1).max(200), revision: z.string().min(1).max(100), note: z.string().trim().max(2000),
+}).strict()
+export type Acknowledge = z.infer<typeof AcknowledgeSchema>
+export interface Acknowledgement { requestId: string; revision: string; at: number; actor: 'local-operator'; note: string }
+export interface AcknowledgementReceipt { incidentId: string; acknowledgement: Acknowledgement }
+export const ACK_WINDOW_MS = 24 * 60 * 60 * 1000
+export interface RetentionPolicy { closedDays: number; auditDays: number; maxClosed: number; maxAudit: number }
+export const DEFAULT_RETENTION: RetentionPolicy = { closedDays: 30, auditDays: 90, maxClosed: 5000, maxAudit: 50000 }
+export type IncidentFilter = 'open' | 'unacknowledged' | 'closed' | 'all'
+export interface Page<T> { items: T[]; cursor: string | null }
+/** Stable operator API failures distinguish stale evidence, expired history and malformed commands. */
+export class WatchdogOperatorError extends Error {
+  constructor(readonly status: number, readonly code: string) { super(code) }
+}

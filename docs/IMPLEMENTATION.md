@@ -25,6 +25,14 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Current increment: independent supervision console
+
+[052 Independent supervision console](052-supervision-console.md) adds an independent operator page, incident/evidence
+review, durable evidence-bound acknowledgement, paginated history and bounded retention to the existing Harness watchdog.
+The page remains available when the main Runtime is down. Acknowledgement never resolves work or suppresses monitoring;
+new evidence requires fresh review. Focused journal, HTTP, Cordis and DOM tests pass; complete local/Linux and separate
+installed-Harness process-failure qualification are in progress. Alert routing and the remaining full architecture stay open.
+
 ## Implemented increment: coordinator routing authority
 
 [051 Coordinator routing authority](051-router-authority.md) removes the remaining local coordinator shell/file/job surface
@@ -659,9 +667,10 @@ Profiles or host scopes bound to an environment provide an initial isolation bou
 ### 1. Supervision and operational visibility — implemented foundation
 
 Current code provides independent observations, semantic assessments and one fenced progress request per assignment.
+Increment 052 adds independent incident UI, explicit evidence-bound acknowledgement, paginated history and bounded retention.
 Complete deployment acceptance with a configured provider, main-process kill/restart, watchdog-process restart, disconnected
-transport and a deliberately long but productive job. Add incident UI, explicit operator acknowledgement, retention and
-alert routing before calling the operational experience complete. Process restarts or task retries require their own narrow,
+transport and a deliberately long but productive job. Add alert routing before calling the operational experience complete.
+Process restarts or task retries require their own narrow,
 audited recovery policies; they must not be inferred from arbitrary worker text.
 
 ### 2. Compute/state/environment contracts and remote execution — whole-profile mission integration implemented

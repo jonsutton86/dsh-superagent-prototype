@@ -541,3 +541,9 @@ restart while workers complete their tasks. The dedicated scenario took 73.50 se
 051 records the initial creation-barrier defect and its regression-tested runtime correction. The original app remains
 running. OS-level isolation, broader credential separation and all other unfinished architecture/product acceptance
 remain open; this increment does not complete the full Agentic OS objective.
+
+Independent operator supervision is implemented in `052-supervision-console.md`: the watchdog's own page, service health,
+incident/evidence review, original acknowledgement receipts, history pagination and bounded retention. It stays independent
+of main Runtime availability. Focused journal/HTTP/Cordis/DOM tests pass; complete local, Linux and real-Harness failure
+qualification is in progress. Alert routing, broader diagnosis quality and all other outstanding architecture/product
+requirements remain active.

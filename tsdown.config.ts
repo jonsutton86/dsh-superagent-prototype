@@ -18,4 +18,9 @@ export default defineConfig([
   { entry: { 'remote-fs-worker': 'src/remote/fs-worker.ts' }, outDir: 'lib', format: 'esm', fixedExtension: false, platform: 'node', target: 'es2024', dts: false, clean: false },
   { entry: { 'remote-command-worker': 'src/remote/command-worker.ts' }, outDir: 'lib', format: 'esm', fixedExtension: false, platform: 'node', target: 'es2024', dts: false, clean: false },
   { entry: { 'verification-snapshot-worker': 'src/verification/snapshot-worker.ts' }, outDir: 'lib', format: 'esm', fixedExtension: false, platform: 'node', target: 'es2024', dts: false, clean: false, deps: { alwaysBundle: ['zod'] } },
+  // Standalone console remains available when the main profile or its UI has stopped.
+  { entry: { 'watchdog-ui': 'src/supervision/console-entry.tsx' }, outDir: 'lib', format: 'esm', fixedExtension: false,
+    platform: 'browser', target: 'es2022', dts: false, clean: false, plugins: [raw],
+    deps: { alwaysBundle: ['react', 'react-dom', 'react/jsx-runtime', 'react-dom/client', 'scheduler'] },
+    define: { 'process.env.NODE_ENV': JSON.stringify('production') } },
 ])
