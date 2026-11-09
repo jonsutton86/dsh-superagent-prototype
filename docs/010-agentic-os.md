@@ -654,4 +654,9 @@ Generated recovery launch profiles are implemented in `061-recovery-launch-profi
 authenticated Harness patch with the complete dedicated or managed composition and optional imported JSONL backend/port
 selection. It preserves provider configuration in the base profile and refuses modified patches before activation. The
 live checks now retire original coordinator/Session/world files before consuming the generated patch and running new work.
-Final local, native and live qualification is pending. Cross-machine failover and all remaining full requirements remain open.
+Full local verification passed 1,942 tests, typechecking and all builds; the final compatibility guard passed 23 focused tests
+and repeated typechecking/builds. Runtime/test revision `26718d6` passed 1,949 native Linux / Node 24 tests with bubblewrap,
+typechecking and all builds in [run 42690711226](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42690711226).
+The exact revision passed installed-Harness / DeepSeek Flash owned-managed and owned-dedicated-restore qualification in
+339.36 seconds combined: generated patches, retired old state files, new missions/artifacts and continued-history restart.
+The original app remains running. Cross-machine failover and all remaining full requirements remain open.

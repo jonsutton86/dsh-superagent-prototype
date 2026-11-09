@@ -236,6 +236,10 @@ From an allowed GitHub account, open an Issue or post a comment containing `@<ag
 
 ## Upgrade
 
+Ownership-controlled standalone deployments need a coordinated checkpoint of the Store, world journals and logical Harness
+Sessions before an upgrade. Use the offline maintenance workflow described in `060-installed-recovery.md`;
+the database-only step below applies to the older single-host repository deployment.
+
 1. Wait until no Executor is in the middle of a turn.
 2. Back up `<stateDir>/orchestrator.sqlite`.
 3. Run `git pull && pnpm install && pnpm build`.
@@ -248,6 +252,22 @@ A database migrated by a newer version cannot be opened by an older one. Rollbac
 ### Agent presets
 
 The worker preset moves shell commands to the background after 5 seconds. The router preset has no shell, filesystem, job or delegation tools; its Session identity enforces typed routing/context tools even if an older Session retains another preset. A Session cannot load without its preset. Keep the `dsh-superagent-worker` and `dsh-superagent-router` rows in `cordis.patch.yml` while their Sessions are in use; otherwise resume fails with `agent-preset/not-found`. On upgrade, known legacy coordinator jobs and descendants must quiesce before routing resumes; an unresolved stop holds initialization instead of granting execution authority.
+
+## Standalone checkpoint recovery
+
+The maintenance profile verifies the encrypted checkpoint, imports Sessions into the selected backend, reserves ownership,
+audits independent endpoint/publication receipts, prepares the reconciled image and installs it in a new private directory.
+Installation emits an authenticated `harness.patch.json` for the complete managed or dedicated execution profile. The
+completion receipt gives its path. Start it with the configured Harness base profile:
+
+```sh
+dsh --profile <configured-profile> --patch <installation>/harness.patch.json --no-open
+```
+
+Keep the base profile's inference and source configuration available. Select the imported JSONL root in `installation.launch`,
+or retain another configured Session backend; startup verifies the actual history before acquiring the recovery lease.
+`061-recovery-launch-profile.md` documents the parameters and supported qualification
+scope. The independent authority, endpoint and publisher retain their own deployment and state.
 
 ## Troubleshooting
 

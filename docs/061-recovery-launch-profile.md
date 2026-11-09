@@ -58,7 +58,19 @@ existing-directory refusal. The live Harness checks consume the generated patch 
 they retire the predecessor's coordinator Store, Session files and world journals; the restored process must run new work
 and restart using the installation and imported Session backend.
 
-Final verification results will be recorded after qualification. This is filesystem-relocation and fresh-process evidence,
+Full local `pnpm check` passed 1,942 tests, typechecking and all six builds in 128.64 seconds of test time. The final
+original-request compatibility guard passed 23 focused installation/documentation tests plus repeated typechecking and
+all builds. Runtime/test revision `26718d6` passed 1,949 native Linux / Node 24 tests with bubblewrap, typechecking and all
+six builds in 241.42 seconds of test time in
+[run 42690711226](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42690711226).
+
+The same revision passed both installed-Harness / DeepSeek Flash owned-managed and owned-dedicated-restore cases in
+339.36 seconds combined. Each used the generated patch unchanged after retiring the old Store, Session files and journals;
+each acquired recovery ownership, completed a new mission with the expected artifact and restarted with continued history.
+The managed case also retained the no-replay assertion for an acknowledged quiescent revocation. Publication traffic stayed
+on local contract servers, inference used the configured real API, and the original app remained running.
+
+This is filesystem-relocation and fresh-process evidence,
 not a claim of cross-machine or operating-system disaster recovery. The independent authority, endpoint, publisher and
 configured inference provider remain deployed. Automated host provisioning, external-service disaster recovery, transport
 and identity rotation, abrupt host-loss drills and the remaining complete Agentic OS architecture still require work.
