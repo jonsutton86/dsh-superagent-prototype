@@ -1,5 +1,5 @@
 /** Offline coordinator checkpoints: acquire every writer before capturing databases and logical Harness Session prefixes. */
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { chmod, copyFile, lstat, mkdir, mkdtemp, open, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -14,7 +14,7 @@ import { KV } from '../kv.ts'
 import { inside } from '../remote/journal.ts'
 import { worldBinding, type WorldRecord } from '../remote/world-journal.ts'
 import { privateDirectory } from '../environments/endpoint-files.ts'
-import { recoveryKey, seal, unseal } from './crypto.ts'
+import { privateInput, recoveryKey, seal, unseal } from './crypto.ts'
 import { exportSession, importSession, inspectSession, ownSessions, type SessionArchive } from './sessions.ts'
 import { recoveryStateDigest } from './state.ts'
 
@@ -232,7 +232,7 @@ export async function verifyCheckpoint(path: string, keyFile: string, signal = n
 
 /** Hold the staged writer lock and prove its entire logical database still matches the authenticated source checkpoint. */
 export async function withVerifiedStagedCheckpoint<T>(path: string, keyFile: string, destination: string, requestedSignal: AbortSignal,
-  operation: (context: { root: string; manifest: CheckpointManifest; db: DatabaseSync; signal: AbortSignal }) => Promise<T>): Promise<T> {
+  operation: (context: { root: string; archive: string; manifest: CheckpointManifest; db: DatabaseSync; signal: AbortSignal }) => Promise<T>): Promise<T> {
   const root = privateDirectory(await realpath(destination)), abort = new AbortController(), signal = AbortSignal.any([requestedSignal, abort.signal])
   const release = lockSync(root, { stale: 30_000, onCompromised: error => abort.abort(error) })
   let verified: Awaited<ReturnType<typeof unpack>> | undefined, original: DatabaseSync | undefined, db: DatabaseSync | undefined
@@ -245,8 +245,15 @@ export async function withVerifiedStagedCheckpoint<T>(path: string, keyFile: str
     if (hold?.checkpoint !== verified.manifest.id || hold.state !== 'staged' || identity(db) !== verified.manifest.masterId)
       throw new Error('Recovery requires the matching staged coordinator with its execution hold intact')
     if (recoveryStateDigest(original, signal) !== recoveryStateDigest(db, signal)) throw new Error('Staged coordinator data differs from the authenticated checkpoint')
+    for (const member of verified.manifest.files.filter(item => item.kind !== 'store')) {
+      const hash = createHash('sha256'); let bytes = 0
+      for await (const chunk of privateInput(join(root, member.member), signal)) {
+        bytes += chunk.length; if (bytes > member.bytes) throw new Error('Staged member exceeds the authenticated size'); hash.update(chunk)
+      }
+      if (bytes !== member.bytes || hash.digest('hex') !== member.sha256) throw new Error('Staged world or Session member differs from the authenticated checkpoint')
+    }
     signal.throwIfAborted()
-    return await operation({ root, manifest: verified.manifest, db, signal })
+    return await operation({ root, archive: verified.directory, manifest: verified.manifest, db, signal })
   } finally {
     try { try { db?.close() } finally { original?.close() } } finally {
       try { if (verified) await rm(verified.directory, { recursive: true, force: true }) } finally { release() }

@@ -242,3 +242,9 @@ installed-Harness/DeepSeek Flash scenarios (199.31 seconds), and 1,470 native Li
 [run 42549125311](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42549125311).
 Typechecking and all four builds passed. Real checkpoint reservation/retry retained the restore hold and invalidated the
 source claimant; provider traffic remained local. The full article and Agentic OS architecture remain in progress.
+
+Recovery audit increment: `030-recovery-receipt-audit.md` compares authenticated original intents against complete enrolled
+endpoint and publisher inventories with mutation/restart revision checks. Durable reports expose missing, changed, unknown
+and unrecorded effects, while repeated inspection observes original outcomes without replay or activation. Applying those
+observations, input/state recovery, administrative-command/configuration reconciliation, Session/backend and world validation,
+activation and clean-host failover remain required alongside the full product ledger.

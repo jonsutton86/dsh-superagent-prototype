@@ -25,6 +25,17 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: recovery receipt audit
+
+[030 Receipt audit](030-recovery-receipt-audit.md) adds administrator-only revision-bound endpoint/publisher inventories,
+complete enrolled-resource coverage, original command/file/publication intent comparison and durable held reports. It detects
+unrecorded effects, missing receipts, changed identities/results and unsettled work; it observes completed original effects
+without replay. Every staged world/Session member is verified, and changed pages or authority invalidate the audit.
+
+Applying observations, administrative-command/configuration reconciliation, authoritative input/state recovery, actual
+Session-backend validation, world remapping, activation and clean-host drills remain required. No audit removes the hold.
+The full article and product architecture remain in progress. Qualification evidence follows the completed checks.
+
 ## Implemented increment: recovery ownership reservations
 
 [029 Recovery reservations](029-recovery-reservations.md) authenticates the selected held checkpoint, compares its logical

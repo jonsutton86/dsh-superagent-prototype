@@ -12,6 +12,8 @@ import type { ExecutionIsolation } from './isolation.ts'
 import { EndpointCredentials } from './credentials.ts'
 import { OwnershipGate, sameOwner, type ResourceOwnershipConfig, type OwnershipGuard, type OwnershipFloor } from '../ownership/gate.ts'
 import { OwnershipError, requiresOwnership, type OwnershipStamp } from '../ownership/protocol.ts'
+import { ResourceInventory } from '../ownership/inventory.ts'
+import { worldBinding } from './world-journal.ts'
 
 export interface EndpointHost {
   filesystem: FileSystem; subprocess: SubprocessRuntime; isolation: ExecutionIsolation; stateDir: string; root: string
@@ -30,6 +32,7 @@ export class RemoteEndpoint {
   readonly journal: RemoteJournal
   readonly credentials: EndpointCredentials
   readonly ownership?: OwnershipGate
+  private readonly inventory: ResourceInventory
   private readonly ownershipScope = new AsyncLocalStorage<OwnershipGuard>()
   private protectedCalls = 0
   private readonly lifetime = new AbortController()
@@ -62,6 +65,16 @@ export class RemoteEndpoint {
         fence: keep => this.fenceOwnership(keep), quiescent: keep => this.ownershipQuiescent(keep),
       })
       if (binding && !saved) this.journal.db.prepare('INSERT INTO endpoint_meta VALUES (?,?)').run('ownership-binding', JSON.stringify(binding))
+      this.inventory = new ResourceInventory(this.journal.db, [
+        { kind: 'grant', table: 'remote_grant', project: (grant: RemoteGrant) => ({ kind: 'grant', id: grant.id,
+          requestHash: worldBinding(this.journal.id, grant), phase: grant.enabled ? 'enabled' : 'disabled', settled: true, epoch: grant.epoch }) },
+        { kind: 'command', table: 'remote_job', project: (job: RemoteJob) => ({ kind: 'command', id: job.id, requestHash: job.fingerprint,
+          grantId: job.grantId, epoch: job.epoch, ownership: job.ownership, phase: job.phase, settled: job.quiescent === true,
+          resultHash: fingerprint(job.outcome ?? null) }) },
+        { kind: 'mutation', table: 'remote_operation', project: (item: RemoteOperation) => ({ kind: 'mutation', id: item.id,
+          requestHash: item.fingerprint, grantId: item.grantId, epoch: item.epoch, ownership: item.ownership, phase: item.phase,
+          settled: item.phase === 'settled' || !!item.reconciled, resultHash: fingerprint(item.value ?? item.error ?? null) }) },
+      ])
     }
     catch (error) { this.journal.close(); throw error }
   }
@@ -393,6 +406,12 @@ export class RemoteEndpoint {
   private async dispatch(principal: Principal, request: RpcRequest): Promise<unknown> {
     switch (request.op) {
       case 'identity': return this.identity()
+      case 'recovery.inventory': {
+        this.admin(principal)
+        const ownership = this.identity().ownership
+        if (!ownership) throw new OwnershipError(409, 'ownership_required', 'Recovery inventories require independent ownership')
+        return this.inventory.page(request, { id: this.journal.id, kind: 'endpoint', ...ownership }, this.ownershipQuiescent())
+      }
       case 'grant.get': this.admin(principal); return this.journal.grant(request.id)
       case 'grant.list': case 'operation.list': case 'job.catalog': {
         this.admin(principal)

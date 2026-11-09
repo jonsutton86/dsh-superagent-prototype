@@ -4,12 +4,14 @@ import { PublicationJournal } from './journal.ts'
 import { ConversationPage, Destination, DestinationConfig, PublicationError, PublicationRpc, type PublicationIdentity, type PublicationReceipt } from './protocol.ts'
 import { contentHash, DeliveryRefused, type PublicationAdapter } from './github.ts'
 import { PublicationProviders } from './providers.ts'
+import { ResourceInventory } from '../ownership/inventory.ts'
 
 export interface PublicationServiceConfig { stateDir: string; ownership: ResourceOwnershipConfig; destinations: DestinationConfig[] }
 /** Independently fenced publication host. Unknown outcomes block ownership handoff until actual observation or administrator reconciliation. */
 export class PublicationService {
   readonly journal: PublicationJournal
   readonly gate: OwnershipGate
+  private readonly inventory: ResourceInventory
   private readonly destinations = new Map<string, DestinationConfig>()
   private readonly lifetime = new AbortController()
   private calls = 0
@@ -27,6 +29,13 @@ export class PublicationService {
       if (!this.destinations.size || this.destinations.size > 100) throw new Error('Configure 1–100 publication destinations')
       const { authorityId, coordinatorId, resourceId } = config.ownership
       this.journal.bind({ authorityId, coordinatorId, resourceId }, [...this.destinations.values()].map(({ credentialFile: _, ...value }) => Destination.parse(value)))
+      this.inventory = new ResourceInventory(this.journal.db, [
+        { kind: 'destination', table: 'publication_destination', project: value => ({ kind: 'destination', id: value.id,
+          requestHash: fingerprint(value), phase: 'configured', settled: true }) },
+        { kind: 'publication', table: 'publication_receipt', project: ({ request, receipt }) => ({ kind: 'publication', id: receipt.id,
+          requestHash: fingerprint(request), phase: receipt.phase, settled: !['accepted', 'started', 'unknown'].includes(receipt.phase),
+          ownership: receipt.ownership, resultHash: fingerprint(receipt.external ?? null) }) },
+      ])
       this.gate = new OwnershipGate(config.ownership, {
         floor: () => { const value = this.journal.meta('floor'); return value ? JSON.parse(value) as OwnershipFloor : undefined },
         remember: value => this.journal.meta('floor', JSON.stringify(value)), fence: keep => this.journal.fence(keep),
@@ -59,6 +68,12 @@ export class PublicationService {
   private async dispatch(principal: 'admin' | 'client', request: PublicationRpc, proof?: string): Promise<unknown> {
     switch (request.op) {
       case 'identity': return this.identity()
+      case 'recovery.inventory': {
+        if (principal !== 'admin') throw new PublicationError(403, 'admin_required', 'Independent publication administrator required')
+        const { id, ownership } = this.identity()
+        return this.inventory.page(request, { id, kind: 'publication', ...ownership },
+          this.calls === 0 && !this.working.size && !this.journal.unsettled().length)
+      }
       case 'destinations': return [...this.destinations.values()].map(({ credentialFile: _, ...value }) => ({ ...value, hash: fingerprint(value) }))
       case 'conversation.read': {
         const guard = await this.gate.authorize(proof), destination = this.destination(request.destination), { credentialFile: _, ...metadata } = destination

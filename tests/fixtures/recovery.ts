@@ -10,12 +10,14 @@ import { KV } from '../../src/kv.ts'
 import { OwnershipClient, type OwnershipConnection } from '../../src/ownership/client.ts'
 import type { OwnershipView } from '../../src/ownership/protocol.ts'
 import type { ReserveCheckpointOwnership } from '../../src/recovery/ownership.ts'
+import type { AuditCheckpointReceipts } from '../../src/recovery/audit.ts'
 import { privateCredential } from '../../src/environments/endpoint-files.ts'
 import { randomUUID } from 'node:crypto'
 
 export async function qualifyRecovery(input: { cli: string; home: string; profile: string; directory: string; temporary: string;
   stateDir: string; sessionRoot: string; port: number; worldDirectories: string[]; worker: string; worlds: number;
-  authority?: OwnershipConnection & { coordinatorId: string }; originalClaimantFile?: string }) {
+  authority?: OwnershipConnection & { coordinatorId: string }; originalClaimantFile?: string;
+  audit?: Pick<AuditCheckpointReceipts, 'endpoints' | 'publication'> }) {
   const root = await realpath(input.temporary), keyFile = join(root, 'recovery-key'), outputDir = join(root, 'checkpoints')
   createRecoveryKey(keyFile)
   const destination = join(root, 'restored'), importedRoot = join(root, 'imported-sessions'), patch = join(input.directory, 'recovery.json')
@@ -26,10 +28,11 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
     running.kill('SIGINT'); const timer = setTimeout(() => running.kill('SIGKILL'), 8000)
     try { await exited } finally { clearTimeout(timer) }
   }
-  const run = async (mode: 'checkpoint' | 'verify' | 'stage' | 'import-sessions' | 'reserve-ownership', checkpoint?: string,
+  const run = async (mode: 'checkpoint' | 'verify' | 'stage' | 'import-sessions' | 'reserve-ownership' | 'audit-receipts', checkpoint?: string,
     reservation?: Pick<ReserveCheckpointOwnership, 'requestId' | 'epoch' | 'generation' | 'authority'>) => {
     const receiptFile = join(root, 'maintenance-receipt-' + invocation++ + '.json')
-    const config = { mode, keyFile, outputDir, stateDir: input.stateDir, worldDirectories: input.worldDirectories, checkpoint, destination, receiptFile, ...(reservation ? { reservation } : {}) }
+    const config = { mode, keyFile, outputDir, stateDir: input.stateDir, worldDirectories: input.worldDirectories, checkpoint, destination, receiptFile,
+      ...(reservation ? { reservation } : {}), ...(mode === 'audit-receipts' ? { audit: { authority: input.authority, ...input.audit } } : {}) }
     await writeFile(patch, JSON.stringify([
       { id: 'webserver', config: { host: '127.0.0.1', port: input.port } },
       { id: 'dsh-superagent', disabled: true },
@@ -83,6 +86,18 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
       } finally { held.close() }
       await expect(new OwnershipClient({ ...input.authority, credentialFile: input.originalClaimantFile! }).call({ op: 'lease.acquire',
         requestId: randomUUID(), instanceId: randomUUID(), leaseMs: 3000 })).rejects.toThrow('replaced')
+      if (input.audit) {
+        await run('audit-receipts', checkpoint); await run('audit-receipts', checkpoint)
+        const store = new Store(join(destination, 'orchestrator.sqlite'))
+        try {
+          const audit = store.get(KV.recovery.audit)!
+          expect(audit).toMatchObject({ phase: 'complete', complete: true, executionOwnership: false })
+          expect(audit.resources).toHaveLength(2); expect(audit.matched).toBeGreaterThan(0)
+          expect(audit.issues.filter(issue => issue.code !== 'unrecorded_effect')).toEqual([])
+          expect(audit.status).toBe(audit.issueCount ? 'blocked' : 'matched')
+          expect(store.get(KV.recovery.hold)?.state).toBe('staged')
+        } finally { store.close() }
+      }
     }
   } finally { await stop() }
 }

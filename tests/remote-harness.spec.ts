@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { createServer } from 'node:net'
-import { appendFile, copyFile, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { appendFile, copyFile, mkdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -276,7 +276,8 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
       await qualifyPublication({ cli, home, profile, directory, port, publisher, ownership: ownershipConfig })
     await qualifyRecovery({ cli, home, profile, directory, temporary: h.directory, port, stateDir, sessionRoot,
       worldDirectories, worker: ticket.sessionId, worlds: mode === 'managed' ? 2 : 1,
-      ...(authority ? { authority: { ...authority.admin.connection, coordinatorId: authority.config.coordinatorId }, originalClaimantFile: authority.config.credentialFile } : {}) })
+      ...(authority ? { authority: { ...authority.admin.connection, coordinatorId: authority.config.coordinatorId }, originalClaimantFile: authority.config.credentialFile,
+        audit: { endpoints: [{ url: h.url, endpointId: h.endpoint.journal.id, credentialFile: await realpath(h.connection.credentialFile) }], publication: publisher!.admin.config } } : {}) })
     if (mode === 'dedicated' && !owned) await qualifyOwnership({ cli, home, profile, directory, temporary: h.directory, port, native })
   } catch (error) {
     const diagnostics: unknown[] = []

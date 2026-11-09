@@ -8,6 +8,7 @@ import type { SettingsSave } from './policy.ts'
 import type { Retry } from './sources/github.ts'
 import type { InterventionResult } from './supervision/protocol.ts'
 import type { RecoveryIntent } from './recovery/ownership.ts'
+import type { ReceiptAudit } from './recovery/audit.ts'
 
 /** Key of a KV record whose value has type `V`; a plain string represents an untyped key. */
 export type Key<V> = string & { readonly __value?: V }
@@ -36,7 +37,7 @@ export const KV = {
     publication: record<{ serviceId: string; credentialFile?: string }>('runtime:publication') },
   /** Copying a staged checkpoint cannot make its data an execution owner. */
   recovery: { hold: record<{ checkpoint: string; at: string; state: 'staged' }>('recovery:restore-hold'),
-    reservation: record<RecoveryIntent>('recovery:ownership-reservation') },
+    reservation: record<RecoveryIntent>('recovery:ownership-reservation'), audit: record<ReceiptAudit>('recovery:receipt-audit') },
   /** Supervision: acknowledged commands and the single status request allowed for each assignment. */
   supervision: { receipt: family<{ fingerprint: string; result: InterventionResult }>('supervision-receipt:'),
     nudged: family<string>('supervision-nudged:') },

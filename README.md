@@ -53,6 +53,8 @@ The [checkpoint maintenance plugin](docs/023-checkpoint-recovery.md) captures en
 verifies backups, and imports Sessions into a staged restore that remains blocked from execution pending ownership reconciliation.
 [Recovery reservations](docs/029-recovery-reservations.md) bind replacement acquisition authority to a verified checkpoint,
 invalidate the source claimant, and recover lost acknowledgements without removing that hold.
+[Receipt audits](docs/030-recovery-receipt-audit.md) compare held checkpoint intents with revision-bound independent
+execution and publication inventories, exposing missing, uncertain or unrecorded effects before activation work proceeds.
 The [ownership authority](docs/024-ownership-fencing.md) provides separate coordinator generations and endpoint handoff
 barriers, cancelling prior work and preserving its receipts before a successor can execute.
 [Runtime ownership](docs/025-runtime-ownership.md) connects dedicated and managed worlds to that lease and stops work on
