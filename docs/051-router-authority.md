@@ -60,5 +60,20 @@ size/path bounds, directory filtering and worker denial.
 Installed-Harness scenarios register a disposable late coordinator tool whose only possible effect would be writing a test
 canary. They assert that the tool is denied, the canary is absent and typed context reads work before and after restart,
 while real configured-model workers complete their existing environment, evidence, publication and recovery scenarios.
-Qualification results will be recorded after execution. These tests do not replace cross-host, long-horizon or operator UI
-acceptance for the complete Agentic OS.
+The first runtime revision, `7ef66e2`, passed the local suite but failed installed-Harness startup: preparation waited for
+the coordinator's own `whenIdle()` inside the serial `agent/created` callback. Harness holds its input queue behind that
+creation barrier, so the wait could not complete. Revision `249ba5b22b671376b8fee3dd9571bdee1e583070` fixes that lifecycle
+error and adds a regression that refuses any own-agent idle wait during creation. This was a runtime defect, not a
+qualification-fixture failure.
+
+On the corrected revision, typechecking and all five builds passed. The full local suite passed 1,826 tests with 13 skipped
+across 120 passing and two skipped files in 112.15 seconds. The dedicated installed-Harness / DeepSeek Flash scenario passed
+in 73.50 seconds; both owned scenarios passed in 315.85 seconds. Those scenarios exercise actual model-created results,
+the router canary and typed reads before and after restart, existing check/mission/publication evidence, managed worlds,
+schedules, usage refusal/retry, ownership and held recovery. Provider message/review effects stay on local contract servers.
+The same corrected revision passed 1,833 tests with seven skipped across 120 passing and two skipped files on Linux /
+Node 24 with native confinement in 224.05 seconds, together with typechecking and all five builds in
+[run 42642436513](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42642436513).
+The original app remains running.
+
+These tests do not replace cross-host, long-horizon or operator UI acceptance for the complete Agentic OS.

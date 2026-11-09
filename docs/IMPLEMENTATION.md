@@ -25,14 +25,21 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
-## Current increment: coordinator routing authority
+## Implemented increment: coordinator routing authority
 
 [051 Coordinator routing authority](051-router-authority.md) removes the remaining local coordinator shell/file/job surface
 and applies an identity-based Harness guard to inherited and late scoped tools. Bounded typed repository reads preserve
 routing context. Legacy coordinator turns, jobs and descendants must quiesce before routing resumes; persistent lineage
 anchors deny their resumed descendants. Worker execution and worker-local teams retain their existing task authorization.
-Focused tests pass; full local, Linux and installed-Harness qualification is in progress. This is a model-tool boundary,
-not an OS sandbox or a claim that every worker/provider credential boundary is complete.
+Corrected runtime revision `249ba5b` passed 1,826 local tests, typechecking and all five builds. The same revision passed
+1,833 Linux / Node 24 tests with native confinement, typechecking and all builds in
+[run 42642436513](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42642436513).
+All three installed-Harness / DeepSeek Flash scenarios passed: dedicated in 73.50 seconds and both owned variants in
+315.85 seconds. They verify denial of a late coordinator tool, absence of its canary and successful typed reads before
+and after restart while authorized workers complete their existing tasks. The first live run exposed an own-agent idle
+wait inside Harness's creation barrier; 051 records the runtime correction and regression. The original app remains
+running. This is a model-tool boundary, not an OS sandbox or a claim that every worker/provider credential boundary is
+complete. All remaining full architecture requirements stay active.
 
 ## Implemented increment: PR-bound results and fresh mission completion
 
