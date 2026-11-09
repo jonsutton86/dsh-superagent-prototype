@@ -63,6 +63,17 @@ receipt recreation, multiple-check ordering, historical review attempts, PR revi
 legacy evidence and refusal before receipt application or inference. Live installed-Harness recovery requires nonempty
 signed checked-publication and mission-delivery evidence with no legacy gaps.
 
-Full local, native Linux and installed-Harness qualification results will be recorded after verification. Deployment
-binding/remapping, restored activation, ownership handoff and clean-host failover remain unfinished. All remaining full
+Full local `pnpm check` passed 1,925 tests, typechecking and all six builds. The final bounded historical-review guard passed
+22 focused publication/result tests and repeated typechecking/builds. Runtime/test revision `ae4732a` passed 1,932 native
+Linux / Node 24 tests with bubblewrap, typechecking and all six builds in
+[run 42681324239](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42681324239).
+
+The exact revision passed installed-Harness / DeepSeek Flash owned-managed recovery in 192.90 seconds. Its signed image
+contains checked artifact publications, original seals, mission delivery grants and sent receipts, with no unresolved
+receipts, missing Outbox entries or legacy publication evidence gaps. Original-ID image retrieval retains the same proof.
+Provider traffic stayed on local contract servers; inference used the configured real API. The original app remained running.
+
+Deployment binding/remapping, restored activation, ownership handoff and clean-host failover remain unfinished. The ownership
+lease already accepts a reserved recovery checkpoint; installation and binding of the Store, Session backend and world
+journals, followed by actual restored Runtime startup, still need implementation and qualification. All remaining full
 architecture and Agentic OS product requirements stay in scope.

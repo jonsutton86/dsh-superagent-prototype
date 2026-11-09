@@ -629,5 +629,11 @@ activation/handoff/failover and every other uncompleted architecture/product req
 Publication authority recovery is implemented in `059-publication-authority-recovery.md`: original artifact approvals,
 destination snapshots, selected checks/captures, plan-bound delivery grants and exact Outbox subjects are checked before
 receipt application and again before signing a held image. Historical edits/revocation and legacy gaps remain explicit.
-Qualification is pending. Deployment binding/remapping, restored activation/handoff, clean-host failover and every remaining
-full product/architecture requirement stay open. The prepared image does not acquire execution authority.
+Full local verification passed 1,925 tests, typechecking and all six builds; the final bounded-review guard passed 22 focused
+tests and repeated typechecking/builds. Runtime/test revision `ae4732a` passed 1,932 Linux / Node 24 tests with native
+confinement, typechecking and all builds in
+[run 42681324239](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42681324239).
+The exact revision passed installed-Harness / DeepSeek Flash owned-managed recovery in 192.90 seconds with signed checked
+publications and mission delivery, no unresolved/legacy publication gaps and original-ID held-image retrieval. The original
+app remains running. Deployment binding/remapping, restored activation/handoff, clean-host failover and every remaining full
+product/architecture requirement stay open. The prepared image does not acquire execution authority.

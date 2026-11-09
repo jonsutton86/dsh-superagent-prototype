@@ -30,7 +30,13 @@ No new runtime, orchestration database, or workflow framework is assumed. Work i
 [059 Publication authority recovery](059-publication-authority-recovery.md) links independent outcomes to original artifact
 approvals, destination snapshots, selected check/capture evidence, mission delivery grants and exact Outbox subjects. It checks
 local authority before applying receipts and requires settled matching outcomes afterward. New requests/destination snapshots
-are retained; historical changes and legacy gaps remain explicit. Qualification is pending. Deployment binding/remapping,
+are retained; historical changes and legacy gaps remain explicit. Full local verification passed 1,925 tests, typechecking
+and all six builds; the final bounded-review guard passed 22 focused tests and repeated typechecking/builds. Runtime/test
+revision `ae4732a` passed 1,932 Linux / Node 24 tests with native confinement, typechecking and all builds in
+[run 42681324239](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42681324239).
+The exact revision passed installed-Harness / DeepSeek Flash owned-managed recovery in 192.90 seconds with nonempty signed
+checked-publication and delivery evidence, no unresolved/legacy publication gaps and original-ID held-image retrieval.
+Provider traffic stayed on local contract servers; the original app remained running. Deployment binding/remapping,
 restored activation, handoff, clean-host failover and the remaining full product/architecture scope remain open.
 
 ## Implemented increment: held context and budget state
