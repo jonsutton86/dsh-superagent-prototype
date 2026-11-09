@@ -6,6 +6,22 @@ import { SETUP_PROBLEMS } from '../setup.ts'
 import { HEALTH_TEXT } from '../sources/host.ts'
 
 const TEXT = {
+  'recall.title': ['记忆检索限制与历史', 'Recall limits and history'],
+  'recall.intro': ['工作执行的检索共享持久额度，协调器按 UTC 日共享额度。更换查询或重启不会重置已用额度。人工浏览不消耗此额度。', 'Reads share a durable allowance for each worker execution, or each UTC day for the coordinator. Changing a query or restarting does not reset usage. Operator browsing is separate.'],
+  'recall.owner': ['累计额度', 'Cumulative allowance'], 'recall.run': ['单次检索上限', 'Per-retrieval limits'],
+  'recall.calls': ['调用次数', 'calls'], 'recall.pages': ['页数', 'pages'], 'recall.bytes': ['UTF-8 字节', 'UTF-8 bytes'], 'recall.nodes': ['来源节点', 'source nodes'],
+  'recall.millis': ['毫秒', 'milliseconds'], 'recall.depth': ['链接层数', 'link levels'], 'recall.edit': ['编辑检索限制', 'Edit recall limits'], 'recall.history': ['检索历史', 'Retrieval history'],
+  'recall.reservationHint': ['中断的检索保留其预留额度。检索工具不能重置或增加额度。', 'Interrupted retrievals retain their reservations. Retrieval tools cannot reset or raise allowances.'],
+  'recall.timeHint': ['时间限制在本地操作之间检查，正在执行的单个数据库操作可能超时。节点、页数及返回字节数另有严格上限。', 'Time is checked between local operations; a single database operation may overrun. Separate limits bound nodes, pages and returned bytes.'],
+  'recall.router': ['协调器', 'Coordinator'], 'recall.worker': ['工作执行', 'Worker execution'],
+  'recall.phase.reserved': ['未结算的预留', 'Unsettled reservation'], 'recall.phase.complete': ['已返回', 'Returned'], 'recall.phase.failed': ['失败', 'Failed'],
+  'recall.truncated': ['已达到检索或来源检查上限；返回的上下文不完整。', 'A retrieval or source-check limit was reached; returned context is incomplete.'],
+  'recall.freshness.current': ['来源状态已检查', 'Source state checked'], 'recall.freshness.stale': ['来源链已变化', 'Source chain changed'],
+  'recall.freshness.contested': ['来源存在冲突', 'Sources contain conflicts'], 'recall.freshness.unknown': ['来源检查未完成', 'Source check incomplete'],
+  'recall.reason.archived': ['来源已归档', 'Archived source'], 'recall.reason.expired': ['来源已过期', 'Expired source'],
+  'recall.reason.superseded': ['来源已有新版本', 'Superseded source'], 'recall.reason.conflicted': ['来源存在冲突', 'Conflicting source'],
+  'recall.reason.hash_mismatch': ['来源哈希不匹配', 'Source hash mismatch'], 'recall.reason.unavailable_source': ['来源不可用', 'Source unavailable'],
+  'recall.reason.cycle': ['来源链接包含循环', 'Source link cycle'], 'recall.reason.limit': ['来源检查达到上限', 'Source check limit reached'],
   'tab.usage': ['用量', 'Usage'], 'health.usage': ['模型用量与限制', 'Model usage and limits'],
   'usage.scope.workspace': ['整个工作区', 'Workspace'], 'usage.scope.mission': ['任务', 'Mission'],
   'usage.scope.schedule': ['定时计划', 'Schedule'], 'usage.scope.persona': ['角色', 'Persona'],

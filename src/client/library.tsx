@@ -5,6 +5,7 @@ import { Button } from './controls.tsx'
 import { usePanel } from './provider.tsx'
 import { errorText } from './text.ts'
 import { PublicationCard } from './publications.tsx'
+import { RecallControls } from './recall.tsx'
 
 /** Library browsing and authoring use the same durable service as Harness worker tools. */
 export function LibraryPage({ id, scope }: { id?: string; scope?: string }) {
@@ -16,12 +17,14 @@ function RecordFlags({ record }: { record: LibraryEntry }) {
     <span>{t(record.provenance.actor === 'worker' ? 'library.agentSubmission' : 'library.operatorSubmission')}</span>
     {(['archived', 'expired', 'superseded', 'conflicted'] as const).filter(flag => record[flag]).map(flag => <strong key={flag}>{t(`library.${flag}`)}</strong>)}
     {!!record.staleSources.length && <strong>{t('library.staleSources')}</strong>}
+    {record.freshness && record.freshness.status !== 'current' && <strong>{t(`recall.freshness.${record.freshness.status}`)}</strong>}
   </div>
 }
 function RecordList({ scope }: { scope?: string }) {
   const { call, navigate, t } = usePanel()
   const [query, setQuery] = useState(''), [draft, setDraft] = useState(''), [kind, setKind] = useState<'memory' | 'artifact' | ''>('')
   const [inactive, setInactive] = useState(false), [offset, setOffset] = useState(0), [creating, setCreating] = useState(false)
+  const [recall, setRecall] = useState(false)
   const { data, error, reload } = usePoll(() => call('GET library', { query: { scope, q: query, kind: kind || undefined,
     includeInactive: inactive ? 'true' : 'false', offset } }), [call, scope, query, kind, inactive, offset])
   const open = (record: LibraryEntry) => navigate({ page: 'library', id: record.id, query: { scope } })
@@ -30,6 +33,8 @@ function RecordList({ scope }: { scope?: string }) {
       <p>{t('library.intro')}</p><p className="dt-hint">{scope ?? t('library.allScopes')}</p></div>
       <Button variant="primary" onClick={() => setCreating(!creating)}>{t(creating ? 'cancel' : 'library.new')}</Button></div>
     {creating && <RecordForm scope={scope ?? 'workspace'} onSaved={open} />}
+    <Button aria-expanded={recall} onClick={() => setRecall(!recall)}>{t('recall.title')}</Button>
+    {recall && <RecallControls />}
     <form className="dt-library-filters" onSubmit={event => { event.preventDefault(); setQuery(draft); setOffset(0) }}>
       <label>{t('library.search')}<input type="search" value={draft} maxLength={256} onChange={event => setDraft(event.target.value)} /></label>
       <label>{t('library.kind')}<select value={kind} onChange={event => { setKind(event.target.value as typeof kind); setOffset(0) }}>
@@ -169,6 +174,9 @@ function RecordDetail({ id, scope }: { id: string; scope?: string }) {
       {!content && record.nextOffset !== null && <p className="dt-hint">{t('library.excerpt')}</p>}
       {record.kind === 'artifact' && <PublicationCard key={`${record.id}:${record.revision}:${record.hash}`} record={record} />}
       <details className="dt-library-provenance"><summary>{t('library.provenance')}</summary>
+        {record.freshness && <><p>{t(`recall.freshness.${record.freshness.status}`)} · {record.freshness.checked} {t('recall.nodes')}</p>
+          <ul>{record.freshness.issues.map((issue, index) => <li key={`${issue.id}:${issue.reason}:${index}`}>
+            <Button onClick={() => link(issue.id)}>{t(`recall.reason.${issue.reason}`)}</Button></li>)}</ul></>}
         <dl><dt>{t('library.scope')}</dt><dd>{record.scope}</dd><dt>SHA-256</dt><dd>{record.hash}</dd>
           <dt>{t('library.created')}</dt><dd>{new Date(record.createdAt).toLocaleString()}</dd>
           {record.expiresAt && <><dt>{t('library.expires')}</dt><dd>{new Date(record.expiresAt).toLocaleString()}</dd></>}

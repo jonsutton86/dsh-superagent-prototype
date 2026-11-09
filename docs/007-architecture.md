@@ -294,6 +294,8 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/index.ts` | The main plugin entry: reads the machine settings, starts the Runtime, and gives it the restart that a save of a Source's account uses |
 | `src/supervision/protocol.ts` | Bounded observation, assessment and intervention schemas shared by independent processes |
 | `src/workspace/library-model.ts` | Scoped memory/artifact contracts, immutable provenance and bounded publication/recall schemas |
+| `src/workspace/freshness.ts`, `recall-model.ts`, `recall.ts` | Bounded transitive source inspection, persisted retrieval policy and atomic cumulative allowances with metered graph context |
+| `src/client/recall.tsx` | Recall allowance editing, original-request retries and persisted retrieval history |
 | `src/workspace/library.ts` | Transactional content-addressed storage, search, scope authorization, provenance, archival and evidence revisions |
 | `src/app/tools/library.ts` | Host-bound worker publication and worker/router recall tools |
 | `src/client/library.tsx` | Library search, authoring, immutable revisions, inert previews, downloads and source history |
@@ -506,6 +508,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/stage.spec.ts` | The Ticket stages, row by row |
 | `tests/supervision.spec.ts` | Real HTTP transport, token authentication, stale commands, transactional receipts and existing worker delivery integration |
 | `tests/library.spec.ts` | Library restart/replay, atomic rollback, scoping, provenance, integrity, freshness, review invalidation and Runtime/API integration |
+| `tests/recall.spec.ts`, `tests/recall-ui.spec.tsx` | Source-chain traversal/freshness, complete review closure, UTF-8 output ceilings, cumulative and interrupted allowances, private scopes and rendered policy/history controls |
 | `tests/library-ui.spec.tsx` | Rendered library creation/revision/archive and worker artifact preview through actual management routes |
 | `tests/workspace.spec.ts` | Mission persistence, deduplication, dependencies, review freshness, rollback and Runtime/Harness wiring |
 | `tests/schedules.spec.ts`, `tests/schedules-ui.spec.tsx` | DST and missed runs, standing authorization, restart deduplication, limits, dispatch rollback, review gates and rendered API retry/pause/navigation |

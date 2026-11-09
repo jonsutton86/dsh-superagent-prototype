@@ -75,8 +75,8 @@ export class Publications {
   }
   private eligible(id: string, revision: number, hash: string) {
     const record = this.host.library.read(id)
-    if (record.kind !== 'artifact' || record.revision !== revision || record.hash !== hash || !record.text || record.archived || record.expired || record.superseded || record.conflicted || record.staleSources.length)
-      throw new PublicationError(409, 'artifact_changed', 'Select a current, non-conflicting text artifact and review its exact content before publication')
+    if (record.kind !== 'artifact' || record.revision !== revision || record.hash !== hash || !record.text || record.archived || record.expired || record.superseded || record.conflicted || record.staleSources.length || record.freshness?.status !== 'current')
+      throw new PublicationError(409, 'artifact_changed', 'Select a current, non-conflicting text artifact with a complete source check and review its exact content before publication')
     return record
   }
   async publish(artifactId: string, input: unknown): Promise<PublicationRecord> {

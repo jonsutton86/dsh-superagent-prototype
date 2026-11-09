@@ -229,6 +229,9 @@ function routes(runtime: HttpHost): Routes {
     return runtime.conversations
   }
   return {
+    'GET recall': ({ query }) => runtime.library.recall.state(offset.parse(query.offset), limit(30, 100).parse(query.limit)),
+    'PUT recall': async ({ body }) => runtime.library.recall.configure(await body()),
+    'GET recall/versions/:version': ({ params }) => runtime.library.recall.configuration(z.coerce.number().int().nonnegative().parse(params.version)),
     'GET usage': ({ query }) => usage().page(UsageScope.parse({ kind: query.scope ?? 'workspace', ...(query.subject ? { id: query.subject } : {}) }),
       query.from === undefined ? undefined : new Date(z.iso.datetime({ offset: true }).parse(query.from)).toISOString(), offset.parse(query.offset), limit(30, 100).parse(query.limit)),
     'PUT usage': async ({ body }) => usage().configure(await body(256 * 1024)),

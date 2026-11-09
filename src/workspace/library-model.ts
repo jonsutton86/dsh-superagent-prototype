@@ -1,5 +1,6 @@
 /** Immutable knowledge/artifact contracts. Scope and provenance are assigned by the host, never by a worker. */
 import { z } from 'zod'
+import type { Freshness } from './freshness.ts'
 
 export const LIBRARY_MAX_BYTES = 512 * 1024
 export const LibraryScope = z.string().regex(/^(workspace|(?:mission|ticket):[A-Za-z0-9_-]{1,100})$/)
@@ -42,6 +43,7 @@ export interface LibraryEntry extends LibraryRecord {
   revision: number; archived: boolean; expired: boolean; superseded: boolean; conflicted: boolean
   verification: 'not_verified'
   staleSources: string[]
+  freshness?: Freshness
 }
 export interface LibraryList { items: LibraryEntry[]; nextOffset: number | null }
 export interface LibraryRead extends LibraryEntry {

@@ -14,7 +14,7 @@ not a claim that the prototype already ships every feature or that the article s
 | --- | --- | --- |
 | Two-level coordination | `src/core/engine.ts`, `src/app/sessions.ts`, `src/executor/dsh.ts` | Separate router execution authority from routing; retain worker-local subagents |
 | Event admission and routing | `src/policy.ts`, `src/core/intake.ts`, `src/core/evals.ts`, `src/sources/*` | Extend source scope only where required; retain subscription ownership and handback invariants |
-| Context and recall | Existing resources plus `src/workspace/library.ts`: immutable scoped records, provenance and FTS recall | Enforced total recall budgets, transitive freshness, measured retrieval and long-horizon validation |
+| Context and recall | Immutable scoped records, provenance/FTS search, host-enforced cumulative retrieval allowances, bounded chain context/transitive freshness and complete review dependency closure | Measured retrieval and long-horizon validation, external-source freshness/imports, model-token-aware context selection and retention/scaling |
 | Speculative work | Inferred mandates, observe/auto, configurable rules | Durable budgets, expiry and promotion/publication gates |
 | Full duplex | Harness job/subagent services, `src/executor/background.ts`, `src/app/delivery.ts`, remote receipts, durable assignment/tool ownership, receipt-only restart recovery and operator cancellation | Broader long-running job, process-failure and cross-host acceptance |
 | Compute/state separation | SQLite Store; Harness Session checkpoints, held import, checkpoint-bound claimant replacement, revision-bound receipt audits and authenticated held receipt application including original administration; ownership authority, endpoint handoff fencing, shared Runtime/pool/provider lifecycle and independently fenced artifact/mission delivery with directed inbound replies | Private credential/runtime configuration validation, authoritative input/state recovery, remapping, broader inbound discovery/admission and repository integration, clean-host activation and failover qualification |
@@ -24,6 +24,17 @@ not a claim that the prototype already ships every feature or that the article s
 | Operator control | Existing web panel, settings, pause/retry/stop, scoped usage/limits/prices and reconciliation, local/remote environment status and revocation, endpoint enrollment/reconciliation and private profile generation | Supervision, broader workload budgets and evidence surfaces |
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
+
+## Implemented increment: bounded Chain of Recall
+
+[043 Chain of Recall](043-chain-recall.md) adds persisted per-execution/router-day retrieval allowances, atomic reservations,
+bounded source/revision traversal, exact returned UTF-8 byte ceilings, scope checks at each node and operator limits/history.
+Library freshness now follows source chains with explicit unknown results at inspection limits. Review fingerprints use the
+complete accessible dependency closure so distant changes invalidate acceptance even when the display traversal is bounded.
+Model token budgets remain in the inference ledger; retrieval bytes are not presented as exact model token counts.
+Deterministic, rendered and installed-Harness qualification results will be recorded after completion. Automatic reflection,
+retrieval quality/long-horizon evaluation, external-source imports/freshness, speculative admission, retention, multi-workspace,
+recovery activation/failover, voice and the remaining full architecture/product requirements stay open.
 
 ## Implemented increment: managed model usage and budgets
 

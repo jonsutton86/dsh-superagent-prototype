@@ -67,3 +67,17 @@ it('keeps publication observation available after ownership loss and never dispa
   expect(() => new Publications({ store: host.runtime.store, library: host.runtime.library, lifetime: new AbortController().signal, roots: () => [] }))
     .toThrow('cannot be removed or replaced')
 }, 10_000)
+
+it.each(['stale', 'unknown'] as const)('refuses artifact publication when transitive source state is %s', async state => {
+  const { host, publisher, approval } = await fixture(), library = host.runtime.library
+  let source = library.publish({ requestId: randomUUID(), kind: 'memory', title: 'Original', summary: 'Source', content: 'Evidence' })
+  const leaf = source
+  for (let n = 0; n < (state === 'unknown' ? 34 : 2); n++) source = library.publish({ requestId: randomUUID(), kind: 'memory',
+    title: `Derived ${n}`, summary: 'Source chain', content: 'Derived evidence', sources: [{ id: source.id, relation: 'derived_from' }] })
+  if (state === 'stale') library.archive(leaf.id, { requestId: randomUUID(), revision: 1, archived: true })
+  const artifact = library.publish({ requestId: randomUUID(), kind: 'artifact', title: 'Dependent report', summary: 'Requires source check',
+    content: 'Candidate result', sources: [{ id: source.id, relation: 'derived_from' }] })
+  expect(library.read(artifact.id).freshness?.status).toBe(state)
+  expect((await host.api('POST', `library/${artifact.id}/publications`, { ...approval, hash: artifact.hash, revision: artifact.revision })).status).toBe(409)
+  expect(publisher.posts).toBe(0)
+})

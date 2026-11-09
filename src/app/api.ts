@@ -14,6 +14,7 @@ import type { Conversation, InboxFilter, InboxItem, InboxPage, InboxReplyInput, 
 import type { PlanIndex, PlanProposal, PlanVersion, ProposePlanInput, ReviewPlanInput, RequestPlanInput } from '../workspace/plan-model.ts'
 import type { CreateScheduleInput, SaveScheduleInput, ToggleScheduleInput, ScheduleView, ScheduleList, Schedule } from '../workspace/schedule-model.ts'
 import type { UsagePage, UsageCall, UsageConfiguration, SaveUsageInput, ReconcileUsageInput } from '../usage/model.ts'
+import type { RecallState, RecallConfiguration, SaveRecallInput } from '../workspace/recall-model.ts'
 import type { EnvironmentList, EnvironmentView, EnrollEnvironmentInput, EnvironmentCommandInput } from '../environments/model.ts'
 import type { ExecutionReceiptPage } from '../remote/effects.ts'
 import type { ArchivePersonaInput, CreatePersonaInput, PersonaList, PersonaRecord, PersonaVersion, SavePersonaInput } from '../personas/model.ts'
@@ -34,6 +35,9 @@ interface Paged { offset?: number; limit?: number }
 type Delivery = 'injected' | 'pending'
 
 export interface Api {
+  'GET recall': { query?: Paged; response: RecallState }
+  'PUT recall': { body: SaveRecallInput; response: RecallConfiguration }
+  'GET recall/versions/:version': { response: RecallConfiguration }
   'GET usage': { query?: Paged & { scope?: 'workspace' | 'mission' | 'schedule' | 'persona'; subject?: string; from?: string }; response: UsagePage }
   'PUT usage': { body: SaveUsageInput; response: UsageConfiguration }
   'GET usage/versions/:version': { response: UsageConfiguration }

@@ -16,7 +16,7 @@ export function PublicationCard({ record }: { record: LibraryRead }) {
   const [approved, setApproved] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('')
   const lock = useRef(false), pending = useRef<{ fingerprint: string; body: ApprovePublication }>()
   const destination = catalog.data?.items.find(item => item.id === destinationId)
-  const current = !record.archived && !record.expired && !record.superseded && !record.conflicted && !record.staleSources.length && record.text
+  const current = !record.archived && !record.expired && !record.superseded && !record.conflicted && !record.staleSources.length && record.text && record.freshness?.status === 'current'
   const duplicate = receipts.data?.items.some(item => item.hash === record.hash && item.destinationHash === destination?.hash
     && !['failed', 'cancelled', 'not_delivered'].includes(item.receipt?.phase ?? 'unknown'))
   const run = async (operation: () => Promise<unknown>) => {

@@ -5,6 +5,8 @@ import { key, latestAssignment, liveTicket } from '../core/index.ts'
 import type { Store } from '../app/store.ts'
 import { workerSessionId } from '../executor/dsh.ts'
 import { WorkspaceError, type Mission } from './model.ts'
+import { FreshnessInspector } from './freshness.ts'
+import { Recall } from './recall.ts'
 import { ArchiveRecord, CreateRecord, LibraryId, LibraryPage, LibraryQuery, LIBRARY_MAX_BYTES, PublishRecord,
   type LibraryActor, type LibraryContent, type LibraryEntry, type LibraryList, type LibraryRead, type LibraryRecord } from './library-model.ts'
 
@@ -15,6 +17,7 @@ type Row = { value: string; revision: number; archived: number }
 
 /** Transactional content-addressed library with host-derived worker scopes and bounded, provenance-aware recall. */
 export class Library {
+  readonly recall: Recall
   constructor(private readonly store: Store, private readonly now = () => new Date().toISOString()) {
     store.db.exec(`CREATE TABLE IF NOT EXISTS workspace_blob (hash TEXT PRIMARY KEY, data BLOB NOT NULL, bytes INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS workspace_library (id TEXT PRIMARY KEY, scope TEXT NOT NULL, kind TEXT NOT NULL,
@@ -27,6 +30,7 @@ export class Library {
       CREATE VIRTUAL TABLE IF NOT EXISTS workspace_library_search USING fts5(title,summary,body,tokenize='unicode61');
       CREATE TABLE IF NOT EXISTS workspace_library_command (actor TEXT NOT NULL, id TEXT NOT NULL, fingerprint TEXT NOT NULL,
         record TEXT NOT NULL, PRIMARY KEY(actor,id));`)
+    this.recall = new Recall(store, this, now)
   }
   private scope(actor: LibraryActor, writing = false): string[] | undefined {
     if (actor.role === 'operator') return undefined
@@ -69,16 +73,24 @@ export class Library {
       FROM workspace_library_edge e JOIN workspace_library l ON l.id=e.source WHERE ${where} ORDER BY l.rowid DESC LIMIT 51`).all(...values) as
       { id: string; relation: LibraryRecord['sources'][number]['relation']; hash: string }[]
   }
-  private view(record: LibraryRecord, row: Row, actor: LibraryActor): LibraryEntry {
+  /** Freshness is metadata/provenance state, never a claim that a source is factually correct. */
+  inspector(actor: LibraryActor, admit?: (id: string) => boolean): FreshnessInspector {
+    let remaining = 512; const until = performance.now() + 100
+    return new FreshnessInspector(id => {
+      const { record, row } = this.require(id, actor)
+      return { record, archived: !!row.archived, expired: !!record.expiresAt && record.expiresAt <= this.now(),
+        superseded: this.incoming(id, actor, true, 'supersedes').length > 0,
+        conflicted: record.sources.some(edge => edge.relation === 'contradicts') || this.incoming(id, actor, true, 'contradicts').length > 0 }
+    }, admit ?? (() => --remaining >= 0 && performance.now() <= until))
+  }
+  private view(record: LibraryRecord, row: Row, actor: LibraryActor, inspector = this.inspector(actor)): LibraryEntry {
+    const freshness = inspector.inspect(record.id), node = inspector.node(record.id)
     return { ...record, revision: Number(row.revision), archived: !!row.archived,
       expired: !!record.expiresAt && record.expiresAt <= this.now(),
-      superseded: this.incoming(record.id, actor, true, 'supersedes').length > 0,
-      conflicted: this.incoming(record.id, actor, true, 'contradicts').length > 0 || record.sources.some(edge => edge.relation === 'contradicts'),
-      verification: 'not_verified', staleSources: record.sources.filter(edge => {
-        const source = this.require(edge.id, actor)
-        return source.row.archived || (source.record.expiresAt && source.record.expiresAt <= this.now())
-          || this.incoming(edge.id, actor, true, 'supersedes').length > 0
-      }).map(edge => edge.id) }
+      superseded: node?.superseded ?? false,
+      conflicted: node?.conflicted === true || freshness.issues.some(issue => issue.reason === 'conflicted'),
+      verification: 'not_verified', freshness, staleSources: [...new Set(freshness.issues.filter(issue => issue.id !== record.id
+        && ['archived', 'expired', 'superseded', 'hash_mismatch'].includes(issue.reason)).map(issue => issue.id))] }
   }
   /** Receipt, blob, provenance, metadata and search index commit together, including within a caller's savepoint. */
   private command(actor: LibraryActor, id: string, input: unknown, operation: () => string): LibraryEntry {
@@ -143,7 +155,7 @@ export class Library {
       return record.id
     })
   }
-  list(input: unknown = {}, actor: LibraryActor = OPERATOR): LibraryList {
+  list(input: unknown = {}, actor: LibraryActor = OPERATOR, inspector = this.inspector(actor)): LibraryList {
     const query = LibraryQuery.parse(input), scopes = this.scope(actor), values: SQLInputValue[] = []
     if (query.scope) this.allowed(query.scope, actor)
     let where = '1=1', from = 'workspace_library l'
@@ -164,13 +176,13 @@ export class Library {
     }
     const rows = this.store.db.prepare(`SELECT l.value,l.revision,l.archived FROM ${from} WHERE ${where}
       ORDER BY ${query.q ? 'rank,' : ''} l.rowid DESC LIMIT ? OFFSET ?`).all(...values, query.limit + 1, query.offset) as Row[]
-    return { items: rows.slice(0, query.limit).map(row => this.view(JSON.parse(row.value) as LibraryRecord, row, actor)),
+    return { items: rows.slice(0, query.limit).map(row => this.view(JSON.parse(row.value) as LibraryRecord, row, actor, inspector)),
       nextOffset: rows.length > query.limit ? query.offset + query.limit : null }
   }
-  read(id: string, input: unknown = {}, actor: LibraryActor = OPERATOR): LibraryRead {
+  read(id: string, input: unknown = {}, actor: LibraryActor = OPERATOR, inspector = this.inspector(actor)): LibraryRead {
     const page = LibraryPage.parse(input), { record, row } = this.require(id, actor), incoming = this.incoming(id, actor, false)
     const text = record.text ? this.bytes(record).toString('utf8') : null
-    return { ...this.view(record, row, actor), contextOnly: true, content: text?.slice(page.offset, page.offset + page.limit) ?? null,
+    return { ...this.view(record, row, actor, inspector), contextOnly: true, content: text?.slice(page.offset, page.offset + page.limit) ?? null,
       totalChars: text?.length ?? null, nextOffset: text && text.length > page.offset + page.limit ? page.offset + page.limit : null,
       incoming: incoming.slice(0, 50), incomingTruncated: incoming.length > 50 }
   }
@@ -196,14 +208,19 @@ export class Library {
   }
   /** Bind mission review to the submitted artifacts/memories and their visibility state, not to a model's success claim. */
   evidenceRevision(ticketId: string): string {
-    const rows = this.store.db.prepare(`SELECT id,revision,(expires_at IS NOT NULL AND expires_at<=?) AS expired FROM workspace_library
-      WHERE json_extract(value,'$.provenance.ticketId')=? ORDER BY id`).all(this.now(), ticketId)
-    if (!rows.length) return ''
-    // A new revision or contradiction can come from the operator or a different worker in the same mission.
-    const related = this.store.db.prepare(`SELECT DISTINCT n.id,n.revision,(n.expires_at IS NOT NULL AND n.expires_at<=?) AS expired
-      FROM workspace_library n JOIN workspace_library_edge e ON (e.source=n.id OR e.target=n.id)
-      JOIN workspace_library root ON (root.id=e.source OR root.id=e.target)
-      WHERE json_extract(root.value,'$.provenance.ticketId')=? ORDER BY n.id`).all(this.now(), ticketId)
-    return key(JSON.stringify({ rows, related }))
+    if (!this.store.db.prepare("SELECT 1 FROM workspace_library WHERE json_extract(value,'$.provenance.ticketId')=? LIMIT 1").get(ticketId)) return ''
+    const scopes = this.scope({ role: 'worker', ticketId })!, slots = scopes.map(() => '?').join(',')
+    // UNION deduplicates cycles and diamond graphs. The library's 50,000-record capacity bounds the complete closure;
+    // this fingerprint never inherits the display traversal's truncation and therefore cannot hide a distant change.
+    const rows = this.store.db.prepare(`WITH RECURSIVE graph(id) AS (
+      SELECT id FROM workspace_library WHERE json_extract(value,'$.provenance.ticketId')=?
+      UNION SELECT e.target FROM graph g JOIN workspace_library_edge e ON e.source=g.id
+        JOIN workspace_library n ON n.id=e.target WHERE n.scope IN (${slots})
+      UNION SELECT e.source FROM graph g JOIN workspace_library_edge e ON e.target=g.id
+        JOIN workspace_library n ON n.id=e.source WHERE e.relation IN ('supersedes','contradicts') AND n.scope IN (${slots})
+    ) SELECT l.id,l.revision,l.archived,(l.expires_at IS NOT NULL AND l.expires_at<=?) AS expired,
+      json_extract(l.value,'$.hash') AS hash,json_extract(l.value,'$.sources') AS sources
+      FROM graph g JOIN workspace_library l ON l.id=g.id ORDER BY l.id`).all(ticketId, ...scopes, ...scopes, this.now())
+    return key(JSON.stringify(rows))
   }
 }
