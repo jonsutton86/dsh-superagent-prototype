@@ -20,18 +20,22 @@ not a claim that the prototype already ships every feature or that the article s
 | Compute/state separation | SQLite Store; Harness Session checkpoints, held import, checkpoint-bound claimant replacement, revision-bound receipt audits and authenticated held receipt application including original administration; ownership authority, endpoint handoff fencing, shared Runtime/pool/provider lifecycle and independently fenced artifact/mission delivery with directed inbound replies | Private credential/runtime configuration validation, authoritative input/state recovery, remapping, broader inbound discovery/admission and repository integration, clean-host activation and failover qualification |
 | Remote environments | Paired local/remote providers, authenticated leased grants, durable revocation, mission/Session binding, endpoint-owned versioned credentials, remote profile and artifact/restart qualification, operator enrollment/reconciliation, generated profiles, managed world pool and exact per-action selection | Managed endpoint/machine launch, remote repository workflows, quotas and cross-host acceptance |
 | Watchdog | Existing health and bounded transient executor retry; now `src/supervision/*` | Live-provider and process-level acceptance, incident UI/alerts, retention, richer progress evidence and separately authorized recovery policies |
-| Delivery | Reports and PR binding/closure; content-addressed artifacts, stale mission-review invalidation, reviewed artifacts and plan-authorized mission replies with independent receipts; exact participant/task inbound listeners; versioned checks, original assignment/environment bindings, host-captured file/Git snapshots, original-job evidence, operator controls and selected-check mission acceptance/publication | Current remote PR-head gates, continuous freshness/fresh whole-mission closure, broader inbound discovery/admission, repository integration and broader speculative quality evaluation |
+| Delivery | Reports and PR binding/closure; content-addressed artifacts, stale mission-review invalidation, reviewed artifacts and plan-authorized mission replies with independent receipts; exact participant/task inbound listeners; versioned checks, original assignment/environment bindings, host-captured file/Git snapshots, original-job evidence, operator controls, selected-check mission acceptance/publication and explicit-commit PR reviews with captured Git tree proof | Mission-level repository/PR closure, CI/branch-policy and merge integration, continuous freshness/fresh whole-mission closure, broader inbound discovery/admission, remote Git provisioning and broader speculative quality evaluation |
 | Operator control | Existing web panel, settings, pause/retry/stop, scoped usage/limits/prices and reconciliation, local/remote environment status and revocation, endpoint enrollment/reconciliation and private profile generation | Supervision, broader workload budgets and evidence surfaces |
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
-## Current increment: checked PR review submission
+## Implemented increment: checked PR review submission
 
 [049 PR review approvals](049-pull-review-approvals.md) adds provider-observed PR identities and head/tree binding to
 checked artifact review submission. Captured bytes reconstruct the commit tree; Git status alone is insufficient.
 The operator inspects the head and selects matching checks; the independent publisher rereads the target and sends an
-explicit-commit review. Historical receipt recovery precedes fresh-source/head gates. Qualification of the working
-revision is pending. GitHub review submission cannot atomically assert the current head; a concurrent push can leave the
+explicit-commit review. Historical receipt recovery precedes fresh-source/head gates. Runtime revision `94f41c6` passed
+1,806 local tests, typechecking and all five builds; final test revision `ca58691` passed 1,812 Linux / Node 24 tests with
+native confinement, typechecking and all builds in [run 42627757241](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42627757241).
+All three installed-Harness / DeepSeek Flash scenarios passed across the runtime qualification and test-only recovery
+fixture correction `ca58691` described in 049. The original app remains running.
+GitHub review submission cannot atomically assert the current head; a concurrent push can leave the
 review on the explicitly approved older commit. Mission repository/PR closure, merge policies/receipts, remote Git
 provisioning, continuous freshness, fresh whole-mission closure and all other full architecture requirements remain open.
 
@@ -706,9 +710,11 @@ quality/waste measurement, scaling, multi-workspace ownership and stronger confi
 
 ### 6. Verified artifacts and delivery
 
-Implemented execution foundation in 046: host-captured bounded file/Git inputs, copied-source checks through existing
-endpoint/Harness jobs, revision preconditions, durable output/outcome evidence and unknown-aware cleanup. Coordinator
-check definitions and observations, local support, evidence UI and publication/PR-head enforcement remain open.
+Implemented through 049: host-captured bounded file/Git inputs, copied-source checks through endpoint/Harness jobs,
+revision preconditions, durable outcomes and unknown-aware cleanup; coordinator definitions, local/remote checks,
+evidence UI, checked acceptance/publication and explicit-commit PR reviews bound to provider-observed heads and actual
+captured Git trees. Mission-level repository/PR closure, CI/branch-policy and merge integration, remote Git provisioning,
+continuous freshness and a fresh whole-mission closure policy remain open.
 
 Persist artifacts and verification results bound to exact source/workspace revisions: commit/tree IDs, content hashes,
 command or check identities, exit outcomes and timestamps. Verification evidence is collected by host integrations;

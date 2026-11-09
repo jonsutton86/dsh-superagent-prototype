@@ -86,11 +86,27 @@ explicit review-ID observation available for reconciliation beyond that bound.
 
 ## Qualification and remaining work
 
-Qualification is pending for this working revision. Tests cover real Git trees, hidden file changes, all three review
-events, head races, account/identity changes, source freshness, original receipt recovery, dismissal and rendered approval.
-All provider effects use local HTTP contract fixtures. Installed-Harness qualification exercises actual model-authored
-artifacts and checked Git source through the coordinator, plus the independently installed publisher's PR inspection API.
-No real GitHub account review or merge is submitted by qualification.
+Runtime revision `94f41c6911e7e0b49038358f9a96775b35352c7f` passed 1,806 local tests with 12 intentional skips,
+typechecking and all five builds; the suite took 109.92 seconds. Linux / Node 24 passed 1,812 tests with seven skips,
+typechecking and all builds in 151.80 seconds in
+[run 42626886664](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42626886664).
+This includes an actual native confined remote check, original-world freshness capture and matching PR review receipt.
+
+The dedicated installed-Harness / DeepSeek Flash scenario passed in 61.74 seconds. The owned dedicated scenario also
+passed, including actual checked review submission, lost-reply recovery and installed independent-publisher PR inspection.
+The initial owned managed run passed the review path but failed a later recovery-fixture assertion: the fixture expected
+one destination while the new PR review destination correctly made two. Test-only follow-up
+`ca58691eee61977b6fe57943af2bbb59572368df` supplies the actual configured destination count; typechecking and seven
+documentation/class checks passed. The owned managed rerun passed in 189.33 seconds, including its complete recovery path.
+The follow-up revision passed typechecking, all five builds and 1,812 native Linux tests (seven skips) in 212.05 seconds
+in [run 42627757241](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42627757241).
+Runtime code is unchanged by this fixture correction.
+
+Tests cover real Git trees, hidden file changes, all three review events, head races, account/identity changes, source
+freshness, original receipt recovery, dismissal, capability/ownership refusal, unknown replacement blocking and rendered
+approval. All provider effects use local HTTP contract fixtures. Installed-Harness qualification uses actual model-authored
+artifacts and checked Git source through the coordinator. No real GitHub account review or merge is submitted. The original
+app process remains running.
 
 The broader delivery scope still includes mission-level repository/PR association and closure rules, remote repository
 provisioning, CI/branch-policy integration, merge receipts/head preconditions, continuous freshness and a fresh whole-mission

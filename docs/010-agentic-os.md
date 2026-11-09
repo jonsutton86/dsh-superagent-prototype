@@ -509,8 +509,12 @@ reflection/usage/recovery regressions. The original app remains running; code an
 gates, a fresh whole-mission closure policy, continuous source freshness and all remaining full architecture requirements
 stay open. The full product objective remains active.
 
-PR review integration is being qualified in `049-pull-review-approvals.md`: independent provider head/tree observations,
+PR review integration is implemented in `049-pull-review-approvals.md`: independent provider head/tree observations,
 Git trees reconstructed from actual checked bytes, explicit-commit review submission and original receipt recovery after
-head changes. This is a review path, not an atomic latest-head approval or merge implementation. Full qualification is
-pending; mission-level repository/PR closure, merge and branch-policy integration, continuous freshness and every other
-remaining architecture/product requirement stay open.
+head changes. Runtime revision `94f41c6` passed 1,806 local tests, typechecking and all five builds. Final test revision
+`ca58691` passed 1,812 native Linux tests, typechecking and all builds in
+[run 42627757241](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42627757241).
+The dedicated and owned dedicated live Harness scenarios passed; owned managed passed after test-only recovery fixture
+correction `ca58691` accounted for the new destination. This is a review path, not an
+atomic latest-head approval or merge implementation. Mission-level repository/PR closure, merge and branch-policy
+integration, continuous freshness and every other remaining architecture/product requirement stay open.
