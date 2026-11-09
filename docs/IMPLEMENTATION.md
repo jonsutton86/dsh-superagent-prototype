@@ -1,8 +1,14 @@
 # Article implementation tracker
 
 [062 Voice](062-voice.md) adds optional local/cloud speech adapters, editable inbox dictation, reply playback,
-interruption and durable request/restart handling while preserving DeepSeek Harness execution. Local/DOM contract checks
-and generated-audio qualification are implemented; complete build, native Linux and installed-Harness results are pending.
+interruption and durable request/restart handling while preserving DeepSeek Harness execution. Qualification revision
+`da21f8fb37f891362f9c900f3aae6a1bd25deb8e` passed the installed Harness speech/inference/restart/recovery drill
+(one test, 242.08 seconds) and the complete native Linux suite (1,969 passed, 10 skipped), typechecking and six builds in
+[run 42696904836](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42696904836).
+The local full suite passed 1,962 tests; subsequent lifecycle hardening passed 106 focused tests including actual
+macOS speech, and the final UI check passed seven tests. Real browser/microphone acceptance, cloud speech-provider
+qualification, realtime streaming, speech fees and receipt maintenance remain open. This does not complete the full
+article/product objective or change the other remaining requirements.
 
 The active product objective also includes the full [Agentic OS workspace](010-agentic-os.md). Its implementation ledger
 preserves these article requirements and adds missions, shared memory, artifacts, personas, schedules, usage and voice.

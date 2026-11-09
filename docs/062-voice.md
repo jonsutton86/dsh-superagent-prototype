@@ -119,5 +119,20 @@ microphone acceptance.
 Opt-in local qualification exercises actual macOS `say`, FFmpeg and whisper.cpp using generated speech, validates its
 transcript and temporary-file cleanup. `DSH_VOICE_MODEL` also enables this round trip in the installed Harness test:
 raw-audio authorization, receipt replay after restart and a transcribed mission objective followed by real inference/tool
-execution and the existing recovery drill. No user microphone recording is used. Exact qualification receipts are added
-to the implementation ledger when the complete checks pass.
+execution and the existing recovery drill. No user microphone recording is used.
+
+Qualified revision: `da21f8fb37f891362f9c900f3aae6a1bd25deb8e`.
+
+- Local full check: 1,962 passed, 16 skipped; 128.38 seconds; typecheck and all six builds passed.
+- Subsequent lifecycle hardening: 106 focused tests passed, including actual `say` → FFmpeg → whisper.cpp with the
+  public `ggml-tiny.en.bin` model and a child process ignoring TERM. Final UI refinement: seven tests passed and rebuilt.
+- Installed Harness, owned managed execution, configured DeepSeek Flash API: one passed, four unrelated variants skipped,
+  242.08 seconds. Generated speech was transcribed, audio access was checked, the original speech receipt survived restart,
+  the transcript became a mission objective, real model/tool execution completed, and the recovery drill passed.
+- Native Linux Node 24 with bubblewrap: 1,969 passed, 10 skipped; 285.00 seconds; typecheck and six builds passed in
+  [run 42696904836](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42696904836), job 129431063063.
+
+The first live attempt exposed a qualification-overlay error: a voice-only plugin patch removed the required stateDir.
+The fixture now extends the complete config, and the instructions above explain that replacement behavior. An earlier
+Linux run timed out in an existing mission-pull test's five-second limit; the final full native run passed with that test
+and its assertions unchanged. Cloud transport tests use contract doubles; no cloud speech-provider acceptance is claimed.

@@ -660,3 +660,12 @@ typechecking and all builds in [run 42690711226](https://github.com/jonsutton86/
 The exact revision passed installed-Harness / DeepSeek Flash owned-managed and owned-dedicated-restore qualification in
 339.36 seconds combined: generated patches, retired old state files, new missions/artifacts and continued-history restart.
 The original app remains running. Cross-machine failover and all remaining full requirements remain open.
+
+Optional speech is implemented and qualified in `062-voice.md`. The inbox supports editable microphone drafts, explicit
+reply playback, local/cloud adapter selection, interruption and text fallback. Requests retain durable identity across
+retries/restarts without automatic provider replay; speech does not create execution authority. Revision
+`da21f8fb37f891362f9c900f3aae6a1bd25deb8e` passed the installed Harness generated-speech/DeepSeek Flash mission/restart/recovery
+drill (242.08 seconds) and native Linux typecheck, six builds and 1,969 tests (10 skipped; run 42696904836). Local full-suite
+validation passed 1,962 tests, with subsequent focused lifecycle and UI checks. Browser/microphone acceptance, cloud
+speech-provider qualification, realtime streaming, long-reply chunking, speech billing and receipt maintenance remain
+open alongside the rest of this full architecture. The original running application was left running.
