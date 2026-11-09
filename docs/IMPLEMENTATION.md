@@ -17,7 +17,7 @@ not a claim that the prototype already ships every feature or that the article s
 | Context and recall | Existing resources plus `src/workspace/library.ts`: immutable scoped records, provenance and FTS recall | Enforced total recall budgets, transitive freshness, measured retrieval and long-horizon validation |
 | Speculative work | Inferred mandates, observe/auto, configurable rules | Durable budgets, expiry and promotion/publication gates |
 | Full duplex | Harness job/subagent services, `src/executor/background.ts`, `src/app/delivery.ts`, remote receipts, durable assignment/tool ownership, receipt-only restart recovery and operator cancellation | Broader long-running job, process-failure and cross-host acceptance |
-| Compute/state separation | SQLite Store; Harness Session checkpoints and held import; independent ownership authority, endpoint handoff fencing, shared Runtime/pool/provider ownership lifecycle and independently fenced artifact/mission delivery with directed inbound replies | Broader inbound discovery/admission and repository integration, clean-host activation and failover qualification |
+| Compute/state separation | SQLite Store; Harness Session checkpoints, held import and checkpoint-bound claimant replacement; independent ownership authority, endpoint handoff fencing, shared Runtime/pool/provider ownership lifecycle and independently fenced artifact/mission delivery with directed inbound replies | Receipt inventory/reconciliation and divergence detection, configuration remapping, broader inbound discovery/admission and repository integration, clean-host activation and failover qualification |
 | Remote environments | Paired local/remote providers, authenticated leased grants, durable revocation, mission/Session binding, endpoint-owned versioned credentials, remote profile and artifact/restart qualification, operator enrollment/reconciliation, generated profiles, managed world pool and exact per-action selection | Managed endpoint/machine launch, remote repository workflows, quotas and cross-host acceptance |
 | Watchdog | Existing health and bounded transient executor retry; now `src/supervision/*` | Live-provider and process-level acceptance, incident UI/alerts, retention, richer progress evidence and separately authorized recovery policies |
 | Delivery | Reports and PR binding/closure; content-addressed artifacts, stale mission-review invalidation, reviewed artifacts and plan-authorized mission replies to GitHub issue/review and Feishu/Lark destinations with independent receipts; exact participant/task inbound listeners | Host-collected check evidence, Git/environment revision binding, broader inbound discovery/admission, repository integration and speculative promotion/publication gates |
@@ -34,7 +34,12 @@ superseded retries never adopt the newest credential. Resource drain barriers an
 
 Receipt inventory/reconciliation, post-checkpoint divergence, Session/world validation for activation, explicit path and
 credential remapping, clean-host activation/failover and every remaining article/product capability still require work.
-This increment does not make a staged restore executable. Qualification evidence follows the completed checks.
+This increment does not make a staged restore executable. Code revision `6d2ef214431d030c82ba2174f5e52ecc10b5acef`
+passed local `pnpm check` on 2026-11-08: 1,468 tests, typechecking and all four builds. Both owned installed-Harness/DeepSeek
+Flash scenarios passed on the final build in 199.31 seconds, including capture, repeated Session import, original reservation
+retries, retained holds and source claimant rejection. It also passed 1,470 tests, typechecking and all builds with native
+Linux confinement in [run 42549125311](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42549125311).
+Provider message traffic stayed on local contract servers; this does not qualify live-account permissions or clean-host failover.
 
 ## Implemented increment: inbound task conversations
 

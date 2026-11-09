@@ -113,7 +113,17 @@ failure, ambiguous response followed by authentication failure, cancellation and
 the unchanged resource barrier. The installed-Harness scenarios also reserve and retry their real model-generated checkpoints
 through the maintenance plugin, preserving imported Sessions and the hold while rejecting the source claimant.
 
-Qualification results are recorded after the local, actual-model and native Linux checks complete.
+Qualification on 2026-11-08: code revision `6d2ef214431d030c82ba2174f5e52ecc10b5acef` passed local `pnpm check`:
+1,468 tests, typechecking and all four builds. Seven opt-in/platform cases were skipped. Both owned installed-Harness
+scenarios passed separately on the final build in 199.31 seconds using Harness 0.2.1-rc.3 and the configured
+`deepseek-official/deepseek-flash` model. Dedicated and managed execution completed real missions, inbound reply resumption,
+restart, capture/verify/stage, repeated Session import and repeated recovery reservation. The authority rejected the original
+claimant while the staged database retained its hold. Provider message traffic used local contract servers.
+
+The same code passed 1,470 tests, typechecking and all four builds with native Linux confinement in
+[run 42549125311](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42549125311)
+on Ubuntu 22.04/Node 24; five opt-in cases were skipped. The separate macOS Harness composition and native Linux checks do
+not establish running clean-host failover or live GitHub/Feishu account permissions.
 
 Activation still requires reconciling independent execution and publication inventories, detecting effects or inputs newer
 than the checkpoint, validating imported Session/world state, explicit configuration and credential remapping, endpoint and

@@ -236,3 +236,9 @@ authenticated held checkpoint. The original installation loses acquisition autho
 response loss and private-file failures without silently rotating again or adopting a newer reservation. Selected process
 clients still require the resource barrier. Maintenance retains the execution hold. Receipt reconciliation, post-checkpoint
 divergence, configuration remapping, activation and clean-host failure drills remain required.
+
+Recovery reservation qualification: code `6d2ef214431d030c82ba2174f5e52ecc10b5acef` passed 1,468 local tests, both owned
+installed-Harness/DeepSeek Flash scenarios (199.31 seconds), and 1,470 native Linux tests in
+[run 42549125311](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42549125311).
+Typechecking and all four builds passed. Real checkpoint reservation/retry retained the restore hold and invalidated the
+source claimant; provider traffic remained local. The full article and Agentic OS architecture remain in progress.
