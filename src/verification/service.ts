@@ -10,7 +10,8 @@ import type { Library } from '../workspace/library.ts'
 import type { LibraryActor, LibraryRead } from '../workspace/library-model.ts'
 import { WorkspaceError } from '../workspace/model.ts'
 import type { RemoteWorld } from '../remote/world.ts'
-import { Rpc, type EndpointIdentity, type OutputWindow, type RemoteJob } from '../remote/protocol.ts'
+import { Rpc, Operations, type EndpointIdentity, type OutputWindow, type RemoteJob } from '../remote/protocol.ts'
+import { worldBinding } from '../remote/world-journal.ts'
 import { fingerprint, inside, timestamp } from '../remote/journal.ts'
 import { OwnershipStamp } from '../ownership/protocol.ts'
 import { BubblewrapIsolation, type ExecutionIsolation } from '../remote/isolation.ts'
@@ -32,6 +33,10 @@ interface Host {
 type Actor = Exclude<LibraryActor, { role: 'router' }>
 type Driver = { world?: RemoteWorld; isolation?: ExecutionIsolation; binding: CheckRun['backend'] }
 const operator: Actor = { role: 'operator' }, evidenceOf = (run: StoredCheckRun) => run.receipt?.verification ?? run.evidence
+const grantStatus = z.object({ authorized: z.boolean(), grant: z.object({ id: z.string(), owner: z.string(), workspace: z.string(), root: z.string(),
+  rootIdentity: z.string(), operations: z.array(Operations), epoch: z.number().int().positive(), revision: z.number().int().positive(), enabled: z.boolean(),
+  leaseUntil: z.number().finite(), createdAt: z.string().datetime(), updatedAt: z.string().datetime(),
+  credentials: z.array(z.object({ id: z.string(), version: z.string(), variable: z.string(), mode: z.enum(['env', 'file']) }).strict()).optional() }).strict() }).strict()
 const outcome = z.object({ exitCode: z.number().int().nullable(), signal: z.string().nullable() }).strict()
 const receiptSchema = z.object({ id: z.string(), grantId: z.string(), epoch: z.number().int().positive(), revision: z.number().int().positive(), fingerprint: z.string(),
   phase: z.enum(['accepted', 'started', 'settled', 'unknown']), createdAt: z.string().datetime(), updatedAt: z.string().datetime(),
@@ -120,7 +125,7 @@ export class Verification {
     if (capture.status !== 'captured' || capture.quiescent !== true || capture.purpose !== 'freshness' || !this.completed(capture, evidence)
       || !evidence?.snapshot || !evidence.finishedAt || capture.backend.binding !== selected.backend.binding
       || capture.backend.source !== selected.backend.source || capture.backend.grantId !== selected.backend.grantId
-      || capture.backend.epoch !== selected.backend.epoch || capture.backend.revision !== selected.backend.revision
+      || capture.backend.epoch !== selected.backend.epoch || capture.backend.revision < selected.backend.revision
       || evidence.snapshot.hash !== binding.snapshotHash || evidence.confinement !== binding.confinement)
       throw new WorkspaceError(409, 'The original source has no matching complete freshness capture')
     const at = Date.parse(evidence.snapshot.capturedAt)
@@ -188,8 +193,12 @@ export class Verification {
       if (location.environment?.world !== status.binding || !inside(world.grant.root, location.directory)) throw new WorkspaceError(409, 'Original execution world differs from the artifact binding')
       const target = z.object({ displayPath: z.string().min(1) }).parse(await world.executionClient().call({ op: 'fs.resolve', path: location.directory }, this.stopped.signal))
       if (!inside(world.grant.root, target.displayPath)) throw new WorkspaceError(409, 'Original source resolves outside its execution grant')
+      // A renewable lease advances revision without replacing the original authority generation or source binding.
+      const current = grantStatus.parse(await world.executionClient().call({ op: 'grant.status' }, this.stopped.signal))
+      if (!current.authorized || !current.grant.enabled || current.grant.leaseUntil <= Date.now() || worldBinding(status.endpointId, current.grant) !== status.binding)
+        throw new WorkspaceError(409, 'Original execution grant is unavailable or changed')
       return { world, binding: { kind: 'remote', binding: status.binding, source: target.displayPath, endpointId: status.endpointId, grantId: status.grantId, epoch: status.epoch,
-        revision: world.grant.revision, confinement: check.definition.confinement } }
+        revision: current.grant.revision, confinement: check.definition.confinement } }
     }
     if (location.environment?.world || !this.host.localAllowed()) throw new WorkspaceError(409, 'Original remote execution cannot fall back to the coordinator host')
     const isolation = check.definition.confinement === 'linux-bubblewrap' ? new BubblewrapIsolation(this.host.subprocess) : new HostProcessIsolation()
@@ -319,6 +328,8 @@ export class Verification {
   async refresh(id: string, actor: Actor = operator): Promise<CheckRun> {
     const run = this.require(id, actor)
     if (run.backend.kind === 'local') return view(run)
+    // A definitive pre-dispatch refusal has no endpoint command to observe; preserve its actual admission error.
+    if (run.status === 'failed' && run.quiescent === true && !run.receipt) return view(run)
     try {
       const world = this.host.remote(run.execution)
       if (!world || world.status().binding !== run.backend.binding) throw new Error('Original execution world is unavailable; no replacement is selected')

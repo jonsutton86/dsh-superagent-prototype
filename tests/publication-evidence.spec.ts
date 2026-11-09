@@ -9,11 +9,12 @@ import { CoordinatorOwnership } from '../src/ownership/lease.ts'
 import { Publications } from '../src/publication/runtime.ts'
 import { PublicationClient } from '../src/publication/client.ts'
 import { PublicationError, type Publication, type PublicationReceipt, type PublicationRpc } from '../src/publication/protocol.ts'
+import { RemoteError } from '../src/remote/protocol.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { for (const dispose of cleanup.splice(0).reverse()) await dispose(); vi.restoreAllMocks() })
-async function fixture(native = false) {
-  const h = await verificationFixture(cleanup, native), authority = await ownershipAuthority(cleanup), owner = new CoordinatorOwnership(authority.config)
+async function fixture(native = false, remoteHost = false) {
+  const h = await verificationFixture(cleanup, native, remoteHost), authority = await ownershipAuthority(cleanup), owner = new CoordinatorOwnership(authority.config)
   const publisher = await publicationFixture(cleanup, authority.resource, owner)
   cleanup.push(() => owner.close()); await owner.start()
   const host = { store: h.store, library: h.library, lifetime: h.lifetime.signal, roots: () => [h.source], ownership: owner,
@@ -121,16 +122,32 @@ it('rechecks freshness after provider preparation and preserves an expired origi
   } finally { release(); h.publisher.holdPrepare() }
 })
 
-it.runIf(process.env.DSH_REMOTE_ISOLATION === '1')('accepts and publishes using real Linux source captures and preserves original receipts across endpoint restart', async () => {
-  const h = await fixture(true), mission = h.ready(), action = mission.actions[0]!
+it.each([false, ...(process.env.DSH_REMOTE_ISOLATION === '1' ? [true] : [])])('accepts and publishes across original-world lease renewal and endpoint restart (native: %s)', async native => {
+  const h = await fixture(native, !native), mission = h.ready(), action = mission.actions[0]!
+  await h.remote!.client.intent({ op: 'grant.renew', requestId: randomUUID(), revision: h.checked.run.backend.revision, leaseMs: 300000 })
   const accepted = await h.workspace.actReviewed(mission.id, action.id, { requestId: randomUUID(), revision: mission.revision, command: 'complete',
     ticketRevision: action.ticket!.revision, text: 'Checked the actual confined output', reviewKind: 'checks', checks: h.approval.checks })
-  expect(accepted.actions[0]!.accepted?.evidence?.[0]?.confinement).toBe('linux-bubblewrap')
+  expect(accepted.actions[0]!.accepted?.evidence?.[0]?.confinement).toBe(native ? 'linux-bubblewrap' : 'host-process')
+  expect(h.verification.get(accepted.actions[0]!.accepted!.evidence![0]!.capture.id).backend.revision).toBe(h.checked.run.backend.revision + 1)
   const sent = await h.publications.publish(h.artifact.id, h.approval)
-  expect(sent.receipt).toMatchObject({ phase: 'sent', artifact: { basis: 'checks', evidence: [{ confinement: 'linux-bubblewrap' }] } })
+  expect(sent.receipt).toMatchObject({ phase: 'sent', artifact: { basis: 'checks', evidence: [{ confinement: native ? 'linux-bubblewrap' : 'host-process' }] } })
   expect(h.remote!.endpoint.journal.jobs()).toHaveLength(3)
   await h.remote!.restart()
   expect((await h.publications.retry(h.approval.requestId)).receipt).toEqual(sent.receipt)
   expect(h.workspace.get(mission.id).actions[0]!.accepted).toEqual(accepted.actions[0]!.accepted)
   expect(h.remote!.endpoint.journal.jobs()).toHaveLength(3); expect(h.publisher.posts).toBe(1)
+})
+
+it('preserves a definitive remote admission refusal instead of overwriting it with a missing-command observation', async () => {
+  const h = await fixture(false, true), rpc = h.remote!.endpoint.rpc.bind(h.remote!.endpoint), requestId = randomUUID()
+  vi.spyOn(h.remote!.endpoint, 'rpc').mockImplementation(async (principal, input, proof) => {
+    const request = input as { op: string; requestId?: string }
+    if (request.op === 'job.spawn' && request.requestId === requestId) throw new RemoteError(409, 'stale_revision', 'Grant revision changed before dispatch')
+    return rpc(principal, input, proof)
+  })
+  await h.verification.request(h.artifact.id, { requestId, artifactHash: h.artifact.hash, artifactRevision: h.artifact.revision,
+    check: { id: h.checked.definition.id, version: 1 } })
+  await vi.waitFor(() => expect(h.verification.get(requestId)).toMatchObject({ status: 'failed', quiescent: true, problem: 'Grant revision changed before dispatch' }))
+  expect(await h.verification.refresh(requestId)).toEqual(h.verification.get(requestId))
+  expect(h.remote!.endpoint.journal.jobs().some(job => job.id === requestId)).toBe(false)
 })

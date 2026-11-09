@@ -11,6 +11,10 @@ The host derives each selectable evidence hash from the original artifact, immut
 environment and canonical source, captured manifest, execution outcome, complete output digests and completion times.
 Clients supply only original run IDs and these hashes. The host revalidates check authority, current artifact revision and
 hash, original execution availability, successful outcome and quiescence. A model claim or capture-only result cannot pass.
+Remote admission reads the current grant revision from the original endpoint. Lease renewal may advance that revision
+while preserving the original grant generation, root, owner, permissions and credential bindings. Captures permit this
+renewal without rebinding the artifact; replacement authority still refuses. A concurrent renewal after admission can
+refuse a dispatch, whose original admission error is preserved instead of being overwritten by a missing-command lookup.
 
 Before a new approval commits, a durable review records the selected checks, approval target and original capture IDs.
 Checks sharing the same backend and snapshot use one source capture. Each capture compares the original source against
@@ -78,6 +82,19 @@ execution. Native Linux qualification covers confined checks, mission acceptance
 endpoint restart. The installed-Harness scenarios are extended to accept actual DeepSeek-produced artifacts using these
 checks and to publish selected evidence through the independent service. Qualification results are recorded below after
 execution; these scenario definitions alone do not establish a pass.
+
+Runtime/test revision `b364e902b43b60520eca35fefafdcfb707b8724e` passed the complete local `pnpm check`: 1,780 tests,
+typechecking and all five builds, with the test run finishing in 108.78 seconds. The installed-Harness / DeepSeek Flash
+dedicated scenario passed in 55.96 seconds. It created the actual file and artifact through the model, ran the host check,
+accepted the mission result using a fresh original-source capture, and preserved the acceptance and original receipts
+across restart. The same revision passed 1,785 Linux / Node 24 tests with native confinement, typechecking and all five
+builds in [run 42620103977](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42620103977), with tests
+finishing in 202.89 seconds. This includes actual Linux checks, capture-bound mission acceptance, independently journaled
+artifact publication and unchanged original receipts after endpoint restart. The owned dedicated live scenario also
+passed on this revision. The owned managed run exposed use of the initial grant revision after lease renewal; that run
+failed before check dispatch, without publishing an unchecked artifact. The follow-up fixes current-revision admission
+and renewal-compatible freshness seals, with deterministic renewal and preserved-refusal regressions. Final requalification
+results remain pending here until those runs finish.
 
 Exact remote PR-head binding, PR approval/merge, repository workflows, continuous freshness, whole-mission final capture,
 retention/scaling and the remaining article implementation (`IMPLEMENTATION.md`) and [Agentic OS](010-agentic-os.md) scope

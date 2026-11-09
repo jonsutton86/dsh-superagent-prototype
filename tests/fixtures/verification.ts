@@ -2,7 +2,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { LocalSubprocessRuntime } from '@deepseek-ai/dsh-subprocess-local'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { expect, vi } from 'vitest'
 import { Store } from '../../src/app/store.ts'
@@ -19,21 +19,27 @@ import type { CheckRun } from '../../src/verification/contracts.ts'
 import { remoteFixture } from './remote.ts'
 import { RemoteWorld } from '../../src/remote/world.ts'
 import type { ExecutionLocation } from '../../src/core/model.ts'
+import { HostProcessIsolation } from '../../src/verification/local.ts'
 
 /** Real Store, Engine and Harness subprocesses; fixture files stand in for model-authored outputs. */
-export async function verificationFixture(cleanup: (() => Promise<unknown>)[], native = false) {
+export async function verificationFixture(cleanup: (() => Promise<unknown>)[], native = false, remoteHost = false) {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-evidence-review-')), ctx = new Context()
   let source = join(directory, 'source')
   await mkdir(source)
   const store = new Store(join(directory, 'store.sqlite')), library = new Library(store), lifetime = new AbortController(), subprocess = new LocalSubprocessRuntime(ctx)
   cleanup.push(async () => { store.close(); await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }) })
-  const remote = native ? await remoteFixture(cleanup, { native: true }) : undefined
+  const remote = native || remoteHost ? await remoteFixture(cleanup, { native }) : undefined
+  if (remote && !native) {
+    remote.host.isolation = new HostProcessIsolation(); remote.host.snapshotHelper = resolve('src/verification/snapshot-worker.ts')
+    // Permit protocol composition on non-Linux fixtures; actual check evidence must still say host-process.
+    vi.spyOn(remote.endpoint, 'identity').mockReturnValue({ ...remote.endpoint.identity(), confinement: 'linux-bubblewrap' })
+  }
   const world = remote && new RemoteWorld({ ...remote.client.connection, stateDir: join(directory, 'remote-world') })
   if (world) { cleanup.push(() => world.close()); await world.start(); source = world.grant.root }
   const environment = world && { environmentId: 'remote-fixture', epoch: world.grant.epoch, revision: world.grant.revision, world: world.status().binding }
   let offset = 0, engine: Engine
   const verifyHost = { store, library, stateDir: directory, subprocess, lifetime: lifetime.signal, authorize: () => {},
-    allowed: () => true, localAllowed: () => !native, remote: (location: ExecutionLocation) => location.environment?.world === environment?.world ? world : undefined }
+    allowed: () => true, localAllowed: () => !remote, remote: (location: ExecutionLocation) => location.environment?.world === environment?.world ? world : undefined }
   const verification = new Verification(verifyHost), reviewHost = { store, verification, lifetime: lifetime.signal, authorize: () => {}, now: () => Date.now() + offset }
   const reviews = new VerificationReviews(reviewHost), missionReviews = new MissionReviews(store, library, verification, reviews)
   cleanup.push(async () => { await reviews.stop(); await verification.stop() })
