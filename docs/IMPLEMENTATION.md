@@ -38,8 +38,9 @@ Feishu, review-thread replies, git/PR mutations, automatic mandate-bound deliver
 and clean-host activation/failover remain open. The full article and product scope is unchanged.
 
 Local qualification on 2026-11-08: 1,418 tests, typechecking and all four builds passed. Both owned installed-Harness
-DeepSeek Flash scenarios also passed, including independent publication plugin loading and restart. Native Linux
-qualification follows on the committed revision.
+DeepSeek Flash scenarios also passed, including independent publication plugin loading and restart. Exact code revision
+`fd058c95ad6046751fd0429a6046c1bb1e151316` passed 1,420 native Linux tests, typechecking and all four builds in
+[run 42540908750](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42540908750).
 
 ## Implemented increment: Runtime ownership
 

@@ -154,4 +154,7 @@ composition and recovery behavior, not a live GitHub account deployment or brows
 
 On 2026-11-08, `pnpm check` passed typechecking, 1,418 tests (7 opt-in tests skipped) and all four builds on Node 25.9.0.
 Both owned installed-Harness/DeepSeek Flash scenarios passed separately in 191.34 seconds, including the dedicated
-publication plugin restart. Native Linux results are recorded with the exact committed revision after CI completes.
+publication plugin restart. Exact code revision `fd058c95ad6046751fd0429a6046c1bb1e151316` also passed typechecking,
+all four builds and 1,420 tests (5 opt-in tests skipped) with native Linux confinement in
+[run 42540908750](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42540908750).
+This is increment qualification; external account deployment and the remaining architecture are still open.

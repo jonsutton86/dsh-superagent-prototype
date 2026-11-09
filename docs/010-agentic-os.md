@@ -203,3 +203,8 @@ Artifact delivery increment: `026-artifact-publication.md` adds an independent H
 artifact/destination approval, private account credentials, durable original-ID receipts and unknown-outcome ownership
 barriers. The library UI reviews full text and recovers original requests. Feishu, Source Outbox and repository mutations,
 automatic mandate-based publication, host verification and restored-state activation remain in the implementation ledger.
+
+Artifact delivery qualification: code `fd058c95ad6046751fd0429a6046c1bb1e151316` passed 1,418 local tests, both owned
+installed-Harness model scenarios including the separate publication plugin, and 1,420 native Linux tests in
+[run 42540908750](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42540908750).
+Typechecking and all four builds passed. No real external messages were sent during qualification.
