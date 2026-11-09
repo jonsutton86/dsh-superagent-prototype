@@ -17,6 +17,7 @@ export { exportSession, inspectSession, importSession, ownSessions, withVerified
 export { prepareCheckpointReceipts, type PrepareCheckpointReceipts, type ReceiptPreparation } from './prepare.ts'
 export { verifyReceiptImage, type ReceiptImage } from './image.ts'
 export { type RecoveryWorldConnection } from './configuration.ts'
+export { inferenceConfigurationCheck, type RecoveryInferenceHost, type InferenceConfigurationVerification } from './inference.ts'
 export const name = 'dsh-superagent-recovery'
 export const inject = ['sessionPersistence']
 const authority = s.object({ url: s.string().required(), authorityId: s.string().required(), coordinatorId: s.string().required(), credentialFile: s.string().pattern(/^\//).required(),
@@ -55,7 +56,12 @@ export async function apply(ctx: Context, config: RecoveryConfig): Promise<void>
   } else if (config.mode === 'prepare-receipts') {
     if (!config.audit || !config.preparation) throw new Error('Receipt preparation requires resource connections and the selected audit/request IDs')
     prepared = await prepareCheckpointReceipts({ ...config.audit, ...config.preparation, checkpoint: required(config.checkpoint, 'checkpoint'), keyFile: config.keyFile,
-      destination: required(config.destination, 'destination'), persistence: ctx.sessionPersistence, signal: abort.signal })
+      destination: required(config.destination, 'destination'), persistence: ctx.sessionPersistence, signal: abort.signal,
+      inference: { get llm() { return ctx.llm }, get projections() { return ctx.sessionProjections }, currentSelection: () => {
+        const defaults = ctx.get('agentDefaultModel') as { currentSelection(): unknown } | undefined
+        if (!defaults) throw new Error('Recovery requires the Harness default model service')
+        return defaults.currentSelection()
+      } } })
     checkpoint = prepared.manifest.checkpoint; path = prepared.path
     ctx.logger.info('Checkpoint %s receipts prepared in a separate authenticated image; execution remains held', checkpoint)
   } else if (config.mode === 'audit-receipts') {

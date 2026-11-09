@@ -460,6 +460,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/recovery/state.ts` | Incremental logical SQLite comparison of held and authenticated state, excluding only hold/reservation/audit metadata |
 | `src/recovery/sessions.ts` | Public Harness logical export/import and exact destination-backend verification under held Session writers |
 | `src/recovery/control.ts` | Original recovery claimant, coordinator publication credential and pinned provider account/target verification without execution |
+| `src/recovery/inference.ts` | Public Harness cold model-selection projection and bounded, history-free recovery inference probes |
 | `src/recovery/crypto.ts` | Private inputs, separate key files and streaming authenticated checkpoint encryption |
 | `src/remote/scoped-plugin.ts` | Harness preset-owned paired providers borrowing one managed execution world |
 | `src/client/provider.tsx` | What every page reads from its host: copy, calls, navigation, notices, the state poll, and `restart`, which reads the state quickly while dsh-superagent restarts |
@@ -509,6 +510,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/remote-harness.spec.ts` | Opt-in installed Harness qualification with a configured model, remote artifacts, restart, maintenance-plugin checkpoint/import/reservation and ownership-authority process handoff |
 | `tests/recovery.spec.ts` | Official JSONL round trips, exclusive ownership, corruption/cancellation refusal, fork imports, held restore, original reservation retries, competing restores and preserved remote receipts |
 | `tests/recovery-audit.spec.ts` | Real HTTP receipt inventories, late effects, original observations, revoked worlds, missing/mismatched resources, revision races, restart, cancellation, authenticated receipt preparation, interruption/retry, tamper refusal, historical administrative and lost-revocation recovery, credential binding comparison and retained restore holds |
+| `tests/recovery-inference.spec.ts` | Effective model selection, role/persona routes, bounded streams, cancellation, sanitized failures and repeated inference preflight |
 | `tests/remote-ownership.spec.ts` | Pre-dispatch persistence, concurrent attribution, lost responses, assignment fences, restart/cancel recovery and receipt mismatch refusal |
 | `tests/ownership.spec.ts` | Competing coordinators, all-resource barriers, claimant replacement/supersession, monotonic expiry/restart, endpoint handoff/outage and immutable receipt generations |
 | `tests/ownership-runtime.spec.ts` | Profile compatibility, owned Runtime startup/loss, managed command attribution, competing writers, startup cleanup and held-restore refusal |

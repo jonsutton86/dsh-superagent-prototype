@@ -25,6 +25,19 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: recovery inference verification
+
+`037-inference-configuration-recovery.md` adds required Harness inference checks to new held receipt preparation.
+Authenticated settings and Session history select effective current routes through the public cold model-selection projection;
+queued persona and current role defaults are included. A bounded history-free, tool-free probe runs through the actual
+Harness provider path twice, with safe failure codes and signed count/configuration-digest evidence. Missing inference,
+changed defaults, unusable streams and failed final probes preserve the hold. Original-ID retries remain historical and
+older signed images remain readable without claiming new evidence.
+
+This verifies the selected restore host, including its middleware. It does not establish an uncaptured source default or
+private adapter endpoint/account identity. Source configuration, authoritative-state reconciliation, remapping, coordinated
+activation and clean-host failover remain open, alongside every other article/product requirement below.
+
 ## Implemented increment: control credentials and publisher configuration
 
 [036 Control configuration](036-control-configuration-recovery.md) verifies the reserved ownership claimant and the

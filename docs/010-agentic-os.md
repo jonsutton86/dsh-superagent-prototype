@@ -338,3 +338,10 @@ Both owned installed-Harness / DeepSeek Flash scenarios passed in 224.07 seconds
 coordinator-publisher authentication, provider account/target preflight and the signed control summary in held preparation.
 Provider-message traffic stayed local; the original app remained running. Broader configuration, authoritative state and
 restored activation remain open.
+
+Inference configuration recovery: `037-inference-configuration-recovery.md` makes new held preparation check effective
+Session, queued persona and role model routes through Harness. Bounded history-free inference probes run before preparation
+and before publication; safe signed evidence records counts and configuration digests. Failures preserve the execution hold.
+These are observations of the selected restore host's inference path, including its middleware, not proof of uncaptured
+source-host settings or future availability. Source/connector configuration, authoritative state, remapping, restored activation
+and clean-host failover remain open alongside the full article/product scope.

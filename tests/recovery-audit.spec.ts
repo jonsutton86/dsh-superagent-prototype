@@ -1,4 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
+import { inferenceFixture } from './fixtures/inference.ts'
 import Jsonl from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { MessageId } from '@deepseek-ai/dsh-llm'
@@ -64,6 +65,7 @@ async function fixture(options: { administration?: boolean; credential?: boolean
   const stateDir = join(directory, 'state'), worldDir = join(directory, 'world'), keyFile = join(directory, 'key')
   await mkdir(stateDir, { mode: 0o700 }); createRecoveryKey(keyFile)
   const context = new Context(); cleanup.push(() => context.fiber.dispose())
+  const inference = await inferenceFixture(context)
   await context.plugin(Jsonl, { root: join(directory, 'sessions'), compression: 'none' })
   const writer = await context.sessionPersistence.create(Session.create(SessionId('audit-master')).header)
   await writer.append([{ type: 'user/message', seq: SessionSeq(0), time: 0, surfaceOp: 'append', data: { role: 'user', id: MessageId('audit-start'),
@@ -165,12 +167,12 @@ async function fixture(options: { administration?: boolean; credential?: boolean
   const connection = { ...authority.admin.connection, coordinatorId: 'coordinator' }
   const reserved = await reserveCheckpointOwnership({ checkpoint: checkpoint.path, keyFile, destination: held, authority: connection,
     requestId: randomUUID(), epoch: 1, generation: 0 })
-  const audit = { checkpoint: checkpoint.path, keyFile, destination: held, authority: connection, persistence: context.sessionPersistence,
+  const audit = { checkpoint: checkpoint.path, keyFile, destination: held, authority: connection, persistence: context.sessionPersistence, inference: inference.host,
     endpoints: [{ ...remote.connection, ownership: undefined, credentialFile: await realpath(remote.connection.credentialFile) }], publication: publisher.admin.config,
     worlds: [{ binding: worldBinding(remote.connection.endpointId, remote.enrolled.grant), endpointId: remote.connection.endpointId, url: remote.url,
       credentialFile: await realpath(remote.client.connection.credentialFile) }] }
   const read = () => { const store = new Store(join(held, 'orchestrator.sqlite')); try { return { report: store.get(KV.recovery.audit), hold: store.get(KV.recovery.hold) } } finally { store.close() } }
-  return { directory, checkpoint, reserved, audit, authority, remote, publisher, publication, job: settled, written, channel, importedCredential, read }
+  return { directory, checkpoint, reserved, audit, authority, remote, publisher, publication, job: settled, written, channel, importedCredential, inference, read }
 }
 
 it.each(['github-comment', 'github-review', 'feishu-reply'] as const)('matches authentic execution and %s receipts without payloads, replay or removing the hold', async kind => {
@@ -255,7 +257,13 @@ it.each(['unsent', 'missing', 'fingerprint', 'epoch', 'history', 'generation', '
     const grant = f.remote.endpoint.journal.grant(f.remote.enrolled.grant.id)
     f.remote.endpoint.journal.saveGrant({ ...grant, ...(mode === 'generation' ? { epoch: grant.epoch + 1 } : { owner: 'changed-owner' }) })
   }
-  if (mode === 'unsettled') f.remote.endpoint.journal.saveJob({ ...f.remote.endpoint.journal.job(f.job.id), quiescent: null })
+  if (mode === 'unsettled') {
+    f.remote.endpoint.journal.saveJob({ ...f.remote.endpoint.journal.job(f.job.id), quiescent: null, cancelRequested: true })
+    const save = vi.spyOn(f.remote.endpoint.journal, 'saveJob')
+    // Observe more than two ownership-monitor polls: an already requested cancellation must remain revision-stable.
+    await new Promise(resolve => setTimeout(resolve, 1100))
+    expect(save).not.toHaveBeenCalled()
+  }
   const audit = await auditCheckpointReceipts(f.audit)
   expect(audit.status).toBe('blocked')
   expect(audit.issues).toContainEqual({ code: ['unsent', 'missing'].includes(mode) ? 'revocation_missing' : 'revocation_mismatch',
@@ -706,6 +714,7 @@ it('keeps the originally selected audit and request after an offline failure and
   const store = new Store(join(f.audit.destination, 'orchestrator.sqlite'))
   try { const intent = store.get(KV.recovery.preparation)!; intent.phase = 'requested'; delete intent.image; store.set(KV.recovery.preparation, intent) } finally { store.close() }
   f.remote.offline(true)
+  f.inference.unregister()
   expect(await prepareCheckpointReceipts(options)).toEqual(prepared)
   expect(f.read().hold?.state).toBe('staged')
 })
@@ -770,13 +779,23 @@ it.each(['manifest', 'member', 'extra'] as const)('refuses a tampered prepared %
 it('authenticates older held image manifests without treating absent configuration or Session evidence as a new verification', async () => {
   const f = await fixture(), audit = await auditCheckpointReceipts(f.audit)
   const prepared = await prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })
-  const { sessionBackend: _, controlConfiguration: __, ...manifest } = prepared.manifest, key = recoveryKey(f.audit.keyFile)
+  const { sessionBackend: _, controlConfiguration: __, inferenceConfiguration: ___, ...manifest } = prepared.manifest, key = recoveryKey(f.audit.keyFile)
   try {
     const mac = createHmac('sha256', key).update('dsh-receipt-image:1\n').update(JSON.stringify(manifest)).digest('hex')
     await writeFile(join(prepared.path, 'prepared.json'), JSON.stringify({ manifest, mac }))
   } finally { key.fill(0) }
   const verified = await verifyReceiptImage(prepared.path, f.audit.keyFile)
   expect(verified).toEqual(manifest); expect(verified.sessionBackend).toBeUndefined(); expect(verified.controlConfiguration).toBeUndefined(); expect(verified.executionOwnership).toBe(false)
+  expect(verified.inferenceConfiguration).toBeUndefined()
+})
+
+it.each(['before', 'during'] as const)('retains the restore hold when inference fails %s preparation', async when => {
+  const f = await fixture(), audit = await auditCheckpointReceipts(f.audit)
+  if (when === 'before') f.inference.unregister()
+  else f.inference.adapter.before = async () => { if (f.inference.adapter.calls.length === 2) throw new Error('synthetic-provider-secret') }
+  await expect(prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })).rejects.toThrow('configuration_unavailable')
+  expect((await readdir(f.audit.destination)).some(name => name.startsWith('prepared-') || name.startsWith('.prepare-'))).toBe(false)
+  expect(f.read().hold?.state).toBe('staged'); expect(f.publisher.posts).toBe(1)
 })
 
 it('reconciles all seven original administrative actions without resending or adopting newer grants and credentials', async () => {

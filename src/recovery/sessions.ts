@@ -65,7 +65,8 @@ export async function inspectSession(file: string, expected: SessionArchive, sig
   await scanSession(file, expected, signal)
 }
 
-async function scanSession(file: string, expected: SessionArchive, signal: AbortSignal,
+/** Visit bounded validated pages, then authenticate the entire archive; callers must discard results if this rejects. */
+export async function scanSession(file: string, expected: SessionArchive, signal: AbortSignal,
   visit?: (events: SessionEvent[], offset: number) => Promise<void>): Promise<void> {
   let count = 0, bytes = 0, metadata = false
   let pending: SessionEvent[] = []

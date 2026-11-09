@@ -370,9 +370,11 @@ export class RemoteEndpoint {
     }
   }
   private cancel(job: RemoteJob): RemoteJob {
+    const changed = !job.cancelRequested || job.phase === 'accepted'
     job.cancelRequested = true
     if (job.phase === 'accepted') { job.phase = 'settled'; job.quiescent = true; job.error = 'Cancelled before process dispatch' }
-    this.journal.saveJob(job)
+    // Repeated fencing must keep terminating a live process without inventing new receipt revisions for unchanged state.
+    if (changed) this.journal.saveJob(job)
     try { this.live.get(job.id)?.terminate() } catch { /* Unknown range remains visibly unresolved. */ }
     return job
   }
