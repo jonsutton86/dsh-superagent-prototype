@@ -34,6 +34,14 @@ and resumes from its original reservation after restart. The Schedules page expo
 blocked dispatch retry and mission links. Reflection proposals, provider spend budgets, retention, multi-workspace ownership,
 restored activation and the remaining full architecture/product requirements remain open.
 
+Schedule code `a9371423fb5b12c63a430fb7e42aef7829e60128` passed 1,679 local tests, typechecking and all four builds.
+The same code passed 1,681 tests with native Linux confinement, typechecking and all builds in
+[run 42578515463](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42578515463).
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 235.73 seconds, including an actual scheduled worker,
+independent file/artifact checks and restart deduplication before and after execution. The focused run passed 40 tests.
+The existing app stayed running. Reflection proposals, provider usage/spend budgets, retention, multi-workspace ownership,
+restored activation, voice and the rest of the full architecture/product ledger remain open.
+
 ## Implemented increment: pending input recovery across all current kinds
 
 [040 Pending inputs](040-pending-input-recovery.md) extends accepted/read acknowledgement tracking to policy changes,

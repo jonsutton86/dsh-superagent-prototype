@@ -401,3 +401,14 @@ Both owned installed-Harness / DeepSeek Flash scenarios passed in 213.61 seconds
 Store non-trigger read acknowledgements against authenticated worker history and preserved original-ID image retries.
 The dedicated case retained its expected unrecorded-publication refusal. Channel traffic stayed on fixture servers and
 the original app remained running. Full activation, failover and the remaining architecture/product scope remain open.
+
+Persistent schedules: `041-schedules.md` adds complete mission-plan snapshots, durable occurrence/run reservations,
+calendar/interval/one-off timing, DST handling, missed-run policies, run/open-mission limits and a bilingual operator page.
+Standing-authorization triggers remain distinct from new human messages; human actions and reviewed dependencies keep
+their existing gates. Schedule code `a9371423fb5b12c63a430fb7e42aef7829e60128` passed 1,679 local tests, typechecking
+and all builds, and 1,681 tests with native Linux confinement plus typechecking/builds in
+[run 42578515463](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42578515463).
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 235.73 seconds. A disabled schedule survived restart,
+its enabled occurrence produced independently checked file/artifact bytes, and a later restart preserved exactly one run
+and assignment. The focused run passed 40 tests. The original app remained running. Reflection proposals, spend accounting,
+multi-workspace ownership, restored activation, voice, packaging and the remaining full architecture/product scope stay open.

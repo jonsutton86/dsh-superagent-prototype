@@ -75,6 +75,17 @@ partial dispatch. Runtime/API and rendered-form tests cover global pause, lost H
 navigation. Installed-Harness qualification also exercises an actual scheduled worker, independent file/artifact checks,
 and real restarts before enabling and after completion. Results are recorded after these checks finish.
 
+Code `a9371423fb5b12c63a430fb7e42aef7829e60128` passed 1,679 local tests (seven skipped), typechecking and all
+four builds. The focused schedule/workspace/UI/localization/documentation run passed 40 tests. The same code passed
+1,681 tests (five skipped), typechecking and all builds with native Linux confinement in
+[run 42578515463](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42578515463).
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 235.73 seconds. The managed-world scenario preserved a
+disabled schedule across a real process restart, enabled it with idempotent command replay, ran its worker, independently
+verified exact file/artifact bytes, and restarted again with exactly one occurrence, run and assignment. Both scenarios
+also completed their held recovery checks. Channel-provider traffic stayed on fixture servers; inference used the actual
+configured API. The original app process remained running. The only added production dependency is the pinned Temporal
+polyfill and its pinned transitive dependency; existing Harness dependency resolutions were preserved.
+
 Overnight reflection can use a scheduled mission, but automatic context selection and durable reflection proposals are
 not yet implemented. Provider spend budgets, retention, multi-workspace ownership, cross-host restored activation,
 supervision UI, voice, packaging and the remaining full architecture/product requirements stay open. Browser layout and
