@@ -55,3 +55,13 @@ and stale registration, missing schemas, invalid configuration/policy, retained 
 reloads, changing defaults/settings and cancellation. Pipeline tests cover source failures before, during and after inference,
 signed summary authentication, old manifests and the retained hold. Installed-Harness qualification checks the real bundle's
 source catalog and signed source summary without sending external provider messages.
+
+Source-contract code `24fe27f7e172d40e2f47e03c618ced6e2e0c9bca` passed 1,656 local tests, typechecking and all four
+builds. The same code passed 1,658 tests with native Linux confinement, typechecking and all builds in
+[run 42572760163](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42572760163).
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 202.70 seconds. Managed recovery loaded the bundle's
+passive source catalog with the coordinator disabled, verified its signed source summary, and retrieved the same held image
+on retry. The dedicated case retained its expected refusal for unrecorded publication probes. Focused source/recovery tests
+passed 184 cases; bundle tests passed all three cases after their expected plugin list was updated. Provider-message traffic
+stayed local and the original app remained running. Deployment binding, authoritative pending-work/cursor reconciliation,
+supported activation, clean-host failover and the remaining architecture/product scope remain open.
