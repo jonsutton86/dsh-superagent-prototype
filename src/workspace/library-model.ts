@@ -1,5 +1,6 @@
 /** Immutable knowledge/artifact contracts. Scope and provenance are assigned by the host, never by a worker. */
 import { z } from 'zod'
+import type { ExecutionLocation } from '../core/model.ts'
 import type { Freshness } from './freshness.ts'
 
 export const LIBRARY_MAX_BYTES = 512 * 1024
@@ -39,6 +40,8 @@ export interface LibraryRecord {
   hash: string; bytes: number; createdAt: string; expiresAt?: string; text: boolean
   provenance: { actor: 'operator' | 'worker'; trust: 'operator_submission' | 'agent_submission'; ticketId?: string
     sessionId?: string; assignmentId?: string; triggerId?: string; triggerHash?: string }
+  /** Observed by the host at publication, never accepted from a model. Legacy records remain explicitly unbound. */
+  execution?: ExecutionLocation & { capturedAt: string; assignmentId: string; sessionId: string }
   reflectionReview?: { runId: string; proposalId: string; ticketId: string; assignmentId: string }
   sources: { id: string; relation: z.infer<typeof LibraryRelation>; hash: string }[]
 }

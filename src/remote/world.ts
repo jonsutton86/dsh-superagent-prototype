@@ -188,6 +188,8 @@ export class RemoteWorld {
   /** Trusted host scope is captured at tool/assignment dispatch, never reconstructed from worker arguments or environment text. */
   withOwner<T>(owner: EffectOwner, authorize: () => void, operation: () => T): T { return this.journal.effects.run(owner, authorize, operation) }
   effects(ticketId?: string, offset = 0, limit = 50) { return this.journal.effects.list(ticketId, offset, limit) }
+  /** Original-ID host observation without a paginated search or a replacement dispatch. */
+  executionReceipt(id: string) { return this.journal.effects.get(id) }
   quiescent(ticketId: string): boolean { return this.journal.effects.quiescent(ticketId) }
   /** Bounded read-only reconciliation; missing or conflicting receipts remain unknown, without automatic replacement dispatch. */
   async refreshEffects(): Promise<void> {

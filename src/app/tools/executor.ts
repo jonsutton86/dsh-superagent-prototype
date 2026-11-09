@@ -17,9 +17,12 @@ import { reflectionTools } from './reflection.ts'
 import type { Planning } from '../../workspace/plans.ts'
 import type { Personas } from '../../personas/service.ts'
 import type { WorldPool } from '../../environments/pool.ts'
+import type { Verification } from '../../verification/service.ts'
+import { verificationTools } from './verification.ts'
 
 export interface ExecutorToolsHost {
   readonly library: Library
+  readonly verification?: Verification
   readonly planning: Planning
   readonly reflections?: Reflections
   readonly personas?: Pick<Personas, 'list'>
@@ -37,6 +40,7 @@ export function executorTools(host: ExecutorToolsHost, ticket: Ticket): Tool[] {
   const ticketId = ticket.id, reflection = host.reflections?.forTicket(ticketId)
   return [
     ...reflection ? [] : libraryTools(host.library, { role: 'worker', ticketId }),
+    ...!reflection && host.verification ? verificationTools(host.verification, ticketId) : [],
     ...(reflection ? reflectionTools(host.reflections!, ticketId) : ticket.mandate.actor.source === 'workspace' ? planningTools(host.planning, ticketId, host.personas, host.worlds) : []),
     readTool('Read one page of a resource of this ticket that the resource parameter lists. Follow next_offset, and next_resource where a page names one.',
       true, (resource, offset, limit, signal) => readResource(host.resources, resource, offset, limit, ticketId, signal)),

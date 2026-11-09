@@ -17,6 +17,8 @@ import { worldBinding } from '../src/remote/world-journal.ts'
 import { qualifyPublication } from './fixtures/publication-harness.ts'
 import { qualifySchedules } from './fixtures/schedules.ts'
 import type { RemoteJob } from '../src/remote/protocol.ts'
+import { HostProcessIsolation } from '../src/verification/local.ts'
+import type { CheckRun } from '../src/verification/contracts.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { for (const dispose of cleanup.reverse()) await dispose(); cleanup.length = 0; vi.restoreAllMocks() })
@@ -169,25 +171,32 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     expect(ticket.executionPersona).toMatchObject({ id: persona.id, version: 1, digest: persona.digest, definition })
     expect(await readFile(join(ticket.directory, 'result.txt'), 'utf8')).toBe(proof)
     expect(artifact?.content).toBe(proof)
-    let verification: { client: RemoteClient; request: any; result: RemoteJob } | undefined
+    let verification: { request: any; result: CheckRun; capture: CheckRun; artifactId: string } | undefined
     if (!owned && mode === 'dedicated') {
-      // Host-authored check of an actual model-created artifact. No inference or service credential enters the check.
-      const connected = await endpoints.world(registration.id, enrollment.id), client = new RemoteClient(connected.config)
+      // Use the actual coordinator API, original artifact binding and production verification runner. Non-Linux
+      // qualification explicitly selects the real host-process implementation; native CI supplies Linux confinement.
       h.host.snapshotHelper = resolve('lib/verification-snapshot-worker.js')
-      const request = { op: 'job.spawn' as const, requestId: randomUUID(), revision: connected.grant.revision, cwd: ticket.directory,
-        owner: { kind: 'host' as const, purpose: 'qualification-artifact-check' }, env: {}, graceMs: 100,
-        argv: ['/bin/sh', '-c', 'test "$(cat result.txt)" = "$1" && test -z "${SERVICE_API_KEY:-}" && printf verified', 'check', proof],
-        verification: { kind: 'check' as const, artifact: { path: 'result.txt', hash: artifact.hash } } }
-      await client.intent(request)
-      let result: RemoteJob | undefined
-      await vi.waitFor(async () => {
-        result = await client.call<RemoteJob>({ op: 'job.get', id: request.requestId }); expect(result.quiescent).toBe(true)
-      }, { timeout: 10000 })
-      expect(result, result?.error).toMatchObject({ phase: 'settled', outcome: { exitCode: 0 }, verification: { kind: 'check', stage: 'finished',
-        artifactHash: artifact.hash, snapshotUnchanged: true, storageReleased: true, output: { stdout: { bytes: 8 } } } })
-      expect(result!.credentials).toBeUndefined()
-      expect(result!.verification!.snapshot!.source).toBe(ticket.directory)
-      verification = { client, request, result: result! }
+      const previousIsolation = h.host.isolation
+      if (!native) h.host.isolation = new HostProcessIsolation()
+      try {
+        const check = await api('checks', { requestId: randomUUID(), enabled: true, definition: { name: 'Live artifact proof', description: 'Check exact bytes without service credentials',
+          argv: ['/bin/sh', '-c', 'test "$(cat result.txt)" = "$1" && test -z "${SERVICE_API_KEY:-}" && printf verified', 'check', proof],
+          artifactPath: 'result.txt', confinement: native ? 'linux-bubblewrap' : 'host-process' } })
+        const request = { requestId: randomUUID(), check: { id: check.id, version: check.version }, artifactRevision: artifact.revision, artifactHash: artifact.hash }
+        await api(`library/${artifact.id}/verification`, request)
+        let result!: CheckRun
+        await vi.waitFor(async () => { result = await api(`verification/${request.requestId}/refresh`, {}); expect(result.quiescent).toBe(true) }, { timeout: 10000 })
+        expect(result, result.problem).toMatchObject({ status: 'passed', outcome: { exitCode: 0 }, owner: { kind: 'assignment', assignmentId: artifact.provenance.assignmentId },
+          evidence: { kind: 'check', stage: 'finished', confinement: native ? 'linux-bubblewrap' : 'host-process', artifactHash: artifact.hash,
+            snapshotUnchanged: true, storageReleased: true, output: { stdout: { bytes: 8 } } } })
+        expect(result.evidence!.snapshot!.source).toBe(ticket.directory)
+        const captured = await api(`verification/${result.id}/freshness`, { requestId: randomUUID() }); let capture!: CheckRun
+        await vi.waitFor(async () => { capture = await api(`verification/${captured.id}/refresh`, {}); expect(capture.quiescent).toBe(true) }, { timeout: 10000 })
+        expect(capture).toMatchObject({ status: 'captured', sourceCheckId: result.id, evidence: { kind: 'capture', snapshot: { hash: result.evidence!.snapshot!.hash } } })
+        expect(capture.outcome).toBeUndefined()
+        const raw = h.endpoint.journal.job(result.id) as RemoteJob; expect(raw.credentials).toBeUndefined()
+        verification = { request, result, capture, artifactId: artifact.id }
+      } finally { h.host.isolation = previousIsolation }
     }
     let publicationId: string | undefined, channelDelivery: any, inboundRecord: any, inboundDelivery: any
     if (publisher) {
@@ -272,7 +281,12 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     }
     expect((await api(`tickets/${task.id}`)).executionEnvironment).toEqual(ticket.executionEnvironment)
     expect((await api(`tickets/${task.id}`)).executionPersona).toEqual(ticket.executionPersona)
-    if (verification) expect(await verification.client.intent(verification.request)).toEqual(verification.result)
+    if (verification) {
+      expect(await api(`library/${verification.artifactId}/verification`, verification.request)).toEqual(verification.result)
+      expect(await api(`verification/${verification.capture.id}`)).toEqual(verification.capture)
+      expect((await api(`verification/${verification.result.id}/refresh`, {})).evidence).toEqual(verification.result.evidence)
+      expect(h.endpoint.journal.jobs().filter(job => [verification.result.id, verification.capture.id].includes(job.id))).toHaveLength(2)
+    }
     expect((await api(runPath, request)).actions[0].runs).toEqual([task.id])
     expect((await api(`tickets/${task.id}`)).assignments).toHaveLength(publisher ? 2 : 1)
     expect((await api(`tickets/${task.id}/execution`)).items.find((item: { id: string }) => item.id === command!.id)).toMatchObject({

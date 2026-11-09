@@ -291,6 +291,21 @@ const ticketOf = (id: string) =>
 const SourceSave = z.object({ enabled: z.boolean(), config: z.unknown() })
 
 const ROUTES: { [K in keyof Api]: Route<K> } = {
+  'GET checks': { query: ['offset', 'limit'], answer: () => ({ items: [], nextOffset: null }) },
+  'POST checks': { body: true, answer: () => refuse(409, 'Check registry fixture not configured') },
+  'GET checks/:id': { answer: () => refuse(404, 'Check not found') },
+  'PUT checks/:id': { body: true, answer: () => refuse(409, 'Check registry fixture not configured') },
+  'POST checks/:id/authority': { body: true, answer: () => refuse(409, 'Check registry fixture not configured') },
+  'GET checks/:id/versions/:version': { answer: () => refuse(404, 'Check version not found') },
+  'GET library/:id/checks': { query: ['offset', 'limit'], answer: () => ({ items: [], nextOffset: null }) },
+  'GET library/:id/verification': { query: ['offset', 'limit'], answer: () => ({ items: [], nextOffset: null }) },
+  'POST library/:id/verification': { body: true, answer: () => refuse(409, 'Verification fixture not configured') },
+  'GET verification/:id': { answer: () => refuse(404, 'Verification not found') },
+  'GET verification/:id/output': { query: ['stream', 'offset', 'limit'], answer: () => refuse(404, 'Verification not found') },
+  'POST verification/:id/refresh': { answer: () => refuse(404, 'Verification not found') },
+  'POST verification/:id/cancel': { body: true, answer: () => refuse(409, 'Verification fixture not configured') },
+  'POST verification/:id/reconcile': { body: true, answer: () => refuse(409, 'Verification fixture not configured') },
+  'POST verification/:id/freshness': { body: true, answer: () => refuse(409, 'Verification fixture not configured') },
   'GET publication/destinations': { answer: () => ({ configured: false, items: [] }) },
   'GET missions/:id/delivery': { answer: () => ({ configured: false, current: false, items: [] }) },
   'GET missions/:id/inbound': { answer: () => ({ configured: false, active: false, items: [] }) },

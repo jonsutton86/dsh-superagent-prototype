@@ -7,7 +7,7 @@ export interface ExecutionIsolation {
   readonly name: string
   wrap(argv: readonly string[], root: string, cwd: string, network: boolean, signal: AbortSignal,
     env?: Record<string, string | null>, helper?: string, mounts?: readonly { source: string; target: string }[],
-    options?: { readOnly?: boolean; writableSnapshot?: string }): Promise<readonly string[]>
+    options?: { readOnly?: boolean; writableSnapshot?: string; temporaryDirectory?: string }): Promise<readonly string[]>
 }
 
 /** Linux process worlds expose only system runtime files and one granted workspace, never endpoint control state. */
@@ -18,7 +18,7 @@ export class BubblewrapIsolation implements ExecutionIsolation {
   }
   async wrap(argv: readonly string[], root: string, cwd: string, network: boolean, signal: AbortSignal,
     env: Record<string, string | null> = {}, helper?: string, mounts: readonly { source: string; target: string }[] = [],
-    options: { readOnly?: boolean; writableSnapshot?: string } = {}): Promise<readonly string[]> {
+    options: { readOnly?: boolean; writableSnapshot?: string; temporaryDirectory?: string } = {}): Promise<readonly string[]> {
     const program = await this.subprocess.resolveExecutable('bwrap', undefined, signal)
     const args = [program, '--unshare-all', '--unshare-user', '--die-with-parent', '--new-session', '--cap-drop', 'ALL']
     if (network) args.push('--share-net')

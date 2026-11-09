@@ -6,6 +6,7 @@ import { usePanel } from './provider.tsx'
 import { errorText } from './text.ts'
 import { PublicationCard } from './publications.tsx'
 import { RecallControls } from './recall.tsx'
+import { CheckRegistry, VerificationCard } from './verification.tsx'
 
 /** Library browsing and authoring use the same durable service as Harness worker tools. */
 export function LibraryPage({ id, scope }: { id?: string; scope?: string }) {
@@ -24,7 +25,7 @@ function RecordList({ scope }: { scope?: string }) {
   const { call, navigate, t } = usePanel()
   const [query, setQuery] = useState(''), [draft, setDraft] = useState(''), [kind, setKind] = useState<'memory' | 'artifact' | ''>('')
   const [inactive, setInactive] = useState(false), [offset, setOffset] = useState(0), [creating, setCreating] = useState(false)
-  const [recall, setRecall] = useState(false)
+  const [recall, setRecall] = useState(false), [checks, setChecks] = useState(false)
   const { data, error, reload } = usePoll(() => call('GET library', { query: { scope, q: query, kind: kind || undefined,
     includeInactive: inactive ? 'true' : 'false', offset } }), [call, scope, query, kind, inactive, offset])
   const open = (record: LibraryEntry) => navigate({ page: 'library', id: record.id, query: { scope } })
@@ -35,6 +36,8 @@ function RecordList({ scope }: { scope?: string }) {
     {creating && <RecordForm scope={scope ?? 'workspace'} onSaved={open} />}
     <Button aria-expanded={recall} onClick={() => setRecall(!recall)}>{t('recall.title')}</Button>
     {recall && <RecallControls />}
+    <Button aria-expanded={checks} onClick={() => setChecks(!checks)}>{t('verification.registry')}</Button>
+    {checks && <CheckRegistry />}
     <form className="dt-library-filters" onSubmit={event => { event.preventDefault(); setQuery(draft); setOffset(0) }}>
       <label>{t('library.search')}<input type="search" value={draft} maxLength={256} onChange={event => setDraft(event.target.value)} /></label>
       <label>{t('library.kind')}<select value={kind} onChange={event => { setKind(event.target.value as typeof kind); setOffset(0) }}>
@@ -174,6 +177,7 @@ function RecordDetail({ id, scope }: { id: string; scope?: string }) {
       {content ? <ContentPreview content={content} title={record.title} /> : record.content !== null && <pre className="dt-library-excerpt">{record.content}</pre>}
       {!content && record.nextOffset !== null && <p className="dt-hint">{t('library.excerpt')}</p>}
       {record.kind === 'artifact' && <PublicationCard key={`${record.id}:${record.revision}:${record.hash}`} record={record} />}
+      {record.kind === 'artifact' && <VerificationCard key={`verification:${record.id}:${record.revision}:${record.hash}`} record={record} />}
       <details className="dt-library-provenance"><summary>{t('library.provenance')}</summary>
         {record.freshness && <><p>{t(`recall.freshness.${record.freshness.status}`)} · {record.freshness.checked} {t('recall.nodes')}</p>
           <ul>{record.freshness.issues.map((issue, index) => <li key={`${issue.id}:${issue.reason}:${index}`}>

@@ -29,7 +29,7 @@ export async function discardSnapshot(path: string): Promise<void> {
 /** Each process dispatch has a durable checkpoint; no failed or interrupted attempt is replayed here. */
 export async function runCapturedCheck(input: CheckInput, host: Host): Promise<CheckResult> {
   const evidence: CheckEvidence = { kind: input.spec.kind, stage: 'capturing', confinement: host.isolation.name, startedAt: new Date().toISOString() }
-  const container = join(host.storageRoot, input.id), copy = join(container, 'workspace')
+  const container = join(host.storageRoot, input.id), copy = join(container, 'workspace'), scratch = join(container, 'scratch')
   let quiescent = true, createdContainer = false, active: SubprocessHandle | undefined, outcome: CheckResult['outcome']
   const output = { stdout: { hash: createHash('sha256'), bytes: 0 }, stderr: { hash: createHash('sha256'), bytes: 0 } }
   let ranCheck = false
@@ -65,7 +65,7 @@ export async function runCapturedCheck(input: CheckInput, host: Host): Promise<C
   const collect = async (root: string, source: string, destination?: string): Promise<SnapshotManifest> => {
     const node = await host.subprocess.resolveExecutable('node', undefined, total)
     const argv = await host.isolation.wrap([node, '/run/dsh-filesystem.mjs'], root, root, false, total, {}, host.helper, [],
-      { readOnly: true, ...(destination ? { writableSnapshot: container } : {}) })
+      { readOnly: true, temporaryDirectory: scratch, ...(destination ? { writableSnapshot: container } : {}) })
     const text = await run(argv, root, JSON.stringify({ source, destination, spec: { ...input.spec.snapshot, ...destination ? {} : { repository: 'none' } } }),
       input.spec.snapshot.timeoutSeconds * 1000, true)
     const value = JSON.parse(text) as { result?: unknown; error?: string }
@@ -85,6 +85,7 @@ export async function runCapturedCheck(input: CheckInput, host: Host): Promise<C
       }
       throw error
     }
+    await mkdir(scratch, { mode: 0o700 })
     evidence.snapshot = await collect(input.root, input.source, copy)
     if (input.spec.expectedSnapshot && evidence.snapshot.hash !== input.spec.expectedSnapshot) throw new Error('Captured source no longer matches the reviewed snapshot')
     if (input.spec.expectedRepository && (evidence.snapshot.repository?.commit !== input.spec.expectedRepository.commit
@@ -97,7 +98,7 @@ export async function runCapturedCheck(input: CheckInput, host: Host): Promise<C
     }
     if (input.spec.kind === 'check') {
       evidence.stage = 'checking'; evidence.checkedAt = new Date().toISOString(); await host.authorize(); total.throwIfAborted()
-      const argv = await host.isolation.wrap(input.argv, copy, copy, false, total, input.env, undefined, [], { readOnly: true })
+      const argv = await host.isolation.wrap(input.argv, copy, copy, false, total, input.env, undefined, [], { readOnly: true, temporaryDirectory: scratch })
       await run(argv, copy, input.stdin, input.spec.timeoutSeconds * 1000, false)
       const after = await collect(copy, copy)
       evidence.snapshotUnchanged = sameSnapshotFiles(evidence.snapshot, after)

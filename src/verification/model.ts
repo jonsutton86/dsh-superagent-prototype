@@ -33,3 +33,8 @@ export const SnapshotManifestSchema = z.object({ version: z.literal(1), hash: z.
     z.object({ path: relativePath, kind: z.literal('symlink'), target: z.union([z.literal('.'), relativePath]) }).strict(),
   ])).max(20000), repository: z.object({ commit: z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/), tree: z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/),
     branch: z.string().min(1).max(1024).nullable(), statusHash: z.string().regex(/^[a-f0-9]{64}$/) }).strict().optional() }).strict()
+export const CheckEvidenceSchema = z.object({ kind: VerificationJob.shape.kind, stage: z.enum(['capturing', 'checking', 'finished']),
+  confinement: z.string().min(1).max(100), startedAt: z.string().datetime(), finishedAt: z.string().datetime().optional(), checkedAt: z.string().datetime().optional(),
+  snapshot: SnapshotManifestSchema.optional(), artifactHash: digest.optional(), snapshotUnchanged: z.boolean().optional(), problem: z.string().max(4000).optional(),
+  storageReleased: z.boolean().optional(), output: z.object({ stdout: z.object({ hash: digest, bytes: z.number().int().nonnegative() }).strict(),
+    stderr: z.object({ hash: digest, bytes: z.number().int().nonnegative() }).strict() }).strict().optional() }).strict()

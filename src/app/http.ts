@@ -51,6 +51,8 @@ import type { Publications } from '../publication/runtime.ts'
 import { PublicationError } from '../publication/protocol.ts'
 import type { ChannelPublications } from '../publication/channels.ts'
 import type { ConversationInbox } from '../publication/inbound.ts'
+import type { Verification } from '../verification/service.ts'
+import { CheckCommandId } from '../verification/contracts.ts'
 
 export interface HttpHost {
   readonly ownership?: Pick<CoordinatorOwnership, 'status'>
@@ -66,6 +68,7 @@ export interface HttpHost {
   readonly worlds: Pick<WorldPool, 'list' | 'activate' | 'refresh' | 'revoke' | 'lookup'>
   readonly inbox: Inbox
   readonly library: Library
+  readonly verification?: Verification
   readonly workspace: Workspace
   readonly schedules?: Schedules
   readonly reflections?: Reflections
@@ -201,6 +204,7 @@ function routes(runtime: HttpHost): Routes {
   const schedules = () => { if (!runtime.schedules) throw new WorkspaceError(409, 'Schedules are unavailable'); return runtime.schedules }
   const reflections = () => { if (!runtime.reflections) throw new WorkspaceError(409, 'Reflection is unavailable'); return runtime.reflections }
   const speculation = () => { if (!runtime.speculation) throw new WorkspaceError(409, 'Speculation is unavailable'); return runtime.speculation }
+  const verification = () => { if (!runtime.verification) throw new WorkspaceError(409, 'Verification is unavailable'); return runtime.verification }
   const { store } = runtime
   const ticket = (id: string) => { if (!store.tickets.get(id)) throw new RouteError(404, 'Ticket not found'); return id }
   const execution = (id?: string, binding?: string) => {
@@ -293,6 +297,22 @@ function routes(runtime: HttpHost): Routes {
     'POST library': async ({ body }) => runtime.library.publish(await body(1024 * 1024)),
     'GET library/:id': ({ params, query }) => runtime.library.read(params.id, query),
     'GET library/:id/content': ({ params }) => runtime.library.content(params.id),
+    'GET checks': ({ query }) => verification().definitions.list(offset.parse(query.offset)),
+    'POST checks': async ({ body }) => verification().definitions.create(await body()),
+    'GET checks/:id': ({ params }) => verification().definitions.get(params.id),
+    'PUT checks/:id': async ({ params, body }) => verification().definitions.update(params.id, await body()),
+    'POST checks/:id/authority': async ({ params, body }) => verification().definitions.configure(params.id, await body()),
+    'GET checks/:id/versions/:version': ({ params }) => verification().definitions.version(params.id, z.coerce.number().int().positive().parse(params.version)),
+    'GET library/:id/checks': ({ params, query }) => verification().choices(params.id, offset.parse(query.offset)),
+    'GET library/:id/verification': ({ params, query }) => verification().list(params.id, offset.parse(query.offset)),
+    'POST library/:id/verification': async ({ params, body }) => verification().request(params.id, await body()),
+    'GET verification/:id': ({ params }) => verification().get(params.id),
+    'GET verification/:id/output': ({ params, query }) => verification().output(params.id, query),
+    'POST verification/:id/refresh': ({ params }) => verification().refresh(params.id),
+    'POST verification/:id/cancel': async ({ params, body }) => verification().cancel(params.id, await body()),
+    'POST verification/:id/reconcile': async ({ params, body }) => verification().reconcile(params.id, await body()),
+    'POST verification/:id/freshness': async ({ params, body }) => verification().freshness(params.id,
+      z.object({ requestId: CheckCommandId }).strict().parse(await body()).requestId),
     'PUT library/:id': async ({ params, body }) => runtime.library.archive(params.id, await body()),
     'GET schedules': ({ query }) => schedules().list(offset.parse(query.offset), limit(30, 100).parse(query.limit)),
     'GET speculation': ({ query }) => speculation().page(offset.parse(query.offset), limit(30, 100).parse(query.limit)),
@@ -406,7 +426,7 @@ export function registerHttp(ctx: Context, runtime: HttpHost): () => void {
       if (!sameOrigin(req, ctx.webServer.port)) { json(res, 403, { error: 'Same-origin management request required' }); return }
       try {
         // Receipt refresh writes observations locally but never sends an execution or cancellation intent.
-        const observation = req.method === 'POST' && /^\/orchestrator\/api\/(?:execution|tickets\/[^/]+\/execution|worlds\/[^/]+\/execution|publications\/[^/]+|deliveries\/[^/]+)\/refresh$/.test(url.pathname)
+        const observation = req.method === 'POST' && /^\/orchestrator\/api\/(?:execution|tickets\/[^/]+\/execution|worlds\/[^/]+\/execution|publications\/[^/]+|deliveries\/[^/]+|verification\/[^/]+)\/refresh$/.test(url.pathname)
         const mutation = req.method !== 'GET' && req.method !== 'HEAD' && !observation
         if (mutation) runtime.authorizeMutation?.()
         if (runtime.ownership && req.method === 'GET' && url.pathname === '/orchestrator/api/state') {

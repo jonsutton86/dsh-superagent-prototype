@@ -68,6 +68,7 @@ import type { CoordinatorOwnership } from '../ownership/lease.ts'
 import { Publications } from '../publication/runtime.ts'
 import { ChannelPublications } from '../publication/channels.ts'
 import { ConversationInbox } from '../publication/inbound.ts'
+import { Verification } from '../verification/service.ts'
 
 // Source plugins interact with dsh-superagent exclusively through the `SourceHost` service interface.
 declare module '@deepseek-ai/cordis' { interface Context { orchestrator: SourceHost } }
@@ -100,6 +101,7 @@ export class Runtime extends Service implements SourceHost {
   readonly usage: Usage
   readonly inbox: Inbox
   readonly library: Library
+  readonly verification: Verification
   readonly environments: Environments
   readonly endpoints: Endpoints
   readonly personas: Personas
@@ -164,6 +166,18 @@ export class Runtime extends Service implements SourceHost {
         controlFiles: machine.publication ? [machine.publication.credentialFile] : [],
         revoked: binding => { for (const ticket of store.tickets.open()) if (ticket.execution?.environment?.environmentId === binding && canStop(ticket)) runtime.engine.stopTicket(ticket.id, 'Managed execution world revoked by the operator') } })
       const library = this.library = new Library(store)
+      const verification = this.verification = new Verification({ store, library, stateDir: machine.stateDir, subprocess: ctx.subprocess, lifetime: this.lifetime,
+        authorize: () => { this.ownership?.proof(); this.lifetime.throwIfAborted() }, paused: () => this.paused(),
+        allowed: location => environments.allows(location.environment), localAllowed: () => !remote && !this.ownership,
+        remote: location => {
+          const binding = location.environment?.world
+          if (binding && remote?.world.status().binding === binding) return remote.world
+          if (binding) return this.worlds.lookup(binding)?.world
+          return undefined
+        }, workerProblem: id => {
+          const ticket = store.tickets.get(id)
+          return !ticket ? 'Worker ticket is unavailable' : runtime.speculation?.problem(ticket)
+        } })
       this.publications = new Publications({ store, library, ownership: this.ownership, connection: machine.publication, lifetime: this.lifetime,
         preparationProblem: (ticketId, assignmentId) => runtime.speculation?.publicationProblem(ticketId, assignmentId),
         roots: () => [executionRoot(store.settings(), machine.stateDir, world?.grant.root), ...this.worlds.list().items.map(item => item.root)] })
@@ -278,7 +292,7 @@ export class Runtime extends Service implements SourceHost {
       this.sourceDeps = { store, engine, outbox, commands, sources, get ready() { return runtime.ready },
         get deployment() { return setup.deployment }, configured: () => setup.configured(),
         get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem }, receive: trigger => passes.receive(trigger) }
-      this.toolHost = { context: ctx, engine, store, prompts, sessions, settings: this.settings, assessor, resources, library, planning: workspace.plans, reflections, personas, worlds: this.worlds,
+      this.toolHost = { context: ctx, engine, store, prompts, sessions, settings: this.settings, assessor, resources, library, verification, planning: workspace.plans, reflections, personas, worlds: this.worlds,
         get github() { return runtime.context({ kind: 'github', health: ['github'] }) },
         requestPass: () => { passes.request() }, sendReplies: () => outbox.sent(),
         quietly: run => { this.quiet++; try { return run() } finally { this.quiet-- } } }
@@ -366,6 +380,7 @@ export class Runtime extends Service implements SourceHost {
     this.passes.start()
     this.effects.start()
     this.conversations.start()
+    this.verification.start()
     this.runtimeHealth.set({ state: 'ready', detail: 'Orchestrator is ready', at: now() })
   }
   private httpHost(): HttpHost {
@@ -374,6 +389,7 @@ export class Runtime extends Service implements SourceHost {
     return { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, get ready() { return runtime.ready }, sourceLinks, remoteRoot: this.remoteWorkspace?.world.grant.root,
       ownership: this.ownership, authorizeMutation: () => { this.ownership?.proof(); this.lifetime.throwIfAborted() },
       publications: this.publications,
+      verification: this.verification,
       channelPublications: this.channelPublications,
       conversations: this.conversations,
       get health() { return runtime.health }, remoteEffects: this.remoteWorkspace?.world,
@@ -386,10 +402,11 @@ export class Runtime extends Service implements SourceHost {
   /** Idempotent stop; concurrent or repeated calls share the same shutdown promise. */
   stop(): Promise<void> { return this.stopping ??= this.shutdown() }
   private async shutdown(): Promise<void> {
-    this.closingFlag = true; const passes = this.passes.stop(); this.stopped.abort()
+    this.closingFlag = true; const passes = this.passes.stop(), verification = this.verification.stop(); this.stopped.abort()
     // Abort an acquisition wait before awaiting any startup-dependent work; loss is terminal for this instance.
     const ownership = this.ownership?.close()
     try {
+      await verification
       await this.endpoints.stop()
       await this.publications.stop()
       await this.channelPublications.stop()

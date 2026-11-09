@@ -41,6 +41,8 @@ interface Skill { name: string; description: string; content: string }
 const BUDGET: Record<Role, number> = { orchestrator: 59_000, worker: 40_500 }
 // New library capabilities have a separate ceiling so they do not relax the original routing/work prompt budget.
 const LIBRARY_BUDGET: Record<Role, number> = { orchestrator: 2_200, worker: 4_500 }
+// Host verification adds a bounded tool surface without relaxing the existing prompt or library ceilings.
+const CHECK_BUDGET: Record<Role, number> = { orchestrator: 2, worker: 3_600 }
 const PROMPTS = 'prompts/, skills/', TOOLS = 'src/app/tools/', SESSIONS = 'src/app/sessions.ts'
 const NOTICES = 'src/app/notices.ts', LINKS = 'src/app/links.ts', ASSESSMENT = 'src/app/assessment.ts'
 const EXECUTOR = 'src/executor/dsh.ts', ERRORS = 'src/core/errors.ts'
@@ -353,7 +355,8 @@ function failures(): Map<string, string> {
 it('collects both roles\' tools, prompts, skills and inputs', () => {
   expect([...toolsOf('worker').keys()].sort()).toEqual(['orchestrator_ack', 'orchestrator_read', 'orchestrator_report',
     'orchestrator_thread_follow',
-    'orchestrator_thread_unrelated', 'orchestrator_trigger_handback', 'workspace_publish', 'workspace_read', 'workspace_search'])
+    'orchestrator_thread_unrelated', 'orchestrator_trigger_handback', 'workspace_check_cancel', 'workspace_check_list', 'workspace_check_output',
+    'workspace_check_read', 'workspace_check_request', 'workspace_publish', 'workspace_read', 'workspace_search'])
   expect(toolsOf('orchestrator').has('workspace_publish')).toBe(false)
   expect([...toolsOf('orchestrator').keys()]).toEqual(expect.arrayContaining(['orchestrator_route', 'orchestrator_eval_decide', 'orchestrator_reply']))
   // The one routing tool takes the place of four.
@@ -396,7 +399,9 @@ it.each(['orchestrator', 'worker'] as const)('keeps the %s within its character 
   const builtIn = (text: string) => ruleLines().reduce((rest, line) => rest.replace(line, ''), text).replace(/ = "[^"\n]*"/g, ' = ""')
   const prompt = Math.max(...ids.map(id => builtIn(host.sections.get(id)!({})).length))
   const definitions = [...toolsOf(role).values()].map(({ name, description, parameters }) => ({ name, description, parameters }))
-  const library = JSON.stringify(definitions.filter(tool => tool.name.startsWith('workspace_'))).length
+  const checks = JSON.stringify(definitions.filter(tool => tool.name.startsWith('workspace_check_'))).length
+  expect(checks, `${checks} characters of verification tools`).toBeLessThanOrEqual(CHECK_BUDGET[role])
+  const library = JSON.stringify(definitions.filter(tool => tool.name.startsWith('workspace_') && !tool.name.startsWith('workspace_check_'))).length
   expect(library, `${library} characters of library tools`).toBeLessThanOrEqual(LIBRARY_BUDGET[role])
   const tools = JSON.stringify(definitions.filter(tool => !tool.name.startsWith('workspace_'))).length
   expect(prompt + tools, `${prompt} characters of prompt and ${tools} of tools`).toBeLessThanOrEqual(BUDGET[role])

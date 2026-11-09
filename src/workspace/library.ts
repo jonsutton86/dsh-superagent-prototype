@@ -143,10 +143,21 @@ export class Library {
       })
       const hash = digest(bytes), ticket = review ? this.store.tickets.get(review.ticketId) : actor.role === 'worker' ? this.store.tickets.get(actor.ticketId)! : undefined
       const trigger = ticket && this.store.triggers.get(ticket.origin.triggerId)
+      const assignment = ticket && ticket.assignments.find(value => value.id === (review?.assignmentId ?? latestAssignment(ticket)?.id))
+      // New worker submissions capture only their actual current assignment location. Reviewed historical candidates
+      // use the original immutable assignment snapshot; absence never falls back to a later ticket execution.
+      const location = assignment?.execution ?? (!review && ticket?.execution ? {
+        directory: ticket.execution.directory, mode: ticket.execution.mode, environment: ticket.execution.environment } : undefined)
+      const sameLocation = (a: NonNullable<typeof location>, b: NonNullable<typeof location>) => a.directory === b.directory
+        && (a.mode ?? 'repository') === (b.mode ?? 'repository') && a.environment?.environmentId === b.environment?.environmentId
+        && a.environment?.revision === b.environment?.revision && a.environment?.epoch === b.environment?.epoch && a.environment?.world === b.environment?.world
+      if (!review && assignment?.execution && ticket?.execution && !sameLocation(assignment.execution, ticket.execution))
+        throw new WorkspaceError(409, 'Current execution differs from the original assignment; create a new assignment before publishing')
       const record: LibraryRecord = { id: randomUUID(), kind: request.kind, scope, title: request.title, summary: request.summary,
         mime: request.mime, filename: request.filename, hash, bytes: bytes.length, text: isText(request.mime), createdAt: this.now(),
         ...(expiresAt ? { expiresAt } : {}), sources,
         ...(review ? { reflectionReview: { ...review } } : {}),
+        ...(ticket && assignment && location ? { execution: { ...structuredClone(location), capturedAt: this.now(), assignmentId: assignment.id, sessionId: workerSessionId(ticket.id) } } : {}),
         provenance: { actor: review ? 'worker' : actor.role, trust: review || actor.role === 'worker' ? 'agent_submission' : 'operator_submission',
           ...(ticket ? { ticketId: ticket.id, sessionId: workerSessionId(ticket.id), assignmentId: review?.assignmentId ?? latestAssignment(ticket)?.id } : {}),
           ...(trigger ? { triggerId: trigger.id, triggerHash: key(JSON.stringify(trigger)) } : {}) } }

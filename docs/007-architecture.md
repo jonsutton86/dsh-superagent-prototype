@@ -300,6 +300,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/workspace/library.ts` | Transactional content-addressed storage, search, scope authorization, provenance, archival and evidence revisions |
 | `src/app/tools/library.ts` | Host-bound worker publication and worker/router recall tools |
 | `src/client/library.tsx` | Library search, authoring, immutable revisions, inert previews, downloads and source history |
+| `src/client/verification.tsx` | Operator check definition/authority forms, artifact requests, original evidence/output, freshness captures and quiescence review |
 | `src/workspace/model.ts` | Mission, action and activity contracts, validated commands and workspace errors |
 | `src/workspace/plan-model.ts` | Complete plan definitions, dependency validation, immutable version and proposal contracts |
 | `src/workspace/plans.ts` | Plan history, legacy migration, session-bound proposals, operator review and atomic planner requests |
@@ -365,6 +366,9 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/remote/endpoint.ts`, `http.ts` | Authenticated execution admission, lease expiry, process supervision, mutation serialization and browser-request refusal |
 | `src/remote/isolation.ts`, `filesystem-runner.ts`, `fs-worker.ts` | Linux bubblewrap process worlds and standalone confined filesystem operations |
 | `src/verification/model.ts`, `snapshot.ts`, `snapshot-worker.ts`, `runner.ts` | Bounded host-captured file/Git manifests, private copied inputs, revision-pinned checks, output digests and quiescence-bound cleanup through Harness |
+| `src/verification/contracts.ts`, `definitions.ts` | Strict operator-authored check contracts, immutable versions, scope/worker authority, durable command receipts and metadata limits |
+| `src/verification/service.ts`, `local.ts` | Assignment/environment-bound artifact checks, local/remote Harness execution, captured-source freshness, original receipt recovery and explicit local isolation strength |
+| `src/app/tools/verification.ts` | Worker selection of fixed authorized check versions, own-artifact evidence/output and original-ID cancellation |
 | `src/remote/credentials.ts`, `command-worker.ts` | Endpoint-private immutable credential snapshots, version binding/revocation and credential loading inside the command namespace without secret argv |
 | `src/remote/client.ts`, `admin.ts` | Pinned host-side RPC, same-ID retry, reconnect observation and explicit uncertain outcomes |
 | `src/remote/world.ts`, `world-journal.ts` | Persistent execution-world authority binding, serialized lease maintenance, durable self-revocation and independent quiescence observations |
@@ -507,6 +511,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | --- | --- |
 | `tests/speculation.spec.ts`, `tests/speculation-runtime.spec.ts`, `tests/speculation-ui.spec.tsx`, `tests/speculation-harness.spec.ts` | Reservation races, preemption, recovery, promotion/publication, HTTP/DOM and opt-in installed-Harness qualification. |
 | `tests/verification-snapshot.spec.ts`, `tests/verification-endpoint.spec.ts` | Actual file/Git evidence, copied-input checks, revision changes, output retention, timeout/cancellation, unknown restart and native Linux read-only/network isolation |
+| `tests/verification-service.spec.ts` | Immutable check definitions, exact artifact/assignment/environment binding, actual local and native remote checks, scope, quotas, output, cancellation, freshness and restart evidence |
 | `tests/core-engine.spec.ts` | Domain rules on in-memory repositories: receiving, Eval, fan-out, resume and stop, interrupted Assignments, the pause, Policy changes, reports and outcomes, attaching, replies, failed deliveries and dismissed problems |
 | `tests/environments.spec.ts` | Runtime/API enrollment, persistent grants, paired-provider proof, races, revocation, replacement and legacy task binding |
 | `tests/environments-ui.spec.tsx` | Rendered enrollment/recovery and exact mutation retry after response loss and polling |

@@ -10,6 +10,8 @@ import type { DecisionListView, SearchView, ThreadDetailView, ThreadListView } f
 import type { TicketListView } from './views/tickets.ts'
 import type { ActionCommandInput, AddActionInput, CreateMissionInput, MissionCommandInput, MissionList, MissionView } from '../workspace/model.ts'
 import type { ArchiveRecordInput, CreateRecordInput, LibraryContent, LibraryEntry, LibraryList, LibraryQueryInput, LibraryRead } from '../workspace/library-model.ts'
+import type { CreateCheckInput, SaveCheckInput, ConfigureCheckInput, RequestCheckInput, CheckRecord, CheckVersion, CheckRun, CheckRunSummary } from '../verification/contracts.ts'
+import type { OutputWindow } from '../remote/protocol.ts'
 import type { Conversation, InboxFilter, InboxItem, InboxPage, InboxReplyInput, InboxStartInput } from '../workspace/inbox-model.ts'
 import type { PlanIndex, PlanProposal, PlanVersion, ProposePlanInput, ReviewPlanInput, RequestPlanInput } from '../workspace/plan-model.ts'
 import type { CreateScheduleInput, SaveScheduleInput, ToggleScheduleInput, ScheduleView, ScheduleList, Schedule } from '../workspace/schedule-model.ts'
@@ -116,6 +118,21 @@ export interface Api {
   'POST library': { body: CreateRecordInput; response: LibraryEntry }
   'GET library/:id': { query?: Paged; response: LibraryRead }
   'GET library/:id/content': { response: LibraryContent }
+  'GET checks': { query?: Paged; response: { items: CheckRecord[]; nextOffset: number | null } }
+  'POST checks': { body: CreateCheckInput; response: CheckRecord }
+  'GET checks/:id': { response: CheckRecord }
+  'PUT checks/:id': { body: SaveCheckInput; response: CheckRecord }
+  'POST checks/:id/authority': { body: ConfigureCheckInput; response: CheckRecord }
+  'GET checks/:id/versions/:version': { response: CheckVersion }
+  'GET library/:id/checks': { query?: Paged; response: { items: CheckRecord[]; nextOffset: number | null } }
+  'GET library/:id/verification': { query?: Paged; response: { items: CheckRunSummary[]; nextOffset: number | null } }
+  'POST library/:id/verification': { body: RequestCheckInput; response: CheckRun }
+  'GET verification/:id': { response: CheckRun }
+  'GET verification/:id/output': { query: { stream: 'stdout' | 'stderr'; offset?: number; limit?: number }; response: OutputWindow }
+  'POST verification/:id/refresh': { response: CheckRun }
+  'POST verification/:id/cancel': { body: { requestId: string; reason: string }; response: CheckRun }
+  'POST verification/:id/reconcile': { body: { requestId: string; reason: string; quiescent: true }; response: CheckRun }
+  'POST verification/:id/freshness': { body: { requestId: string }; response: CheckRun }
   'PUT library/:id': { body: ArchiveRecordInput; response: LibraryEntry }
   'GET missions': { query?: Paged; response: MissionList }
   'GET missions/:id': { response: MissionView }

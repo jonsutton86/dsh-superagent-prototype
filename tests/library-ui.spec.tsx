@@ -9,6 +9,8 @@ import type { Route } from '../src/client/route.ts'
 import { translator } from './fixtures/panel.tsx'
 import { feishu, startRuntime, type Host } from './fixtures/host.ts'
 import type { LibraryEntry } from '../src/workspace/library-model.ts'
+import { mkdir } from 'node:fs/promises'
+import { join } from 'node:path'
 
 let host: Host | undefined, root: Root | undefined, container: HTMLElement | undefined
 afterEach(async () => {
@@ -53,7 +55,7 @@ it('saves, revises, follows provenance and archives through rendered library for
   await f.enter('Short description', 'Prefer original sources')
   await f.enter('Content', 'Use primary sources and record uncertainty.')
   await f.click('Save record')
-  await vi.waitFor(() => expect(f.text()).toContain('Saved content; independent result verification has not been performed.'))
+  await vi.waitFor(() => expect(f.text()).toContain('Saved content is a submission. Review its provenance and any independent check evidence before relying on it.'))
   expect(f.text()).toContain('Use primary sources and record uncertainty.')
   const first = host!.runtime.library.list().items[0]!
   await f.click('Create a new revision')
@@ -109,4 +111,66 @@ it('removes navigation, executable markup, nested frames and external resources 
   expect(result).toContain('<div style="color:blue">Safe text</div>')
   expect(result).toContain('data:image/png;base64,YQ==')
   for (const forbidden of ['<base', '<form', '<iframe', '<object', '<svg', 'onclick', 'srcset', 'evil.invalid']) expect(result).not.toContain(forbidden)
+})
+
+it('creates disabled check definitions through real forms, reuses a lost response and saves immutable revisions', async () => {
+  const f = await fixture(), fetch = globalThis.fetch, requests: string[] = []; let lost = true
+  vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+    const response = await fetch(url, init)
+    if (String(url).endsWith('/checks') && init?.method === 'POST') {
+      requests.push(JSON.parse(String(init.body)).requestId)
+      if (lost) { lost = false; throw new Error('Saved response was lost') }
+    }
+    return response
+  })
+  await f.click('Check definitions'); await f.click('Create a check')
+  await f.enter('Check name', 'Artifact existence'); await f.enter('What this check establishes', 'The saved artifact is present and nonempty')
+  await f.click('Save check definition'); expect(f.text()).toContain('Cannot reach the dsh-superagent service')
+  await f.click('Save check definition')
+  expect(requests).toHaveLength(2); expect(requests[0]).toBe(requests[1])
+  const definitions = host!.runtime.verification.definitions, check = definitions.list().items[0]!
+  expect(definitions.list().items).toHaveLength(1); expect(check).toMatchObject({ version: 1, enabled: false, workers: false, definition: { confinement: 'linux-bubblewrap' } })
+  const open = async (text: string) => act(async () => { [...container!.querySelectorAll('summary')].find(item => item.textContent?.includes(text))!.click() })
+  await open('Artifact existence'); await f.enter('Reason for this action', 'Reviewed for this workspace')
+  const enabled = [...container!.querySelectorAll('label')].find(item => item.textContent === 'Allow this check to run')!.querySelector('input')!
+  await act(async () => enabled.click()); await f.click('Update check authority')
+  expect(definitions.get(check.id)).toMatchObject({ version: 1, revision: 2, enabled: true, workers: false })
+  await open('Save a new version'); await f.enter('What this check establishes', 'New acceptance description')
+  await f.click('Save check definition')
+  expect(definitions.get(check.id)).toMatchObject({ version: 2, revision: 3, enabled: true })
+  expect(definitions.version(check.id, 1).definition.description).toBe('The saved artifact is present and nonempty')
+})
+
+it('keeps artifact check IDs through a lost response, allows a deliberate new check and labels uncertain evidence honestly', async () => {
+  const f = await fixture(), accepted = await host!.acceptedTicket(feishu('check-ui', '@bot prepare an artifact'))
+  const ticket = host!.runtime.store.tickets.list().find(item => `worker-${item.id}` === accepted.sessionId)!, source = join(host!.directory, 'verification-source')
+  await mkdir(source)
+  ticket.execution!.directory = source; ticket.assignments.at(-1)!.execution = { directory: source, mode: ticket.execution!.mode, environment: ticket.execution!.environment }
+  host!.runtime.store.tickets.save(ticket)
+  const record = host!.runtime.library.publish({ requestId: 'check-ui-artifact', kind: 'artifact', title: 'Check UI artifact', summary: 'Saved result', content: 'evidence' }, { role: 'worker', ticketId: ticket.id })
+  const check = host!.runtime.verification.definitions.create({ requestId: 'check-ui-definition', enabled: true, definition: {
+    name: 'Check UI', description: 'Exercise the request and observation controls', argv: ['/bin/true'], artifactPath: 'artifact.txt', confinement: 'host-process' } })
+  await f.navigate({ page: 'library', id: record.id })
+  const select = [...container!.querySelectorAll('label')].find(item => item.firstChild?.textContent === 'Select a check version')!.querySelector('select')!
+  await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(select, `${check.id}:1`); select.dispatchEvent(new Event('change', { bubbles: true })) })
+  const originalFetch = globalThis.fetch, requests: string[] = []; let lost = true
+  vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+    const response = await originalFetch(url, init)
+    if (String(url).endsWith(`/library/${record.id}/verification`) && init?.method === 'POST') {
+      requests.push(JSON.parse(String(init.body)).requestId)
+      if (lost) { lost = false; throw new Error('Check acknowledgement lost') }
+    }
+    return response
+  })
+  const flush = async () => act(async () => { await new Promise(resolve => setTimeout(resolve, 10)) })
+  await f.click('Request check'); await vi.waitFor(async () => { await flush(); expect(f.text()).toContain('Cannot reach the dsh-superagent service') })
+  await f.click('Request check'); await vi.waitFor(async () => { await flush(); expect(requests).toHaveLength(2) }); expect(requests[1]).toBe(requests[0])
+  await vi.waitFor(() => expect(host!.runtime.verification.get(requests[0]!).quiescent).toBe(true))
+  await f.click('Request check'); await vi.waitFor(async () => { await flush(); expect(requests).toHaveLength(3) }); expect(requests[2]).not.toBe(requests[1])
+  expect(host!.runtime.verification.list(record.id).items).toHaveLength(2)
+  // The fake subprocess provider cannot produce snapshot evidence. The UI must not promote its result.
+  expect(f.text()).not.toContain('Passed for captured inputs')
+  expect(f.text()).toContain('does not establish factual correctness')
+  expect(f.text()).toContain('Host processes have no filesystem or network sandbox')
+  expect(f.text()).toContain('Original assignment')
 })

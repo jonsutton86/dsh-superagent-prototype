@@ -224,6 +224,8 @@ export type ReportState = 'progress' | 'waiting' | 'ready' | 'blocked' | 'failed
 /** Binding between a ticket and one executor instance. */
 export interface Assignment {
   id: string
+  /** Host-recorded location at admission. Later ticket retries cannot rewrite this assignment's execution provenance. */
+  execution?: ExecutionLocation
   state: AssignmentState
   createdAt: string
   startedAt?: string
@@ -321,6 +323,7 @@ export interface Ticket {
 export interface Follow { thread: string; own: boolean; closed?: { at: string; outcome: 'merged' | 'closed' } }
 export interface Execution { name: string; directory: string; assignment: string; mode?: 'repository' | 'local'; environment?: ExecutionGrant;
   persona?: import('../personas/model.ts').PersonaSnapshot }
+export type ExecutionLocation = Pick<Execution, 'directory' | 'mode' | 'environment'>
 
 /** Whether a ticket is open: it has not ended. */
 export const liveTicket = (ticket: Pick<Ticket, 'ended'>): boolean => !ticket.ended
