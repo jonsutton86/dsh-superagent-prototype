@@ -75,7 +75,19 @@ request deduplication, assignment retries, environment refusal, output hashes/re
 withdrawal, unknown restart, source freshness and real operator HTTP/DOM flows. The installed-Harness qualification uses
 an actual DeepSeek-created file and library artifact through coordinator check APIs and preserves check and capture
 receipts across restart. Non-Linux live qualification explicitly uses the production host-process runner; native Linux
-qualification supplies independent confinement evidence. Exact final qualification results are recorded after running.
+qualification supplies independent confinement evidence.
+
+Runtime/test revision `6685cb6fea83401b3489392bd83fd40fa7d1ce8b` passed the complete local `pnpm check`:
+1,768 tests, typechecking and all five builds, with the test run finishing in 108.13 seconds. The installed-Harness /
+DeepSeek Flash dedicated scenario passed in 58.27 seconds, including actual worker-created artifact bytes, absence of
+service credentials, original-assignment effect ownership, capture-only freshness and unchanged check/capture receipts
+after restart. The same revision passed 1,772 Linux / Node 24 tests, typechecking and all five builds in
+[run 42613515022](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42613515022), with tests finishing
+in 174.42 seconds. The native service test independently exercises real Linux execution, lost spawn acknowledgement,
+concurrent successful observation, original endpoint restart and no redispatch. Both owned installed-Harness / DeepSeek
+Flash scenarios also passed in 278.79 seconds, retaining scheduled reflection, usage refusal/retry, artifact delivery and
+held-recovery behavior across the Runtime lifecycle changes. The original app process remained running. Code and
+qualification receipts are pushed on the feature branch; the full product objective remains active.
 
 This increment does **not** yet make a selected check mandatory for external publication or mission result acceptance.
 The next integration must bind the operator's selected check and original source/Git/environment state to the approval,

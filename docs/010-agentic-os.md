@@ -482,3 +482,16 @@ confinement, typechecking and all five builds. The Linux result is
 The installed-Harness / DeepSeek Flash dedicated scenario passed in 55.54 seconds, with actual worker-created file/artifact
 bytes checked by the built helper and the original receipt preserved after restart. The original app process remains
 running. These results qualify the execution layer while the full product goal stays active.
+
+Artifact check integration: `047-artifact-checks.md` adds immutable operator definitions, original assignment/environment
+bindings, worker requests, coordinator local/remote execution and bilingual evidence controls. Source freshness is a
+separate capture without command execution. Explicit host-process execution does not claim filesystem/network isolation;
+Linux-required checks fail when that confinement is unavailable. Code `6685cb6fea83401b3489392bd83fd40fa7d1ce8b` passed
+1,768 local tests, typechecking and all five builds. The installed-Harness / DeepSeek Flash dedicated scenario passed in
+58.27 seconds, retaining actual artifact checks and freshness receipts across restart. Native Linux / Node 24 passed
+1,772 tests, typechecking and all builds in
+[run 42613515022](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42613515022).
+Selected-check binding for mission acceptance/publication, immediate pre-publication freshness and exact PR-head gates
+remain required, alongside all other full architecture/product requirements. Both owned installed-Harness / DeepSeek Flash
+scenarios passed in 278.79 seconds, retaining scheduled reflection, usage refusal/retry, artifact delivery and held recovery.
+Code and qualification receipts are pushed on the feature branch. The original app process remains running.

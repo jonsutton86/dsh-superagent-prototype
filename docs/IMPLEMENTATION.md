@@ -31,7 +31,14 @@ No new runtime, orchestration database, or workflow framework is assumed. Work i
 worker requests, local/remote Harness jobs and operator evidence controls. Explicit host-process execution is labelled as
 unconfined; Linux-required checks refuse unavailable isolation. Freshness captures do not rerun commands or become passes.
 Publication and mission acceptance still require the next selected-check/freshness integration; exact PR-head binding and
-all other full architecture requirements remain open. Final qualification results follow below after execution.
+all other full architecture requirements remain open. Code `6685cb6fea83401b3489392bd83fd40fa7d1ce8b` passed 1,768 local
+tests, typechecking and all five builds. The installed-Harness / DeepSeek Flash dedicated scenario passed in 58.27 seconds,
+with an actual model-created artifact, host check and capture-only freshness evidence retaining their original receipts
+across restart. The same revision passed 1,772 Linux / Node 24 tests with native confinement, typechecking and all builds in
+[run 42613515022](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42613515022), in 174.42 seconds.
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 278.79 seconds, retaining scheduled reflection, usage
+refusal/retry, artifact delivery and held-recovery behavior. The original app process remained running. Code and
+qualification receipts are pushed on the feature branch; the full product goal remains active.
 
 ## Implemented increment: host-captured verification execution
 
