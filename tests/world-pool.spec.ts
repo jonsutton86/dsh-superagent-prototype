@@ -107,10 +107,11 @@ it('does not adopt replaced credentials before first startup and preserves a fai
 })
 
 it('restores revoked-world receipt access without adopting a new grant epoch or disabling another world', async () => {
-  const { h, first, second, pool } = await fixture()
+  const { h, a, first, second, pool } = await fixture()
   const prior = pool.require(first.id).world.effects().items
   await pool.revoke(first.id, { requestId: rid(), revision: 1, reason: 'Restart after revocation' })
   await pool.stop()
+  const dispatch = vi.spyOn(a.endpoint, 'rpc')
   const ctx = new Context(), store = new Store(join(h.directory, 'orchestrator.sqlite'))
   ctx.reflect.provide('agentPresets', h.ctx.get('agentPresets'))
   const recovered = new WorldPool(ctx, { store, endpoints: h.runtime.endpoints, lifetime: h.runtime.lifetime, report: () => {} })
@@ -121,6 +122,8 @@ it('restores revoked-world receipt access without adopting a new grant epoch or 
   expect(recovered.lookup(first.id)!.world.effects().items.map(item => item.id)).toEqual(prior.map(item => item.id))
   expect(() => recovered.require(first.id)).toThrow('revoked')
   expect(recovered.get(second.id).ready).toBe(true)
+  await recovered.lookup(first.id)!.world.refresh()
+  expect(dispatch.mock.calls.some(([, request]) => (request as { op: string }).op === 'grant.revoke')).toBe(false)
 })
 
 it('persists revocation while offline and retries the original request without disturbing another world', async () => {

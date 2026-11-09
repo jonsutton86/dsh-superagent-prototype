@@ -186,6 +186,11 @@ export class RemoteWorld {
   }
   private async flushRevocation(): Promise<void> {
     const request = this.record!.revocation!
+    if (request.receipt?.quiescent) {
+      // A durable terminal receipt, including one recovered from the independent journal, already completed this intent.
+      // Keep observation access without resending a completed administrative mutation after every restart.
+      this.journal.effects.revoked(); this.problem = undefined; return
+    }
     const receipt = await this.control.intent<RevocationReceipt>({ op: 'grant.revoke', requestId: request.requestId, reason: request.reason })
     this.journal.acknowledge(receipt); this.record = this.journal.read()!; this.problem = undefined
     if (receipt.quiescent) this.journal.effects.revoked()
