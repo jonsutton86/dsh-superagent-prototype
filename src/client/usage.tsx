@@ -44,7 +44,7 @@ export function UsagePage({ scope = 'workspace', subject }: { scope?: UsageScope
         <p>{t('usage.cacheRead')}: {usd(price.cacheRead)} · {t('usage.cacheWrite')}: {usd(price.cacheWrite)}</p><p>{price.note}</p>
         <Button onClick={() => setEditing({ kind: 'price', config: data.configuration, price })}>{t('usage.editPrice')}</Button>
       </article>)}</div>
-      {editing && <ConfigurationForm key={`${editing.kind}:${editing.budget?.id ?? editing.price?.model ?? 'new'}:${editing.config.revision}`} editor={editing} scope={selected}
+      {editing && <ConfigurationForm key={`${editing.kind}:${editing.budget?.id ?? (editing.price ? JSON.stringify([editing.price.provider, editing.price.model]) : 'new')}:${editing.config.revision}`} editor={editing} scope={selected}
         done={() => { setEditing(undefined); void reload() }} cancel={() => setEditing(undefined)} />}
       <h3>{t('usage.history')}</h3><div className="dt-mission-actions">{data.calls.map(item => <CallCard key={item.id} item={item} changed={() => { void reload() }} />)}</div>
       <div className="dt-mission-buttons">{offset > 0 && <Button onClick={() => setOffset(offset - 30)}>{t('mission.previous')}</Button>}
