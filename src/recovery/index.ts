@@ -9,6 +9,7 @@ import { reserveCheckpointOwnership, type ReserveCheckpointOwnership } from './o
 import { prepareCheckpointReceipts, type PrepareCheckpointReceipts } from './prepare.ts'
 import { auditCheckpointReceipts, type AuditCheckpointReceipts, type ReceiptAudit } from './audit.ts'
 import { recoveryInferenceHost } from './inference.ts'
+import { recoverySourceHost } from './sources.ts'
 
 export { createCheckpoint, importCheckpointSessions, stageCheckpoint, verifyCheckpoint, type CheckpointManifest } from './checkpoint.ts'
 export { createRecoveryKey } from './crypto.ts'
@@ -19,6 +20,7 @@ export { prepareCheckpointReceipts, type PrepareCheckpointReceipts, type Receipt
 export { verifyReceiptImage, type ReceiptImage } from './image.ts'
 export { type RecoveryWorldConnection } from './configuration.ts'
 export { inferenceConfigurationCheck, type RecoveryInferenceHost, type InferenceConfigurationVerification } from './inference.ts'
+export { sourceConfigurationCheck, type RecoverySourceHost, type SourceConfigurationVerification } from './sources.ts'
 export const name = 'dsh-superagent-recovery'
 export const inject = ['sessionPersistence']
 const authority = s.object({ url: s.string().required(), authorityId: s.string().required(), coordinatorId: s.string().required(), credentialFile: s.string().pattern(/^\//).required(),
@@ -58,7 +60,7 @@ export async function apply(ctx: Context, config: RecoveryConfig): Promise<void>
     if (!config.audit || !config.preparation) throw new Error('Receipt preparation requires resource connections and the selected audit/request IDs')
     prepared = await prepareCheckpointReceipts({ ...config.audit, ...config.preparation, checkpoint: required(config.checkpoint, 'checkpoint'), keyFile: config.keyFile,
       destination: required(config.destination, 'destination'), persistence: ctx.sessionPersistence, signal: abort.signal,
-      inference: recoveryInferenceHost(ctx) })
+      inference: recoveryInferenceHost(ctx), sources: recoverySourceHost(ctx) })
     checkpoint = prepared.manifest.checkpoint; path = prepared.path
     ctx.logger.info('Checkpoint %s receipts prepared in a separate authenticated image; execution remains held', checkpoint)
   } else if (config.mode === 'audit-receipts') {

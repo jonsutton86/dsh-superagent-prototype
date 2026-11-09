@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { z } from 'zod'
 import { key, latestAssignment, ticketStage, canRetry, canStop, hasPendingFollowup, type Engine, type Policy, type Trigger, type Ticket, type ChannelRef } from '../core/index.ts'
 import type { Store } from '../app/store.ts'
 import type { SourceKind } from '../sources/kind.ts'
+import { workspaceContract } from '../sources/contracts.ts'
 import { workerSessionId } from '../executor/dsh.ts'
 import { ActionCommand, AddAction, CreateMission, MissionCommand, WorkspaceError,
   type ActionView, type Mission, type MissionAction, type MissionEvent, type MissionList, type MissionView } from './model.ts'
@@ -32,7 +32,7 @@ export class Workspace {
 
   readonly source: SourceKind = { kind: SOURCE, title: { en: 'Workspace', zh: '工作空间' },
     description: { en: 'Missions authorized by the local operator.', zh: '由本地用户授权的任务。' },
-    schema: z.object({}).strict(), fields: [], health: [],
+    schema: workspaceContract.schema, fields: [], health: [],
     scope: ({ meta }) => this.authorized(meta) ? { listened: true, observed: false } : { listened: false, reason: 'Unknown workspace action' } }
 
   /** Only host-created intents backed by an existing active mission can originate workspace execution. */

@@ -30,7 +30,7 @@ it('deploys the watchdog in a separate profile without the main plugin or Source
   const rows = await patched('examples/watchdog.cordis.patch.yml', [
     ...await patched(), { id: 'webserver', name: '@deepseek-ai/dsh-host-webserver', config: { host: '127.0.0.1', port: 3082 } },
   ])
-  for (const id of ['dsh-superagent', 'dsh-superagent-github', 'dsh-superagent-feishu'])
+  for (const id of ['dsh-superagent', 'dsh-superagent-sources', 'dsh-superagent-github', 'dsh-superagent-feishu'])
     expect(rows.find(row => row.id === id)!.disabled).toBe(true)
   expect(rows.find(row => row.id === 'webserver')!.config).toMatchObject({ host: '127.0.0.1', port: 3083 })
   expect(rows.find(row => row.id === 'dsh-superagent-watchdog')!.name).toBe('dsh-superagent/watchdog')
@@ -39,7 +39,7 @@ it('deploys the watchdog in a separate profile without the main plugin or Source
 
 it('defines the worker preset Executor Sessions run under, with a shell that moves long commands to the background', async () => {
   const rows = await patched()
-  expect(rows.map(row => row.id)).toEqual(['dsh-superagent', 'dsh-superagent-github', 'dsh-superagent-feishu', 'dsh-superagent-worker-preset',
+  expect(rows.map(row => row.id)).toEqual(['dsh-superagent-sources', 'dsh-superagent', 'dsh-superagent-github', 'dsh-superagent-feishu', 'dsh-superagent-worker-preset',
     'dsh-superagent-router-preset'])
   const preset = presetOf(rows, WORKER_PRESET)
   expect(preset.id).toBe(WORKER_PRESET)

@@ -17,6 +17,7 @@ import { lockSync } from 'proper-lockfile'
 import { Engine, canStop, key, reasonText, type EngineForSettings, type ReceiveResult, type Ticket, type Trigger } from '../core/index.ts'
 import { allowedSender, settingsPolicy } from '../policy.ts'
 import { SourceRegistry } from '../sources/registry.ts'
+import { sourceAvailable } from '../sources/contracts.ts'
 import { Commands } from '../infra/commands.ts'
 import type { Deployment, Machine } from '../deployment.ts'
 import { environmentOf, ticketEnvironment, executionRoot, type Variable } from './execution-environment.ts'
@@ -184,7 +185,7 @@ export class Runtime extends Service implements SourceHost {
         if (kind.policy?.sync) void this.ready?.then(() => this.settings.syncable().includes(kind.kind) ? this.settings.sync(kind.kind) : undefined)
           .catch(() => { /* sync() records its failure in health. */ })
         return () => {}
-      }, id => this.ownership ? id === 'workspace' || (id === 'publication' || id === 'conversation') && !!machine.publication : id !== 'github' || machine.executionMode !== 'local')
+      }, id => sourceAvailable({ owned: !!this.ownership, publication: !!machine.publication, local: machine.executionMode === 'local' }, id))
       this.channelPublications = new ChannelPublications({ store, ownership: this.ownership, connection: machine.publication, lifetime: this.lifetime,
         mission: id => workspace.get(id, false), destinations: () => this.publications.destinations(),
         authorized: ticket => workspace.policy(settingsPolicy(store.settings(), sources)).revalidate(ticket.mandate) && workspace.executionAllowed(ticket) })

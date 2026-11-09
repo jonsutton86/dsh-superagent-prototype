@@ -23,6 +23,12 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+function pluginContext(value: unknown, disposers: (() => unknown)[]): never {
+  const context = { orchestrator: value, superagentSources: { register: () => () => {} },
+    effect: (effect: () => () => unknown) => { disposers.push(effect()) },
+    inject: (_keys: string[], apply: (child: unknown) => void) => { apply(context) } }
+  return context as never
+}
 const MEMBER = 'ou_alice'
 function host(overrides: Partial<SourceContextDeps> = {}) {
   const store = new Store(join(mkdtempSync(join(tmpdir(), 'sources-')), 'db.sqlite'))
@@ -95,7 +101,7 @@ describe('feishu source', () => {
       // The fixture's registry already holds the kind; this one starts empty so the plugin's registration shows.
       const value = host({ sources: emptyRegistry(), ...overrides })
       const disposers: (() => unknown)[] = []
-      applyFeishu({ orchestrator: value, effect: (effect: () => () => unknown) => { disposers.push(effect()) } } as never)
+      applyFeishu(pluginContext(value, disposers))
       await vi.waitFor(() => expect(value.health.history).toBeDefined())
       const registered = value.sources.kind('feishu')
       // Snapshot health before disposal clears the registered entries.
@@ -770,7 +776,7 @@ describe('github source', () => {
         healthOf.set(sources, board)
         const value = host({ sources, ...overrides })
         const disposers: (() => unknown)[] = []
-        applyGithub({ orchestrator: value, effect: (effect: () => () => unknown) => { disposers.push(effect()) } } as never)
+        applyGithub(pluginContext(value, disposers))
         return { value, stop: async () => { for (const dispose of disposers) await dispose(); value.store.close() } }
       }
       const pending = await start({ configured: () => false })
@@ -806,7 +812,7 @@ describe('github source', () => {
     // The fixture's registry already holds the kind; this one starts empty so the plugin can register it.
     const value = host({ sources: emptyRegistry(), ready: Promise.reject(new Error('lock held')) })
     const disposers: (() => unknown)[] = []
-    applyGithub({ orchestrator: value, effect: (effect: () => () => unknown) => { disposers.push(effect()) } } as never)
+    applyGithub(pluginContext(value, disposers))
     await vi.waitFor(() => expect(value.health.github).toMatchObject({ state: 'error', detail: expect.stringContaining('lock held') }))
     for (const dispose of disposers) await dispose()
     value.store.close()

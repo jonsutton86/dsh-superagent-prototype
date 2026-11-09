@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { Store } from '../app/store.ts'
 import type { ChannelRef, OutboundMessage, Ticket } from '../core/index.ts'
 import type { SourceKind } from '../sources/kind.ts'
+import { publicationContract } from '../sources/contracts.ts'
 import type { Mission, MissionAction, MissionView } from '../workspace/model.ts'
 import type { CoordinatorOwnership } from '../ownership/lease.ts'
 import type { OwnershipStamp } from '../ownership/protocol.ts'
@@ -42,7 +43,7 @@ export class ChannelPublications {
   }
   readonly source: SourceKind = { kind: 'publication', title: { en: 'Mission delivery', zh: '任务交付' },
     description: { en: 'Replies to an operator-selected mission destination.', zh: '向用户指定的任务目标发送回复。' },
-    schema: z.object({}).strict(), fields: [], health: [], scope: () => ({ listened: false, reason: 'Outbound-only mission channel' }),
+    schema: publicationContract.schema, fields: [], health: [], scope: () => ({ listened: false, reason: 'Outbound-only mission channel' }),
     channel: { allowed: address => this.allowed(address.grantId ?? ''), send: async (_host, message) => {
       const result = await this.send(message)
       if (result === 'pending') throw new PublicationError(409, 'delivery_unknown', 'Delivery is unresolved; inspect its original receipt')

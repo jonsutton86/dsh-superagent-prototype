@@ -1,5 +1,6 @@
 /** GitHub source kind definition, notification and repository polling loops, and Cordis plugin entry. */
 import type { Context } from '@deepseek-ai/cordis'
+import type {} from './catalog.ts'
 import { key, type Thread } from '../core/index.ts'
 import { sameName } from '../infra/text.ts'
 import { GithubAccountsSchema, requireGithub } from '../deployment.ts'
@@ -109,8 +110,12 @@ export const githubKind: SourceKind<GithubConfig> = {
   } : {},
 }
 export const name = 'dsh-superagent-github'
-export const inject = ['orchestrator']
+export const inject = ['superagentSources']
 export function apply(ctx: Context): void {
+  ctx.effect(() => ctx.superagentSources.register(githubKind), 'source contract')
+  ctx.inject(['orchestrator'], watchContext)
+}
+function watchContext(ctx: Context): void {
   ctx.effect(() => ctx.orchestrator.sources.register(githubKind), 'github: source kind')
   ctx.effect(() => {
     const source = sourceContext(ctx.orchestrator, githubKind)

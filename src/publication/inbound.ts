@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { Store } from '../app/store.ts'
 import { followupOwners, type Engine, type Policy, type Ticket } from '../core/index.ts'
 import type { SourceKind } from '../sources/kind.ts'
+import { conversationContract } from '../sources/contracts.ts'
 import type { CoordinatorOwnership } from '../ownership/lease.ts'
 import { fingerprint, timestamp } from '../remote/journal.ts'
 import { PublicationClient, type PublicationConnection } from './client.ts'
@@ -43,7 +44,7 @@ export class ConversationInbox {
   }
   readonly source: SourceKind = { kind: SOURCE, title: { en: 'External task replies', zh: '外部任务回复' },
     description: { en: 'Authorized participants replying to one selected task.', zh: '经授权的参与者向指定任务发送的回复。' },
-    schema: z.object({}).strict(), fields: [], health: [], scope: ({ meta }) => {
+    schema: conversationContract.schema, fields: [], health: [], scope: ({ meta }) => {
       const item = typeof meta.inbound === 'string' ? this.record(meta.inbound) : undefined
       const binding = item && this.binding(item.bindingId)
       return binding && this.active(binding) ? { listened: true, observed: false } : { listened: false, reason: 'External reply authority is inactive' }

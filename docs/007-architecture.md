@@ -430,6 +430,8 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/infra/health.ts` | The `HealthBoard`, every part's health entry, each claimed by its one writer |
 | `src/sources/kind.ts` | The `SourceKind` protocol |
 | `src/sources/registry.ts` | `SourceRegistry` |
+| `src/sources/contracts.ts` | Shared built-in source schemas and owned/local availability rules |
+| `src/sources/catalog.ts` | Passive Cordis source-contract service and registration lifetime tracking, exported as `./sources` |
 | `src/sources/host.ts` | `SourceHost`, `SourceContext`, `Health`, `health` and the fixed health texts |
 | `src/sources/poll.ts` | What GitHub and Feishu polling share: `POLL_HORIZON_MS`, `polled`, `cursorAt`, and `pollThreads`, which keeps a failure on its Thread as `pollError` |
 | `src/sources/github.ts` | The GitHub kind and plugin entry, exported as `./github-watch`: a poll round of notifications, the pull requests of open Tickets with their CI, and subscribed Threads |
@@ -462,6 +464,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/recovery/control.ts` | Original recovery claimant, coordinator publication credential and pinned provider account/target verification without execution |
 | `src/recovery/inference.ts` | Public Harness cold model-selection projection and bounded, history-free recovery inference probes |
 | `src/recovery/inputs.ts` | Transactional reconciliation of live input acknowledgements against authenticated worker consumption history |
+| `src/recovery/sources.ts` | Actual passive source catalog and authenticated settings qualification with repeated registration/default checks |
 | `src/recovery/crypto.ts` | Private inputs, separate key files and streaming authenticated checkpoint encryption |
 | `src/remote/scoped-plugin.ts` | Harness preset-owned paired providers borrowing one managed execution world |
 | `src/client/provider.tsx` | What every page reads from its host: copy, calls, navigation, notices, the state poll, and `restart`, which reads the state quickly while dsh-superagent restarts |
@@ -485,7 +488,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/client/locales.ts` | All copy in both languages, and the glossary of [001 Domain model](001-domain.md) |
 | `src/client/client.css`, `css.d.ts` | The panel's stylesheet, loaded as text |
 
-`src/sources/github.ts` and `src/sources/feishu.ts` are also the entries of the two Source plugins, built by `tsdown.config.ts` and exported in `package.json` as `./github-watch` and `./feishu-watch`. The bundle's `cordis.patch.yml` inserts the three plugins, with Feishu disabled.
+`src/sources/github.ts` and `src/sources/feishu.ts` are also the entries of the two Source plugins, built by `tsdown.config.ts` and exported in `package.json` as `./github-watch` and `./feishu-watch`. The bundle's `cordis.patch.yml` inserts the coordinator, passive `./sources` catalog and both source plugins, with Feishu disabled. Source contracts register without a coordinator; polling starts only when `orchestrator` is available.
 
 ## Tests
 
@@ -513,6 +516,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/recovery-audit.spec.ts` | Real HTTP receipt inventories, late effects, original observations, revoked worlds, missing/mismatched resources, revision races, restart, cancellation, authenticated receipt preparation, interruption/retry, tamper refusal, historical administrative and lost-revocation recovery, credential binding comparison and retained restore holds |
 | `tests/recovery-inference.spec.ts` | Effective model selection, role/persona routes, bounded streams, cancellation, sanitized failures and repeated inference preflight |
 | `tests/recovery-inputs.spec.ts` | Real Session consumption attribution, inherited boundaries, pending/ended state and rollback of contradictory input acknowledgements |
+| `tests/recovery-sources.spec.ts` | Real passive source plugin lifecycle, shared eligibility, strict settings checks, registration changes, cancellation and safe failures |
 | `tests/remote-ownership.spec.ts` | Pre-dispatch persistence, concurrent attribution, lost responses, assignment fences, restart/cancel recovery and receipt mismatch refusal |
 | `tests/ownership.spec.ts` | Competing coordinators, all-resource barriers, claimant replacement/supersession, monotonic expiry/restart, endpoint handoff/outage and immutable receipt generations |
 | `tests/ownership-runtime.spec.ts` | Profile compatibility, owned Runtime startup/loss, managed command attribution, competing writers, startup cleanup and held-restore refusal |

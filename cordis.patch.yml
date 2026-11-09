@@ -2,6 +2,8 @@
 # profile supplies the `dsh-superagent` entry's stateDir (see docs/006-deployment.md and examples/profile.cordis.patch.yml); the plugin
 # refuses to start without stateDir.
 - insert:
+    - id: dsh-superagent-sources
+      name: dsh-superagent/sources
     - id: dsh-superagent
       name: dsh-superagent
     - id: dsh-superagent-github

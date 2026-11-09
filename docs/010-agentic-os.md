@@ -370,3 +370,10 @@ consumption summary against actual worker inputs and returned the same held imag
 its expected refusal for unrecorded publication probes. The focused recovery/delivery run passed 133 tests. Provider-message
 traffic stayed local and the original app remained running. Source configuration, broader authoritative-state reconciliation,
 supported activation and the remaining full architecture/product requirements remain open.
+
+Passive source recovery: `039-source-contract-recovery.md` separates loaded source contracts from polling and coordinator
+startup. New held preparation validates source/policy settings against the actual maintenance catalog and shared owned-mode
+eligibility, records signed counts/digests, and rejects catalog reloads or changed settings/defaults before final publication.
+Unknown explicitly disabled sources remain opaque; invalid or required missing contracts fail held. This does not establish
+uncaptured plugin versions, private connector accounts or successful polling. Actual deployment binding, broader state/cursor
+reconciliation, remapping, restored activation and the remaining full article/product scope remain open.

@@ -25,6 +25,19 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: passive source contracts and settings recovery
+
+[039 Source contracts](039-source-contract-recovery.md) separates loaded source schemas from polling and Runtime startup.
+GitHub/Feishu register passively, while listeners still require the coordinator. Built-in adapters and recovery share schemas
+and eligibility rules. Held preparation validates authenticated source/policy settings against the actual catalog, pins its
+lifetime and registration revision, and checks for changes before final publication. Invalid settings or missing required
+contracts fail held; explicitly disabled unknown settings remain opaque. Signed summaries, older image authentication and
+original-ID retries are supported without treating catalog membership as provider authentication or activation authority.
+
+Deployment binding, private legacy connector credentials, authoritative pending work and broader state relationships,
+cursor reconciliation, runtime remapping, supported activation and clean-host failover remain open with every other full
+architecture/product requirement below.
+
 ## Implemented increment: consumed input acknowledgement recovery
 
 [038 Consumed inputs](038-consumed-input-recovery.md) reconciles missing live input acknowledgements against authenticated
