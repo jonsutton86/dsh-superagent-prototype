@@ -6,27 +6,29 @@ import { useAction, usePanel, usePanelData } from './provider.tsx'
 import { errorText } from './text.ts'
 import { MarkdownLite, When } from './widgets.tsx'
 import { INBOX_FILTERS } from '../app/api.ts'
-import type { ConversationMessage, InboxFilter, InboxItem } from '../workspace/inbox-model.ts'
+import type { ConversationMessage, InboxFilter, InboxItem, InboxExecutionSelection } from '../workspace/inbox-model.ts'
 import { Dictation, SpeakReply, VoiceProvider } from './voice.tsx'
 import { AttachmentCard, AttachmentPicker } from './attachments.tsx'
+import { InboxTaskSettings, InboxExecutionDetails } from './inbox-settings.tsx'
 
-function Composer({ send, done, fresh = false }: {
-  send: (text: string, requestId: string, attachments: string[]) => Promise<InboxItem>; done: (item: InboxItem) => void; fresh?: boolean
+function Composer({ send, done, fresh = false, available = true }: {
+  send: (text: string, requestId: string, attachments: string[], execution: InboxExecutionSelection) => Promise<InboxItem>; done: (item: InboxItem) => void; fresh?: boolean; available?: boolean
 }) {
   const { t } = usePanel(), [text, setText] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('')
   const running = useRef(false)
   const [dictating, setDictating] = useState(false)
   const [unapplied, setUnapplied] = useState('')
   const [files, setFiles] = useState<string[]>([]), [uploading, setUploading] = useState(false), [resetUploads, setResetUploads] = useState(0)
+  const [execution, setExecution] = useState<InboxExecutionSelection>({}), [settingsReady, setSettingsReady] = useState(!fresh)
   // Keep the original body/revision for ambiguous failures; a later poll must not turn a retry into a second message.
   const pending = useRef<{ fingerprint: string; send: () => Promise<InboxItem> }>()
+  const fingerprint = JSON.stringify([text, files, execution]), retryOriginal = pending.current?.fingerprint === fingerprint
   const submit = async (event: FormEvent) => {
     event.preventDefault()
-    if (running.current || dictating || uploading || !text.trim()) return
-    const fingerprint = JSON.stringify([text, files])
+    if (running.current || dictating || uploading || !text.trim() || (!available || !settingsReady) && !retryOriginal) return
     if (!pending.current || pending.current.fingerprint !== fingerprint) {
-      const requestId = crypto.randomUUID(), submitted = text, attachments = [...files]
-      pending.current = { fingerprint, send: () => send(submitted, requestId, attachments) }
+      const requestId = crypto.randomUUID(), submitted = text, attachments = [...files], choices = structuredClone(execution)
+      pending.current = { fingerprint, send: () => send(submitted, requestId, attachments, choices) }
     }
     running.current = true; setBusy(true); setError('')
     try { const item = await pending.current.send(); pending.current = undefined; setText(''); setResetUploads(value => value + 1); done(item) }
@@ -39,6 +41,8 @@ function Composer({ send, done, fresh = false }: {
     <label>{t(fresh ? 'inbox.task' : 'inbox.reply')}<textarea value={text} onChange={event => setText(event.target.value)}
       required maxLength={12000} rows={3} disabled={busy} /></label>
     {error && <p className="dt-error" role="alert">{error}</p>}
+    {fresh && <InboxTaskSettings value={execution} change={setExecution} ready={setSettingsReady} disabled={busy} />}
+    {!available && <p role="status">{t('mission.executionUnavailable')}</p>}
     <Dictation disabled={busy} onBusy={setDictating} onText={spoken => {
       const combined = [text, spoken].filter(Boolean).join('\n')
       if (combined.length > 12000) setUnapplied(spoken)
@@ -46,7 +50,7 @@ function Composer({ send, done, fresh = false }: {
     }} />
     {unapplied && <label>{t('voice.draftFull')}<textarea readOnly value={unapplied} rows={3} /></label>}
     <AttachmentPicker disabled={busy} reset={resetUploads} onChange={(ids, active) => { setFiles(ids); setUploading(active) }} />
-    <Button variant="primary" type="submit" disabled={busy || dictating || uploading || !text.trim()}>{t(fresh ? 'inbox.start' : 'inbox.send')}</Button>
+    <Button variant="primary" type="submit" disabled={busy || dictating || uploading || !text.trim() || (!available || !settingsReady) && !retryOriginal}>{t(fresh ? 'inbox.start' : 'inbox.send')}</Button>
   </form>
 }
 
@@ -62,9 +66,9 @@ function ConversationList({ filter }: { filter: InboxFilter }) {
       <Button variant="primary" onClick={() => setCreating(!creating)}>{t(creating ? 'cancel' : 'inbox.new')}</Button></div>
     {data && <p className="dt-hint">{t('inbox.counts', { unread: data.unread, questions: data.questions, review: data.review })}</p>}
     {creating && <><p className="dt-hint">{t('inbox.newHint')}</p>
-      {state?.paused || state?.setup.problem || (state && !state.environment?.ready) ? <p role="status">{t('mission.executionUnavailable')}</p>
-        : <Composer fresh send={(text, requestId, attachments) => call('POST inbox', { body: { text, requestId, ...(attachments.length ? { attachments } : {}) } })}
-          done={item => navigate({ page: 'inbox', id: item.id })} />}</>}
+      <Composer fresh available={!!state && !state.paused && !state.setup.problem && !!state.environment?.ready}
+        send={(text, requestId, attachments, execution) => call('POST inbox', { body: { text, requestId, ...execution, ...(attachments.length ? { attachments } : {}) } })}
+        done={item => navigate({ page: 'inbox', id: item.id })} /></>}
     <div className="dt-filters">{INBOX_FILTERS.map(value => <Pill key={value} active={value === filter}
       onClick={() => { setOffset(0); navigate({ page: 'inbox', query: { filter: value } }, true) }}>{t(`inbox.filter.${value}`)}</Pill>)}</div>
     <form className="dt-inbox-search" role="search" onSubmit={event => { event.preventDefault(); setOffset(0); setQuery(search.trim()) }}>
@@ -107,6 +111,7 @@ function ConversationPage({ id }: { id: string }) {
     {!data && !error && <p role="status">{t('loading')}</p>}
     {data && item && <>
       <div className="dt-mission-heading"><h2>{item.title}</h2><span>{t(`inbox.status.${item.status}`)}</span></div>
+      {item.execution && <InboxExecutionDetails execution={item.execution} />}
       <div className="dt-mission-buttons">
         {item.unread && <Button disabled={mark.busy} onClick={() => { void mark.run() }}>{t('inbox.markRead')}</Button>}
         {item.mission && <Button onClick={() => navigate({ page: 'missions', id: item.mission!.id })}>{t('inbox.mission')}</Button>}

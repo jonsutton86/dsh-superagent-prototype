@@ -19,6 +19,7 @@ import { qualifyPublication } from './fixtures/publication-harness.ts'
 import { qualifySchedules } from './fixtures/schedules.ts'
 import type { RemoteJob } from '../src/remote/protocol.ts'
 import { HostProcessIsolation } from '../src/verification/local.ts'
+import { qualifyInboxSettings } from './fixtures/inbox-harness.ts'
 import { attachmentInstructions, qualifyAttachments } from './fixtures/attachment-harness.ts'
 import type { CheckRun } from '../src/verification/contracts.ts'
 
@@ -108,7 +109,7 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
       { id: 'session-title-llm', disabled: true }]))
   }
   const attachmentQualification = process.env.DSH_ATTACHMENT_QUALIFICATION === '1', attachmentRoot = join(h.directory, 'native-input-store')
-  let verifyInputs: (() => Promise<void>) | undefined
+  let verifyInputs: (() => Promise<void>) | undefined, verifyInbox: (() => Promise<void>) | undefined
   if (attachmentQualification) await appendFile(join(directory, 'cordis.patch.yml'), '\n- id: attachment-local\n  config:\n    dshHome: ' + JSON.stringify(attachmentRoot) + '\n')
   const voiceModel = process.env.DSH_VOICE_MODEL
   if (voiceModel) {
@@ -177,6 +178,7 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
       await stop(); start(); await ready()
       for (const value of (await api('worlds')).items) expect(value.ready, value.problem ?? 'World did not prepare after restart').toBe(true)
     }
+    if (process.env.DSH_INBOX_QUALIFICATION === '1' && alternate) { verifyInbox = await qualifyInboxSettings(api, alternate, owned); await verifyInbox() }
     let voiceObjective = ''
     if (voiceModel) {
       expect(await api('voice')).toMatchObject({ input: 'local', output: 'local' })
@@ -386,7 +388,7 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     await api(`personas/${persona.id}/archive`, { requestId: 'persona-proof-archive', revision: updated.revision, archived: true, reason: 'Qualification finished; preserve original execution' })
     const oldOwner = owned && (await api('state')).ownership.owner
     await stop(); if (attachmentQualification) await rm(attachmentRoot, { recursive: true, force: true }); start(); await ready()
-    await verifyInputs?.()
+    await verifyInputs?.(); await verifyInbox?.()
     await qualifyRouter()
     if (owned) {
       const nextOwner = (await api('state')).ownership.owner
@@ -467,7 +469,7 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     const unrecordedPublications = variant === 'owned-dedicated' && publisher && ownershipConfig
       ? await qualifyPublication({ cli, home, profile, directory, port, publisher, ownership: ownershipConfig }) : []
     if (attachmentQualification) await rm(attachmentRoot, { recursive: true, force: true })
-    await qualifyRecovery({ verifyInputs, cli, home, profile, directory, temporary: h.directory, port, stateDir, sessionRoot,
+    await qualifyRecovery({ verifyInputs: async () => { await verifyInputs?.(); await verifyInbox?.() }, cli, home, profile, directory, temporary: h.directory, port, stateDir, sessionRoot,
       worldDirectories, worker: ticket.sessionId, worlds: mode === 'managed' ? owned ? 3 : 2 : 1, unrecordedPublications, expectedRecoveredRevocations: lostRevocation ? 1 : 0,
       expectedPublicationDestinations: publisher?.config.destinations.length,
       ...(authority ? { authority: { ...authority.admin.connection, coordinatorId: authority.config.coordinatorId }, originalClaimantFile: authority.config.credentialFile,

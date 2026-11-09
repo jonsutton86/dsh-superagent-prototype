@@ -313,6 +313,7 @@ function routes(runtime: HttpHost): Routes {
     'GET voice/:id': ({ params }) => { if (!runtime.voice) throw new VoiceError(503, 'Speech is unavailable'); return runtime.voice.get(params.id) },
     'POST voice/:id/cancel': ({ params }) => { if (!runtime.voice) throw new VoiceError(503, 'Speech is unavailable'); return runtime.voice.cancel(params.id) },
     'GET inbox': ({ query }) => runtime.inbox.list(query),
+    'GET inbox/setup': () => runtime.inbox.setup(),
     'POST inbox': async ({ body }) => runtime.inbox.start(await body()),
     'GET inbox/:id': ({ params, query }) => runtime.inbox.conversation(params.id, query),
     'POST inbox/:id/read': async ({ params, body }) => runtime.inbox.read(params.id, await body()),

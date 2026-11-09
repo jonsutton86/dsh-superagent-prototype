@@ -4,6 +4,12 @@ import type { ExecutionGrant } from '../core/index.ts'
 import type { CredentialBinding } from '../remote/protocol.ts'
 
 const requestId = z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/)
+/** Optional optimistic precondition for an operator-reviewed default execution grant. */
+export const DefaultEnvironmentRef = z.object({ environmentId: z.string().uuid(), revision: z.number().int().positive(),
+  epoch: z.number().int().positive(), world: z.string().regex(/^[a-f0-9]{64}$/).optional() }).strict()
+export interface EnvironmentDescription { name: string; root: string; mode: 'local' | 'repository'; kind: 'local' | 'remote' }
+export type DefaultEnvironmentSelection = { available: false; problem: string }
+  | ({ available: true; grant: ExecutionGrant } & EnvironmentDescription)
 export const EnrollEnvironment = z.object({ requestId, name: z.string().trim().min(1).max(160),
   root: z.string().min(1), mode: z.enum(['local', 'repository']),
   replaceId: z.string().uuid().optional(), revision: z.number().int().positive().optional() }).strict()

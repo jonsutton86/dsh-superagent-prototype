@@ -230,7 +230,7 @@ export class Runtime extends Service implements SourceHost {
         (occurrence, missionId, spec) => reflections.prepare(occurrence, missionId, spec))
       const usage = this.usage = new Usage(store, Date.now, call => runtime.speculation?.admitCall(call))
       const inbox = this.inbox = new Inbox(store, workspace, library,
-        async id => (await ctx.sessionController.inspect(id as SessionId, AbortSignal.any([this.lifetime, AbortSignal.timeout(15_000)]))).events, this.attachments)
+        async id => (await ctx.sessionController.inspect(id as SessionId, AbortSignal.any([this.lifetime, AbortSignal.timeout(15_000)]))).events, this.attachments, environments)
       this.disposers.push(ctx.on('session/event', (session, event) => {
         const id = ticketOfSession(session.id)
         if (id) inbox.record(id, event)

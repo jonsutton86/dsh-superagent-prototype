@@ -15,7 +15,7 @@ import type { ArchiveRecordInput, CreateRecordInput, LibraryContent, LibraryEntr
 import type { CreateCheckInput, SaveCheckInput, ConfigureCheckInput, RequestCheckInput, CheckRecord, CheckVersion, CheckRun, CheckRunSummary } from '../verification/contracts.ts'
 import type { EvidenceBinding, EvidenceReview } from '../verification/review-model.ts'
 import type { OutputWindow } from '../remote/protocol.ts'
-import type { Conversation, InboxFilter, InboxItem, InboxPage, InboxReplyInput, InboxStartInput } from '../workspace/inbox-model.ts'
+import type { Conversation, InboxFilter, InboxItem, InboxPage, InboxReplyInput, InboxStartInput, InboxSetup } from '../workspace/inbox-model.ts'
 import type { PlanIndex, PlanProposal, PlanVersion, ProposePlanInput, ReviewPlanInput, RequestPlanInput } from '../workspace/plan-model.ts'
 import type { CreateScheduleInput, SaveScheduleInput, ToggleScheduleInput, ScheduleView, ScheduleList, Schedule } from '../workspace/schedule-model.ts'
 import type { UsagePage, UsageCall, UsageConfiguration, SaveUsageInput, ReconcileUsageInput } from '../usage/model.ts'
@@ -122,6 +122,7 @@ export interface Api {
   'POST missions/:id/proposals/:proposal': { body: ReviewPlanInput; response: PlanProposal }
   'POST missions/:id/plan-request': { body: RequestPlanInput; response: MissionView }
   'GET inbox': { query?: Paged & { filter?: InboxFilter; q?: string }; response: InboxPage }
+  'GET inbox/setup': { response: InboxSetup }
   'POST inbox': { body: InboxStartInput; response: InboxItem }
   'GET inbox/:id': { query?: { before?: string; limit?: number }; response: Conversation }
   'POST inbox/:id/read': { body: { revision: string }; response: { marked: boolean; unread: boolean } }

@@ -1,5 +1,13 @@
 # Article implementation tracker
 
+[064 Inbox execution settings](064-inbox-execution-settings.md) adds reviewed persona versions and default/managed
+environment selection to new inbox tasks, exact default-grant preconditions and captured execution details. Ambiguous Send
+retries retain their original request even after persona archival or environment revocation. Execution continues through
+the existing Workspace, Engine and DeepSeek Harness. Local typechecking, six builds and 1,988 tests passed (16 skipped;
+130.32 seconds); native Linux and live Harness qualification remain pending. Broader browser/provider acceptance
+and all remaining full architecture and product requirements below remain open. After resuming, the prior temporary Harness
+installation and app process were absent; the existing code and task history are not evidence of a currently running app.
+
 [063 Conversation attachments](063-attachments.md) adds resumable file uploads, exact task/reply bindings, native Harness image
 projection and verified copies through the existing scoped subprocess service. Source bytes reside in the checkpointed Store.
 Revision `ba44a813777991f59a9b8e355dd7827b0dc8f949` passed the installed Harness / DeepSeek Flash input-to-checked-artifact,

@@ -462,3 +462,8 @@ a.dt-btn, a.dt-btn:hover { text-decoration: none; }
 .dt-attachments li { margin: 8px 0; overflow-wrap: anywhere; }
 .dt-attachment-card { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; overflow-wrap: anywhere; }
 .dt-attachment-card img { display: block; max-width: 100%; max-height: 480px; object-fit: contain; }
+.dt-inbox-settings { border: 1px solid var(--dsw-alias-border-l3); border-radius: 8px; padding: 12px; min-width: 0; overflow-wrap: anywhere; }
+.dt-inbox-settings select { max-width: 100%; }
+.dt-inbox-settings > div { margin-bottom: 12px; }
+.dt-inbox-settings summary { cursor: pointer; }
+.dt-inbox-selection { border-left: 2px solid var(--dsw-alias-border-l3); padding-left: 12px; }

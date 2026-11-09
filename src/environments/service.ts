@@ -11,7 +11,7 @@ import type { WorldPool } from './pool.ts'
 import type { OwnershipAccess } from '../ownership/protocol.ts'
 import { ownershipReady } from '../ownership/runtime.ts'
 import { EnrollEnvironment, EnvironmentCommand, EnvironmentError, type EnvironmentList, type EnvironmentRecord,
-  type EnvironmentView, type ExecutionGrant } from './model.ts'
+  type EnvironmentView, type ExecutionGrant, type DefaultEnvironmentSelection, type EnvironmentDescription } from './model.ts'
 
 export interface EnvironmentHost {
   store: Store; filesystem: FileSystem; subprocess: SubprocessRuntime; lifetime: AbortSignal
@@ -82,6 +82,33 @@ export class Environments {
     if (this.host.ownership && !this.host.remote) return false
     if (this.host.remote && !this.host.remote.world.status().ready) return false
     return this.records().some(record => this.current(record) && record.enabled && this.checked.get(record.id)?.verifiedAt && !this.checked.get(record.id)?.problem)
+  }
+  private defaultRecord(): EnvironmentRecord {
+    if (this.host.lifetime.aborted || !ownershipReady(this.host.ownership)) throw new EnvironmentError(409, 'Coordinator ownership is unavailable')
+    if (this.host.ownership && !this.host.remote) throw new EnvironmentError(409, 'Select an enrolled endpoint world for ownership-controlled execution')
+    const record = this.records().find(record => this.current(record))
+    if (!record?.enabled || !this.checked.get(record.id)?.verifiedAt || this.checked.get(record.id)?.problem
+      || this.host.remote && !this.host.remote.world.status().ready)
+      throw new EnvironmentError(409, 'Enroll and enable the configured execution environment before starting work.')
+    this.host.authorizeRoot?.(record.root)
+    return record
+  }
+  /** A read-only selection; dispatch compares this grant again in the inbox transaction. */
+  defaultSelection(): DefaultEnvironmentSelection {
+    try {
+      const record = this.defaultRecord()
+      return { available: true, name: record.name, root: record.root, mode: record.mode, kind: record.kind,
+        grant: { environmentId: record.id, revision: record.revision, epoch: record.epoch, ...(record.remote ? { world: record.remote.binding } : {}) } }
+    } catch (error) { return { available: false, problem: error instanceof EnvironmentError ? error.message : 'Default execution environment is unavailable' } }
+  }
+  /** Catalog labels are descriptive only; the ticket retains its original grant and directory. */
+  describe(grant: ExecutionGrant): EnvironmentDescription | undefined {
+    if (grant.world && grant.environmentId === grant.world) {
+      try { const world = this.host.worlds?.().get(grant.world); return world && { name: world.name, root: world.root, mode: 'local', kind: 'remote' } }
+      catch { return undefined }
+    }
+    const record = this.records().find(record => record.id === grant.environmentId)
+    return record && { name: record.name, root: record.root, mode: record.mode, kind: record.kind }
   }
   private receipt(id: string, fingerprint: string): EnvironmentView | undefined {
     const row = this.host.store.db.prepare('SELECT fingerprint,environment FROM execution_environment_command WHERE id=?').get(id)
@@ -217,11 +244,7 @@ export class Environments {
       if (resolve(dirname(execution.directory)) !== remote.world.grant.root) throw new EnvironmentError(409, 'Task directory is outside the selected execution world')
       return { environmentId: binding, revision: record.revision, epoch: record.epoch, world: binding }
     }
-    if (this.host.ownership && !this.host.remote) throw new EnvironmentError(409, 'Select an enrolled endpoint world for ownership-controlled execution')
-    const record = this.records().find(record => this.current(record))
-    if (!record?.enabled || !this.checked.get(record.id)?.verifiedAt || this.checked.get(record.id)?.problem
-      || this.host.remote && !this.host.remote.world.status().ready)
-      throw new EnvironmentError(409, 'Enroll and enable the configured execution environment before starting work.')
+    const record = this.defaultRecord()
     if (resolve(dirname(execution.directory)) !== record.configuredRoot)
       throw new EnvironmentError(409, 'The task directory is outside the enrolled execution root.')
     return { environmentId: record.id, revision: record.revision, epoch: record.epoch, ...(record.remote ? { world: record.remote.binding } : {}) }

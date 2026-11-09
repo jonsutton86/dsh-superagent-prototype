@@ -6,8 +6,9 @@ import type { Workspace } from './service.ts'
 import type { Library } from './library.ts'
 import { WorkspaceError } from './model.ts'
 import type { Attachments } from '../attachments/service.ts'
+import type { Environments } from '../environments/service.ts'
 import { InboxHistory, InboxQuery, InboxRead, InboxReply, InboxStart,
-  type Conversation, type ConversationMessage, type InboxItem, type InboxPage } from './inbox-model.ts'
+  type Conversation, type ConversationMessage, type InboxItem, type InboxPage, type InboxSetup } from './inbox-model.ts'
 
 const MAX_TEXT = 8000
 const bounded = (text: string) => ({ text: text.slice(0, MAX_TEXT), truncated: text.length > MAX_TEXT })
@@ -19,7 +20,8 @@ export class Inbox {
   private readonly hydrated = new Set<string>()
   private readonly loading = new Map<string, Promise<boolean>>()
   constructor(private readonly store: Store, private readonly workspace: Workspace, private readonly library: Library,
-    private readonly history: (sessionId: string) => Promise<readonly SessionEvent[]>, private readonly attachments?: Attachments) {
+    private readonly history: (sessionId: string) => Promise<readonly SessionEvent[]>, private readonly attachments?: Attachments,
+    private readonly environments?: Pick<Environments, 'defaultSelection' | 'describe'>) {
     store.db.exec(`CREATE TABLE IF NOT EXISTS workspace_inbox_read (ticket TEXT PRIMARY KEY, revision TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS workspace_inbox_message (id INTEGER PRIMARY KEY, ticket TEXT NOT NULL, identity TEXT NOT NULL,
         seq INTEGER NOT NULL, at TEXT NOT NULL, value TEXT NOT NULL, UNIQUE(ticket,identity));
@@ -79,10 +81,14 @@ export class Inbox {
     const at = [ticket.updatedAt, message?.at ?? ''].sort().at(-1)!
     const canReply = !!mission?.current && definitionCurrent && ticket.ended?.by !== 'human' && this.workspace.get(mission.id, false).status === 'active'
       && this.store.settings().sources.workspace?.enabled !== false && this.workspace.executionAllowed(ticket)
+    const execution = ticket.execution, persona = execution?.persona, grant = execution?.environment
     return { id, title: ticket.title, source: origin?.source ?? ticket.mandate.actor.source, at, revision,
       unread: seen?.revision !== revision, status, preview: (ticket.attention?.question || report?.summary || message?.text || origin?.text || '').slice(0, 300),
       ...(ticket.attention ? { question: ticket.attention.question } : {}), ...(ticket.execution ? { sessionId: workerSessionId(id) } : {}),
-      ...(mission ? { mission } : {}), canReply }
+      ...(mission ? { mission } : {}), canReply, ...(execution ? { execution: { directory: execution.directory,
+        ...(persona ? { persona: { id: persona.id, version: persona.version, digest: persona.digest, name: persona.definition.name,
+          model: persona.definition.model, capabilities: persona.definition.capabilities } } : {}),
+        ...(grant ? { environment: { grant, description: this.environments?.describe(grant) } } : {}) } } : {}) }
   }
   list(input: unknown = {}): InboxPage {
     const query = InboxQuery.parse(input)
@@ -123,17 +129,31 @@ export class Inbox {
   start(input: unknown): InboxItem {
     const request = InboxStart.parse(input), prefix = `inbox-${key(request.requestId)}`
     return this.command(request.requestId, { operation: 'start', ...request }, () => {
+      if (request.expectedDefault) {
+        const current = this.setup().defaultEnvironment, expected = request.expectedDefault
+        if (!current.available || current.grant.environmentId !== expected.environmentId || current.grant.revision !== expected.revision
+          || current.grant.epoch !== expected.epoch || current.grant.world !== expected.world)
+          throw new WorkspaceError(409, 'The default execution environment changed. Review the current location before starting this task.')
+      }
       if (request.attachments?.length && !this.attachments) throw new WorkspaceError(409, 'Attachments are unavailable')
       const files = this.attachments?.selection(request.attachments ?? []) ?? []
       let mission = this.workspace.create({ requestId: `${prefix}-mission`, title: request.title || request.text.split('\n')[0]!.slice(0, 160),
         objective: request.text, acceptance: 'The requested result is available with evidence and limitations, and has been explicitly reviewed.' })
       mission = this.workspace.add(mission.id, { requestId: `${prefix}-action`, revision: mission.revision, title: mission.title,
-        instructions: request.text, owner: 'agent' })
+        instructions: request.text, owner: 'agent', ...(request.persona ? { persona: request.persona } : {}), ...(request.environment ? { environment: request.environment } : {}) })
       mission = this.workspace.act(mission.id, mission.actions[0]!.id, { requestId: `${prefix}-run`, revision: mission.revision, command: 'run' })
       const id = mission.actions[0]!.ticket!.id, ticket = this.require(id)
+      if (request.expectedDefault) {
+        const actual = ticket.execution?.environment, expected = request.expectedDefault
+        if (!actual || actual.environmentId !== expected.environmentId || actual.revision !== expected.revision || actual.epoch !== expected.epoch || actual.world !== expected.world)
+          throw new WorkspaceError(409, 'The dispatched environment differs from the reviewed default; the task was not admitted.')
+      }
       this.attachments?.bind(id, `trigger:${ticket.origin.triggerId}`, files)
       return id
     })
+  }
+  setup(): InboxSetup {
+    return { defaultEnvironment: this.environments?.defaultSelection() ?? { available: false, problem: 'Default execution selection is unavailable' } }
   }
   reply(id: string, input: unknown): InboxItem {
     const request = InboxReply.parse(input)

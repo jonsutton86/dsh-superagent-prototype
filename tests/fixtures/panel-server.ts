@@ -383,6 +383,7 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
   'POST missions/:id/proposals/:proposal': { body: true, answer: () => refuse(409, 'Workspace fixture not configured') },
   'POST missions/:id/plan-request': { body: true, answer: () => refuse(409, 'Workspace fixture not configured') },
   'GET inbox': { query: ['offset', 'limit', 'filter', 'q'], answer: () => ({ items: [], nextOffset: null, unread: 0, questions: 0, review: 0 }) },
+  'GET inbox/setup': { answer: () => ({ defaultEnvironment: { available: true, name: 'Local execution', kind: 'local', mode: 'local', root: '/work', grant: { environmentId: '00000000-0000-4000-8000-000000000001', revision: 1, epoch: 1 } } }) },
   'POST inbox': { body: true, answer: () => refuse(409, 'Use the runtime fixture to start work') },
   'GET inbox/:id': { query: ['before', 'limit'], answer: () => refuse(404, 'Conversation not found') },
   'POST inbox/:id/read': { body: true, answer: () => refuse(404, 'Conversation not found') },
