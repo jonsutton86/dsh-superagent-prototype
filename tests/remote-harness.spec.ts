@@ -39,6 +39,27 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
   if (bootstrap) cleanup.push(() => bootstrap.close())
   const native = process.env.DSH_REMOTE_ISOLATION === '1', h = await remoteFixture(cleanup, { native,
     ownership: authority?.resource, access: bootstrap, beforeEnroll: async () => { await bootstrap?.start() } })
+  if (!native && process.env.DSH_ATTACHMENT_QUALIFICATION === '1') {
+    // This macOS-only composition fixture has no Linux mounts. Model a system Node location without installing
+    // anything on the host or widening the production endpoint's /usr,/bin runtime allowlist. Linux CI uses real Node.
+    const alias = '/usr/local/bin/dsh-qualification-node', local = h.host.subprocess
+    const map = (argv: readonly string[]) => argv.map(arg => {
+      if (arg === alias) return process.execPath
+      if (arg.startsWith('{"argv":')) {
+        const config = JSON.parse(arg)
+        if (config.argv[0] === alias) { config.argv[0] = process.execPath; return JSON.stringify(config) }
+      }
+      return arg
+    })
+    const wrap = h.isolation.wrap.bind(h.isolation)
+    h.isolation.wrap = async (...args) => map(await wrap(...args))
+    h.host.subprocess = new Proxy(local, { get(target, property) {
+      if (property === 'resolveExecutable') return (...args: Parameters<typeof local.resolveExecutable>) => args[0] === 'node' ? Promise.resolve(alias) : local.resolveExecutable(...args)
+      if (property === 'spawn') return (...args: Parameters<typeof local.spawn>) => local.spawn({ ...args[0], argv: map(args[0].argv) })
+      const value = Reflect.get(target, property, target)
+      return typeof value === 'function' ? value.bind(target) : value
+    } })
+  }
   const stale = bootstrap && new RemoteClient({ ...h.connection, ownership: {
     authorityId: bootstrap.authorityId, coordinatorId: bootstrap.coordinatorId, proof: (() => { const proof = bootstrap.proof(); return () => proof })() } })
   // Synthetic service credential exercises endpoint binding; the operator's inference credential remains on the coordinator.
