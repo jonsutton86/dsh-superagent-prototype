@@ -31,7 +31,14 @@ No new runtime, orchestration database, or workflow framework is assumed. Work i
 and workspace reservations, spare-capacity admission, explicit-work preemption, expiry, model usage integration,
 quiescence/recovery holds and operator promotion. Exact-message approval is separate from promotion; artifact publication
 also requires current promotion. API and bilingual review controls expose the lifecycle and reconciliation path.
-The executor remains DeepSeek Harness. Qualification results are recorded below when each check completes.
+The executor remains DeepSeek Harness. Code `6f27667b1d6f6ca4572fbad02e4aa06e830ffdbb` passed the final local
+`pnpm check`: 1,738 tests, typechecking and all four builds. Linux / Node 24 with native confinement passed 1,740 tests,
+typechecking and all builds in [run 42599700832](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42599700832).
+The final installed-Harness / DeepSeek Flash speculative scenario passed in 21.98 seconds: actual file/artifact creation
+and token usage, held publication, promotion plus separate exact-message approval, then unchanged evidence/usage and one
+execution/delivery across restart and repeated original requests. Both final owned installed-Harness scenarios passed
+in 262.56 seconds, retaining scheduled reflection, usage refusal/retry, artifact and held-recovery behavior. The original
+app process remained running. The completed code and qualification receipts are pushed on the feature branch.
 This does not close long-horizon evaluation, stronger confinement, managed machine launch, host-collected verification,
 recovery activation/failover, supervision, voice, packaging, onboarding or any remaining full-scope requirement below.
 

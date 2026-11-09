@@ -84,3 +84,17 @@ gates are not an OS or network sandbox and do not prove that arbitrary shell com
 In-flight commands/provider requests can outlive a deadline while cancellation settles; their usage stays charged.
 Long-horizon speculative quality/waste measurements, billing reconciliation across providers, retention and scale tests,
 stronger router/worker confinement and all remaining Agentic OS architecture requirements stay open.
+
+Code `6f27667b1d6f6ca4572fbad02e4aa06e830ffdbb` passed the final local `pnpm check`: 1,738 tests passed, eight skipped,
+109 test files passed and two skipped, in 108.54 seconds, with typechecking and all four builds successful. The installed
+Harness / DeepSeek Flash speculative scenario passed against the final built artifact in 21.98 seconds. It verified a
+real file and library artifact, nonzero reported model usage, no send before promotion and exact message approval, and
+unchanged result/evidence/usage plus a single delivery after restart and repeated original approval requests.
+
+The same code passed Ubuntu / Node 24 with native confinement enabled in
+[run 42599700832](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42599700832): 1,740 tests passed,
+six skipped, 109 files passed and two skipped, in 175.89 seconds, with typechecking and all four builds successful.
+
+Both owned installed-Harness / DeepSeek Flash scenarios passed against the final built artifact in 262.56 seconds,
+including managed-world scheduled reflection, usage refusal/retry, artifacts and held recovery. The original app process
+remained running. These checks qualify this increment; they do not close the remaining full Agentic OS requirements.

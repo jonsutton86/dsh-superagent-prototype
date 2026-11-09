@@ -459,5 +459,13 @@ remain in the full implementation scope.
 
 Speculative preparation: `045-speculative-preparation.md` adds durable reservations before execution, actual Harness model
 accounting, explicit-work preemption, quiescence and recovery holds, evidence promotion and separate message publication
-approval. The original Engine and Harness remain the execution path. Qualification is in progress; long-horizon quality,
-confinement, retention/scaling and all remaining full architecture/product requirements remain active.
+approval. The original Engine and Harness remain the execution path. Code `6f27667b1d6f6ca4572fbad02e4aa06e830ffdbb`
+passed 1,738 local tests and 1,740 Linux tests, typechecking and all builds in
+[run 42599700832](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42599700832).
+The final installed-Harness / DeepSeek Flash speculative scenario passed in 21.98 seconds, with real file/artifact and
+usage evidence, separate promotion/publication decisions and no repeated execution or delivery after restart.
+Long-horizon quality, confinement, retention/scaling and all remaining full architecture/product requirements remain active.
+
+Both owned installed-Harness / DeepSeek Flash scenarios passed against the final built artifact in 262.56 seconds,
+including managed-world scheduled reflection, usage refusal/retry, artifacts and held recovery. The original app process
+remained running. These checks qualify this increment; they do not close the remaining full Agentic OS requirements.
