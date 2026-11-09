@@ -23,11 +23,12 @@ export interface PublicationRecord {
   verification?: { checks: CheckSelection[]; reviewId: string; evidence?: EvidenceSeal[] }
   pull?: PullObservation
 }
-interface Stored extends PublicationRecord { intent: Publication; fingerprint: string; attempts: OwnershipStamp[] }
+interface Stored extends PublicationRecord { intent: Publication; fingerprint: string; attempts: OwnershipStamp[];
+  approval?: ApprovePublication; destinationSnapshot?: z.infer<typeof DestinationView> }
 interface PublicationHost { store: Store; library: Library; ownership?: CoordinatorOwnership; connection?: PublicationConnection; lifetime: AbortSignal; roots(): string[];
   verification?: Verification; reviews?: VerificationReviews;
   preparationProblem?(ticketId: string, assignmentId?: string): string | undefined }
-const view = ({ intent: _, fingerprint: __, attempts: ___, ...record }: Stored): PublicationRecord => record
+const view = ({ intent: _, fingerprint: __, attempts: ___, approval: ____, destinationSnapshot: _____, ...record }: Stored): PublicationRecord => record
 
 /** Operator-approved immutable artifact delivery with original-ID transport recovery and independent service receipts. */
 export class Publications {
@@ -143,7 +144,7 @@ export class Publications {
       hash: request.hash, destination: request.destination, destinationHash: request.destinationHash, createdAt: at, updatedAt: at, phase: 'pending', fingerprint: digest,
       ...(request.checks?.length ? { verification: { checks: request.checks, reviewId: request.requestId } } : {}),
       ...(pull ? { pull } : {}),
-      attempts: [owner], intent: { id: request.requestId, destination: request.destination, destinationHash: request.destinationHash, hash: request.hash, text,
+      approval: request, destinationSnapshot: destination, attempts: [owner], intent: { id: request.requestId, destination: request.destination, destinationHash: request.destinationHash, hash: request.hash, text,
         ...(pull ? { pull: pull.binding } : {}),
         artifact: { id: artifactId, revision: request.revision, hash: request.hash, basis: 'operator' } } }
     // Recheck after asynchronous discovery: concurrent duplicate approvals must never overwrite the first durable intent.

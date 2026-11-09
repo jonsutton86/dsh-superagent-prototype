@@ -39,6 +39,8 @@ export class ChannelPublications {
       CREATE INDEX IF NOT EXISTS delivery_grant_mission ON delivery_grant(mission);
       CREATE TABLE IF NOT EXISTS channel_publication (id TEXT PRIMARY KEY, message TEXT NOT NULL UNIQUE, mission TEXT NOT NULL, value TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS channel_publication_mission ON channel_publication(mission);`)
+    if (!host.store.db.prepare('PRAGMA table_info(delivery_grant)').all().some(row => row.name === 'request'))
+      host.store.db.exec('ALTER TABLE delivery_grant ADD COLUMN request TEXT')
     if (host.connection) this.client = new PublicationClient(host.connection, host.ownership)
   }
   readonly source: SourceKind = { kind: 'publication', title: { en: 'Mission delivery', zh: '任务交付' },
@@ -94,7 +96,8 @@ export class ChannelPublications {
       if (current) { current.revokedAt = at; this.host.store.db.prepare('UPDATE delivery_grant SET value=? WHERE id=?').run(JSON.stringify(current), current.id) }
       const grant: DeliveryGrant = { id: request.requestId, missionId, revision: request.revision + 1, planVersion: mission.planVersion,
         enabled: request.enabled, createdAt: at, ...(destination ? { destination } : {}) }
-      this.host.store.db.prepare('INSERT INTO delivery_grant VALUES (?,?,?,?)').run(grant.id, missionId, digest, JSON.stringify(grant))
+      this.host.store.db.prepare('INSERT INTO delivery_grant (id,mission,fingerprint,value,request) VALUES (?,?,?,?,?)')
+        .run(grant.id, missionId, digest, JSON.stringify(grant), JSON.stringify({ missionId, ...request }))
       return this.state(missionId)
     })
   }

@@ -3,7 +3,7 @@ import { fingerprint } from '../remote/journal.ts'
 import type { StoredCheckRun } from './contracts.ts'
 import type { CheckEvidence } from './model.ts'
 import { validateSnapshot } from './snapshot.ts'
-import { EvidenceBinding } from './review-model.ts'
+import { EvidenceBinding, FRESHNESS_WINDOW_MS, type EvidenceSeal } from './review-model.ts'
 
 export const checkEvidence = (run: StoredCheckRun) => run.receipt?.verification ?? run.evidence
 
@@ -33,4 +33,20 @@ export function recordedCheckBinding(run: StoredCheckRun): EvidenceBinding {
     execution: { binding: run.backend.binding, assignmentId: run.artifact.assignmentId, sessionId: run.artifact.sessionId },
     ...(repository ? { repository: { commit: repository.commit, tree: repository.tree,
       ...(repository.contentTree ? { contentTree: repository.contentTree, statusHash: repository.statusHash } : {}) } } : {}), confinement: evidence.confinement, checkedAt: evidence.checkedAt })
+}
+
+/** Verify an original seal against its check and capture without renewing historical freshness. */
+export function matchesRecordedSeal(value: EvidenceSeal, original: StoredCheckRun, captured: StoredCheckRun): boolean {
+  try {
+    if (original.purpose !== 'check' || original.status !== 'passed' || !original.quiescent || !completedCheck(original, checkEvidence(original), true)) return false
+    const { capture, validUntil, ...binding } = value, evidence = checkEvidence(captured)
+    if (fingerprint(binding) !== fingerprint(recordedCheckBinding(original)) || capture.id !== captured.id
+      || captured.purpose !== 'freshness' || captured.status !== 'captured' || !captured.quiescent || !completedCheck(captured, evidence, true)
+      || captured.backend.binding !== original.backend.binding || captured.backend.source !== original.backend.source || captured.backend.grantId !== original.backend.grantId
+      || captured.backend.epoch !== original.backend.epoch || captured.backend.revision < original.backend.revision
+      || evidence?.snapshot?.hash !== value.snapshotHash || evidence?.confinement !== value.confinement
+      || capture.capturedAt !== evidence?.snapshot?.capturedAt || capture.finishedAt !== evidence?.finishedAt) return false
+    const from = Date.parse(capture.capturedAt), until = Date.parse(validUntil)
+    return until > from && until <= from + FRESHNESS_WINDOW_MS && Date.parse(capture.finishedAt) >= from
+  } catch { return false }
 }

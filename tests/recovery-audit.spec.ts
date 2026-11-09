@@ -45,12 +45,14 @@ import { scheduleDefinition, workspaceStateFixture } from './fixtures/workspace-
 import { Library } from '../src/workspace/library.ts'
 import { Personas } from '../src/personas/service.ts'
 import { Usage } from '../src/usage/service.ts'
+import { Publications } from '../src/publication/runtime.ts'
+import { ChannelPublications } from '../src/publication/channels.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { vi.restoreAllMocks(); for (const close of cleanup.splice(0).reverse()) await close() })
 
 async function fixture(options: { administration?: boolean; credential?: boolean; rotateCredential?: boolean; revokeCredential?: boolean; pending?: boolean; channel?: boolean; extra?: boolean; revoked?: boolean;
-  managed?: boolean; changedPin?: boolean; omitPublicationCredential?: boolean; input?: 'consumed' | 'missing'; graph?: 'indexes' | 'conflict'; connector?: 'valid' | 'invalid'; workspace?: 'valid' | 'conflict'; results?: 'valid' | 'conflict'; registries?: 'valid' | 'conflict'; resources?: 'valid' | 'context-conflict' | 'budget-conflict'; revocation?: 'lost' | 'unsettled' | 'unsent'; kind?: DestinationView['kind'] } = {}) {
+  managed?: boolean; changedPin?: boolean; omitPublicationCredential?: boolean; input?: 'consumed' | 'missing'; graph?: 'indexes' | 'conflict'; connector?: 'valid' | 'invalid'; workspace?: 'valid' | 'conflict'; results?: 'valid' | 'conflict'; registries?: 'valid' | 'conflict'; resources?: 'valid' | 'context-conflict' | 'budget-conflict'; publicationGraph?: 'approval-conflict' | 'grant-conflict' | 'outbox-conflict'; revocation?: 'lost' | 'unsettled' | 'unsent'; kind?: DestinationView['kind'] } = {}) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'dsh-receipt-audit-')))
   cleanup.push(() => rm(directory, { recursive: true, force: true }))
   const authority = await ownershipAuthority(cleanup, ['endpoint', 'publication']), owner = new CoordinatorOwnership(authority.config)
@@ -92,22 +94,37 @@ async function fixture(options: { administration?: boolean; credential?: boolean
   const mutation = world.effects.prepare({ op: 'fs.write' as const, requestId: randomUUID(), path: 'second', content: 'private-file-payload', expected: { kind: 'createIfAbsent' as const } }, scope)
   const written = await remote.client.call<RemoteOperation>(mutation); if (!options.pending && !options.administration) world.effects.observed(mutation, written)
   const destination = (await publisher.client.call<DestinationView[]>({ op: 'destinations' }))[0]!, text = 'private-publication-payload'
-  const publication: Publication = { id: randomUUID(), destination: destination.id, destinationHash: destination.hash, text, hash: contentHash(text),
-    artifact: { id: randomUUID(), revision: 1, hash: contentHash(text) } }
-  const receipt = await publisher.client.call<PublicationReceipt>({ op: 'publish', publication })
-  store.db.exec('CREATE TABLE IF NOT EXISTS workspace_publication (id TEXT PRIMARY KEY,value TEXT NOT NULL)')
-  store.db.prepare('INSERT INTO workspace_publication VALUES (?,?)').run(publication.id, JSON.stringify({ id: publication.id, intent: Object.fromEntries(Object.entries(publication).reverse()),
-    attempts: [owner.status().owner], ...options.pending ? {} : { receipt } }))
+  const library = new Library(store), artifact = library.publish({ requestId: randomUUID(), kind: 'artifact', title: 'Publication evidence', summary: 'Original approval', content: text })
+  const publications = new Publications({ store, library, ownership: owner, connection: publisher.connection, lifetime: new AbortController().signal, roots: () => [] })
+  const approved = await publications.publish(artifact.id, { requestId: randomUUID(), revision: artifact.revision, hash: artifact.hash,
+    destination: destination.id, destinationHash: destination.hash })
+  const storedPublication = JSON.parse(String(store.db.prepare('SELECT value FROM workspace_publication WHERE id=?').get(approved.id)!.value))
+  const publication: Publication = storedPublication.intent
+  storedPublication.intent = Object.fromEntries(Object.entries(publication).reverse())
+  if (options.pending) { delete storedPublication.receipt; storedPublication.phase = 'unknown' }
+  store.db.prepare('UPDATE workspace_publication SET value=? WHERE id=?').run(JSON.stringify(storedPublication), publication.id)
+  await publications.stop()
+  if (options.omitPublicationCredential) store.set(KV.runtime.publication, { serviceId: publisher.connection.serviceId })
   let channel: Publication | undefined
   if (options.channel) {
-    const { artifact: _, ...base } = publication
-    const message = { id: 'channel-message', channel: { source: 'publication', thread: 'test', address: {} }, text, kind: 'reply' as const, ticketId: 'ticket' }
-    channel = { ...base, id: randomUUID(), message: { id: message.id, ticketId: message.ticketId, missionId: randomUUID(), grantId: randomUUID(), planVersion: 1 } }
-    await publisher.client.call({ op: 'publish', publication: channel })
+    let deliveries: ChannelPublications
+    const product = workspaceStateFixture(store, (mission, action) => deliveries.channel(mission, action))
+    deliveries = new ChannelPublications({ store, ownership: owner, connection: publisher.connection, lifetime: new AbortController().signal,
+      mission: id => product.workspace.get(id), destinations: async () => ({ configured: true, items: [destination] }), authorized: () => true })
+    let mission = product.workspace.create({ requestId: randomUUID(), title: 'Delivery evidence', objective: 'Keep the original delivery grant', acceptance: 'Recorded receipt' })
+    mission = product.workspace.add(mission.id, { requestId: randomUUID(), revision: mission.revision, title: 'Prepare reply', instructions: 'Prepare the result', owner: 'agent' })
+    await deliveries.configure(mission.id, { requestId: randomUUID(), revision: 0, missionRevision: mission.revision, enabled: true,
+      destination: destination.id, destinationHash: destination.hash })
+    mission = product.workspace.act(mission.id, mission.actions[0]!.id, { requestId: randomUUID(), revision: mission.revision, command: 'run' })
+    const ticket = store.tickets.get(mission.actions[0]!.runs[0]!)!, trigger = store.triggers.get(ticket.origin.triggerId)!
+    const message = { id: 'channel-message', channel: trigger.channel!, text, kind: 'reply' as const, ticketId: ticket.id }
     store.receipts.add(message)
-    store.db.exec('CREATE TABLE channel_publication (id TEXT PRIMARY KEY,message TEXT UNIQUE,mission TEXT,value TEXT NOT NULL)')
-    store.db.prepare('INSERT INTO channel_publication VALUES (?,?,?,?)').run(channel.id, message.id, channel.message!.missionId,
-      JSON.stringify({ id: channel.id, messageId: message.id, publication: channel, original: message, attempts: [owner.status().owner], phase: 'unknown', withdrawn: true }))
+    await deliveries.send(message)
+    const stored = JSON.parse(String(store.db.prepare('SELECT value FROM channel_publication WHERE message=?').get(message.id)!.value))
+    channel = stored.publication; delete stored.receipt; stored.phase = 'unknown'; stored.withdrawn = true
+    store.db.prepare('UPDATE channel_publication SET value=? WHERE id=?').run(JSON.stringify(stored), stored.id)
+    store.db.prepare('UPDATE outbox SET value=? WHERE id=?').run(JSON.stringify({ ...message, status: 'pending' }), message.id)
+    await deliveries.stop()
   }
   if (options.administration) {
     const registry = new Endpoints({ store, stateDir, lifetime: new AbortController().signal, ownership: owner, workerRoots: () => [remote.enrolled.grant.root] })
@@ -176,11 +193,6 @@ async function fixture(options: { administration?: boolean; credential?: boolean
       await worker.flush()
     } finally { await worker.close() }
   }
-  if (options.channel && !options.input) {
-    const ticket = inputTicket('ticket', [])
-    ticket.assignments = [{ id: 'assignment', state: 'pending', createdAt: inputTime }]
-    seedInputTicket(store, ticket)
-  }
   if (options.graph === 'indexes') store.db.exec("UPDATE trigger SET at='stale'; UPDATE decision SET thread='stale'; DELETE FROM trigger_thread")
   if (options.graph === 'conflict') {
     const ticket = store.tickets.get('ticket')!; ticket.mandate.scope = 'Changed authority'; store.tickets.save(ticket)
@@ -218,6 +230,9 @@ async function fixture(options: { administration?: boolean; credential?: boolean
       store.db.prepare('UPDATE workspace_mission SET value=? WHERE id=?').run(JSON.stringify(mission), missionId)
     }
   }
+  if (options.publicationGraph === 'approval-conflict') store.db.exec("UPDATE workspace_publication SET value=json_set(value,'$.approval.revision',999)")
+  if (options.publicationGraph === 'grant-conflict') store.db.exec("UPDATE delivery_grant SET fingerprint='" + '0'.repeat(64) + "'")
+  if (options.publicationGraph === 'outbox-conflict') store.db.exec("UPDATE outbox SET value=json_set(value,'$.text','private-substitution') WHERE id='channel-message'")
   world.close(); store.close()
   const checkpoint = await createCheckpoint({ stateDir, keyFile, outputDir: join(directory, 'backups'), worldDirectories: [worldDir], persistence: context.sessionPersistence })
   if (options.revocation === 'unsettled') remote.endpoint.journal.saveJob({ ...remote.endpoint.journal.job(job.id), quiescent: true })
@@ -606,6 +621,8 @@ it.each(['github-comment', 'github-review', 'feishu-reply'] as const)('prepares 
   const before = recoveryStateDigest(source); source.close()
   const options = { ...f.audit, requestId: randomUUID(), auditId: audit.id }, prepared = await prepareCheckpointReceipts(options)
   expect(prepared.manifest.applied).toEqual({ commands: 1, mutations: 1, publications: 2 })
+  expect(prepared.manifest.publicationState).toMatchObject({ version: 1, artifacts: 1, deliveryGrants: 1, deliveries: 1,
+    receipts: 2, sent: 2, unresolved: 0, withdrawn: 1, legacyApprovals: 0, legacyDestinations: 0, legacyGrantRequests: 0, legacyPlanBindings: 0 })
   expect(prepared.manifest.sessionBackend).toEqual({ sessions: 1, events: 1 })
   expect(prepared.manifest.controlConfiguration).toEqual({ claimant: true, publication: true, destinations: 1 })
   expect(prepared.manifest.sourceConfiguration).toEqual({ kinds: 3, enabled: 3, inactive: 0, retained: 0, configuration: expect.stringMatching(/^[a-f0-9]{64}$/) })
@@ -851,7 +868,7 @@ it('authenticates older held image manifests without treating absent configurati
   const f = await fixture(), audit = await auditCheckpointReceipts(f.audit)
   const prepared = await prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })
   const { sessionBackend: _, controlConfiguration: __, inferenceConfiguration: ___, consumedInputs: ____, sourceConfiguration: _____, stateGraph: ______, connectorState: _______, workspaceState: ________, resultState: _________, registryState: __________,
-    contextState: ___________, budgetState: ____________, ...manifest } = prepared.manifest, key = recoveryKey(f.audit.keyFile)
+    contextState: ___________, budgetState: ____________, publicationState: _____________, ...manifest } = prepared.manifest, key = recoveryKey(f.audit.keyFile)
   try {
     const mac = createHmac('sha256', key).update('dsh-receipt-image:1\n').update(JSON.stringify(manifest)).digest('hex')
     await writeFile(join(prepared.path, 'prepared.json'), JSON.stringify({ manifest, mac }))
@@ -865,6 +882,7 @@ it('authenticates older held image manifests without treating absent configurati
   expect(verified.resultState).toBeUndefined()
   expect(verified.registryState).toBeUndefined()
   expect(verified.contextState).toBeUndefined(); expect(verified.budgetState).toBeUndefined()
+  expect(verified.publicationState).toBeUndefined()
 })
 
 it('repairs consumed input acknowledgements only in the signed held image and preserves historical retries', async () => {
@@ -924,7 +942,7 @@ it('refuses an authentic checkpoint with contradictory product authority and rem
 it('signs original artifact bytes and retains the same image on original-ID retry', async () => {
   const f = await fixture({ results: 'valid' }), audit = await auditCheckpointReceipts(f.audit)
   const options = { ...f.audit, requestId: randomUUID(), auditId: audit.id }, prepared = await prepareCheckpointReceipts(options)
-  expect(prepared.manifest.resultState).toMatchObject({ version: 1, artifacts: 1, blobs: 1, blobBytes: 23, digest: expect.stringMatching(/^[a-f0-9]{64}$/) })
+  expect(prepared.manifest.resultState).toMatchObject({ version: 1, artifacts: 2, blobs: 2, blobBytes: 50, digest: expect.stringMatching(/^[a-f0-9]{64}$/) })
   expect(await verifyReceiptImage(prepared.path, f.audit.keyFile)).toEqual(prepared.manifest)
   expect(await prepareCheckpointReceipts(options)).toEqual(prepared)
   expect(f.read().hold?.state).toBe('staged'); expect(f.publisher.posts).toBe(1)
@@ -974,6 +992,17 @@ it.each(['context-conflict', 'budget-conflict'] as const)('refuses inconsistent 
   await expect(prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })).rejects.toMatchObject({ code: 'conflict' })
   expect(f.inference.adapter.calls).toEqual([])
   expect(f.read().hold?.state).toBe('staged'); expect(f.publisher.posts).toBe(1)
+  expect((await readdir(f.audit.destination)).filter(name => name.startsWith('prepared-') || name.startsWith('.prepare-'))).toEqual([])
+})
+it.each(['approval-conflict', 'grant-conflict', 'outbox-conflict'] as const)('refuses %s before applying delivery receipts or probing inference', async publicationGraph => {
+  const f = await fixture({ channel: true, pending: true, publicationGraph }), audit = await auditCheckpointReceipts(f.audit)
+  expect(audit.status).toBe('matched')
+  const options = { ...f.audit, requestId: randomUUID(), auditId: audit.id }
+  await expect(prepareCheckpointReceipts(options)).rejects.toThrow('recovery_publications_')
+  expect(f.inference.adapter.calls).toEqual([])
+  expect(f.read().hold?.state).toBe('staged'); expect(f.publisher.posts).toBe(2)
+  const source = new Store(join(f.audit.destination, 'orchestrator.sqlite'))
+  try { expect(source.replyStatus('channel-message')).toBe('pending') } finally { source.close() }
   expect((await readdir(f.audit.destination)).filter(name => name.startsWith('prepared-') || name.startsWith('.prepare-'))).toEqual([])
 })
 

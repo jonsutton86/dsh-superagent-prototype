@@ -8,6 +8,7 @@ import type { Publication, PublicationRpc } from '../src/publication/protocol.ts
 import { PublicationClient } from '../src/publication/client.ts'
 import { GithubPullPublication } from '../src/publication/github-pull.ts'
 import { matchesPullEvidence } from '../src/publication/pull-model.ts'
+import { verifyPublicationState } from '../src/recovery/publications.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { for (const dispose of cleanup.splice(0).reverse()) await dispose(); vi.restoreAllMocks() })
@@ -21,6 +22,7 @@ it.each([['APPROVE', 'APPROVED'], ['COMMENT', 'COMMENTED'], ['REQUEST_CHANGES', 
   expect(h.publisher.posts).toBe(1)
   await expect(h.publications.publish(h.artifact.id, { ...h.approval, requestId: randomUUID() })).rejects.toThrow('already has a publication')
   expect(JSON.stringify(result)).not.toContain(h.publisher.secret)
+  expect(await verifyPublicationState(h.store.db, new AbortController().signal, true)).toMatchObject({ checkedArtifacts: 1, pullReviews: 1, seals: 1, sent: 1 })
 })
 
 it('requires inspected head consent and rejects checks with a different tree even if Git status is clean', async () => {

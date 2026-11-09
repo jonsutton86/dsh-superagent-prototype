@@ -7,12 +7,14 @@ import { ownershipAuthority } from './ownership-authority.ts'
 import { publicationFixture } from './publication.ts'
 import { CoordinatorOwnership } from '../../src/ownership/lease.ts'
 import { Publications } from '../../src/publication/runtime.ts'
+import { KV } from '../../src/kv.ts'
 
 /** Actual Git files, host check subprocesses, durable coordinator and independent HTTP provider contract. */
 export async function pullReviewFixture(cleanup: (() => Promise<unknown>)[], event: 'APPROVE' | 'COMMENT' | 'REQUEST_CHANGES' = 'APPROVE', native = false) {
   const h = await verificationFixture(cleanup, native), authority = await ownershipAuthority(cleanup), owner = new CoordinatorOwnership(authority.config)
   const publisher = await publicationFixture(cleanup, authority.resource, owner, 'github-pr-review', event)
   cleanup.push(() => owner.close()); await owner.start()
+  h.store.set(KV.runtime.ownership, { authorityId: authority.config.authorityId, coordinatorId: authority.config.coordinatorId })
   const host = { store: h.store, library: h.library, lifetime: h.lifetime.signal, roots: () => [h.source], ownership: owner,
     connection: publisher.connection, verification: h.verification, reviews: h.reviews }
   const publications = new Publications(host); cleanup.push(() => publications.stop())

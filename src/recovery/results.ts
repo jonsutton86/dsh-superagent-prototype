@@ -15,8 +15,8 @@ import { ReflectionCandidate, ProposeReflection } from '../workspace/reflection-
 import { CheckDefinition, CheckCommandId, CreateCheck, SaveCheck, ConfigureCheck, CancelCheck, ReconcileCheck, type CheckVersion, type StoredCheckRun } from '../verification/contracts.ts'
 import { CheckEvidenceSchema } from '../verification/model.ts'
 import { validateSnapshot } from '../verification/snapshot.ts'
-import { checkEvidence, completedCheck, recordedCheckBinding } from '../verification/evidence.ts'
-import { EvidenceSeal, ReviewRequest, FRESHNESS_WINDOW_MS, type EvidenceReview } from '../verification/review-model.ts'
+import { checkEvidence, completedCheck, recordedCheckBinding, matchesRecordedSeal } from '../verification/evidence.ts'
+import { EvidenceSeal, ReviewRequest, type EvidenceReview } from '../verification/review-model.ts'
 
 const id = z.string().min(1).max(4096), uuid = z.string().uuid(), at = z.iso.datetime({ offset: true })
 const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), positive = count.min(1)
@@ -314,16 +314,9 @@ export async function verifyResultState(db: DatabaseSync, signal: AbortSignal): 
     return recordedCheckBinding(run)
   }
   function seal(input: unknown) {
-    const value = parse(EvidenceSeal, input, 'seal'), { capture, validUntil, ...binding } = value
+    const value = parse(EvidenceSeal, input, 'seal'), { capture, validUntil: _, ...binding } = value
     same(binding, selection(value.selection.runId), `seal_binding:${value.selection.runId}`)
-    const original = needed(runs, value.selection.runId, 'selected_check'), captured = needed(runs, capture.id, 'capture'), evidence = checkEvidence(captured)
-    if (captured.purpose !== 'freshness' || captured.status !== 'captured' || !captured.quiescent || !completedCheck(captured, evidence, true)
-      || captured.backend.binding !== original.backend.binding || captured.backend.source !== original.backend.source || captured.backend.grantId !== original.backend.grantId
-      || captured.backend.epoch !== original.backend.epoch || captured.backend.revision < original.backend.revision
-      || evidence?.snapshot?.hash !== value.snapshotHash || evidence?.confinement !== value.confinement) fail('seal_capture', capture.id)
-    same([capture.capturedAt, capture.finishedAt], [evidence!.snapshot!.capturedAt, evidence!.finishedAt], `capture_time:${capture.id}`)
-    const from = Date.parse(capture.capturedAt), until = Date.parse(validUntil)
-    if (until <= from || until > from + FRESHNESS_WINDOW_MS || Date.parse(capture.finishedAt) < from) fail('seal_window', capture.id)
+    if (!matchesRecordedSeal(value, needed(runs, value.selection.runId, 'selected_check'), needed(runs, capture.id, 'capture'))) fail('seal_capture', capture.id)
     seals++; return value
   }
   const reviews = new Map<string, EvidenceReview>()

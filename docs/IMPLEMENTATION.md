@@ -25,6 +25,14 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: held publication authority
+
+[059 Publication authority recovery](059-publication-authority-recovery.md) links independent outcomes to original artifact
+approvals, destination snapshots, selected check/capture evidence, mission delivery grants and exact Outbox subjects. It checks
+local authority before applying receipts and requires settled matching outcomes afterward. New requests/destination snapshots
+are retained; historical changes and legacy gaps remain explicit. Qualification is pending. Deployment binding/remapping,
+restored activation, handoff, clean-host failover and the remaining full product/architecture scope remain open.
+
 ## Implemented increment: held context and budget state
 
 [058 Context and budget recovery](058-context-budget-recovery.md) verifies original reflection evidence and read charges,

@@ -625,3 +625,9 @@ recall/model/reflection evidence, zero legacy accounting gaps and original-ID he
 preparation, separate publication approval and restart without duplicate synthetic delivery passed in 21.43 seconds.
 The original app remains running. Remaining publication/registry cross-references, deployment binding/remapping,
 activation/handoff/failover and every other uncompleted architecture/product requirement remain in the full objective.
+
+Publication authority recovery is implemented in `059-publication-authority-recovery.md`: original artifact approvals,
+destination snapshots, selected checks/captures, plan-bound delivery grants and exact Outbox subjects are checked before
+receipt application and again before signing a held image. Historical edits/revocation and legacy gaps remain explicit.
+Qualification is pending. Deployment binding/remapping, restored activation/handoff, clean-host failover and every remaining
+full product/architecture requirement stay open. The prepared image does not acquire execution authority.

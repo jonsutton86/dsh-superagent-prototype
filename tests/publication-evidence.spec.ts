@@ -10,6 +10,8 @@ import { Publications } from '../src/publication/runtime.ts'
 import { PublicationClient } from '../src/publication/client.ts'
 import { PublicationError, type Publication, type PublicationReceipt, type PublicationRpc } from '../src/publication/protocol.ts'
 import { RemoteError } from '../src/remote/protocol.ts'
+import { KV } from '../src/kv.ts'
+import { verifyPublicationState } from '../src/recovery/publications.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { for (const dispose of cleanup.splice(0).reverse()) await dispose(); vi.restoreAllMocks() })
@@ -17,6 +19,7 @@ async function fixture(native = false, remoteHost = false) {
   const h = await verificationFixture(cleanup, native, remoteHost), authority = await ownershipAuthority(cleanup), owner = new CoordinatorOwnership(authority.config)
   const publisher = await publicationFixture(cleanup, authority.resource, owner)
   cleanup.push(() => owner.close()); await owner.start()
+  h.store.set(KV.runtime.ownership, { authorityId: authority.config.authorityId, coordinatorId: authority.config.coordinatorId })
   const host = { store: h.store, library: h.library, lifetime: h.lifetime.signal, roots: () => [h.source], ownership: owner,
     connection: publisher.connection, verification: h.verification, reviews: h.reviews }
   const publications = new Publications(host); cleanup.push(() => publications.stop())
@@ -38,6 +41,28 @@ it('requires exact successful host checks and records capture-bound evidence in 
   expect(seal).toMatchObject({ artifact: { id: h.artifact.id, revision: h.artifact.revision, hash: h.artifact.hash }, selection: checks[0], confinement: 'host-process' })
   expect(h.verification.get(seal.capture.id)).toMatchObject({ purpose: 'freshness', status: 'captured', quiescent: true })
   expect(h.publisher.posts).toBe(1)
+  expect(await verifyPublicationState(h.store.db, new AbortController().signal, true)).toMatchObject({ checkedArtifacts: 1, seals: 1, legacyReviewSeals: 0 })
+})
+
+it('verifies historical publication seals after a later review captures again and preserves operator check ordering', async () => {
+  const h = await fixture(), another = await h.check(h.artifact)
+  h.approval.checks = [h.checked.selection, another.selection].sort((a, b) => b.runId.localeCompare(a.runId))
+  const record = await h.publications.publish(h.artifact.id, h.approval), original = record.verification!.evidence!
+  const review = h.reviews.get(record.id)
+  await h.reviews.prepare({ id: review.id, purpose: review.purpose, target: review.target, checks: review.checks })
+  expect(h.reviews.get(record.id).attempts).toHaveLength(2)
+  expect(h.reviews.get(record.id).evidence).not.toEqual(original)
+  expect(await verifyPublicationState(h.store.db, new AbortController().signal, true)).toMatchObject({ checkedArtifacts: 1, seals: 2, legacyReviewSeals: 0 })
+  const history = h.reviews.get(record.id); delete history.attempts[0]!.evidenceVersion; delete history.attempts[0]!.evidence
+  h.store.db.prepare('UPDATE verification_review SET value=? WHERE id=?').run(JSON.stringify(history), record.id)
+  expect(await verifyPublicationState(h.store.db, new AbortController().signal, true)).toMatchObject({ legacyReviewSeals: 1, seals: 2 })
+  h.store.db.prepare('UPDATE verification_review SET value=? WHERE id=?').run(JSON.stringify({ ...history, attempts: Array(21).fill(history.attempts[0]) }), record.id)
+  await expect(verifyPublicationState(h.store.db, new AbortController().signal)).rejects.toThrow('recovery_publications_shape: publication_review')
+  h.store.db.prepare('UPDATE verification_review SET value=? WHERE id=?').run(JSON.stringify(history), record.id)
+  const row = JSON.parse(String(h.store.db.prepare('SELECT value FROM workspace_publication WHERE id=?').get(record.id)!.value))
+  row.verification.evidence[0].validUntil = '2099-01-01T00:00:00.000Z'; row.intent.artifact.evidence = row.verification.evidence
+  h.store.db.prepare('UPDATE workspace_publication SET value=? WHERE id=?').run(JSON.stringify(row), record.id)
+  await expect(verifyPublicationState(h.store.db, new AbortController().signal)).rejects.toThrow('recovery_publications_')
 })
 
 it('holds changed sources without sending and prevents a held approval from duplicating a newer publication', async () => {
