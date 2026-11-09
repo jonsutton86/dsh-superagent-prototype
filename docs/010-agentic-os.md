@@ -602,3 +602,9 @@ The exact revision passed installed-Harness / DeepSeek Flash owned-managed recov
 artifact/check/review/completion evidence, no legacy review seals and original-ID image retrieval. The original app remains
 running. Other product graphs, deployment binding/remapping, activation/failover, broader connector admission and every
 remaining architecture/product requirement stay active. The restore hold remains in place.
+
+Registry authority recovery is implemented in `057-registry-authority-recovery.md`: persona versions and command history,
+environment generations, managed-world journals and original worker/Session bindings are checked without reauthorization.
+Archived persona versions and revoked worlds remain historical. Incomplete legacy bindings and opaque request payloads are
+reported, not reconstructed. Qualification is pending. Remaining product graphs and registry/publication cross-references,
+deployment binding/remapping, activation/handoff/failover and the full architecture/product scope remain open.

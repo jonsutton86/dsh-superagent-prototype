@@ -27,6 +27,8 @@ import type { MissionView } from '../src/workspace/model.ts'
 import type { LibraryEntry } from '../src/workspace/library-model.ts'
 import type { FileSystem } from '@deepseek-ai/dsh-fs'
 import { KV } from '../src/kv.ts'
+import { DatabaseSync } from 'node:sqlite'
+import { verifyRegistryState } from '../src/recovery/registries.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { for (const stop of cleanup.reverse()) await stop(); cleanup.length = 0; vi.restoreAllMocks() })
@@ -519,6 +521,13 @@ async function remoteMission(native: boolean) {
   expect(host.controller.create).not.toHaveBeenCalled()
   expect(host.runtime.store.get(KV.sessions.world(id))).toBe(binding)
   expect(host.ctx.agents.get(id as never)?.session.header.agentPreset).toBe(`dsh-superagent-remote-worker-${binding}`)
+  const originalJournal = new DatabaseSync(join(p.config.stateDir, 'world.sqlite'), { readOnly: true })
+  try {
+    const record = JSON.parse(String(originalJournal.prepare('SELECT value FROM execution_world WHERE id=1').get()!.value))
+    const registry = await verifyRegistryState(host.runtime.store.db, { masterId: host.runtime.masterId, worlds: [record],
+      sessions: [...host.agents.values()].map(agent => ({ id: agent.id, header: host.ctx.agents.get(agent.id as never)!.session.header })) }, new AbortController().signal)
+    expect(registry).toMatchObject({ environments: 1, managedWorlds: 0, executions: 1, legacyGrants: 0, historicalGrants: 0 })
+  } finally { originalJournal.close() }
   const child = host.presets.get(`dsh-superagent-remote-child-${binding}`)!
   expect(JSON.stringify(child)).toContain(`dsh-superagent-remote-child-${binding}`)
   const router = JSON.stringify(host.presets.get(`dsh-superagent-remote-router-${binding}`))

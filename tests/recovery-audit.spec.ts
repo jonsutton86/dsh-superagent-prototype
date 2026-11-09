@@ -43,12 +43,13 @@ import { remoteFixture } from './fixtures/remote.ts'
 import { publicationFixture } from './fixtures/publication.ts'
 import { scheduleDefinition, workspaceStateFixture } from './fixtures/workspace-state.ts'
 import { Library } from '../src/workspace/library.ts'
+import { Personas } from '../src/personas/service.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { vi.restoreAllMocks(); for (const close of cleanup.splice(0).reverse()) await close() })
 
 async function fixture(options: { administration?: boolean; credential?: boolean; rotateCredential?: boolean; revokeCredential?: boolean; pending?: boolean; channel?: boolean; extra?: boolean; revoked?: boolean;
-  managed?: boolean; changedPin?: boolean; omitPublicationCredential?: boolean; input?: 'consumed' | 'missing'; graph?: 'indexes' | 'conflict'; connector?: 'valid' | 'invalid'; workspace?: 'valid' | 'conflict'; results?: 'valid' | 'conflict'; revocation?: 'lost' | 'unsettled' | 'unsent'; kind?: DestinationView['kind'] } = {}) {
+  managed?: boolean; changedPin?: boolean; omitPublicationCredential?: boolean; input?: 'consumed' | 'missing'; graph?: 'indexes' | 'conflict'; connector?: 'valid' | 'invalid'; workspace?: 'valid' | 'conflict'; results?: 'valid' | 'conflict'; registries?: 'valid' | 'conflict'; revocation?: 'lost' | 'unsettled' | 'unsent'; kind?: DestinationView['kind'] } = {}) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'dsh-receipt-audit-')))
   cleanup.push(() => rm(directory, { recursive: true, force: true }))
   const authority = await ownershipAuthority(cleanup, ['endpoint', 'publication']), owner = new CoordinatorOwnership(authority.config)
@@ -152,8 +153,14 @@ async function fixture(options: { administration?: boolean; credential?: boolean
     }
   }
   if (options.managed) {
-    store.db.exec('CREATE TABLE managed_world (id TEXT PRIMARY KEY, value TEXT NOT NULL)')
+    store.db.exec('CREATE TABLE managed_world (id TEXT PRIMARY KEY, value TEXT NOT NULL); CREATE TABLE managed_world_command (id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, world TEXT NOT NULL)')
+    const at = new Date().toISOString(), grant = remote.enrolled.grant
+    store.db.prepare('INSERT INTO managed_world_command VALUES (?,?,?)').run('original-activation', fingerprint('original-activation'), scope.world)
+    if (world.read()!.revocation) store.db.prepare('INSERT INTO managed_world_command VALUES (?,?,?)').run('revoke-world', fingerprint({ op: 'revoke', id: scope.world,
+      requestId: 'revoke-world', revision: 1, reason: 'Qualification revocation' }), scope.world)
     store.db.prepare('INSERT INTO managed_world VALUES (?,?)').run(scope.world, JSON.stringify({ id: scope.world, grant: remote.enrolled.grant,
+      name: 'Original managed world', endpointId: remote.connection.endpointId, grantId: grant.id, epoch: grant.epoch, root: grant.root,
+      revision: world.read()!.revocation ? 2 : 1, createdAt: at, updatedAt: at,
       enabled: !world.read()!.revocation, credentialPin: options.changedPin ? '0'.repeat(64) : credentialDigest(remote.enrolled.credential!),
       config: { endpointId: remote.connection.endpointId, url: remote.url, credentialFile: await realpath(remote.client.connection.credentialFile), stateDir: worldDir },
       ...(world.read()!.revocation ? { revoke: { requestId: 'revoke-world', reason: 'Qualification revocation' } } : {}) }))
@@ -181,6 +188,12 @@ async function fixture(options: { administration?: boolean; credential?: boolean
   if (options.results) {
     const library = new Library(store), record = library.publish({ requestId: randomUUID(), kind: 'artifact', title: 'Captured artifact', summary: 'Original bytes', content: 'Original artifact bytes' })
     if (options.results === 'conflict') store.db.prepare('UPDATE workspace_blob SET data=? WHERE hash=?').run(Buffer.from('Changed artifact bytes'), record.hash)
+  }
+  if (options.registries) {
+    const personas = new Personas(store), persona = await personas.create({ requestId: randomUUID(), definition: { name: 'Recorded researcher',
+      description: 'Original identity', instructions: 'Preserve original evidence.', model: null, capabilities: ['read'], skills: [] } })
+    personas.archive(persona.id, { requestId: randomUUID(), revision: 1, archived: true, reason: 'Retired for new work' })
+    if (options.registries === 'conflict') store.db.exec('DELETE FROM persona_version')
   }
   if (options.workspace) {
     const product = workspaceStateFixture(store)
@@ -825,7 +838,7 @@ it.each(['manifest', 'member', 'extra'] as const)('refuses a tampered prepared %
 it('authenticates older held image manifests without treating absent configuration or Session evidence as a new verification', async () => {
   const f = await fixture(), audit = await auditCheckpointReceipts(f.audit)
   const prepared = await prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })
-  const { sessionBackend: _, controlConfiguration: __, inferenceConfiguration: ___, consumedInputs: ____, sourceConfiguration: _____, stateGraph: ______, connectorState: _______, workspaceState: ________, resultState: _________, ...manifest } = prepared.manifest, key = recoveryKey(f.audit.keyFile)
+  const { sessionBackend: _, controlConfiguration: __, inferenceConfiguration: ___, consumedInputs: ____, sourceConfiguration: _____, stateGraph: ______, connectorState: _______, workspaceState: ________, resultState: _________, registryState: __________, ...manifest } = prepared.manifest, key = recoveryKey(f.audit.keyFile)
   try {
     const mac = createHmac('sha256', key).update('dsh-receipt-image:1\n').update(JSON.stringify(manifest)).digest('hex')
     await writeFile(join(prepared.path, 'prepared.json'), JSON.stringify({ manifest, mac }))
@@ -837,6 +850,7 @@ it('authenticates older held image manifests without treating absent configurati
   expect(verified.connectorState).toBeUndefined()
   expect(verified.workspaceState).toBeUndefined()
   expect(verified.resultState).toBeUndefined()
+  expect(verified.registryState).toBeUndefined()
 })
 
 it('repairs consumed input acknowledgements only in the signed held image and preserves historical retries', async () => {
@@ -913,6 +927,22 @@ it('refuses contradictory read acknowledgements before inference and discards th
   expect(f.inference.adapter.calls).toEqual([])
   expect((await readdir(f.audit.destination)).filter(name => name.startsWith('prepared-') || name.startsWith('.prepare-'))).toEqual([])
   expect(f.read().hold?.state).toBe('staged'); expect(f.publisher.posts).toBe(1)
+})
+
+it('signs archived persona authority and returns the same original prepared image without renewing it', async () => {
+  const f = await fixture({ registries: 'valid' }), audit = await auditCheckpointReceipts(f.audit)
+  const options = { ...f.audit, requestId: randomUUID(), auditId: audit.id }, prepared = await prepareCheckpointReceipts(options)
+  expect(prepared.manifest.registryState).toMatchObject({ version: 1, personas: 1, personaVersions: 1, personaCommands: 2, digest: expect.stringMatching(/^[a-f0-9]{64}$/) })
+  expect(await verifyReceiptImage(prepared.path, f.audit.keyFile)).toEqual(prepared.manifest)
+  expect(await prepareCheckpointReceipts(options)).toEqual(prepared)
+  expect(prepared.manifest.executionOwnership).toBe(false); expect(f.read().hold?.state).toBe('staged'); expect(f.publisher.posts).toBe(1)
+})
+it('refuses a missing original persona version before inference and removes the unpublished image', async () => {
+  const f = await fixture({ registries: 'conflict' }), audit = await auditCheckpointReceipts(f.audit)
+  await expect(prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })).rejects.toMatchObject({ code: 'reference', relation: 'persona_snapshot' })
+  expect(f.inference.adapter.calls).toEqual([])
+  expect(f.read().hold?.state).toBe('staged'); expect(f.publisher.posts).toBe(1)
+  expect((await readdir(f.audit.destination)).filter(name => name.startsWith('prepared-') || name.startsWith('.prepare-'))).toEqual([])
 })
 
 it.each(['before', 'during', 'late'] as const)('retains the restore hold when source registration is unavailable or changes %s preparation', async when => {

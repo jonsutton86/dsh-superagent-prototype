@@ -46,6 +46,13 @@ export const ReceiptImage = z.object({ version: z.literal(1), requestId: z.strin
     checks: z.number().int().nonnegative(), checkVersions: z.number().int().nonnegative(), runs: z.number().int().nonnegative(), successfulRuns: z.number().int().nonnegative(),
     unsettledRuns: z.number().int().nonnegative(), reviews: z.number().int().nonnegative(), seals: z.number().int().nonnegative(), legacyReviewSeals: z.number().int().nonnegative(),
     completions: z.number().int().nonnegative(), reflectionPromotions: z.number().int().nonnegative(), partialOutputs: z.number().int().nonnegative(), digest }).strict().optional(),
+  registryState: z.object({ version: z.literal(1), records: z.number().int().nonnegative(), personas: z.number().int().nonnegative(),
+    personaVersions: z.number().int().nonnegative(), personaCommands: z.number().int().nonnegative(), personaReferences: z.number().int().nonnegative(), unresolvedTemplateReferences: z.number().int().nonnegative(),
+    environments: z.number().int().nonnegative(), environmentEvents: z.number().int().nonnegative(), managedWorlds: z.number().int().nonnegative(),
+    opaqueCommandReceipts: z.number().int().nonnegative(), executions: z.number().int().nonnegative(), personaExecutions: z.number().int().nonnegative(),
+    historicalGrants: z.number().int().nonnegative(), legacyGrants: z.number().int().nonnegative(), sessions: z.number().int().nonnegative(),
+    personaPins: z.number().int().nonnegative(), worldPins: z.number().int().nonnegative(), pendingPins: z.number().int().nonnegative(),
+    legacySessionPins: z.number().int().nonnegative(), digest }).strict().optional(),
 }).strict()
 export type ReceiptImage = z.infer<typeof ReceiptImage>
 const envelope = z.object({ manifest: ReceiptImage, mac: digest }).strict()

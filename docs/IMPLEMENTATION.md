@@ -25,6 +25,14 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: held registry authority
+
+[057 Registry authority recovery](057-registry-authority-recovery.md) verifies persona definitions and command history,
+environment generations, managed-world journals, original worker snapshots and immutable Session ancestry. Historical
+archive/revocation remains historical; missing legacy bindings and opaque command payloads are counted explicitly. Persona
+authority is checked before inference. Qualification is pending. Remaining product graphs, registry/publication cross-references,
+deployment binding/remapping, restored activation and clean-host failover stay open under the full architecture objective.
+
 ## Implemented increment: held artifact and result evidence
 
 [056 Result evidence recovery](056-result-evidence-recovery.md) verifies library bytes/provenance, original host check
