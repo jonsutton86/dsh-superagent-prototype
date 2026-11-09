@@ -6,7 +6,9 @@ grants, publication authority, or inference credentials from the Harness provide
 
 ## Configuration
 
-Add `voice` to the `dsh-superagent` plugin config in the existing Harness profile. Input and output are independently
+Add `voice` to the complete `dsh-superagent` plugin config in the existing Harness profile, preserving `stateDir` and
+all other deployment fields. Harness patch entries replace that plugin's configuration; a separate voice-only config
+entry would remove the required deployment settings. Input and output are independently
 optional; absent adapters are disabled. Changing settings remounts the plugin. The UI reports local/cloud mode and never
 silently changes providers or modes on failure. An inference API key alone does not enable audio services.
 
@@ -99,8 +101,12 @@ crash-left operation directories are cleaned at startup under the Runtime state 
 logically after 15 minutes, with background cleanup each minute. Content-free fingerprints remain to prevent old retries
 from reissuing calls. At 10,000 receipts new operations are refused; operator retention/migration UI remains outstanding.
 Logical expiry is not secure erasure of SQLite pages, WAL or checkpoints. Existing backup protection/retention applies.
-Sent transcripts become ordinary inbox history. Recovery does not infer relocated speech models/credentials: configure
-them in the Harness base profile. Speech never renews execution grants or changes checkpoint activation proofs.
+Sent transcripts become ordinary inbox history. Generated recovery launch patches do not restore speech configuration
+automatically, and replace the main plugin config from the base profile. To enable speech on an installed deployment,
+use its complete installed plugin configuration with `voice` added, preserving its authenticated state, ownership,
+publication and restore bindings. Keep the original authenticated launch patch unchanged; modifying that file invalidates
+its hash. Activation checks the installed core bindings. Speech paths are validated against current execution roots;
+they are never inferred from former paths. Speech never renews grants or changes checkpoint activation proofs.
 
 ## Verification
 

@@ -87,11 +87,13 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
   }
   const voiceModel = process.env.DSH_VOICE_MODEL
   if (voiceModel) {
-    const patch = JSON.parse(await readFile(overlay, 'utf8')) as unknown[]
-    patch.push({ id: 'dsh-superagent', config: { voice: {
+    const patch = JSON.parse(await readFile(overlay, 'utf8')) as { id?: string; config?: Record<string, unknown> }[]
+    const main = patch.find(entry => entry.id === 'dsh-superagent')
+    if (!main?.config) throw new Error('Qualification profile has no complete superagent configuration')
+    main.config.voice = {
       input: { kind: 'whisper', binary: '/opt/homebrew/bin/whisper-cli', ffmpeg: '/opt/homebrew/bin/ffmpeg', modelFile: voiceModel },
       output: { kind: 'say', binary: '/usr/bin/say', ffmpeg: '/opt/homebrew/bin/ffmpeg', voice: 'Samantha' },
-    } } }); await writeFile(overlay, JSON.stringify(patch))
+    }; await writeFile(overlay, JSON.stringify(patch))
   }
   let log = '', child: ChildProcess | undefined
   const stop = async () => {
