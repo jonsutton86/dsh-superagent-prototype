@@ -25,6 +25,16 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: managed model usage and budgets
+
+[042 Usage and budgets](042-usage-budgets.md) adds managed Harness call/token accounting, immutable price snapshots,
+workspace/mission/schedule/persona limits, atomic admission reservations, uncertain-outcome reconciliation and operator UI.
+Missing reports retain reservations across restart. Prices are explicit operator inputs and displayed costs are estimates;
+provider invoices, exact prepared-generation metadata and non-token fees remain outside this increment. Deterministic,
+rendered and installed-Harness qualification results will be recorded after completion. Speculative admission integration,
+retention, multi-workspace ownership, reflection, recovery activation/failover, voice and all other full-scope requirements
+remain open.
+
 ## Implemented increment: persistent mission schedules
 
 [041 Schedules](041-schedules.md) adds versioned complete-plan snapshots, timezone-aware calendar/interval/one-off

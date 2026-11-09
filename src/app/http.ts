@@ -31,6 +31,8 @@ import { decisionList, search, threadDetail, threadList } from './views/threads.
 import { executorLoad, ticketDetail, ticketList } from './views/tickets.ts'
 import type { Workspace } from '../workspace/service.ts'
 import type { Schedules } from '../workspace/schedules.ts'
+import type { Usage } from '../usage/service.ts'
+import { UsageScope, UsageError } from '../usage/model.ts'
 import { WorkspaceError } from '../workspace/model.ts'
 import type { Library } from '../workspace/library.ts'
 import type { Inbox } from '../workspace/inbox.ts'
@@ -64,6 +66,7 @@ export interface HttpHost {
   readonly library: Library
   readonly workspace: Workspace
   readonly schedules?: Schedules
+  readonly usage?: Usage
   readonly supervision?: Supervision
   readonly store: Store
   /** Feishu message links resolved since startup, used by search to match AppLink URLs. */
@@ -122,6 +125,7 @@ function failure(error: unknown): [number, Record<string, unknown>] {
   if (error instanceof SetupError) return [400, { error: error.message, setup: error.problem }]
   if (error instanceof RouteError) return [error.status, { error: error.message }]
   if (error instanceof WorkspaceError) return [error.status, { error: error.message }]
+  if (error instanceof UsageError) return [error.status, { error: error.message }]
   if (error instanceof EnvironmentError) return [error.status, { error: error.message }]
   if (error instanceof RemoteError || error instanceof OwnershipError || error instanceof PublicationError) return [error.status, { error: error.message, code: error.code }]
   if (error instanceof UserError) return [error.missing ? 404 : 400, { error: error.message, code: error.code, values: error.values }]
@@ -189,6 +193,7 @@ const SettingsBlockSchema = z.union([z.enum(['policy', 'eval', 'executor']), Sou
 const SaveRequest = z.object({ value: z.unknown(), revision: z.number().int().nonnegative() })
 
 function routes(runtime: HttpHost): Routes {
+  const usage = () => { if (!runtime.usage) throw new UsageError(409, 'Model accounting is unavailable'); return runtime.usage }
   const schedules = () => { if (!runtime.schedules) throw new WorkspaceError(409, 'Schedules are unavailable'); return runtime.schedules }
   const { store } = runtime
   const ticket = (id: string) => { if (!store.tickets.get(id)) throw new RouteError(404, 'Ticket not found'); return id }
@@ -224,6 +229,11 @@ function routes(runtime: HttpHost): Routes {
     return runtime.conversations
   }
   return {
+    'GET usage': ({ query }) => usage().page(UsageScope.parse({ kind: query.scope ?? 'workspace', ...(query.subject ? { id: query.subject } : {}) }),
+      query.from === undefined ? undefined : new Date(z.iso.datetime({ offset: true }).parse(query.from)).toISOString(), offset.parse(query.offset), limit(30, 100).parse(query.limit)),
+    'PUT usage': async ({ body }) => usage().configure(await body(256 * 1024)),
+    'GET usage/versions/:version': ({ params }) => usage().configuration(z.coerce.number().int().nonnegative().parse(params.version)),
+    'POST usage/calls/:id/reconcile': async ({ params, body }) => usage().reconcile(params.id, await body()),
     'GET missions/:id/inbound': ({ params }) => conversations().state(params.id),
     'PUT missions/:id/inbound': async ({ params, body }) => conversations().configure(params.id, await body()),
     'POST missions/:id/inbound/poll': async ({ params, body }) => conversations().poll(params.id, z.object({ rescan: z.boolean().default(false) }).strict().parse(await body()).rescan),

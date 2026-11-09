@@ -13,6 +13,7 @@ import type { ArchiveRecordInput, CreateRecordInput, LibraryContent, LibraryEntr
 import type { Conversation, InboxFilter, InboxItem, InboxPage, InboxReplyInput, InboxStartInput } from '../workspace/inbox-model.ts'
 import type { PlanIndex, PlanProposal, PlanVersion, ProposePlanInput, ReviewPlanInput, RequestPlanInput } from '../workspace/plan-model.ts'
 import type { CreateScheduleInput, SaveScheduleInput, ToggleScheduleInput, ScheduleView, ScheduleList, Schedule } from '../workspace/schedule-model.ts'
+import type { UsagePage, UsageCall, UsageConfiguration, SaveUsageInput, ReconcileUsageInput } from '../usage/model.ts'
 import type { EnvironmentList, EnvironmentView, EnrollEnvironmentInput, EnvironmentCommandInput } from '../environments/model.ts'
 import type { ExecutionReceiptPage } from '../remote/effects.ts'
 import type { ArchivePersonaInput, CreatePersonaInput, PersonaList, PersonaRecord, PersonaVersion, SavePersonaInput } from '../personas/model.ts'
@@ -33,6 +34,10 @@ interface Paged { offset?: number; limit?: number }
 type Delivery = 'injected' | 'pending'
 
 export interface Api {
+  'GET usage': { query?: Paged & { scope?: 'workspace' | 'mission' | 'schedule' | 'persona'; subject?: string; from?: string }; response: UsagePage }
+  'PUT usage': { body: SaveUsageInput; response: UsageConfiguration }
+  'GET usage/versions/:version': { response: UsageConfiguration }
+  'POST usage/calls/:id/reconcile': { body: ReconcileUsageInput; response: UsageCall }
   'GET schedules': { query?: Paged; response: ScheduleList }
   'GET schedules/:id': { query?: Paged; response: ScheduleView }
   'GET schedules/:id/versions/:version': { response: Schedule }

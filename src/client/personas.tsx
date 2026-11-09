@@ -86,7 +86,7 @@ function PersonaPreview({ version }: { version: PersonaVersion }) {
   </div>
 }
 function PersonaDetail({ id, changed }: { id: string; changed: () => void }) {
-  const { call, t } = usePanel(), { data: record, error, reload } = usePoll(() => call('GET personas/:id', { id }), [call, id])
+  const { call, t, navigate } = usePanel(), { data: record, error, reload } = usePoll(() => call('GET personas/:id', { id }), [call, id])
   const [editing, setEditing] = useState<{ key: string; record: PersonaRecord; definition?: PersonaDefinition }>(), [historical, setHistorical] = useState<PersonaVersion>(), [reason, setReason] = useState('')
   const command = useOperatorCommand(() => { void reload(); changed() })
   if (!record) return <p role={error ? 'alert' : 'status'}>{error?.message ?? t('loading')}</p>
@@ -101,6 +101,7 @@ function PersonaDetail({ id, changed }: { id: string; changed: () => void }) {
   return <article className="dt-mission-card"><p><code>{id}</code> · {t(record.archived ? 'persona.archived' : 'persona.available')}</p>
     {error && <p role="alert" className="dt-error">{error.message}</p>}
     <PersonaPreview version={record} />
+    <Button onClick={() => navigate({ page: 'usage', query: { scope: 'persona', subject: id } })}>{t('usage.limits')}</Button>
     {editing ? <PersonaForm key={editing.key} record={editing.record} restored={editing.definition} saved={() => { setEditing(undefined); void reload(); changed() }} cancel={() => setEditing(undefined)} />
       : <Button onClick={() => setEditing({ key: crypto.randomUUID(), record })}>{t('persona.edit')}</Button>}
     <form className="dt-mission-form" onSubmit={history}>

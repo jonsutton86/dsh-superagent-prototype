@@ -52,6 +52,8 @@ import { executorTools, type ExecutorToolsHost } from './tools/executor.ts'
 import { Supervision } from '../supervision/service.ts'
 import { Workspace } from '../workspace/service.ts'
 import { Schedules } from '../workspace/schedules.ts'
+import { Usage } from '../usage/service.ts'
+import { UsageRuntime } from '../usage/runtime.ts'
 import { Inbox } from '../workspace/inbox.ts'
 import { Library } from '../workspace/library.ts'
 import { Environments } from '../environments/service.ts'
@@ -91,6 +93,7 @@ export class Runtime extends Service implements SourceHost {
   readonly supervision: Supervision
   readonly workspace: Workspace
   readonly schedules: Schedules
+  readonly usage: Usage
   readonly inbox: Inbox
   readonly library: Library
   readonly environments: Environments
@@ -164,6 +167,7 @@ export class Runtime extends Service implements SourceHost {
         id => library.evidenceRevision(id), ticket => environments.allows(ticket.execution?.environment), reference => personas.snapshot(reference), reference => environments.select(reference),
         (mission, action) => runtime.channelPublications?.channel(mission, action))
       const schedules = this.schedules = new Schedules(store, workspace, () => !this.paused())
+      const usage = this.usage = new Usage(store)
       const inbox = this.inbox = new Inbox(store, workspace, library,
         async id => (await ctx.sessionController.inspect(id as SessionId, AbortSignal.any([this.lifetime, AbortSignal.timeout(15_000)]))).events)
       this.disposers.push(ctx.on('session/event', (session, event) => {
@@ -182,6 +186,8 @@ export class Runtime extends Service implements SourceHost {
       store.set(KV.runtime.masterId, masterId)
       const commands = this.commands = new Commands(() => setup.deployment, setup.commandEnvironment, this.lifetime)
       const board = this.board
+      const accounting = new UsageRuntime(ctx, store, usage, masterId, this.lifetime, board.claim('usage', { state: 'starting', detail: 'Model accounting is starting' }))
+      this.disposers.push(() => accounting.dispose())
       const effects = this.effects = new Effects(store, board)
       const sources = this.sources = new SourceRegistry(() => store.settings(), board, kind => {
         // Sync source member lists once startup completes when a source plugin loads dynamically.
@@ -345,7 +351,7 @@ export class Runtime extends Service implements SourceHost {
       channelPublications: this.channelPublications,
       conversations: this.conversations,
       get health() { return runtime.health }, remoteEffects: this.remoteWorkspace?.world,
-      supervision: this.supervision, workspace: this.workspace, schedules: this.schedules, library: this.library, inbox: this.inbox, environments: this.environments, endpoints: this.endpoints, personas: this.personas, worlds: this.worlds,
+      supervision: this.supervision, workspace: this.workspace, schedules: this.schedules, usage: this.usage, library: this.library, inbox: this.inbox, environments: this.environments, endpoints: this.endpoints, personas: this.personas, worlds: this.worlds,
       get deployment() { return setup.deployment },
       get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem },
       configured: () => setup.configured(), links: () => runtime.links(), ticketEnvironment: ticket => runtime.ticketEnvironment(ticket),

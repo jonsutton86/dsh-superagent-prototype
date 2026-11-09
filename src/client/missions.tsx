@@ -107,6 +107,7 @@ function MissionDetail({ id }: { id: string }) {
       {(state?.paused || state?.setup.problem || (state && !state.environment?.ready)) && <p role="status">{t('mission.executionUnavailable')}</p>}
       <div className="dt-mission-buttons">
         <Button disabled={!mission.actions.length} onClick={() => navigate({ page: 'schedules', query: { mission: mission.id } })}>{t('schedule.thisPlan')}</Button>
+        <Button onClick={() => navigate({ page: 'usage', query: { scope: 'mission', subject: mission.id } })}>{t('usage.limits')}</Button>
         {mission.schedule && <Button onClick={() => navigate({ page: 'schedules', id: mission.schedule!.id })}>{t('schedule.origin')}</Button>}
         {mission.status === 'active' ? <>
           <Button onClick={() => setAdding(!adding)}>{t(adding ? 'cancel' : 'mission.addAction')}</Button>

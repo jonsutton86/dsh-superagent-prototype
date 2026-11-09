@@ -5,7 +5,7 @@ import type { SetupPlace } from '../setup.ts'
 import { DECISION_FILTERS, type DecisionFilter } from './api.ts'
 import type { T } from './text.ts'
 
-export const TABS = ['inbox', 'missions', 'schedules', 'library', 'personas', 'environments', 'overview', 'source', 'trigger', 'eval', 'execution', 'settings'] as const
+export const TABS = ['inbox', 'missions', 'schedules', 'library', 'personas', 'usage', 'environments', 'overview', 'source', 'trigger', 'eval', 'execution', 'settings'] as const
 export type Tab = typeof TABS[number]
 export const SETTINGS_GROUPS = ['source', 'eval', 'execution', 'prompts', 'deployment'] as const
 export type SettingsGroup = typeof SETTINGS_GROUPS[number]
@@ -13,6 +13,7 @@ export type Route = { page: 'overview' | 'source' | 'environments' | 'personas';
   | { page: 'inbox'; id?: string; query?: { filter?: InboxFilter } }
   | { page: 'missions'; id?: string; query?: undefined }
   | { page: 'schedules'; id?: string; query?: { mission?: string } }
+  | { page: 'usage'; id?: undefined; query?: { scope?: 'workspace' | 'mission' | 'schedule' | 'persona'; subject?: string } }
   | { page: 'library'; id?: string; query?: { scope?: string } }
   | { page: 'trigger'; id?: undefined; query?: { filter?: ThreadFilter } }
   | { page: 'trigger'; id: string; query?: { trigger?: string } }
@@ -42,6 +43,11 @@ export function parseRoute(value: unknown): Route | undefined {
     case 'inbox': return record ? { page, id: record } : { page, query: compact({ filter: pick(INBOX_FILTERS, query?.filter) }) }
     case 'library': return { page, ...(record ? { id: record } : {}), query: compact({ scope: text('scope') }) }
     case 'missions': return record ? { page, id: record } : { page }
+    case 'usage': {
+      const scope = pick(['workspace', 'mission', 'schedule', 'persona'] as const, query?.scope)
+      const subject = text('subject')
+      return scope && scope !== 'workspace' && subject && /^[a-zA-Z0-9_-]{1,100}$/.test(subject) ? { page, query: { scope, subject } } : { page }
+    }
     case 'schedules': return record ? { page, id: record } : { page, query: compact({ mission: text('mission') }) }
     case 'overview': case 'source': case 'environments': case 'personas': return { page }
     case 'trigger': return record ? { page, id: record, query: compact({ trigger: text('trigger') }) }

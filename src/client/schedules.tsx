@@ -53,7 +53,8 @@ function ScheduleDetail({ id }: { id: string }) {
       <p>{t('schedule.pauseHint')}</p><div className="dt-mission-buttons">
         <Button disabled={command.busy} onClick={() => { void command.run({ id, revision: data.revision, enabled: !data.enabled }, requestId =>
           call('POST schedules/:id/enabled', { id, body: { requestId, revision: data.revision, enabled: !data.enabled } })) }}>{t(data.enabled ? 'schedule.pause' : 'schedule.enable')}</Button>
-        <Button onClick={() => setEditing(editing ? undefined : data)}>{t(editing ? 'cancel' : 'schedule.edit')}</Button></div>
+        <Button onClick={() => setEditing(editing ? undefined : data)}>{t(editing ? 'cancel' : 'schedule.edit')}</Button>
+        <Button onClick={() => navigate({ page: 'usage', query: { scope: 'schedule', subject: id } })}>{t('usage.limits')}</Button></div>
       {editing && <ScheduleForm key={id} existing={editing} plan={editing.definition.plan} done={() => { setEditing(undefined); void reload() }} />}
       <h3>{t('schedule.history')}</h3><div className="dt-mission-actions">{data.occurrences.map(occurrence => <article className="dt-mission-card" key={occurrence.id}>
         <time dateTime={occurrence.due}>{new Date(occurrence.due).toLocaleString()}</time>{occurrence.through && <> — <time dateTime={occurrence.through}>{new Date(occurrence.through).toLocaleString()}</time></>}

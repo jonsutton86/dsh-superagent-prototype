@@ -31,10 +31,39 @@ export async function qualifySchedules(api: (path: string, body?: unknown, metho
   const conversation = await api(`inbox/${task}`)
   const artifacts = await Promise.all(conversation.artifacts.map((item: { id: string }) => api(`library/${item.id}`)))
   expect(artifacts.some(item => item.provenance.ticketId === task && item.content === proof)).toBe(true)
+  const usage = await api(`usage?scope=schedule&subject=${saved.id}`)
+  expect(usage.totals.calls).toBeGreaterThan(0); expect(usage.totals.tokens).toBeGreaterThan(0)
+  expect(usage.calls.some((call: any) => call.phase === 'reported' && call.owner.ticketId === task && call.owner.missionId === mission.id && call.owner.scheduleId === saved.id)).toBe(true)
   await restart()
   const restored = await api(`schedules/${saved.id}`)
   expect(restored).toMatchObject({ runs: 1, enabled: true, open: 1 })
   expect(restored.occurrences).toHaveLength(1)
   expect((await api(`missions/${mission.id}`)).actions[0].runs).toEqual([task])
   expect((await api(`tickets/${task}`)).assignments).toHaveLength(1)
+  expect((await api(`usage?scope=schedule&subject=${saved.id}`)).totals).toEqual(usage.totals)
+  await qualifyUsageLimit(api, environment)
+}
+
+/** A real worker is refused before inference, then resumes on operator retry after its scoped allowance changes. */
+async function qualifyUsageLimit(api: (path: string, body?: unknown, method?: string) => Promise<any>, environment: string): Promise<void> {
+  let mission = await api('missions', { requestId: 'usage-mission', title: 'Usage limit proof', objective: 'Verify admission limits', acceptance: 'Worker resumes after allowance change' })
+  mission = await api(`missions/${mission.id}/actions`, { requestId: 'usage-action', revision: mission.revision, title: 'Budgeted response', owner: 'agent', environment,
+    instructions: 'Report ready using your reporting tool with summary "Usage allowance restored". Do not run commands, call external services or delegate.' })
+  const config = (await api('usage')).configuration
+  const budget = { id: 'qualification-mission', title: 'Qualification token allowance', scope: { kind: 'mission', id: mission.id }, period: 'lifetime', enabled: true, tokens: 1 }
+  await api('usage', { requestId: 'usage-limit', revision: config.revision, prices: config.prices, budgets: [...config.budgets, budget] }, 'PUT')
+  mission = await api(`missions/${mission.id}/actions/${mission.actions[0].id}`, { requestId: 'usage-start', revision: mission.revision, command: 'run' })
+  await vi.waitFor(async () => {
+    mission = await api(`missions/${mission.id}`)
+    expect(mission.actions[0].ticket.retryable).toBe(true)
+  }, { timeout: 30_000, interval: 500 })
+  expect((await api(`usage?scope=mission&subject=${mission.id}`)).totals.calls).toBe(0)
+  const current = (await api('usage')).configuration
+  await api('usage', { requestId: 'usage-restore', revision: current.revision, prices: current.prices,
+    budgets: current.budgets.map((item: any) => item.id === budget.id ? { ...item, enabled: false } : item) }, 'PUT')
+  await api(`missions/${mission.id}/actions/${mission.actions[0].id}`, { requestId: 'usage-retry', revision: mission.revision, command: 'retry' })
+  await vi.waitFor(async () => {
+    expect((await api(`missions/${mission.id}`)).actions[0].status).toBe('review')
+    expect((await api(`usage?scope=mission&subject=${mission.id}`)).totals.tokens).toBeGreaterThan(0)
+  }, { timeout: 60_000, interval: 500 })
 }
