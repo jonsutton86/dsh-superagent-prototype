@@ -329,3 +329,12 @@ the coordinator's publisher credential. It checks pinned provider account identi
 repeats private-file checks before publishing, and records only safe successful check counts. No lease or message is created.
 Inference/source configuration, authoritative state, remapping, coordinated activation and clean-host failure qualification
 remain required alongside the complete article/product scope.
+
+Control-configuration code `56adf6dc2243fe40e41b8491a885623293a77762` passed 1,591 local tests, typechecking and all
+four builds. Focused recovery and ownership/publication runs passed 92 and 43 tests respectively.
+The same code passed 1,593 tests with native Linux confinement, typechecking and all builds in
+[run 42564344905](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42564344905).
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 224.07 seconds, including actual reserved-claimant and
+coordinator-publisher authentication, provider account/target preflight and the signed control summary in held preparation.
+Provider-message traffic stayed local; the original app remained running. Broader configuration, authoritative state and
+restored activation remain open.

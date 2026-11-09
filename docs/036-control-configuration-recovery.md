@@ -5,6 +5,10 @@ do not prove that a restored coordinator can authenticate to its ownership autho
 preparation now verify those control credentials separately. They also check the publisher's pinned provider account and
 destination access without sending a message or acquiring a coordinator lease.
 
+Upgrade the maintenance bundle, independent ownership authority and publication service together before using these checks.
+An older authority or publisher that does not implement the new read-only operations cannot qualify recovery; maintenance
+refuses its unsupported response instead of treating it as valid configuration.
+
 ## Reserved claimant proof
 
 `recovery.claimant` is a read-only ownership operation restricted to the current recovery claimant. Administrator, resource
@@ -64,7 +68,7 @@ validation. Transport/protocol failures fail the audit; they cannot be interpret
 
 Preparation independently verifies control configuration and repeats it immediately before final resource/Session checks
 and image publication. Missing files, changed accounts, wrong roles or changed private pins leave both execution holds
-intact and remove the unfinished image. No credentials are renewed or substituted automatically.
+intact and remove the unfinished image. No workspace grant or ownership lease is renewed, and no credential file is substituted.
 
 New signed images append `controlConfiguration: { claimant: true, publication: boolean, destinations: number }`. The optional
 field preserves verification of older images without inventing missing evidence. An original-ID retry returns its original
@@ -81,3 +85,16 @@ Harness qualification checks the signed control summary after actual model-drive
 Inference and source-connector configuration, authoritative input/state reconciliation, explicit runtime/path remapping,
 coordinated restored activation and clean-host failure qualification remain required. The full article and Agentic OS
 implementation ledgers remain active.
+
+Code `56adf6dc2243fe40e41b8491a885623293a77762` passed 1,591 local tests (seven skipped), typechecking and all four
+builds. Focused runs passed 92 recovery tests and 43 ownership/publication tests. The full run also verified that an
+unsettled publication prevents a configuration probe before it reaches the provider.
+
+The same code passed 1,593 tests with native Linux confinement (five skipped), typechecking and all builds in
+[run 42564344905](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42564344905).
+
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 224.07 seconds. Managed recovery verified the current
+reserved claimant, actual coordinator publication credential and pinned provider account/target, then authenticated its
+control summary and original-ID retry. The dedicated case retained its expected refusal for unrecorded publication probes.
+Inference used the configured model API; provider-message traffic remained on local contract servers. The original app
+remained running. This qualifies held control-configuration checks, not restored activation or future provider write access.

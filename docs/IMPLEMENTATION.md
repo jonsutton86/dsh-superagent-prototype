@@ -36,6 +36,15 @@ Signed images contain only successful control-check counts. Historical retries d
 Inference/source configuration, authoritative input/state reconciliation, explicit remapping, coordinated restored activation
 and clean-host failure qualification remain open alongside the full architecture and product ledger.
 
+Code `56adf6dc2243fe40e41b8491a885623293a77762` passed 1,591 local tests, typechecking and all four builds. Focused
+runs passed 92 recovery tests and 43 ownership/publication tests.
+The same code passed 1,593 tests with native Linux confinement, typechecking and all builds in
+[run 42564344905](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42564344905).
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 224.07 seconds. Managed recovery verified its actual
+reserved claimant and coordinator publication credentials and the provider account/target, then authenticated the held
+control summary and original-ID retry. The dedicated case retained its expected refusal for unrecorded publication probes.
+Provider-message traffic stayed local; the original app remained running. Restored activation remains unqualified.
+
 ## Implemented increment: destination Session verification
 
 [035 Destination Sessions](035-session-backend-recovery.md) verifies the actual imported Harness backend during held
