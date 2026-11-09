@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import type { AttachmentStore, ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-llm'
-import type {} from '@deepseek-ai/dsh-subprocess'
+import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import { extname, join } from 'node:path'
 import { COPY_INPUT_PROGRAM } from './copy-program.ts'
 import { personaDenial } from '../personas/runtime.ts'
@@ -229,7 +229,13 @@ export class Attachments {
     if (persona && (personaDenial(persona, 'write') || personaDenial(persona, 'bash'))) throw new UploadError(409, 'Input copy requires this persona’s write and command capabilities')
     this.verify(value)
     const suffix = extname(value.name), name = `input-${value.id}-${value.sha256.slice(0, 12)}${/^\.[A-Za-z0-9]{1,12}$/.test(suffix) ? suffix : ''}`
-    const subprocess = agent.ctx.subprocess, node = await subprocess.resolveExecutable('node', undefined, signal)
+    // Agent contexts do not inject subprocess. Resolve the actual mounted preset service explicitly,
+    // retaining its execution binding; an unavailable remote provider must never fall back to local execution.
+    const registry = agent.ctx.get('agentPresets') as { serviceFor?: (agent: Agent, name: string) => SubprocessRuntime | undefined } | undefined
+    const subprocess = (registry?.serviceFor?.(agent, 'subprocess') ?? agent.ctx.get('subprocess')) as (SubprocessRuntime & { executionBinding?: string }) | undefined
+    const world = ticket.execution?.environment?.world
+    if (!subprocess || (world && subprocess.executionBinding !== world)) throw new UploadError(409, 'The task’s Harness process service is unavailable or belongs to a different execution world')
+    const node = await subprocess.resolveExecutable('node', undefined, signal)
     let offset = 0
     const copy = async (bytes: Buffer): Promise<boolean> => {
       signal.throwIfAborted(); this.authorized(ticketId, id)

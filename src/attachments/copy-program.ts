@@ -1,7 +1,7 @@
 /** Fixed Node program for bringing an input into the already-authorized execution directory. */
-function copyInput() {
-  const fs = require('node:fs') as typeof import('node:fs')
-  const crypto = require('node:crypto') as typeof import('node:crypto')
+function copyInput(load: NodeRequire) {
+  const fs = load('node:fs') as typeof import('node:fs')
+  const crypto = load('node:crypto') as typeof import('node:crypto')
   const [name, totalText, digest, offsetText, chunkDigest] = process.argv.slice(1)
   const total = Number(totalText), offset = Number(offsetText)
   if (!name || !/^input-[0-9a-f-]{36}-[0-9a-f]{12}(?:\.[A-Za-z0-9]{1,12})?$/.test(name)
@@ -82,4 +82,5 @@ function copyInput() {
   } finally { fs.closeSync(fd) }
   process.stdout.write(JSON.stringify({ complete: published, bytes: offset + chunk.length, sha256: digest }))
 }
-export const COPY_INPUT_PROGRAM = `(${copyInput.toString()})()`
+// Pass the child process's CJS loader explicitly. Bundling must not capture an ESM __require shim in toString().
+export const COPY_INPUT_PROGRAM = `(${copyInput.toString()})(require)`

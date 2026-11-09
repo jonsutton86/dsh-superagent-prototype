@@ -105,7 +105,8 @@ it.each([false, ...(process.env.DSH_REMOTE_ISOLATION === '1' ? [true] : [])])('c
   const cwd = remote ? join(remote.enrolled.grant.root, 'input-copy') : directory(); mkdirSync(cwd, { recursive: true })
   ticket.execution!.directory = cwd; store.tickets.save(ticket)
   const processor = remote?.remoteProcess ?? new LocalSubprocessRuntime(context)
-  const agent = { session: { header: { cwd } }, ctx: { subprocess: processor } } as unknown as Agent
+  const agent = { session: { header: { cwd } }, ctx: { get subprocess() { throw new Error('subprocess is not injected on Agent contexts') },
+    get: (name: string) => name === 'agentPresets' ? { serviceFor: () => processor } : undefined } } as unknown as Agent
   const result = await uploads.copy(item.id, value.id, agent, new AbortController().signal)
   expect(readFileSync(result.path)).toEqual(data); expect(result.sha256).toBe(value.sha256)
   expect(await uploads.copy(item.id, value.id, agent, new AbortController().signal)).toEqual(result)
