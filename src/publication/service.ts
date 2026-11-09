@@ -7,6 +7,7 @@ import { contentHash, DeliveryRefused, type PublicationAdapter } from './github.
 import { PublicationProviders } from './providers.ts'
 import { ResourceInventory } from '../ownership/inventory.ts'
 import { freshSeal } from '../verification/reviews.ts'
+import { PullBinding, PullObservation, matchesPullEvidence } from './pull-model.ts'
 
 export interface PublicationServiceConfig { stateDir: string; ownership: ResourceOwnershipConfig; destinations: DestinationConfig[] }
 /** Independently fenced publication host. Unknown outcomes block ownership handoff until actual observation or administrator reconciliation. */
@@ -50,7 +51,7 @@ export class PublicationService {
   start(report: (error: unknown) => void = () => {}): void { this.gate.start(report) }
   identity(): PublicationIdentity {
     const { authorityId, coordinatorId, resourceId } = this.config.ownership
-    return { protocol: 1, id: this.journal.id, capabilities: { artifactEvidence: true }, ownership: { authorityId, coordinatorId, resourceId } }
+    return { protocol: 1, id: this.journal.id, capabilities: { artifactEvidence: true, pullReviews: true }, ownership: { authorityId, coordinatorId, resourceId } }
   }
   private destination(id: string) {
     const value = this.destinations.get(id)
@@ -96,6 +97,17 @@ export class PublicationService {
         return request.op === 'recovery.inventory' ? this.inventory.page(request, identity, quiescent) : this.inventory.receipt(request, identity, quiescent)
       }
       case 'destinations': return [...this.destinations.values()].map(({ credentialFile: _, ...value }) => ({ ...value, hash: fingerprint(value) }))
+      case 'pull.inspect': {
+        const guard = await this.gate.authorize(proof), destination = this.destination(request.destination), { credentialFile: _, ...metadata } = destination
+        if (fingerprint(metadata) !== request.destinationHash) throw new PublicationError(409, 'destination_changed', 'PR review destination changed')
+        if (destination.kind !== 'github-pr-review' || !this.adapter.inspectPull) throw new PublicationError(409, 'pull_unavailable', 'This destination cannot inspect PR heads')
+        this.calls++
+        try {
+          const binding = PullBinding.parse(await this.adapter.inspectPull(destination, AbortSignal.any([guard.signal, this.lifetime.signal])))
+          await this.gate.verify(guard)
+          return PullObservation.parse({ destination: request.destination, destinationHash: request.destinationHash, binding, hash: fingerprint(binding), observedAt: timestamp() })
+        } finally { this.calls-- }
+      }
       case 'conversation.read': {
         const guard = await this.gate.authorize(proof), destination = this.destination(request.destination), { credentialFile: _, ...metadata } = destination
         if (fingerprint(metadata) !== request.destinationHash) throw new PublicationError(409, 'destination_changed', 'Conversation destination changed')
@@ -140,6 +152,11 @@ export class PublicationService {
           if (exists) return this.journal.accept(publication, guard.stamp).receipt
           const assertEvidence = () => {
             const artifact = publication.artifact
+            if (destination.kind === 'github-pr-review') {
+              if (!publication.pull || !artifact || artifact.basis !== 'checks' || !artifact.evidence?.length
+                || artifact.evidence.some(seal => !matchesPullEvidence(seal, publication.pull!)))
+                throw new PublicationError(409, 'pull_evidence_required', 'PR reviews require host checks of the exact approved commit and captured Git tree')
+            } else if (publication.pull) throw new PublicationError(409, 'unexpected_pull', 'This destination does not accept PR review bindings')
             if (!artifact?.evidence) return
             if (new Set(artifact.evidence.map(seal => seal.selection.runId)).size !== artifact.evidence.length || artifact.evidence.some(seal =>
               seal.artifact.id !== artifact.id || seal.artifact.revision !== artifact.revision || seal.artifact.hash !== artifact.hash || !freshSeal(seal)))
@@ -151,6 +168,7 @@ export class PublicationService {
           try {
             const signal = AbortSignal.any([guard.signal, this.lifetime.signal])
             const prepared = await this.adapter.prepare(destination, publication, signal)
+            await prepared.verify?.(signal)
             await this.gate.verify(guard); signal.throwIfAborted()
             assertEvidence()
             if (this.item(item.receipt.id).receipt.phase !== 'accepted') throw new Error('Publication was fenced before dispatch')

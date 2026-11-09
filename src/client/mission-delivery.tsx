@@ -48,7 +48,7 @@ export function MissionDeliveryCard({ mission }: { mission: MissionView }) {
       {activeWork && <p>{t('delivery.activeWork')}</p>}
       <label>{t('publication.destination')}<select value={destinationId} disabled={busy || activeWork} onChange={event => { setDestination(event.target.value); setConsent(false) }}>
         <option value="">{t('publication.select')}</option>
-        {catalog.data.items.map(item => <option key={item.id} value={item.id}>{item.name} — {destinationLabel(item)}</option>)}
+        {catalog.data.items.filter(item => item.kind !== 'github-pr-review').map(item => <option key={item.id} value={item.id}>{item.name} — {destinationLabel(item)}</option>)}
       </select></label>
       <label><input type="checkbox" checked={consent} disabled={busy || !destination || activeWork || mission.status !== 'active'}
         onChange={event => setConsent(event.target.checked)} />{t('delivery.consent')}</label>

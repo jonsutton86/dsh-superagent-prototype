@@ -21,7 +21,7 @@ export async function qualifyPublication(input: { cli: string; home: string; pro
     return original(['https://api.github.com', 'https://open.feishu.cn', 'https://open.larksuite.com'].includes(url.origin) ? ${JSON.stringify(publisher.providerOrigin)} + url.pathname + url.search : input, init);
   };\n`, { mode: 0o600 })
   const common = { maxBytes: 30_000, credentialFile: publisher.destination.credentialFile }
-  const destinations: DestinationConfig[] = [publisher.destination,
+  const destinations: DestinationConfig[] = [...publisher.config.destinations,
     { ...common, id: 'review-replies', name: 'Review replies', kind: 'github-review', repository: 'acme/project', issue: 7, comment: 11, login: 'agent-bot' },
     ...(['feishu', 'lark'] as const).map(brand => ({ ...common, id: `${brand}-replies`, name: `${brand} replies`, kind: 'feishu-reply' as const,
       brand, appId: 'cli_agent', botId: 'ou_bot', chatId: 'oc_chat', messageId: 'om_root' }))]
@@ -52,10 +52,15 @@ export async function qualifyPublication(input: { cli: string; home: string; pro
   }
   try {
     const client = await start(), catalog = await client.call<DestinationView[]>({ op: 'destinations' })
-    expect(catalog).toHaveLength(4)
+    expect(catalog).toHaveLength(destinations.length)
     const text = 'Installed Harness publication proof', hash = contentHash(text), before = publisher.posts
     const proofs: { publication: Publication; receipt: PublicationReceipt }[] = []
     for (const destination of catalog) {
+      if (destination.kind === 'github-pr-review') {
+        const observation = await client.call<{ binding: { head: { sha: string } } }>({ op: 'pull.inspect', destination: destination.id, destinationHash: destination.hash })
+        expect(observation.binding.head.sha).toBe(publisher.pull.head.sha)
+        continue
+      }
       const publication: Publication = { id: randomUUID(), text, hash, destination: destination.id, destinationHash: destination.hash,
         message: { id: randomUUID(), ticketId: randomUUID(), missionId: randomUUID(), grantId: randomUUID(), planVersion: 1 } }
       publisher.loseProviderReply()

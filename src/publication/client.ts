@@ -23,7 +23,7 @@ export class PublicationClient {
     const credential = privateCredential(this.config.credentialFile, this.pin)
     const response = await fetch(this.url, { method: 'POST', redirect: 'error', signal: AbortSignal.any([AbortSignal.timeout(this.config.timeoutMs ?? 30_000), ...signal ? [signal] : []]),
       headers: { authorization: `Bearer ${credential}`, 'content-type': 'application/json', 'x-dsh-publication': this.config.serviceId,
-        ...(request.op === 'publish' || request.op === 'conversation.read' ? { 'x-dsh-owner': this.ownership?.proof() ?? '' } : {}) }, body: JSON.stringify(request) })
+        ...(['publish', 'conversation.read', 'pull.inspect'].includes(request.op) ? { 'x-dsh-owner': this.ownership?.proof() ?? '' } : {}) }, body: JSON.stringify(request) })
     if (!response.body) throw new Error('Publication service returned no response body')
     const reader = response.body.getReader(), chunks: Uint8Array[] = []; let bytes = 0
     try { for (;;) { const next = await reader.read(); if (next.done) break; bytes += next.value.length

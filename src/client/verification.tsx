@@ -3,6 +3,7 @@ import type { LibraryRead } from '../workspace/library-model.ts'
 import type { CheckRecord, CheckRun, CreateCheckInput } from '../verification/contracts.ts'
 import { CheckDefinition } from '../verification/contracts.ts'
 import type { CheckSelection } from '../verification/review-model.ts'
+import { matchesPullEvidence, type PullBinding } from '../publication/pull-model.ts'
 import { usePoll } from './api.ts'
 import { usePanel } from './provider.tsx'
 import { Button } from './controls.tsx'
@@ -197,16 +198,17 @@ function OutputWindow({ id, stream }: { id: string; stream: 'stdout' | 'stderr' 
 }
 
 /** Approval selects an existing host receipt. Commands and success assertions cannot be entered here. */
-export function ArtifactCheckPicker({ artifactId, selected, onChange, disabled = false }: {
-  artifactId: string; selected: CheckSelection[]; onChange(value: CheckSelection[]): void; disabled?: boolean
+export function ArtifactCheckPicker({ artifactId, selected, onChange, disabled = false, pull }: {
+  artifactId: string; selected: CheckSelection[]; onChange(value: CheckSelection[]): void; disabled?: boolean; pull?: PullBinding
 }) {
   const { call, t, navigate } = usePanel(), [offset, setOffset] = useState(0)
   const catalog = usePoll(() => call('GET library/:id/review-checks', { id: artifactId, query: { offset } }), [call, artifactId, offset])
+  const items = catalog.data?.items.filter(item => !pull || matchesPullEvidence(item.binding, pull))
   return <fieldset disabled={disabled}>
     <legend>{t('verification.selectEvidence')}</legend><p>{t('verification.approvalHint')}</p>
     {catalog.error && <p role="alert">{catalog.error.message}</p>}
-    {catalog.data?.items.length === 0 && <p>{t('verification.noPassed')}</p>}
-    {catalog.data?.items.map(({ run, binding }) => <label key={run.id}>
+    {items?.length === 0 && <p>{t(pull ? 'publication.pullNoChecks' : 'verification.noPassed')}</p>}
+    {items?.map(({ run, binding }) => <label key={run.id}>
       <input type="checkbox" checked={selected.some(item => item.runId === run.id && item.evidenceHash === binding.selection.evidenceHash)} disabled={!!catalog.error}
         onChange={event => onChange(event.target.checked ? [...selected.filter(item => item.runId !== run.id), binding.selection] : selected.filter(item => item.runId !== run.id))} />
       {run.check.name} · v{run.check.version} · {new Date(binding.checkedAt).toLocaleString()} · {binding.confinement}

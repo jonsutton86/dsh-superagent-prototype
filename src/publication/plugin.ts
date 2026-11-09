@@ -18,6 +18,7 @@ export const Config: s<Partial<PublicationServiceConfig>, PublicationServiceConf
   destinations: s.array(s.union([
     s.object({ ...common, ...github, kind: s.const('github-comment').required() }),
     s.object({ ...common, ...github, kind: s.const('github-review').required(), comment: s.number().required() }),
+    s.object({ ...common, ...github, kind: s.const('github-pr-review').required(), event: s.union(['COMMENT', 'APPROVE', 'REQUEST_CHANGES']).required() }),
     s.object({ ...common, kind: s.const('feishu-reply').required(), brand: s.union(['feishu', 'lark']).required(), appId: s.string().required(),
       botId: s.string().required(), chatId: s.string().required(), messageId: s.string().required() }),
   ])).required(),

@@ -309,6 +309,7 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
   'POST verification/:id/reconcile': { body: true, answer: () => refuse(409, 'Verification fixture not configured') },
   'POST verification/:id/freshness': { body: true, answer: () => refuse(409, 'Verification fixture not configured') },
   'GET publication/destinations': { answer: () => ({ configured: false, items: [] }) },
+  'GET publication/destinations/:id/pull': { query: ['hash'], answer: () => refuse(409, 'No PR review destination is configured') },
   'GET missions/:id/delivery': { answer: () => ({ configured: false, current: false, items: [] }) },
   'GET missions/:id/inbound': { answer: () => ({ configured: false, active: false, items: [] }) },
   'PUT missions/:id/inbound': { body: true, answer: () => refuse(409, 'Conversation fixture not configured') },

@@ -4,5 +4,5 @@ import type { DestinationView } from '../publication/protocol.ts'
 export function destinationLabel(destination: DestinationView): string {
   return destination.kind === 'feishu-reply'
     ? `${destination.brand} · ${destination.chatId} · ${destination.messageId} · ${destination.appId}`
-    : `${destination.repository} #${destination.issue}${destination.kind === 'github-review' ? ` · review ${destination.comment}` : ''} · ${destination.login}`
+    : `${destination.repository} #${destination.issue}${destination.kind === 'github-review' ? ` · review ${destination.comment}` : destination.kind === 'github-pr-review' ? ` · ${destination.event}` : ''} · ${destination.login}`
 }

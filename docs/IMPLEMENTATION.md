@@ -25,6 +25,16 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Current increment: checked PR review submission
+
+[049 PR review approvals](049-pull-review-approvals.md) adds provider-observed PR identities and head/tree binding to
+checked artifact review submission. Captured bytes reconstruct the commit tree; Git status alone is insufficient.
+The operator inspects the head and selects matching checks; the independent publisher rereads the target and sends an
+explicit-commit review. Historical receipt recovery precedes fresh-source/head gates. Qualification of the working
+revision is pending. GitHub review submission cannot atomically assert the current head; a concurrent push can leave the
+review on the explicitly approved older commit. Mission repository/PR closure, merge policies/receipts, remote Git
+provisioning, continuous freshness, fresh whole-mission closure and all other full architecture requirements remain open.
+
 ## Implemented increment: checked approval and mission acceptance
 
 [048 Checked approvals](048-checked-approvals.md) binds selected successful host checks and fresh original-source captures

@@ -508,3 +508,9 @@ seconds, including actual acceptance/publication, renewal-compatible captures, o
 reflection/usage/recovery regressions. The original app remains running; code and receipts are pushed. Exact PR-head
 gates, a fresh whole-mission closure policy, continuous source freshness and all remaining full architecture requirements
 stay open. The full product objective remains active.
+
+PR review integration is being qualified in `049-pull-review-approvals.md`: independent provider head/tree observations,
+Git trees reconstructed from actual checked bytes, explicit-commit review submission and original receipt recovery after
+head changes. This is a review path, not an atomic latest-head approval or merge implementation. Full qualification is
+pending; mission-level repository/PR closure, merge and branch-policy integration, continuous freshness and every other
+remaining architecture/product requirement stay open.

@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn, execFileSync, type ChildProcess } from 'node:child_process'
 import { createServer } from 'node:net'
 import { appendFile, copyFile, mkdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
@@ -30,6 +30,8 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
   if (!cli || !home || !source) throw new Error('Supply the qualification CLI, DSH home and source profile paths')
   const authority = owned ? await ownershipAuthority(cleanup, ['endpoint', 'publication']) : undefined
   const publisher = authority ? await publicationFixture(cleanup, authority.resourceFor('publication')) : undefined
+  if (publisher) await publisher.restart([...publisher.config.destinations, { id: 'checked-pr', name: 'Checked PR review', kind: 'github-pr-review',
+    repository: 'acme/project', issue: 7, login: 'agent-bot', event: 'APPROVE', maxBytes: 30_000, credentialFile: publisher.destination.credentialFile }])
   const ownershipConfig = authority && { ...authority.config, leaseMs: 10_000, prepareTimeoutMs: 30_000 }
   const bootstrap = ownershipConfig && new CoordinatorOwnership(ownershipConfig)
   if (bootstrap) cleanup.push(() => bootstrap.close())
@@ -180,6 +182,12 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
       if (!native) h.host.isolation = new HostProcessIsolation()
       try { return await operation() } finally { h.host.isolation = previousIsolation }
     }
+    if (publisher) {
+      const git = (...args: string[]) => execFileSync('git', args, { cwd: ticket.directory, encoding: 'utf8' }).trim()
+      git('init', '-q'); git('add', '--', 'result.txt')
+      git('-c', 'user.name=Qualification', '-c', 'user.email=qualification@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Live verified artifact')
+      publisher.pull.head.sha = git('rev-parse', 'HEAD'); publisher.tree(git('rev-parse', 'HEAD^{tree}'))
+    }
     const verification = await inCheckWorld(async () => {
         const check = await api('checks', { requestId: randomUUID(), enabled: true, definition: { name: 'Live artifact proof', description: 'Check exact bytes without service credentials',
           argv: ['/bin/sh', '-c', 'test "$(cat result.txt)" = "$1" && test -z "${SERVICE_API_KEY:-}" && printf verified', 'check', proof],
@@ -220,6 +228,15 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
       expect(delivery.receipt.phase).toBe('unknown')
       expect((await api(`publications/${publicationId}/refresh`, {})).receipt).toMatchObject({ phase: 'sent', hash: artifact.hash })
       expect(publisher.comments.filter(comment => comment.body.includes(`dsh-publication:${publicationId}:`))).toHaveLength(1)
+      const pr = (await api('publication/destinations')).items.find((item: { id: string }) => item.id === 'checked-pr')
+      const pull = await api(`publication/destinations/${pr.id}/pull?hash=${pr.hash}`), reviewId = randomUUID()
+      publisher.loseProviderReply(reviewId)
+      const review = await inCheckWorld(() => api(`library/${artifact.id}/publications`, { requestId: reviewId, revision: artifact.revision, hash: artifact.hash,
+        destination: pr.id, destinationHash: pr.hash, checks: [verification.selection], pullHash: pull.hash }))
+      expect(review.receipt.phase).toBe('unknown')
+      expect((await api(`publications/${reviewId}/refresh`, {})).receipt).toMatchObject({ phase: 'sent', pull: pull.binding,
+        external: { review: { state: 'APPROVED', commit: pull.binding.head.sha } } })
+      expect(publisher.reviews.filter(item => item.body.includes(`dsh-publication:${reviewId}:`))).toHaveLength(1)
     }
     const command = h.endpoint.journal.jobs().find(job => job.request.cwd === ticket.directory && job.request.argv[0] === 'bash'
       && job.request.argv.some(arg => arg.includes('result.txt')) && job.outcome?.exitCode === 0)

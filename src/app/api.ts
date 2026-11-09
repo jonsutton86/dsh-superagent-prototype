@@ -26,6 +26,7 @@ import type { ArchivePersonaInput, CreatePersonaInput, PersonaList, PersonaRecor
 import type { ActivateWorldInput, RevokeWorldInput, WorldList, WorldView } from '../environments/pool-model.ts'
 import type { EndpointCatalog, EndpointCommandInput, EndpointList, EndpointRegistration, OperatorCommand, RegisterEndpointInput, RemoteProfileView } from '../environments/endpoint-model.ts'
 import type { ApprovePublication, PublicationRecord } from '../publication/runtime.ts'
+import type { PullObservation } from '../publication/pull-model.ts'
 import type { DestinationView } from '../publication/protocol.ts'
 import type { ChannelDelivery, ConfigureDelivery, MissionDelivery } from '../publication/channels.ts'
 import type { ConfigureInbound, InboundState } from '../publication/inbound.ts'
@@ -111,7 +112,8 @@ export interface Api {
   'POST inbox/:id/read': { body: { revision: string }; response: { marked: boolean; unread: boolean } }
   'POST inbox/:id/reply': { body: InboxReplyInput; response: InboxItem }
   'GET library': { query?: LibraryQueryInput; response: LibraryList }
-  'GET publication/destinations': { response: { configured: boolean; items: DestinationView[]; artifactEvidence?: boolean } }
+  'GET publication/destinations': { response: { configured: boolean; items: DestinationView[]; artifactEvidence?: boolean; pullReviews?: boolean } }
+  'GET publication/destinations/:id/pull': { query: { hash: string }; response: PullObservation }
   'GET library/:id/publications': { response: { items: PublicationRecord[] } }
   'POST library/:id/publications': { body: ApprovePublication; response: PublicationRecord }
   'POST publications/:id/refresh': { response: PublicationRecord }

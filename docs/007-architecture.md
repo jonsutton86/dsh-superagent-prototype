@@ -366,6 +366,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/remote/endpoint.ts`, `http.ts` | Authenticated execution admission, lease expiry, process supervision, mutation serialization and browser-request refusal |
 | `src/remote/isolation.ts`, `filesystem-runner.ts`, `fs-worker.ts` | Linux bubblewrap process worlds and standalone confined filesystem operations |
 | `src/verification/model.ts`, `snapshot.ts`, `snapshot-worker.ts`, `runner.ts` | Bounded host-captured file/Git manifests, private copied inputs, revision-pinned checks, output digests and quiescence-bound cleanup through Harness |
+| `src/verification/git-tree.ts` | Canonical Git blob/tree reconstruction from captured bytes and modes, independent of index and local objects |
 | `src/verification/contracts.ts`, `definitions.ts` | Strict operator-authored check contracts, immutable versions, scope/worker authority, durable command receipts and metadata limits |
 | `src/verification/service.ts`, `local.ts` | Assignment/environment-bound artifact checks, local/remote Harness execution, captured-source freshness, original receipt recovery and explicit local isolation strength |
 | `src/verification/review-model.ts`, `reviews.ts`, `missions.ts` | Exact selected-check seals, durable grouped freshness capture, original-ID recovery and all-current-artifact mission acceptance |
@@ -391,6 +392,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/publication/journal.ts` | Independent locked publication journal, private roles, immutable bindings and unknown restart outcomes |
 | `src/publication/service.ts` | Ownership-fenced publication, final pre-dispatch verification and unresolved-effect handoff barrier |
 | `src/publication/github.ts` | Fixed-origin account/target checks, single-attempt issue comments and exact provider receipt observation |
+| `src/publication/github-pull.ts`, `pull-model.ts` | Provider-observed immutable PR identities, explicit-commit reviews, exact captured-tree evidence and historical review receipt recovery |
 | `src/publication/feishu.ts`, `providers.ts` | Fixed-origin Feishu/Lark bot authentication, pinned root replies, exact receipt recovery and provider routing |
 | `src/publication/channels.ts` | Plan-bound mission delivery grants, Outbox intent persistence, revocation and receipt recovery |
 | `src/publication/inbound.ts` | Exact participant/task listeners, independently fenced provider reads, durable cursors and atomic directed admission with native-message deduplication |
@@ -546,6 +548,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/ownership.spec.ts` | Competing coordinators, all-resource barriers, claimant replacement/supersession, monotonic expiry/restart, endpoint handoff/outage and immutable receipt generations |
 | `tests/ownership-runtime.spec.ts` | Profile compatibility, owned Runtime startup/loss, managed command attribution, competing writers, startup cleanup and held-restore refusal |
 | `tests/publication.spec.ts` | Provider/service acknowledgement loss, late commits, ownership barriers, account checks, exact intents and independent reconciliation |
+| `tests/publication-pull.spec.ts`, `tests/publication-pull-ui.spec.tsx`, `tests/fixtures/pull-review.ts` | Actual Git/check evidence, PR identity/head races, three review events, restart/dismissal recovery and rendered exact-head consent |
 | `tests/publication-runtime.spec.ts` | Management approval, stale artifact/destination refusal, duplicate prevention and observation after ownership loss |
 | `tests/publication-ui.spec.tsx` | Rendered content/destination review, unchanged approval IDs after lost responses and unknown receipt recovery |
 | `tests/channel-publication.spec.ts` | Owned managed execution through acknowledgements/results, exact grants, revoked/withdrawn unknown sends and ordered Outbox recovery |

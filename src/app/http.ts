@@ -257,6 +257,7 @@ function routes(runtime: HttpHost): Routes {
     'POST deliveries/:id/refresh': ({ params }) => channelPublications().refresh(params.id),
     'POST deliveries/:id/retry': ({ params }) => channelPublications().retry(params.id),
     'GET publication/destinations': () => runtime.publications?.destinations() ?? { configured: false, items: [] },
+    'GET publication/destinations/:id/pull': ({ params, query }) => publications().inspectPull(params.id, z.string().regex(/^[a-f0-9]{64}$/).parse(query.hash)),
     'GET library/:id/publications': ({ params }) => publications().list(params.id),
     'POST library/:id/publications': async ({ params, body }) => publications().publish(params.id, await body()),
     'POST publications/:id/refresh': ({ params }) => publications().refresh(params.id),

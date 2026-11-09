@@ -2,14 +2,16 @@ import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { credentialDigest, privateCredential } from '../environments/endpoint-files.ts'
 import { PublicationError, type ConversationRead, type ConversationPage, type DestinationConfig, type ExternalReceipt, type Publication } from './protocol.ts'
+import type { PullBinding } from './pull-model.ts'
 
 export const contentHash = (text: string) => createHash('sha256').update(text).digest('hex')
-export interface PreparedPublication { send(signal: AbortSignal): Promise<ExternalReceipt> }
+export interface PreparedPublication { verify?(signal: AbortSignal): Promise<void>; send(signal: AbortSignal): Promise<ExternalReceipt> }
 export interface PublicationAdapter {
   check?(destination: DestinationConfig, signal: AbortSignal): Promise<void>
   prepare(destination: DestinationConfig, publication: Publication, signal: AbortSignal): Promise<PreparedPublication>
   observe(destination: DestinationConfig, publication: Publication, signal: AbortSignal, externalId?: string): Promise<ExternalReceipt | undefined>
   read?(destination: DestinationConfig, request: ConversationRead, signal: AbortSignal): Promise<ConversationPage>
+  inspectPull?(destination: DestinationConfig, signal: AbortSignal): Promise<PullBinding>
 }
 /** A complete provider rejection whose documented status establishes that no comment was created. */
 export class DeliveryRefused extends Error {}
@@ -17,7 +19,7 @@ const Comment = z.looseObject({ id: z.number().int().positive(), body: z.string(
 const ReviewComment = Comment.extend({ pull_request_url: z.string(), in_reply_to_id: z.number().int().positive().optional() })
 export const publicationMarker = (request: Publication) => `dsh-publication:${request.id}:${request.hash}:${request.artifact?.id ?? 'message-' + request.message!.id}`
 const body = (request: Publication) => `${request.text}\n\n<!-- ${publicationMarker(request)} -->`
-type GithubDestination = Exclude<DestinationConfig, { kind: 'feishu-reply' }>
+type GithubDestination = Extract<DestinationConfig, { kind: 'github-comment' | 'github-review' }>
 
 /** Fixed-origin GitHub comment publisher. Prepare is read-only; send is exactly one POST and never follows redirects. */
 export class GithubPublication implements PublicationAdapter {
@@ -71,11 +73,11 @@ export class GithubPublication implements PublicationAdapter {
     return credential
   }
   async check(destination: DestinationConfig, signal: AbortSignal): Promise<void> {
-    if (destination.kind === 'feishu-reply') throw new Error('GitHub destination required')
+    if (destination.kind !== 'github-comment' && destination.kind !== 'github-review') throw new Error('GitHub comment destination required')
     await this.preflight(destination, signal)
   }
   async prepare(destination: DestinationConfig, publication: Publication, signal: AbortSignal): Promise<PreparedPublication> {
-    if (destination.kind === 'feishu-reply') throw new Error('GitHub destination required')
+    if (destination.kind !== 'github-comment' && destination.kind !== 'github-review') throw new Error('GitHub comment destination required')
     const credential = await this.preflight(destination, signal)
     // All credential loading, account verification and target discovery finish before the service's final owner verification.
     return { send: async signal => {
@@ -87,7 +89,7 @@ export class GithubPublication implements PublicationAdapter {
     } }
   }
   async observe(destination: DestinationConfig, publication: Publication, signal: AbortSignal, externalId?: string): Promise<ExternalReceipt | undefined> {
-    if (destination.kind === 'feishu-reply') throw new Error('GitHub destination required')
+    if (destination.kind !== 'github-comment' && destination.kind !== 'github-review') throw new Error('GitHub comment destination required')
     const credential = this.credential(destination), prefix = `repos/${destination.repository}`
     const resource = destination.kind === 'github-review' ? 'pulls' : 'issues'
     if (externalId) {
@@ -106,7 +108,7 @@ export class GithubPublication implements PublicationAdapter {
 
   /** Read a bounded page; provider metadata, never message text, determines sender and thread identity. */
   async read(destination: DestinationConfig, request: ConversationRead, signal: AbortSignal): Promise<ConversationPage> {
-    if (destination.kind === 'feishu-reply') throw new Error('GitHub destination required')
+    if (destination.kind !== 'github-comment' && destination.kind !== 'github-review') throw new Error('GitHub comment destination required')
     const page = request.cursor ? z.coerce.number().int().min(1).max(100_000).parse(request.cursor) : 1
     const resource = destination.kind === 'github-review' ? 'pulls' : 'issues'
     const query = new URLSearchParams({ per_page: '10', page: String(page), since: request.since, sort: 'created', direction: 'asc' })

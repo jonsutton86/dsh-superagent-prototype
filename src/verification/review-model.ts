@@ -9,7 +9,8 @@ export const CheckSelections = z.array(CheckSelection).max(32).refine(items => n
 export const EvidenceBinding = z.object({ selection: CheckSelection, artifact: z.object({ id, revision, hash: digest }).strict(),
   check: CheckRef.extend({ hash: digest }).strict(), snapshotHash: digest,
   execution: z.object({ binding: z.string().min(1).max(200), assignmentId: z.string().min(1).max(200), sessionId: z.string().min(1).max(200) }).strict(),
-  repository: z.object({ commit: z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/), tree: z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/) }).strict().optional(),
+  repository: z.object({ commit: z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/), tree: z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/),
+    contentTree: z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/).optional(), statusHash: digest.optional() }).strict().optional(),
   confinement: z.enum(['linux-bubblewrap', 'host-process']), checkedAt: z.string().datetime() }).strict()
 export type EvidenceBinding = z.infer<typeof EvidenceBinding>
 export const EvidenceSeal = EvidenceBinding.extend({ capture: z.object({ id: CheckCommandId, capturedAt: z.string().datetime(), finishedAt: z.string().datetime() }).strict(),

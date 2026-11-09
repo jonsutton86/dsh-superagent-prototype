@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile, readFile, symlink, chmod } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, readFile, symlink, chmod, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
@@ -31,10 +31,47 @@ it('captures Git commit/tree identity and dirty working content without treating
   await writeFile(join(f.source, 'source.txt'), 'dirty')
   const manifest = await captureSnapshot(f.source, SnapshotSpec.parse({ repository: 'required' }), signal(), f.copy)
   expect(manifest.repository).toMatchObject({ commit: git('rev-parse', 'HEAD'), tree: git('rev-parse', 'HEAD^{tree}') })
+  expect(manifest.repository!.contentTree).not.toBe(manifest.repository!.tree)
   expect(manifest.entries.some(item => item.path.startsWith('.git'))).toBe(false)
   expect(manifest.entries[0]!.hash).toBe(createHash('sha256').update('dirty').digest('hex'))
   git('add', 'source.txt'); git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Changed')
   expect((await captureSnapshot(f.source, SnapshotSpec.parse({ repository: 'required' }), signal())).hash).not.toBe(manifest.hash)
+})
+it.each(['sha1', 'sha256'])('reconstructs the committed %s tree from captured bytes, modes and canonical link text', async algorithm => {
+  const f = await fixture(), git = (...args: string[]) => execFileSync('git', args, { cwd: f.source, encoding: 'utf8' }).trim()
+  git('init', '-q', `--object-format=${algorithm}`)
+  await mkdir(join(f.source, 'a')); await mkdir(join(f.source, 'empty'))
+  await writeFile(join(f.source, 'a/file'), Buffer.from([0, 255, 42])); await writeFile(join(f.source, 'a.txt'), 'sort before directory')
+  await writeFile(join(f.source, 'é'), 'unicode'); await writeFile(join(f.source, 'run'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+  await symlink('a/file', join(f.source, 'link'))
+  git('add', '.'); git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Initial')
+  const manifest = await captureSnapshot(f.source, SnapshotSpec.parse({ repository: 'required' }), signal(), f.copy)
+  expect(manifest.repository!.contentTree).toBe(git('rev-parse', 'HEAD^{tree}'))
+  expect(manifest.repository!.statusHash).toBe(createHash('sha256').update('').digest('hex'))
+})
+it.each(['--assume-unchanged', '--skip-worktree'])('detects changed bytes hidden by %s even when Git status is empty', async flag => {
+  const f = await fixture(), git = (...args: string[]) => execFileSync('git', args, { cwd: f.source, encoding: 'utf8' }).trim()
+  git('init', '-q'); await writeFile(join(f.source, 'file'), 'original'); git('add', '.')
+  git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Initial')
+  git('update-index', flag, 'file'); await writeFile(join(f.source, 'file'), 'hidden change')
+  expect(git('status', '--porcelain')).toBe('')
+  const manifest = await captureSnapshot(f.source, SnapshotSpec.parse({ repository: 'required' }), signal())
+  expect(manifest.repository!.statusHash).toBe(createHash('sha256').update('').digest('hex'))
+  expect(manifest.repository!.contentTree).not.toBe(manifest.repository!.tree)
+})
+it('does not claim committed content for extra files, excluded tracked paths, or rewritten link text', async () => {
+  const f = await fixture(), git = (...args: string[]) => execFileSync('git', args, { cwd: f.source, encoding: 'utf8' }).trim()
+  git('init', '-q'); await writeFile(join(f.source, 'file'), 'original'); await symlink('./file', join(f.source, 'link')); git('add', '.')
+  git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Initial')
+  const capture = () => captureSnapshot(f.source, SnapshotSpec.parse({ repository: 'required' }), signal())
+  expect((await capture()).repository!.contentTree).not.toBe(git('rev-parse', 'HEAD^{tree}'))
+  await unlink(join(f.source, 'link')); await symlink('file', join(f.source, 'link')); git('add', '.')
+  git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Canonical')
+  expect((await capture()).repository!.contentTree).toBe(git('rev-parse', 'HEAD^{tree}'))
+  await writeFile(join(f.source, 'extra'), 'untracked'); expect((await capture()).repository!.contentTree).not.toBe(git('rev-parse', 'HEAD^{tree}'))
+  await unlink(join(f.source, 'extra'))
+  const partial = await captureSnapshot(f.source, SnapshotSpec.parse({ repository: 'required', exclude: ['file', 'link'] }), signal())
+  expect(partial.repository!.contentTree).not.toBe(git('rev-parse', 'HEAD^{tree}'))
 })
 it('refuses escaped/excluded links, incomplete bounds, traversal and missing required repositories', async () => {
   const f = await fixture(); await writeFile(join(f.root, 'outside'), 'private'); await symlink('../outside', join(f.source, 'escape'))

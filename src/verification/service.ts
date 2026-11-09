@@ -111,7 +111,8 @@ export class Verification {
     return EvidenceBinding.parse({ selection: { runId: id, evidenceHash }, artifact: { id: run.artifact.id, revision: run.artifact.revision, hash: run.artifact.hash },
       check: { id: run.check.id, version: run.check.version, hash: run.check.hash }, snapshotHash: evidence!.snapshot!.hash,
       execution: { binding: run.backend.binding, assignmentId: run.artifact.assignmentId, sessionId: run.artifact.sessionId },
-      ...(repository ? { repository: { commit: repository.commit, tree: repository.tree } } : {}), confinement: evidence!.confinement, checkedAt: evidence!.checkedAt })
+      ...(repository ? { repository: { commit: repository.commit, tree: repository.tree,
+        ...(repository.contentTree ? { contentTree: repository.contentTree, statusHash: repository.statusHash } : {}) } } : {}), confinement: evidence!.confinement, checkedAt: evidence!.checkedAt })
   }
   reviewChoices(artifactId: string, offset = 0) {
     const page = this.list(artifactId, offset)

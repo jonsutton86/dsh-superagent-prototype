@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { OwnershipStamp } from '../ownership/protocol.ts'
 import { InventoryPage, InventoryRequest, ReceiptRequest } from '../ownership/inventory.ts'
 import { EvidenceSeal } from '../verification/review-model.ts'
+import { PullBinding } from './pull-model.ts'
 
 export const PUBLICATION_PATH = '/publication/v1'
 export const PublicationId = z.string().uuid()
@@ -14,6 +15,7 @@ const GithubDestination = BaseDestination.extend({ repository: z.string().max(20
 })
 const destinationShapes = [GithubDestination.extend({ kind: z.literal('github-comment') }).strict(),
   GithubDestination.extend({ kind: z.literal('github-review'), comment: z.number().int().positive().max(Number.MAX_SAFE_INTEGER) }).strict(),
+  GithubDestination.extend({ kind: z.literal('github-pr-review'), event: z.enum(['COMMENT', 'APPROVE', 'REQUEST_CHANGES']) }).strict(),
   BaseDestination.extend({ kind: z.literal('feishu-reply'), brand: z.enum(['feishu', 'lark']), appId: z.string().regex(/^cli_[A-Za-z0-9]+$/),
     botId: z.string().regex(/^ou_[A-Za-z0-9]+$/), chatId: z.string().regex(/^oc_[A-Za-z0-9]+$/), messageId: z.string().regex(/^om_[A-Za-z0-9]+$/) }).strict()] as const
 export const Destination = z.discriminatedUnion('kind', destinationShapes)
@@ -28,13 +30,14 @@ const subject = { artifact: z.object({ id: PublicationId, revision: z.number().i
 const oneSubject = (value: { artifact?: unknown; message?: unknown }) => !!value.artifact !== !!value.message
 export const Publication = z.object({ id: PublicationId, destination: BaseDestination.shape.id, destinationHash: Digest,
   text: z.string().min(1).max(60_000), hash: Digest,
-  ...subject }).strict().refine(oneSubject, 'Exactly one artifact or message subject is required')
+  ...subject, pull: PullBinding.optional() }).strict().refine(oneSubject, 'Exactly one artifact or message subject is required')
 export type Publication = z.infer<typeof Publication>
 export const ExternalReceipt = z.object({ id: z.string().regex(/^(?:[1-9][0-9]*|om_[A-Za-z0-9]+)$/),
-  url: z.string().regex(/^https:\/\/(?:github\.com\/[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+\/(?:issues|pull)\/[1-9][0-9]*#(?:issuecomment-|discussion_r)[1-9][0-9]*|applink\.(?:feishu\.cn|larksuite\.com)\/client\/chat\/open\?openChatId=oc_[A-Za-z0-9]+)$/), bodyHash: Digest }).strict()
+  url: z.string().regex(/^https:\/\/(?:github\.com\/[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+\/(?:issues|pull)\/[1-9][0-9]*#(?:issuecomment-|discussion_r|pullrequestreview-)[1-9][0-9]*|applink\.(?:feishu\.cn|larksuite\.com)\/client\/chat\/open\?openChatId=oc_[A-Za-z0-9]+)$/), bodyHash: Digest,
+  review: z.object({ commit: PullBinding.shape.head.shape.sha, state: z.enum(['COMMENTED', 'APPROVED', 'CHANGES_REQUESTED', 'DISMISSED']) }).strict().optional() }).strict()
 export type ExternalReceipt = z.infer<typeof ExternalReceipt>
 export const PublicationReceipt = z.object({ id: PublicationId, destination: BaseDestination.shape.id, destinationHash: Digest,
-  ...subject, hash: Digest, bytes: z.number().int().positive(), ownership: OwnershipStamp,
+  ...subject, pull: PullBinding.optional(), hash: Digest, bytes: z.number().int().positive(), ownership: OwnershipStamp,
   phase: z.enum(['accepted', 'started', 'sent', 'failed', 'unknown', 'cancelled', 'not_delivered']),
   createdAt: z.string().datetime(), updatedAt: z.string().datetime(), external: ExternalReceipt.optional(), problem: z.string().max(1000).optional(),
   reconciliation: z.object({ at: z.string().datetime(), note: z.string().min(1).max(1000), evidence: z.string().min(1).max(2000) }).strict().optional(),
@@ -56,6 +59,7 @@ export const PublicationRpc = z.discriminatedUnion('op', [
     destination: BaseDestination.shape.id, destinationHash: Digest }).strict(),
   z.object({ op: z.literal('identity') }).strict(), z.object({ op: z.literal('destinations') }).strict(),
   z.object({ op: z.literal('publish'), publication: Publication }).strict(),
+  z.object({ op: z.literal('pull.inspect'), destination: BaseDestination.shape.id, destinationHash: Digest }).strict(),
   ConversationRead.extend({ op: z.literal('conversation.read') }),
   z.object({ op: z.literal('receipt.get'), id: PublicationId }).strict(),
   z.object({ op: z.literal('receipt.list'), offset: z.number().int().min(0).max(1_000_000).default(0) }).strict(),
@@ -64,7 +68,7 @@ export const PublicationRpc = z.discriminatedUnion('op', [
 ])
 export type PublicationRpc = z.infer<typeof PublicationRpc>
 export const PublicationIdentity = z.object({ protocol: z.literal(1), id: PublicationId,
-  capabilities: z.object({ artifactEvidence: z.literal(true) }).strict().optional(),
+  capabilities: z.object({ artifactEvidence: z.literal(true), pullReviews: z.literal(true).optional() }).strict().optional(),
   ownership: z.object({ authorityId: z.string().uuid(), coordinatorId: z.string(), resourceId: z.string() }).strict() }).strict()
 export type PublicationIdentity = z.infer<typeof PublicationIdentity>
 export const DestinationView = z.union(destinationShapes.map(shape => shape.extend({ hash: Digest }).strict()))

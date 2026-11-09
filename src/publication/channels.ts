@@ -80,6 +80,7 @@ export class ChannelPublications {
     if (old) { if (old.fingerprint !== digest) throw new PublicationError(409, 'intent_changed', 'Delivery request ID belongs to another configuration'); return this.state(missionId) }
     const destination = request.enabled ? (await this.host.destinations()).items.find(item => item.id === request.destination && item.hash === request.destinationHash) : undefined
     if (request.enabled && !destination) throw new PublicationError(409, 'destination_changed', 'Refresh and review the delivery destination')
+    if (destination?.kind === 'github-pr-review') throw new PublicationError(409, 'artifact_only', 'PR reviews require an individually approved checked artifact')
     this.owner()
     return this.host.store.atomic(() => {
       const raced = this.host.store.db.prepare('SELECT fingerprint FROM delivery_grant WHERE id=?').get(request.requestId)

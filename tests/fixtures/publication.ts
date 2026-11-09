@@ -12,11 +12,16 @@ import type { ResourceOwnershipConfig } from '../../src/ownership/gate.ts'
 import type { DestinationConfig } from '../../src/publication/protocol.ts'
 
 /** Real HTTP at both boundaries, with local GitHub and Feishu/Lark contract servers; never publishes to an external account. */
-export async function publicationFixture(cleanup: (() => Promise<unknown>)[], ownership: ResourceOwnershipConfig, access?: OwnershipAccess, kind: DestinationConfig['kind'] = 'github-comment') {
+export async function publicationFixture(cleanup: (() => Promise<unknown>)[], ownership: ResourceOwnershipConfig, access?: OwnershipAccess, kind: DestinationConfig['kind'] = 'github-comment', event: 'APPROVE' | 'COMMENT' | 'REQUEST_CHANGES' = 'APPROVE') {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'dsh-publication-'))), credentialFile = join(directory, 'account.token')
   const secret = randomBytes(32).toString('base64url'); await writeFile(credentialFile, secret, { mode: 0o600 })
   const comments: { id: number; body: string; user: { login: string; type?: string }; created_at?: string; issue_url: string; pull_request_url?: string; in_reply_to_id?: number }[] = []
   const messages: Record<string, unknown>[] = [], tenantToken = randomBytes(32).toString('base64url')
+  const pull = { id: 700, number: 7, url: 'https://api.github.com/repos/acme/project/pulls/7', user: { login: 'contributor' },
+    head: { repo: { id: 10, full_name: 'contributor/project' }, ref: 'feature', sha: '1'.repeat(40) },
+    base: { repo: { id: 20, full_name: 'acme/project' }, ref: 'main', sha: '2'.repeat(40) }, state: 'open', draft: false, merged: false }
+  const reviews: { id: number; body: string; user: { login: string }; state: string; commit_id: string; pull_request_url: string; submitted_at: string }[] = []
+  let tree = '3'.repeat(40), beforePullRead: (() => void) | undefined
   let botId = 'ou_bot', parentChat = 'oc_chat'
   let loseProviderReply: boolean | string = false
   const shouldLose = (body: string) => loseProviderReply === true || typeof loseProviderReply === 'string' && body.includes(`dsh-publication:${loseProviderReply}:`)
@@ -55,6 +60,29 @@ export async function publicationFixture(cleanup: (() => Promise<unknown>)[], ow
     }
     if (req.headers.authorization !== `Bearer ${secret}`) { res.writeHead(401); res.end('{}'); return }
     if (path === '/user') { inspections++; await prepareHold; res.end(JSON.stringify({ login })); return }
+    if (path === '/repos/acme/project/pulls/7') { beforePullRead?.(); res.end(JSON.stringify(pull)); return }
+    if (path === `/repos/${pull.head.repo.full_name}/git/commits/${pull.head.sha}`) { res.end(JSON.stringify({ sha: pull.head.sha, tree: { sha: tree } })); return }
+    if (path === '/repos/acme/project/pulls/7/reviews') {
+      if (req.method === 'GET') {
+        reads++; await readHold
+        const offset = (Number(url.searchParams.get('page') ?? 1) - 1) * 100
+        res.end(JSON.stringify(reviews.slice(offset, offset + 100))); return
+      }
+      const chunks: Buffer[] = []; for await (const chunk of req) chunks.push(Buffer.from(chunk))
+      posts++
+      if (refuse) { res.writeHead(403); res.end('{}'); return }
+      if (unavailable) { unavailable = false; res.writeHead(503); res.end('{}'); return }
+      await hold
+      const value = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+      const states: Record<string, string> = { COMMENT: 'COMMENTED', APPROVE: 'APPROVED', REQUEST_CHANGES: 'CHANGES_REQUESTED' }
+      const review = { id: reviews.length + 1, body: value.body, user: { login }, state: states[value.event]!, commit_id: value.commit_id,
+        pull_request_url: pull.url, submitted_at: new Date().toISOString() }
+      reviews.push(review)
+      if (shouldLose(value.body)) { loseProviderReply = false; res.destroy(); return }
+      res.end(JSON.stringify(review)); return
+    }
+    const reviewId = /^\/repos\/acme\/project\/pulls\/7\/reviews\/(\d+)$/.exec(path)
+    if (reviewId) { const review = reviews.find(value => value.id === Number(reviewId[1])); if (review) { res.end(JSON.stringify(review)); return } }
     if (path === '/repos/acme/project/issues/7') { res.end(JSON.stringify({ number: 7 })); return }
     if (path === '/repos/acme/project/pulls/comments/11') { res.end(JSON.stringify({ id: 11, body: 'Review question', user: { login: 'reviewer' }, pull_request_url: 'https://api.github.com/repos/acme/project/pulls/7' })); return }
     if (path === '/repos/acme/project/issues/7/comments' || path === '/repos/acme/project/pulls/7/comments' || path === '/repos/acme/project/pulls/7/comments/11/replies') {
@@ -88,7 +116,8 @@ export async function publicationFixture(cleanup: (() => Promise<unknown>)[], ow
   }
   const common = { id: 'project-updates', name: 'Project updates', maxBytes: 30_000, credentialFile }
   const destination: DestinationConfig = kind === 'feishu-reply' ? { ...common, kind, brand: 'feishu', appId: 'cli_agent', botId: 'ou_bot', chatId: 'oc_chat', messageId: 'om_root' }
-    : { ...common, kind, repository: 'acme/project', issue: 7, login: 'agent-bot', ...(kind === 'github-review' ? { comment: 11 } : {}) } as DestinationConfig
+    : { ...common, kind, repository: 'acme/project', issue: 7, login: 'agent-bot', ...(kind === 'github-review' ? { comment: 11 } : {}),
+      ...(kind === 'github-pr-review' ? { event } : {}) } as DestinationConfig
   const config = { stateDir: join(directory, 'service'), ownership, destinations: [destination] }
   let service = new PublicationService(config, new PublicationProviders(fetcher)); service.start()
   let loseServiceReply = false
@@ -105,6 +134,7 @@ export async function publicationFixture(cleanup: (() => Promise<unknown>)[], ow
     await rm(directory, { recursive: true, force: true })
   })
   return { directory, config, connection, destination, comments, messages, secret, providerOrigin: origin, get service() { return service }, get posts() { return posts }, get reads() { return reads }, get inspections() { return inspections },
+    pull, reviews, tree: (value: string) => { tree = value }, beforePullRead: (callback?: () => void) => { beforePullRead = callback },
     client: new PublicationClient(connection, access), admin: new PublicationClient({ ...connection, credentialFile: join(directory, 'service/admin.token') }, access),
     loseProviderReply: (id?: string) => { loseProviderReply = id ?? true }, loseServiceReply: () => { loseServiceReply = true },
     refuse: (value: boolean) => { refuse = value }, login: (value: string) => { login = value }, hold: (value?: Promise<void>) => { hold = value },

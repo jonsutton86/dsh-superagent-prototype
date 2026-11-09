@@ -6,6 +6,7 @@ import { join, resolve, relative, isAbsolute, dirname } from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { SnapshotManifestSchema, type SnapshotSpec, type SnapshotManifest, type SnapshotEntry } from './model.ts'
+import { capturedGitTree, gitObjectHash, type GitFile } from './git-tree.ts'
 
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex')
 /** Schema parsing may reorder keys; the evidence digest must not depend on object insertion order. */
@@ -38,6 +39,7 @@ export async function captureSnapshot(source: string, spec: SnapshotSpec, signal
   if (!rootBefore.isDirectory()) throw new Error('Snapshot source must be a directory')
   if (destination && (inside(root, resolve(destination)) || inside(resolve(destination), root))) throw new Error('Snapshot storage must be outside its source')
   const initialRepository = await repository(root, spec.repository, signal), entries: SnapshotEntry[] = []
+  const gitFiles: GitFile[] = [], algorithm = initialRepository?.commit.length === 64 ? 'sha256' : 'sha1'
   let files = 0, bytes = 0, manifestBytes = 0
   const omitted = (path: string) => path.split('/').includes('.git') || exclude.some(prefix => path === prefix || path.startsWith(`${prefix}/`))
   const append = (entry: SnapshotEntry) => {
@@ -68,7 +70,9 @@ export async function captureSnapshot(source: string, spec: SnapshotSpec, signal
         const text = await readlink(original)
         if (await realpath(original) !== resolved || await readlink(original) !== text) throw new Error(`Snapshot link changed: ${path}`)
         append({ path, kind: 'symlink', target })
-        if (destination) await symlink(relative(dirname(join(destination, path)), join(destination, target)) || '.', join(destination, path))
+        const copiedTarget = relative(dirname(join(root, path)), join(root, target)) || '.'
+        if (initialRepository) gitFiles.push({ path, mode: '120000', hash: gitObjectHash(algorithm, 'blob', Buffer.from(copiedTarget)) })
+        if (destination) await symlink(copiedTarget, join(destination, path))
       } else if (info.isDirectory()) {
         append({ path, kind: 'directory' }); if (destination) await mkdir(join(destination, path), { mode: 0o700 })
         await walk(path)
@@ -90,6 +94,7 @@ export async function captureSnapshot(source: string, spec: SnapshotSpec, signal
             throw new Error(`Snapshot file changed while reading: ${path}`)
           const content = Buffer.concat(chunks), executable = !!(opened.mode & 0o111)
           bytes += content.length; append({ path, kind: 'file', bytes: content.length, hash: hash(content), executable })
+          if (initialRepository) gitFiles.push({ path, mode: executable ? '100755' : '100644', hash: gitObjectHash(algorithm, 'blob', content) })
           if (destination) await writeFile(join(destination, path), content, { flag: 'wx', mode: executable ? 0o555 : 0o444 })
         } finally { await handle.close() }
       } else throw new Error(`Snapshot refuses a device, socket or special file: ${path}`)
@@ -108,7 +113,7 @@ export async function captureSnapshot(source: string, spec: SnapshotSpec, signal
     for (const entry of [...entries].reverse()) if (entry.kind === 'directory') await chmod(join(destination, entry.path), 0o555)
     await chmod(destination, 0o555)
   }
-  const value = { version: 1 as const, exclude, entries, ...(initialRepository ? { repository: initialRepository } : {}) }
+  const value = { version: 1 as const, exclude, entries, ...(initialRepository ? { repository: { ...initialRepository, contentTree: capturedGitTree(gitFiles, algorithm) } } : {}) }
   return { ...value, hash: hash(canonical(value)), capturedAt: new Date().toISOString(), source: root, files, bytes }
 }
 /** Content equality ignores capture location/time and repository metadata unavailable inside a source-only copy. */
