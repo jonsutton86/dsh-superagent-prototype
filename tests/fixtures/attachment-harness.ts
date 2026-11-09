@@ -5,7 +5,7 @@ type Api = (path: string, body?: unknown) => Promise<any>
 const sha = (data: Uint8Array) => createHash('sha256').update(data).digest('hex')
 export const attachmentInstructions = 'First report blocked with summary "Waiting for CSV input" and ask the operator to attach evidence.csv, then end your turn. Once the operator supplies the file, list inputs with workspace_attachments and copy evidence.csv with workspace_attachment_copy. Use bash to read that copied CSV, sum the numeric value column, and verify the sum is exactly 42. The attached pixel.png is a storage/recovery fixture; this text-only model is not asked to inspect it. After the CSV check succeeds, continue the following mission instructions: '
 export async function qualifyAttachments(api: Api, port: number, task: string): Promise<() => Promise<void>> {
-  await vi.waitFor(async () => expect((await api(`inbox/${task}`)).item.status).toBe('blocked'), { timeout: 60000, interval: 500 })
+  await vi.waitFor(async () => expect((await api(`inbox/${task}`)).item.status).toBe('question'), { timeout: 60000, interval: 500 })
   expect((await api('uploads')).available).toBe(true)
   const sources = [
     { name: 'evidence.csv', mediaType: 'text/csv', bytes: Buffer.from('name,value\nalpha,11\nbeta,31\n') },
