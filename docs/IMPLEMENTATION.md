@@ -25,6 +25,17 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: held connector state verification
+
+[054 Connector state recovery](054-connector-state-recovery.md) checks retained built-in cursor families and owned inbound
+listener permissions, pagination and deduplication history before signing a held image. It binds received messages to their
+original participants, task, channel and directed Engine input, and detects substituted grants/destinations or missing
+receipts. New receipts retain native provider IDs so their message identity and supported content hashes can be checked;
+older receipts are reported separately. It never polls, resets a cursor, discards a receipt or activates work. Provider retention and future connectivity
+are not inferred from a saved cursor. Local, native Linux and installed-Harness qualification receipts are pending.
+Product-extension authority graphs, deployment binding/remapping, activation/handoff and clean-host failover remain open,
+alongside the full architecture/product requirements below.
+
 ## Implemented increment: held Engine state reconciliation
 
 [053 Engine state reconciliation](053-engine-state-reconciliation.md) verifies the recorded core authority chain from

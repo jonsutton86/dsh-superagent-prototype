@@ -46,7 +46,7 @@ const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { vi.restoreAllMocks(); for (const close of cleanup.splice(0).reverse()) await close() })
 
 async function fixture(options: { administration?: boolean; credential?: boolean; rotateCredential?: boolean; revokeCredential?: boolean; pending?: boolean; channel?: boolean; extra?: boolean; revoked?: boolean;
-  managed?: boolean; changedPin?: boolean; omitPublicationCredential?: boolean; input?: 'consumed' | 'missing'; graph?: 'indexes' | 'conflict'; revocation?: 'lost' | 'unsettled' | 'unsent'; kind?: DestinationView['kind'] } = {}) {
+  managed?: boolean; changedPin?: boolean; omitPublicationCredential?: boolean; input?: 'consumed' | 'missing'; graph?: 'indexes' | 'conflict'; connector?: 'valid' | 'invalid'; revocation?: 'lost' | 'unsettled' | 'unsent'; kind?: DestinationView['kind'] } = {}) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'dsh-receipt-audit-')))
   cleanup.push(() => rm(directory, { recursive: true, force: true }))
   const authority = await ownershipAuthority(cleanup, ['endpoint', 'publication']), owner = new CoordinatorOwnership(authority.config)
@@ -175,6 +175,7 @@ async function fixture(options: { administration?: boolean; credential?: boolean
   if (options.graph === 'conflict') {
     const ticket = store.tickets.get('ticket')!; ticket.mandate.scope = 'Changed authority'; store.tickets.save(ticket)
   }
+  if (options.connector) store.set(KV.github.since, options.connector === 'valid' ? inputTime : 'private-invalid-cursor')
   world.close(); store.close()
   const checkpoint = await createCheckpoint({ stateDir, keyFile, outputDir: join(directory, 'backups'), worldDirectories: [worldDir], persistence: context.sessionPersistence })
   if (options.revocation === 'unsettled') remote.endpoint.journal.saveJob({ ...remote.endpoint.journal.job(job.id), quiescent: true })
@@ -807,7 +808,7 @@ it.each(['manifest', 'member', 'extra'] as const)('refuses a tampered prepared %
 it('authenticates older held image manifests without treating absent configuration or Session evidence as a new verification', async () => {
   const f = await fixture(), audit = await auditCheckpointReceipts(f.audit)
   const prepared = await prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })
-  const { sessionBackend: _, controlConfiguration: __, inferenceConfiguration: ___, consumedInputs: ____, sourceConfiguration: _____, stateGraph: ______, ...manifest } = prepared.manifest, key = recoveryKey(f.audit.keyFile)
+  const { sessionBackend: _, controlConfiguration: __, inferenceConfiguration: ___, consumedInputs: ____, sourceConfiguration: _____, stateGraph: ______, connectorState: _______, ...manifest } = prepared.manifest, key = recoveryKey(f.audit.keyFile)
   try {
     const mac = createHmac('sha256', key).update('dsh-receipt-image:1\n').update(JSON.stringify(manifest)).digest('hex')
     await writeFile(join(prepared.path, 'prepared.json'), JSON.stringify({ manifest, mac }))
@@ -816,14 +817,16 @@ it('authenticates older held image manifests without treating absent configurati
   expect(verified).toEqual(manifest); expect(verified.sessionBackend).toBeUndefined(); expect(verified.controlConfiguration).toBeUndefined(); expect(verified.executionOwnership).toBe(false)
   expect(verified.inferenceConfiguration).toBeUndefined(); expect(verified.consumedInputs).toBeUndefined(); expect(verified.sourceConfiguration).toBeUndefined()
   expect(verified.stateGraph).toBeUndefined()
+  expect(verified.connectorState).toBeUndefined()
 })
 
 it('repairs consumed input acknowledgements only in the signed held image and preserves historical retries', async () => {
-  const f = await fixture({ input: 'consumed', graph: 'indexes' }), audit = await auditCheckpointReceipts(f.audit)
+  const f = await fixture({ input: 'consumed', graph: 'indexes', connector: 'valid' }), audit = await auditCheckpointReceipts(f.audit)
   const options = { ...f.audit, requestId: randomUUID(), auditId: audit.id }, prepared = await prepareCheckpointReceipts(options)
   expect(prepared.manifest.consumedInputs).toEqual({ tickets: 1, inputs: 1, consumed: 1, readMarkers: 1, undelivered: 1 })
   expect(prepared.manifest.stateGraph).toMatchObject({ version: 1, triggers: 1, decisions: 1, tickets: 1, assignments: 1, inputs: 1,
     indexes: { triggerTimes: 1, triggerThreads: 1, decisionThreads: 1 }, digest: expect.stringMatching(/^[a-f0-9]{64}$/) })
+  expect(prepared.manifest.connectorState).toMatchObject({ version: 1, github: 1, bindings: 0, messages: 0, digest: expect.stringMatching(/^[a-f0-9]{64}$/) })
   const read = (directory: string) => {
     const db = new DatabaseSync(join(directory, 'orchestrator.sqlite'), { readOnly: true })
     try { return JSON.parse(String(db.prepare('SELECT value FROM ticket WHERE id=?').get('ticket')!.value)) } finally { db.close() }
@@ -840,6 +843,12 @@ it('refuses contradictory Engine authority and removes the unpublished prepared 
   const before = f.read()
   await expect(prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })).rejects.toMatchObject({ code: 'conflict' })
   expect(f.read().hold).toEqual(before.hold)
+  expect((await readdir(f.audit.destination)).filter(name => name.startsWith('prepared-') || name.startsWith('.prepare-'))).toEqual([])
+})
+it('refuses malformed retained connector cursors without moving state or publishing a prepared image', async () => {
+  const f = await fixture({ connector: 'invalid' }), audit = await auditCheckpointReceipts(f.audit)
+  await expect(prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })).rejects.toMatchObject({ code: 'shape', message: 'recovery_connector_shape: github-since' })
+  expect(f.read().hold?.state).toBe('staged')
   expect((await readdir(f.audit.destination)).filter(name => name.startsWith('prepared-') || name.startsWith('.prepare-'))).toEqual([])
 })
 it('refuses contradictory read acknowledgements before inference and discards the unpublished image', async () => {

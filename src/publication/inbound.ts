@@ -16,7 +16,7 @@ export type ConfigureInbound = z.infer<typeof ConfigureInbound>
 export interface InboundBinding { id: string; missionId: string; revision: number; enabled: boolean; grantId?: string; ticketId?: string;
   destination?: DestinationView; senders: string[]; startsAt: string; revokedAt?: string; lastPoll?: string; problem?: string; received: number; unsupported: number }
 interface StoredBinding extends InboundBinding { nextPoll: number; failures: number; watermark: string; cycle?: { since: string; startedAt: string; cursor?: string; seen: string[] } }
-export interface InboundRecord { id: string; bindingId: string; ticketId: string; sender: string; at: string; url: string; hash: string;
+export interface InboundRecord { id: string; nativeId?: string; bindingId: string; ticketId: string; sender: string; at: string; url: string; hash: string;
   status: 'received' | 'unsupported'; triggerId?: string; problem?: string }
 export interface InboundState { configured: boolean; binding?: InboundBinding; active: boolean; items: InboundRecord[] }
 interface Host { store: Store; ownership?: CoordinatorOwnership; connection?: PublicationConnection; lifetime: AbortSignal; channels: ChannelPublications;
@@ -24,7 +24,7 @@ interface Host { store: Store; ownership?: CoordinatorOwnership; connection?: Pu
 const SOURCE = 'conversation'
 const view = ({ nextPoll: _, failures: __, watermark: ___, cycle: ____, ...value }: StoredBinding): InboundBinding => value
 // Configuration aliases and credential/display changes do not make a second physical conversation.
-const conversationKey = (destination: DestinationView): string => fingerprint(destination.kind === 'feishu-reply'
+export const conversationKey = (destination: DestinationView): string => fingerprint(destination.kind === 'feishu-reply'
   ? { kind: destination.kind, brand: destination.brand, chat: destination.chatId, root: destination.messageId }
   : { kind: destination.kind, repository: destination.repository.toLowerCase(), issue: destination.issue,
     ...(destination.kind === 'github-review' ? { root: destination.comment } : {}) })
@@ -128,7 +128,7 @@ export class ConversationInbox {
     if (Number(this.host.store.db.prepare('SELECT count(*) AS n FROM conversation_message').get()!.n) >= 50_000)
       throw new PublicationError(409, 'capacity', 'Inbound receipt capacity reached; retain deduplication history when archiving')
     const unsupported = !!message.problem || !message.text.trim(), triggerId = `conversation:${id}`
-    const item: InboundRecord = { id, bindingId: binding.id, ticketId: binding.ticketId!, sender: message.sender, at: message.at, url: message.url,
+    const item: InboundRecord = { id, nativeId: message.id, bindingId: binding.id, ticketId: binding.ticketId!, sender: message.sender, at: message.at, url: message.url,
       hash: fingerprint(message), status: unsupported ? 'unsupported' : 'received', ...(unsupported ? { problem: message.problem ?? 'empty_content' } : { triggerId }) }
     this.host.store.db.prepare('INSERT INTO conversation_message VALUES (?,?,?,?)').run(id, binding.id, binding.missionId, JSON.stringify(item))
     if (unsupported) { binding.unsupported++; return }

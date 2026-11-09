@@ -2,20 +2,14 @@ import { randomUUID } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
 import { channelPublicationFixture } from './fixtures/channel-publication.ts'
 import { ConversationInbox } from '../src/publication/inbound.ts'
+import { inboundFixture } from './fixtures/inbound.ts'
 import { threadKey } from '../src/core/index.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { for (const dispose of cleanup.splice(0).reverse()) await dispose(); vi.restoreAllMocks() })
 
 async function fixture(kind: 'github-comment' | 'github-review' | 'feishu-reply' = 'github-comment') {
-  vi.spyOn(ConversationInbox.prototype, 'start').mockImplementation(() => {})
-  const context = await channelPublicationFixture(cleanup, kind), { host, mission, configure, run } = context, runtime = host.runtime
-  await runtime.channelPublications.configure(mission.id, configure)
-  const task = await run(), sender = kind === 'feishu-reply' ? 'ou_alice' : 'alice'
-  const request = { requestId: randomUUID(), revision: 0, enabled: true, grantId: configure.requestId, ticketId: task.ticket.id, senders: [sender] }
-  const state = runtime.conversations.configure(mission.id, request)
-  await vi.waitFor(() => expect(Date.now()).toBeGreaterThanOrEqual(Date.parse(state.binding!.startsAt)), { interval: 25, timeout: 1500 })
-  return { ...context, ...task, runtime, sender, request, poll: (rescan = false) => runtime.conversations.poll(mission.id, rescan) }
+  return inboundFixture(cleanup, kind)
 }
 
 it.each(['github-comment', 'github-review', 'feishu-reply'] as const)('receives verified %s replies once, and answers through the original task grant', async kind => {

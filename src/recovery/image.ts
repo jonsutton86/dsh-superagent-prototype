@@ -33,6 +33,9 @@ export const ReceiptImage = z.object({ version: z.literal(1), requestId: z.strin
     outbox: z.number().int().nonnegative(), effects: z.number().int().nonnegative(), historicalEvaluations: z.number().int().nonnegative(),
     indexes: z.object({ triggerTimes: z.number().int().nonnegative(), triggerThreads: z.number().int().nonnegative(), decisionThreads: z.number().int().nonnegative() }).strict(),
     retiredEffects: z.number().int().nonnegative(), digest }).strict().optional(),
+  connectorState: z.object({ version: z.literal(1), records: z.number().int().nonnegative(), github: z.number().int().nonnegative(),
+    feishu: z.number().int().nonnegative(), bindings: z.number().int().nonnegative(), messages: z.number().int().nonnegative(),
+    nativeMessages: z.number().int().nonnegative(), legacyMessages: z.number().int().nonnegative(), cycles: z.number().int().nonnegative(), digest }).strict().optional(),
 }).strict()
 export type ReceiptImage = z.infer<typeof ReceiptImage>
 const envelope = z.object({ manifest: ReceiptImage, mac: digest }).strict()
