@@ -17,7 +17,7 @@ not a claim that the prototype already ships every feature or that the article s
 | Context and recall | Existing resources plus `src/workspace/library.ts`: immutable scoped records, provenance and FTS recall | Enforced total recall budgets, transitive freshness, measured retrieval and long-horizon validation |
 | Speculative work | Inferred mandates, observe/auto, configurable rules | Durable budgets, expiry and promotion/publication gates |
 | Full duplex | Harness job/subagent services, `src/executor/background.ts`, `src/app/delivery.ts`, remote receipts, durable assignment/tool ownership, receipt-only restart recovery and operator cancellation | Broader long-running job, process-failure and cross-host acceptance |
-| Compute/state separation | SQLite Store; Harness Session checkpoints, held import and checkpoint-bound claimant replacement; independent ownership authority, endpoint handoff fencing, shared Runtime/pool/provider ownership lifecycle and independently fenced artifact/mission delivery with directed inbound replies | Receipt inventory/reconciliation and divergence detection, configuration remapping, broader inbound discovery/admission and repository integration, clean-host activation and failover qualification |
+| Compute/state separation | SQLite Store; Harness Session checkpoints, held import, checkpoint-bound claimant replacement and revision-bound independent receipt audits; ownership authority, endpoint handoff fencing, shared Runtime/pool/provider lifecycle and independently fenced artifact/mission delivery with directed inbound replies | Apply receipt observations, administrative-command/configuration reconciliation, authoritative input/state recovery, remapping, broader inbound discovery/admission and repository integration, clean-host activation and failover qualification |
 | Remote environments | Paired local/remote providers, authenticated leased grants, durable revocation, mission/Session binding, endpoint-owned versioned credentials, remote profile and artifact/restart qualification, operator enrollment/reconciliation, generated profiles, managed world pool and exact per-action selection | Managed endpoint/machine launch, remote repository workflows, quotas and cross-host acceptance |
 | Watchdog | Existing health and bounded transient executor retry; now `src/supervision/*` | Live-provider and process-level acceptance, incident UI/alerts, retention, richer progress evidence and separately authorized recovery policies |
 | Delivery | Reports and PR binding/closure; content-addressed artifacts, stale mission-review invalidation, reviewed artifacts and plan-authorized mission replies to GitHub issue/review and Feishu/Lark destinations with independent receipts; exact participant/task inbound listeners | Host-collected check evidence, Git/environment revision binding, broader inbound discovery/admission, repository integration and speculative promotion/publication gates |
@@ -34,7 +34,12 @@ without replay. Every staged world/Session member is verified, and changed pages
 
 Applying observations, administrative-command/configuration reconciliation, authoritative input/state recovery, actual
 Session-backend validation, world remapping, activation and clean-host drills remain required. No audit removes the hold.
-The full article and product architecture remain in progress. Qualification evidence follows the completed checks.
+The full article and product architecture remain in progress. Code `44b3fa54685ee4cf471c5b26db1ccc4c918337ba` passed
+1,482 local tests, typechecking and all four builds. Both owned installed-Harness/DeepSeek Flash scenarios passed in
+215.31 seconds, including repeated audits, every original receipt, full resource coverage and exact identification of four
+unrecorded publication probes. The held state stayed non-executable. It also passed 1,484 native Linux tests, typechecking
+and all builds in [run 42552272631](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42552272631).
+Provider-message traffic stayed on local contract servers; live-account acceptance and restored activation remain open.
 
 ## Implemented increment: recovery ownership reservations
 

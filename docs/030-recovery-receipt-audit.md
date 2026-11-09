@@ -124,7 +124,21 @@ changed ownership, cancellation, service failure and tampered staged members. Th
 repeated audits on real dedicated and managed model checkpoints. Its independent publication probes intentionally create
 effects absent from coordinator history; the report must block those rather than silently accept them.
 
-Qualification results are recorded after local, actual-model and native Linux checks complete.
+Qualification on 2026-11-08: code `44b3fa54685ee4cf471c5b26db1ccc4c918337ba` passed local verification with 1,482 tests,
+typechecking and all four builds. Seven opt-in/platform cases were skipped. All fourteen receipt-audit cases passed,
+including all three destination types and normalized provider results. Native mission qualification also waits for confirmed
+managed-range quiescence separately from the command outcome before asserting the durable receipt.
+
+Both owned installed-Harness/DeepSeek Flash scenarios passed on the final build in 215.31 seconds. Dedicated and managed
+missions completed real model work and restart, then captured/staged/imported/reserved their checkpoints and audited twice.
+The checks covered every original execution/publication receipt, full resource coverage, quiescence and retained holds.
+The dedicated publication probes were identified by their exact four original IDs as unrecorded effects and kept the report
+blocked. The independent publisher was running with its complete persisted destination catalog during inspection.
+
+The same code passed 1,484 tests, typechecking and all four builds on Ubuntu 22.04/Node 24 with native confinement in
+[run 42552272631](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42552272631).
+Five opt-in cases were skipped. Model calls used the configured DeepSeek provider; message-provider traffic stayed on local
+contract servers. These checks establish neither live GitHub/Feishu account permissions nor cross-host restored activation.
 
 This implements receipt inventory and comparison. Applying observed outcomes to executable state, reconciling administrative
 command history and credential configuration, validating actual restored Session backends, world/workspace remapping, and

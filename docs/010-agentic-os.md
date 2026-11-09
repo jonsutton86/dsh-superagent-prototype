@@ -58,7 +58,7 @@ refer to the same environment. Remote access requires authentication; do not exp
 | Usage and budgets | Worker concurrency and health | Provider usage, estimated/reported costs, durable reservations/limits and spend/workload UI |
 | Models and connectors | Harness configuration, optional GitHub/Feishu, local grants, authenticated remote transport, paired Harness services, persistent remote authority/revocation and native Linux namespace/cancellation CI, whole-profile and per-action world binding, durable command/file ownership and operator receipts, endpoint-owned versioned credentials, real model artifact/restart qualification, endpoint enrollment/reconciliation and independent managed worlds | Managed endpoint/runtime launch, cross-host deployment qualification and connector scope |
 | Voice | None | Optional input/output adapters, interruption, local/cloud modes and text fallback |
-| Supervision and recovery | Watchdog foundation, encrypted checkpoints/held Session import, checkpoint-bound claimant replacement, independent ownership authority, endpoint and artifact/mission publication fencing and owned Runtime/dedicated/managed provider lifecycle | Receipt reconciliation/divergence checks, configuration remapping, inbound connector/repository integration, clean-host activation/failover, incident UI and broader live failure tests |
+| Supervision and recovery | Watchdog foundation, encrypted checkpoints/held Session import, checkpoint-bound claimant replacement, revision-bound independent receipt audits, ownership authority, endpoint and artifact/mission publication fencing and owned Runtime/dedicated/managed provider lifecycle | Apply receipt observations, authoritative input/state recovery, administrative-command/configuration reconciliation, remapping, inbound connector/repository integration, clean-host activation/failover, incident UI and broader live failure tests |
 | Whole-product qualification | Deterministic unit, API/DOM flows, actual Harness restarts, live local model/tool, inbox and planner-to-execution missions | Browser/desktop layout, broader provider acceptance, backup/restore drills, accessibility and packaging |
 
 ## Missions increment
@@ -248,3 +248,10 @@ endpoint and publisher inventories with mutation/restart revision checks. Durabl
 and unrecorded effects, while repeated inspection observes original outcomes without replay or activation. Applying those
 observations, input/state recovery, administrative-command/configuration reconciliation, Session/backend and world validation,
 activation and clean-host failover remain required alongside the full product ledger.
+
+Recovery audit qualification: code `44b3fa54685ee4cf471c5b26db1ccc4c918337ba` passed 1,482 local tests and both owned
+installed-Harness/DeepSeek Flash scenarios in 215.31 seconds. Repeated audits covered all original receipts and identified the
+four unrecorded publication probes by exact ID while retaining the hold. The same code passed 1,484 native Linux tests,
+typechecking and all four builds in
+[run 42552272631](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42552272631).
+Provider traffic remained local; the full product and restored activation remain in progress.
