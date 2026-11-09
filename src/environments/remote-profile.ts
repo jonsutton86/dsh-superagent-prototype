@@ -2,11 +2,12 @@
 import { join } from 'node:path'
 import type { RemoteGrant } from '../remote/protocol.ts'
 import type { CoordinatorOwnershipConfig } from '../ownership/lease.ts'
+import type { PublicationConnection } from '../publication/client.ts'
 
-export function remoteProfile(input: { url: string; endpointId: string; credentialFile: string; directory: string; grant: RemoteGrant; port: number; ownership?: CoordinatorOwnershipConfig }): unknown[] {
+export function remoteProfile(input: { url: string; endpointId: string; credentialFile: string; directory: string; grant: RemoteGrant; port: number; ownership?: CoordinatorOwnershipConfig; publication?: PublicationConnection }): unknown[] {
   return [
     { id: 'webserver', config: { host: '127.0.0.1', port: input.port } },
-    { id: 'dsh-superagent', config: { stateDir: join(input.directory, 'application'), executionMode: 'local', ...(input.ownership ? { ownership: input.ownership } : {}) } },
+    { id: 'dsh-superagent', config: { stateDir: join(input.directory, 'application'), executionMode: 'local', ...(input.ownership ? { ownership: input.ownership } : {}), ...(input.publication ? { publication: input.publication } : {}) } },
     { id: 'sandbox-policy', config: { mode: 'danger-full-access', workspaceRoot: input.grant.root } },
     { id: 'permission', config: { defaultPreset: 'danger-full-access', presets: {
       'danger-full-access': { sandbox: 'danger-full-access', approval: 'never', name: 'Endpoint grant', description: 'Execution is bounded by the remote endpoint grant.' },

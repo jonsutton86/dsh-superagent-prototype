@@ -33,6 +33,6 @@ export function openRuntimeOwnership(store: Store, config: CoordinatorOwnershipC
   if (!config) return
   assertOwnershipCredential(config, roots)
   const ownership = new CoordinatorOwnership(config)
-  if (!stored) store.set(KV.runtime.ownership, { authorityId: config.authorityId, coordinatorId: config.coordinatorId })
+  store.set(KV.runtime.ownership, { authorityId: config.authorityId, coordinatorId: config.coordinatorId, credentialFile: config.credentialFile })
   return ownership
 }

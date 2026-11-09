@@ -46,11 +46,15 @@ async function fixture() {
 
 it('captures encrypted coordinator data and owned Session descendants, verifies every member, and stages a fenced restore', async () => {
   const f = await fixture()
+  const source = new Store(join(f.stateDir, 'orchestrator.sqlite'))
+  source.set(KV.runtime.ownership, { authorityId: 'authority', coordinatorId: 'coordinator', credentialFile: '/private/claimant.token' })
+  source.set(KV.runtime.publication, { serviceId: 'publication', credentialFile: '/private/publication-client.token' }); source.close()
   for (const [id, parentSession] of [['child', 'recovery-master'], ['grandchild', 'child'], ['unrelated', undefined]] as const) {
     const writer = await f.persistence.create(header(id, parentSession ? { parentSession: SessionId(parentSession) } : {}))
     await writer.append([event(0, id)]); await writer.close()
   }
   const result = await createCheckpoint(f)
+  expect(result.manifest.requiredFiles).toEqual(['/private/claimant.token', '/private/publication-client.token'])
   expect(result.manifest.sessions.map(item => item.id).sort()).toEqual(['child', 'grandchild', 'recovery-master'])
   expect(await verifyCheckpoint(result.path, f.keyFile)).toEqual(result.manifest)
   for (const name of await readdir(result.path)) expect((await readFile(join(result.path, name))).toString()).not.toContain('private archive evidence')

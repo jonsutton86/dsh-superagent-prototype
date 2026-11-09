@@ -368,6 +368,14 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/ownership/lease.ts` | Process-instance acquisition, conservative deadlines, renewal and terminal loss without silent reacquisition |
 | `src/ownership/runtime.ts` | Runtime configuration, durable authority/identity binding, workspace credential separation and shared ownership checks |
 | `src/ownership/authority-plugin.ts`, `index.ts` | Dedicated Harness authority host and public host-only lease/resource composition |
+| `src/publication/protocol.ts` | Exact artifact/destination approvals, bounded private RPC and immutable delivery receipts |
+| `src/publication/journal.ts` | Independent locked publication journal, private roles, immutable bindings and unknown restart outcomes |
+| `src/publication/service.ts` | Ownership-fenced publication, final pre-dispatch verification and unresolved-effect handoff barrier |
+| `src/publication/github.ts` | Fixed-origin account/target checks, single-attempt issue comments and exact provider receipt observation |
+| `src/publication/http.ts`, `client.ts` | Private pinned HTTP transport, bounded payloads and original-ID dispatch without automatic retries |
+| `src/publication/runtime.ts` | Operator artifact approval, persistent intents, duplicate guard and receipt recovery after ownership loss |
+| `src/publication/plugin.ts` | Dedicated loopback Harness publication service with independent account credentials |
+| `src/client/publications.tsx` | Complete artifact and destination review, delivery status and original-intent recovery controls |
 | `src/app/setup.ts` | Setup, and `setupChanged`, whether a save changes a field setup reads |
 | `src/app/passes.ts` | Passes, the pass scheduler |
 | `src/app/outbox.ts` | The Outbox: the Engine's `Outbox` port, the receipts and the `reply` effects that send them |
@@ -486,6 +494,9 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/remote-ownership.spec.ts` | Pre-dispatch persistence, concurrent attribution, lost responses, assignment fences, restart/cancel recovery and receipt mismatch refusal |
 | `tests/ownership.spec.ts` | Competing coordinators, all-resource barriers, monotonic expiry/restart, real endpoint handoff/outage, immutable receipt generations and durable binding/floor refusal |
 | `tests/ownership-runtime.spec.ts` | Profile compatibility, owned Runtime startup/loss, managed command attribution, competing writers, startup cleanup and held-restore refusal |
+| `tests/publication.spec.ts` | Provider/service acknowledgement loss, late commits, ownership barriers, account checks, exact intents and independent reconciliation |
+| `tests/publication-runtime.spec.ts` | Management approval, stale artifact/destination refusal, duplicate prevention and observation after ownership loss |
+| `tests/publication-ui.spec.tsx` | Rendered content/destination review, unchanged approval IDs after lost responses and unknown receipt recovery |
 | `tests/remote-credentials.spec.ts` | Private import validation, environment/file bindings, secret-free provider argv and receipts, rotation/rebind, restart, tamper refusal and native Linux mounts/cancellation |
 | `tests/execution-receipts-ui.spec.tsx` | Rendered receipt pagination, separate outcome/quiescence and same-ID cancellation retry after an ambiguous response |
 | `tests/watchdog.spec.ts` | Independent journal recovery, assessment budgets, service outages, bounded interventions and concurrent polling |
@@ -693,7 +704,7 @@ Most built-in instructions live in `prompts/*.md`, with one sentence per line jo
 
 ## Configuration reload
 
-Every plugin configuration key except `stateDir` and `executionMode` is volatile. The panel's Deployment settings and DeepSeek Harness's Plugin Manager edit limits and mode through DeepSeek Harness's configuration form. The host writes `cordis.patch.yml`; limits update in place, while a mode change restarts the plugin. Setup and launch refuse tickets recorded under a different mode; legacy tickets are repository tickets.
+The main plugin's limits are volatile; `stateDir`, `executionMode`, `ownership` and `publication` changes remount it. The panel's Deployment settings and DeepSeek Harness's Plugin Manager edit limits and mode through DeepSeek Harness's configuration form. The host writes `cordis.patch.yml`; limits update in place, while a mode change restarts the plugin. Setup and launch refuse tickets recorded under a different mode; legacy tickets are repository tickets.
 
 A settings save that changes a Source field setup reads, such as an account's CLI, and any save while setup waits, restarts dsh-superagent. DeepSeek Harness's settings service does not serve the entry during that restart, so after its own restart dsh-superagent asks it to read the entry again, and an open form becomes editable again.
 

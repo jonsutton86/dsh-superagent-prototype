@@ -58,6 +58,7 @@ import { resolveRoleModel } from './role-models.ts'
 import { WorldPool } from '../environments/pool.ts'
 import { openRuntimeOwnership, assertOwnership, ownershipReady } from '../ownership/runtime.ts'
 import type { CoordinatorOwnership } from '../ownership/lease.ts'
+import { Publications } from '../publication/runtime.ts'
 
 // Source plugins interact with dsh-superagent exclusively through the `SourceHost` service interface.
 declare module '@deepseek-ai/cordis' { interface Context { orchestrator: SourceHost } }
@@ -92,6 +93,7 @@ export class Runtime extends Service implements SourceHost {
   readonly worlds: WorldPool
   readonly remoteWorkspace?: RemoteWorkspace
   readonly ownership?: CoordinatorOwnership
+  readonly publications: Publications
   readonly ready: Promise<void>
   private quiescing?: Promise<void>
   private readonly board = new HealthBoard()
@@ -130,11 +132,15 @@ export class Runtime extends Service implements SourceHost {
       const environments = this.environments = new Environments({ store, filesystem: ctx.fs, subprocess: ctx.subprocess, lifetime: this.lifetime,
         remote, ownership: this.ownership, worlds: () => runtime.worlds, root: () => executionRoot(store.settings(), machine.stateDir, world?.grant.root), mode: () => machine.executionMode ?? 'repository', engine: () => runtime.engine })
       this.endpoints = new Endpoints({ store, stateDir: machine.stateDir, lifetime: this.lifetime, ownership: this.ownership, ownershipConfig: machine.ownership,
+        publicationConfig: machine.publication,
         workerRoots: () => [...environments.list().items.filter(item => item.kind === 'local').flatMap(item => [item.root, item.configuredRoot]),
           ...(!world ? [executionRoot(store.settings(), machine.stateDir)] : [])] })
       this.worlds = new WorldPool(ctx, { store, endpoints: this.endpoints, lifetime: this.lifetime, ownership: this.ownership, ownershipConfig: machine.ownership, report,
+        controlFiles: machine.publication ? [machine.publication.credentialFile] : [],
         revoked: binding => { for (const ticket of store.tickets.open()) if (ticket.execution?.environment?.environmentId === binding && canStop(ticket)) runtime.engine.stopTicket(ticket.id, 'Managed execution world revoked by the operator') } })
       const library = this.library = new Library(store)
+      this.publications = new Publications({ store, library, ownership: this.ownership, connection: machine.publication, lifetime: this.lifetime,
+        roots: () => [executionRoot(store.settings(), machine.stateDir, world?.grant.root), ...this.worlds.list().items.map(item => item.root)] })
       const personas = this.personas = new Personas(store, async model => { await resolveRoleModel(ctx, model) })
       const workspace = this.workspace = new Workspace(store, () => runtime.engine, () => !this.paused() && !this.closing(),
         id => library.evidenceRevision(id), ticket => environments.allows(ticket.execution?.environment), reference => personas.snapshot(reference), reference => environments.select(reference))
@@ -307,6 +313,7 @@ export class Runtime extends Service implements SourceHost {
     const { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, sourceLinks, setup, passes } = this
     return { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, get ready() { return runtime.ready }, sourceLinks, remoteRoot: this.remoteWorkspace?.world.grant.root,
       ownership: this.ownership, authorizeMutation: () => { this.ownership?.proof(); this.lifetime.throwIfAborted() },
+      publications: this.publications,
       get health() { return runtime.health }, remoteEffects: this.remoteWorkspace?.world,
       supervision: this.supervision, workspace: this.workspace, library: this.library, inbox: this.inbox, environments: this.environments, endpoints: this.endpoints, personas: this.personas, worlds: this.worlds,
       get deployment() { return setup.deployment },
@@ -322,6 +329,7 @@ export class Runtime extends Service implements SourceHost {
     const ownership = this.ownership?.close()
     try {
       await this.endpoints.stop()
+      await this.publications.stop()
       this.assessor.stop()
       const ids = [this.masterId, ...this.store.tickets.list().map(ticket => workerSessionId(ticket.id))]
       const agents = ids.map(id => this.ctx.agents.get(id as SessionId)).filter((agent): agent is Agent => agent !== undefined)

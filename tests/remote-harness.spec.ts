@@ -12,6 +12,8 @@ import { Endpoints } from '../src/environments/endpoints.ts'
 import { ownershipAuthority } from './fixtures/ownership-authority.ts'
 import { CoordinatorOwnership } from '../src/ownership/lease.ts'
 import { RemoteClient } from '../src/remote/client.ts'
+import { publicationFixture } from './fixtures/publication.ts'
+import { qualifyPublication } from './fixtures/publication-harness.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { for (const dispose of cleanup.reverse()) await dispose(); cleanup.length = 0; vi.restoreAllMocks() })
@@ -21,7 +23,8 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
   const owned = variant.startsWith('owned-'), mode = variant.endsWith('dedicated') ? 'dedicated' : 'managed'
   const cli = process.env.DSH_QUALIFICATION_CLI!, home = process.env.DSH_QUALIFICATION_HOME!, source = process.env.DSH_QUALIFICATION_PROFILE!
   if (!cli || !home || !source) throw new Error('Supply the qualification CLI, DSH home and source profile paths')
-  const authority = owned ? await ownershipAuthority(cleanup) : undefined
+  const authority = owned ? await ownershipAuthority(cleanup, ['endpoint', 'publication']) : undefined
+  const publisher = authority ? await publicationFixture(cleanup, authority.resourceFor('publication')) : undefined
   const ownershipConfig = authority && { ...authority.config, leaseMs: 10_000, prepareTimeoutMs: 30_000 }
   const bootstrap = ownershipConfig && new CoordinatorOwnership(ownershipConfig)
   if (bootstrap) cleanup.push(() => bootstrap.close())
@@ -33,7 +36,7 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
   const secret = randomUUID(), secretDigest = createHash('sha256').update(secret).digest('hex')
   await writeFile(join(h.endpoint.credentials.imports, 'qualification'), secret, { mode: 0o600 })
   const store = new Store(join(h.directory, 'operator.sqlite')), endpoints = new Endpoints({ store, stateDir: join(h.directory, 'operator'),
-    lifetime: new AbortController().signal, workerRoots: () => [], ownership: bootstrap, ownershipConfig })
+    lifetime: new AbortController().signal, workerRoots: () => [], ownership: bootstrap, ownershipConfig, publicationConfig: publisher?.connection })
   cleanup.push(async () => { await endpoints.stop(); store.close() })
   const registration = await endpoints.register({ requestId: 'qualification-enrollment', endpointId: h.endpoint.journal.id,
     url: h.url, name: 'Qualification endpoint', credentialFile: h.connection.credentialFile, revision: 0 })
@@ -66,7 +69,8 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
   else {
     overlay = join(directory, 'managed-worlds.json')
     await writeFile(overlay, JSON.stringify([{ id: 'webserver', config: { host: '127.0.0.1', port } },
-      { id: 'dsh-superagent', config: { stateDir: join(h.directory, 'coordinator'), executionMode: 'local', ...(ownershipConfig ? { ownership: ownershipConfig } : {}) } },
+      { id: 'dsh-superagent', config: { stateDir: join(h.directory, 'coordinator'), executionMode: 'local', ...(ownershipConfig ? { ownership: ownershipConfig } : {}),
+        ...(publisher ? { publication: publisher.connection } : {}) } },
       { id: 'session-title-llm', disabled: true }]))
   }
   let log = '', child: ChildProcess | undefined
@@ -158,6 +162,17 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     expect(ticket.executionPersona).toMatchObject({ id: persona.id, version: 1, digest: persona.digest, definition })
     expect(await readFile(join(ticket.directory, 'result.txt'), 'utf8')).toBe(proof)
     expect(artifact?.content).toBe(proof)
+    let publicationId: string | undefined
+    if (publisher) {
+      const destination = (await api('publication/destinations')).items[0]
+      publisher.loseProviderReply()
+      publicationId = randomUUID()
+      const delivery = await api(`library/${artifact.id}/publications`, { requestId: publicationId, revision: artifact.revision, hash: artifact.hash,
+        destination: destination.id, destinationHash: destination.hash })
+      expect(delivery.receipt.phase).toBe('unknown')
+      expect((await api(`publications/${publicationId}/refresh`, {})).receipt).toMatchObject({ phase: 'sent', hash: artifact.hash })
+      expect(publisher.posts).toBe(1)
+    }
     const command = h.endpoint.journal.jobs().find(job => job.request.cwd === ticket.directory && job.request.argv[0] === 'bash'
       && job.request.argv.some(arg => arg.includes('result.txt')) && job.outcome?.exitCode === 0)
     expect(command?.request.owner).toMatchObject({ kind: 'assignment', ticketId: task.id,
@@ -195,6 +210,11 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
       expect(nextOwner.epoch).toBeGreaterThan(oldOwner.epoch)
       expect(nextOwner.instanceId).not.toBe(oldOwner.instanceId)
     }
+    if (publisher && publicationId) {
+      expect((await api(`library/${artifact.id}/publications`)).items[0].receipt).toMatchObject({ phase: 'sent', hash: artifact.hash })
+      expect((await api(`publications/${publicationId}/retry`, {})).receipt.phase).toBe('sent')
+      expect(publisher.posts).toBe(1)
+    }
     expect((await api(`tickets/${task.id}`)).executionEnvironment).toEqual(ticket.executionEnvironment)
     expect((await api(`tickets/${task.id}`)).executionPersona).toEqual(ticket.executionPersona)
     expect((await api(runPath, request)).actions[0].runs).toEqual([task.id])
@@ -223,6 +243,8 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     await qualifyRecovery({ cli, home, profile, directory, temporary: h.directory, port, stateDir, sessionRoot,
       worldDirectories, worker: ticket.sessionId, worlds: mode === 'managed' ? 2 : 1 })
     if (mode === 'dedicated' && !owned) await qualifyOwnership({ cli, home, profile, directory, temporary: h.directory, port, native })
+    if (mode === 'dedicated' && publisher && ownershipConfig)
+      await qualifyPublication({ cli, home, profile, directory, port, publisher, ownership: ownershipConfig })
   } catch (error) {
     const diagnostics: unknown[] = []
     try {

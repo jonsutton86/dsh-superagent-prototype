@@ -23,6 +23,7 @@
     "./recovery": "./lib/recovery.js",
     "./ownership": "./lib/ownership.js",
     "./ownership-authority": "./lib/ownership-authority.js",
+    "./publication": "./lib/publication.js",
     "./remote-client": "./lib/remote-client.js",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json"

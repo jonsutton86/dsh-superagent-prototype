@@ -42,9 +42,12 @@ import type { Personas } from '../personas/service.ts'
 import type { WorldPool } from '../environments/pool.ts'
 import type { CoordinatorOwnership } from '../ownership/lease.ts'
 import { OwnershipError } from '../ownership/protocol.ts'
+import type { Publications } from '../publication/runtime.ts'
+import { PublicationError } from '../publication/protocol.ts'
 
 export interface HttpHost {
   readonly ownership?: Pick<CoordinatorOwnership, 'status'>
+  readonly publications?: Publications
   authorizeMutation?(): void
   readonly remoteRoot?: string
   readonly remoteEffects?: Pick<RemoteWorld, 'effects' | 'refreshEffects' | 'cancelEffect' | 'status'>
@@ -114,7 +117,7 @@ function failure(error: unknown): [number, Record<string, unknown>] {
   if (error instanceof RouteError) return [error.status, { error: error.message }]
   if (error instanceof WorkspaceError) return [error.status, { error: error.message }]
   if (error instanceof EnvironmentError) return [error.status, { error: error.message }]
-  if (error instanceof RemoteError || error instanceof OwnershipError) return [error.status, { error: error.message, code: error.code }]
+  if (error instanceof RemoteError || error instanceof OwnershipError || error instanceof PublicationError) return [error.status, { error: error.message, code: error.code }]
   if (error instanceof UserError) return [error.missing ? 404 : 400, { error: error.message, code: error.code, values: error.values }]
   if (error instanceof SettingsConflict || error instanceof PromptConflict) return [409, { error: error.message }]
   return [500, { error: error instanceof Error ? error.message : String(error) }]
@@ -201,7 +204,16 @@ function routes(runtime: HttpHost): Routes {
     return receiptPage(id, {}, binding)
   }
   const promptBody = (input: { body: (maxBytes?: number) => Promise<unknown> }) => input.body(4 * runtime.machine.promptMaxChars.get() + 4096)
+  const publications = () => {
+    if (!runtime.publications) throw new PublicationError(409, 'not_configured', 'Publication service is unavailable')
+    return runtime.publications
+  }
   return {
+    'GET publication/destinations': () => runtime.publications?.destinations() ?? { configured: false, items: [] },
+    'GET library/:id/publications': ({ params }) => publications().list(params.id),
+    'POST library/:id/publications': async ({ params, body }) => publications().publish(params.id, await body()),
+    'POST publications/:id/refresh': ({ params }) => publications().refresh(params.id),
+    'POST publications/:id/retry': ({ params }) => publications().retry(params.id),
     'GET execution': ({ query }) => receiptPage(undefined, query),
     'POST execution/refresh': () => refreshReceipts(),
     'POST execution/:effect/cancel': async ({ params, body }) => cancelReceipt(undefined, params.effect, await body()),
@@ -337,7 +349,7 @@ export function registerHttp(ctx: Context, runtime: HttpHost): () => void {
       if (!sameOrigin(req, ctx.webServer.port)) { json(res, 403, { error: 'Same-origin management request required' }); return }
       try {
         // Receipt refresh writes observations locally but never sends an execution or cancellation intent.
-        const observation = req.method === 'POST' && /^\/orchestrator\/api\/(?:execution|tickets\/[^/]+\/execution|worlds\/[^/]+\/execution)\/refresh$/.test(url.pathname)
+        const observation = req.method === 'POST' && /^\/orchestrator\/api\/(?:execution|tickets\/[^/]+\/execution|worlds\/[^/]+\/execution|publications\/[^/]+)\/refresh$/.test(url.pathname)
         const mutation = req.method !== 'GET' && req.method !== 'HEAD' && !observation
         if (mutation) runtime.authorizeMutation?.()
         if (runtime.ownership && req.method === 'GET' && url.pathname === '/orchestrator/api/state') {

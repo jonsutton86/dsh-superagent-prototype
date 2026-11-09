@@ -142,7 +142,11 @@ export async function createCheckpoint(options: CheckpointOptions): Promise<{ pa
       if (session.sha256 !== encrypted.sha256 || session.bytes !== encrypted.bytes) throw new Error('Session export changed during capture')
       sessions.push(session)
     }
-    const requiredFiles = [...new Set([...managed.map(item => item.config.credentialFile),
+    const controlFiles = [KV.runtime.ownership, KV.runtime.publication].flatMap(key => {
+      const binding = kv(store, key) as { credentialFile?: string } | null
+      return binding?.credentialFile ? [binding.credentialFile] : []
+    })
+    const requiredFiles = [...new Set([...controlFiles, ...managed.map(item => item.config.credentialFile),
       ...values<{ credentialFile: string }>(store, 'operator_endpoint').map(item => item.credentialFile)])]
     const manifest = manifestSchema.parse({ version: 1, id, createdAt: new Date().toISOString(), sourceRoot: root, schema: SCHEMA_VERSION,
       masterId, files, sessions, requiredFiles, executionWorkspaces: workspaces, recovery: 'fenced-until-ownership-reconciled' })

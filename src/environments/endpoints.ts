@@ -15,13 +15,15 @@ import type { RemoteWorldConfig } from '../remote/world.ts'
 import type { OwnershipAccess } from '../ownership/protocol.ts'
 import { requiresOwnership } from '../ownership/protocol.ts'
 import type { CoordinatorOwnershipConfig } from '../ownership/lease.ts'
+import type { PublicationConnection } from '../publication/client.ts'
 import { assertOwnership } from '../ownership/runtime.ts'
 
 export interface EndpointWorld { config: RemoteWorldConfig; grant: RemoteGrant; credentialPin: string }
 
 interface Registration extends EndpointRegistration { credentialPin: string }
 interface Command extends OperatorCommand { fingerprint: string; registration: Registration; expectedEpoch?: number; previousGrant?: RemoteGrant; credentialPin?: string }
-interface EndpointHost { store: Store; stateDir: string; lifetime: AbortSignal; ownership?: OwnershipAccess; ownershipConfig?: CoordinatorOwnershipConfig; workerRoots(): string[] }
+interface EndpointHost { store: Store; stateDir: string; lifetime: AbortSignal; ownership?: OwnershipAccess; ownershipConfig?: CoordinatorOwnershipConfig;
+  publicationConfig?: PublicationConnection; workerRoots(): string[] }
 const stamp = () => new Date().toISOString()
 const jobView = ({ id, grantId, epoch, phase, createdAt, updatedAt, cancelRequested, quiescent, reconciled }: EndpointJob): EndpointJob =>
   ({ id, grantId, epoch, phase, createdAt, updatedAt, cancelRequested, quiescent, reconciled })
@@ -223,7 +225,7 @@ export class Endpoints {
     return this.serial(async () => {
       const { config, grant } = await this.worldConnection(id, commandId)
       if (this.host.ownership && !this.host.ownershipConfig) throw new EnvironmentError(409, 'Ownership configuration is required to generate a dedicated profile')
-      const directory = dirname(config.stateDir), patch = remoteProfile({ ...config, directory, grant, port, ownership: this.host.ownershipConfig }), patchFile = join(directory, `profile-${port}.json`)
+      const directory = dirname(config.stateDir), patch = remoteProfile({ ...config, directory, grant, port, ownership: this.host.ownershipConfig, publication: this.host.publicationConfig }), patchFile = join(directory, `profile-${port}.json`)
       privateFile(patchFile, JSON.stringify(patch, null, 2))
       return { endpointId: id, grantId: grant.id, epoch: grant.epoch, leaseUntil: grant.leaseUntil, port, patchFile, patch }
     })

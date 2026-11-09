@@ -54,7 +54,9 @@ verifies backups, and imports Sessions into a staged restore that remains blocke
 The [ownership authority](docs/024-ownership-fencing.md) provides separate coordinator generations and endpoint handoff
 barriers, cancelling prior work and preserving its receipts before a successor can execute.
 [Runtime ownership](docs/025-runtime-ownership.md) connects dedicated and managed worlds to that lease and stops work on
-loss. Publication fencing and restored-state reconciliation are still required before staged restore activation is supported.
+loss. The [publication service](docs/026-artifact-publication.md) sends operator-reviewed text artifacts to pinned GitHub
+issue or PR comment destinations, with independent credentials, ownership fencing and persistent delivery receipts.
+Channel-wide publication integration and restored-state reconciliation remain required before staged restore activation.
 Approved plans preserve execution history and invalidate affected results before they can be accepted again.
 
 The [Inbox](docs/013-inbox.md) brings conversations, unread updates, questions and review into one view. Start a task,

@@ -52,13 +52,13 @@ refer to the same environment. Remote access requires authentication; do not exp
 | Human participation and completion | Human actions, reviewed dependencies; acceptance bound to ticket, library evidence and direct provenance state | Host-collected check evidence bound to Git/environment revisions; rejected results and revisions |
 | Conversations and steering | Unified inbox, durable read receipts, question/review filters, visible Harness text, atomic task creation, idempotent replies and mission/artifact links | Cross-workspace enrollment, large-history indexing/retention, attachments and richer conversation tooling |
 | Shared memory and recall | Immutable scoped capsules, typed/hash-bound provenance, FTS search, source freshness/conflict flags, worker tools and library UI | Host-enforced total recall budgets, transitive freshness, measured recall quality, import connectors and multi-workspace ownership |
-| Artifact library | Content-addressed publication, search/previews/download, mission/session links, archival and immutable revision history | Large/streamed files, matched-environment imports and directory sync, retention, host verification and external delivery receipts |
+| Artifact library | Content-addressed publication, search/previews/download, mission/session links, archival, immutable revisions and reviewed GitHub comment delivery with persistent receipts | Large/streamed files, matched-environment imports and directory sync, retention, host verification and broader channel/repository delivery |
 | Personas and skills | Immutable versioned definitions, model preferences, optional-tool guards, embedded skills, management UI, reviewed per-action assignment and worker/descendant resume binding; contract in `021-personas.md` | Multi-workspace ownership, stronger per-capability execution boundaries, role-quality evaluations and catalog retention |
 | Schedules and reflection | Existing runtime passes | Persisted occurrences, deduplication, timezone/DST, missed-run policy, budgets and reviewable reflection proposals |
 | Usage and budgets | Worker concurrency and health | Provider usage, estimated/reported costs, durable reservations/limits and spend/workload UI |
 | Models and connectors | Harness configuration, optional GitHub/Feishu, local grants, authenticated remote transport, paired Harness services, persistent remote authority/revocation and native Linux namespace/cancellation CI, whole-profile and per-action world binding, durable command/file ownership and operator receipts, endpoint-owned versioned credentials, real model artifact/restart qualification, endpoint enrollment/reconciliation and independent managed worlds | Managed endpoint/runtime launch, cross-host deployment qualification and connector scope |
 | Voice | None | Optional input/output adapters, interruption, local/cloud modes and text fallback |
-| Supervision and recovery | Watchdog foundation, encrypted checkpoints/held Session import, independent ownership authority, remote endpoint handoff fencing and owned Runtime/dedicated/managed provider lifecycle | Publication ownership integration, clean-host activation/failover, incident UI and broader live failure tests |
+| Supervision and recovery | Watchdog foundation, encrypted checkpoints/held Session import, independent ownership authority, endpoint and artifact-publication fencing and owned Runtime/dedicated/managed provider lifecycle | Channel-wide publication integration, clean-host activation/failover, incident UI and broader live failure tests |
 | Whole-product qualification | Deterministic unit, API/DOM flows, actual Harness restarts, live local model/tool, inbox and planner-to-execution missions | Browser/desktop layout, broader provider acceptance, backup/restore drills, accessibility and packaging |
 
 ## Missions increment
@@ -198,3 +198,8 @@ Runtime qualification: code `ba17edd5fe09d9276b8d27168188f7f6d9b83abe` passed 1,
 Harness model scenarios, and 1,408 tests with native confinement in
 [Linux run 42537715231](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42537715231).
 Typechecking and all builds passed. The full product goal remains in progress.
+
+Artifact delivery increment: `026-artifact-publication.md` adds an independent Harness publication service, exact
+artifact/destination approval, private account credentials, durable original-ID receipts and unknown-outcome ownership
+barriers. The library UI reviews full text and recovers original requests. Feishu, Source Outbox and repository mutations,
+automatic mandate-based publication, host verification and restored-state activation remain in the implementation ledger.

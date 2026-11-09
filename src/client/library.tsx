@@ -4,6 +4,7 @@ import { usePoll } from './api.ts'
 import { Button } from './controls.tsx'
 import { usePanel } from './provider.tsx'
 import { errorText } from './text.ts'
+import { PublicationCard } from './publications.tsx'
 
 /** Library browsing and authoring use the same durable service as Harness worker tools. */
 export function LibraryPage({ id, scope }: { id?: string; scope?: string }) {
@@ -166,6 +167,7 @@ function RecordDetail({ id, scope }: { id: string; scope?: string }) {
       {replacing && <RecordForm scope={record.scope} replaces={record} onSaved={next => link(next.id)} />}
       {content ? <ContentPreview content={content} title={record.title} /> : record.content !== null && <pre className="dt-library-excerpt">{record.content}</pre>}
       {!content && record.nextOffset !== null && <p className="dt-hint">{t('library.excerpt')}</p>}
+      {record.kind === 'artifact' && <PublicationCard key={`${record.id}:${record.revision}:${record.hash}`} record={record} />}
       <details className="dt-library-provenance"><summary>{t('library.provenance')}</summary>
         <dl><dt>{t('library.scope')}</dt><dd>{record.scope}</dd><dt>SHA-256</dt><dd>{record.hash}</dd>
           <dt>{t('library.created')}</dt><dd>{new Date(record.createdAt).toLocaleString()}</dd>

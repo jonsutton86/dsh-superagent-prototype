@@ -291,6 +291,11 @@ const ticketOf = (id: string) =>
 const SourceSave = z.object({ enabled: z.boolean(), config: z.unknown() })
 
 const ROUTES: { [K in keyof Api]: Route<K> } = {
+  'GET publication/destinations': { answer: () => ({ configured: false, items: [] }) },
+  'GET library/:id/publications': { answer: () => ({ items: [] }) },
+  'POST library/:id/publications': { body: true, answer: () => refuse(409, 'Publication service is not configured') },
+  'POST publications/:id/refresh': { answer: () => refuse(409, 'Publication service is not configured') },
+  'POST publications/:id/retry': { answer: () => refuse(409, 'Publication service is not configured') },
   'GET execution': { query: ['offset', 'limit'], answer: () => ({ items: [], total: 0, nextOffset: null, blocked: 0 }) },
   'POST execution/refresh': { answer: () => refuse(409, 'Remote world fixture not configured') },
   'POST execution/:effect/cancel': { body: true, answer: () => refuse(409, 'Remote world fixture not configured') },

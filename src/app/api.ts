@@ -17,6 +17,8 @@ import type { ExecutionReceiptPage } from '../remote/effects.ts'
 import type { ArchivePersonaInput, CreatePersonaInput, PersonaList, PersonaRecord, PersonaVersion, SavePersonaInput } from '../personas/model.ts'
 import type { ActivateWorldInput, RevokeWorldInput, WorldList, WorldView } from '../environments/pool-model.ts'
 import type { EndpointCatalog, EndpointCommandInput, EndpointList, EndpointRegistration, OperatorCommand, RegisterEndpointInput, RemoteProfileView } from '../environments/endpoint-model.ts'
+import type { ApprovePublication, PublicationRecord } from '../publication/runtime.ts'
+import type { DestinationView } from '../publication/protocol.ts'
 
 export const TICKET_FILTERS = ['open', 'person', 'working', 'idle', 'ended'] as const
 export const THREAD_FILTERS = ['subscribed', 'evaluating', 'recent', 'all'] as const
@@ -69,6 +71,11 @@ export interface Api {
   'POST inbox/:id/read': { body: { revision: string }; response: { marked: boolean; unread: boolean } }
   'POST inbox/:id/reply': { body: InboxReplyInput; response: InboxItem }
   'GET library': { query?: LibraryQueryInput; response: LibraryList }
+  'GET publication/destinations': { response: { configured: boolean; items: DestinationView[] } }
+  'GET library/:id/publications': { response: { items: PublicationRecord[] } }
+  'POST library/:id/publications': { body: ApprovePublication; response: PublicationRecord }
+  'POST publications/:id/refresh': { response: PublicationRecord }
+  'POST publications/:id/retry': { response: PublicationRecord }
   'POST library': { body: CreateRecordInput; response: LibraryEntry }
   'GET library/:id': { query?: Paged; response: LibraryRead }
   'GET library/:id/content': { response: LibraryContent }
