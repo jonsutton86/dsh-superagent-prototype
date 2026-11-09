@@ -2,7 +2,7 @@
 
 This increment connects [artifact checks](047-artifact-checks.md) to mission result acceptance and independently journaled
 artifact publication. DeepSeek Harness remains the executor. A model-authored artifact needs operator-selected successful
-host checks before a new external publication. An agent action with current artifacts needs at least one selected check
+host checks before a new external publication through this approval path. An agent action with current artifacts needs at least one selected check
 for every current artifact from its latest assignment before acceptance. Selecting a check does not rerun its command.
 
 ## Evidence and source binding
@@ -59,6 +59,9 @@ An identical committed request returns its original receipt without another capt
 artifacts requires explicit human-review acknowledgment, stored and displayed as human review without a host verification
 claim. Person-owned actions require the existing result note. Operator-authored publication artifacts retain exact-content
 approval and do not claim host checks. Legacy accepted publication receipts remain readable.
+These gates cover the coordinator's artifact publication and mission acceptance APIs. Plan-authorized channel messages
+and direct worker tools retain their existing authority. Separating broader worker/router shell authority and publication
+credentials remains part of the full architecture work; this increment is not a global outbound-network policy.
 
 ## Operator controls and bounds
 
@@ -80,8 +83,7 @@ changes, concurrent mission edits, authority withdrawal, expiry, unknown-capture
 recovery against local HTTP provider contract servers. Rendered UI tests use actual management routes and real check
 execution. Native Linux qualification covers confined checks, mission acceptance, publication and original receipts after
 endpoint restart. The installed-Harness scenarios are extended to accept actual DeepSeek-produced artifacts using these
-checks and to publish selected evidence through the independent service. Qualification results are recorded below after
-execution; these scenario definitions alone do not establish a pass.
+checks and to publish selected evidence through the independent service. Executed qualification results follow.
 
 Runtime/test revision `b364e902b43b60520eca35fefafdcfb707b8724e` passed the complete local `pnpm check`: 1,780 tests,
 typechecking and all five builds, with the test run finishing in 108.78 seconds. The installed-Harness / DeepSeek Flash
@@ -93,8 +95,18 @@ finishing in 202.89 seconds. This includes actual Linux checks, capture-bound mi
 artifact publication and unchanged original receipts after endpoint restart. The owned dedicated live scenario also
 passed on this revision. The owned managed run exposed use of the initial grant revision after lease renewal; that run
 failed before check dispatch, without publishing an unchecked artifact. The follow-up fixes current-revision admission
-and renewal-compatible freshness seals, with deterministic renewal and preserved-refusal regressions. Final requalification
-results remain pending here until those runs finish.
+and renewal-compatible freshness seals, with deterministic renewal and preserved-refusal regressions.
+
+The lease correction, `77142e7c8a5373fbf59a29f3900449a4e16a8bbb`, passed the complete local `pnpm check`: 1,782 tests,
+typechecking and all five builds (109.03 seconds for tests). The dedicated installed-Harness / DeepSeek Flash scenario
+passed again on that revision in 65.52 seconds. The same revision passed 1,787 Linux / Node 24 tests with native
+confinement, typechecking and all five builds in
+[run 42621744787](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42621744787), with tests finishing
+in 152.84 seconds. This includes lease renewal between check and acceptance/publication. Both final owned installed-Harness
+/ DeepSeek Flash scenarios passed in 306.30 seconds, covering actual artifact checks, mission acceptance, independently
+journaled publication, original-receipt recovery, managed worlds, schedules/reflection, usage refusal/retry and held
+recovery. The original app process remained running. Runtime changes and qualification records are pushed on the feature
+branch. The full Agentic OS objective remains active.
 
 Exact remote PR-head binding, PR approval/merge, repository workflows, continuous freshness, whole-mission final capture,
 retention/scaling and the remaining article implementation (`IMPLEMENTATION.md`) and [Agentic OS](010-agentic-os.md) scope

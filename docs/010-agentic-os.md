@@ -52,7 +52,7 @@ refer to the same environment. Remote access requires authentication; do not exp
 | Human participation and completion | Human actions, reviewed dependencies; acceptance bound to ticket, library evidence and direct provenance state | Host-collected check evidence bound to Git/environment revisions; rejected results and revisions |
 | Conversations and steering | Unified inbox, durable read receipts, question/review filters, visible Harness text, atomic task creation, idempotent replies and mission/artifact links | Cross-workspace enrollment, large-history indexing/retention, attachments and richer conversation tooling |
 | Shared memory and recall | Immutable scoped capsules, typed/hash-bound provenance, FTS search, bounded transitive freshness, complete review dependency closure, durable retrieval allowances and chain reads, worker tools and library UI (`043-chain-recall.md`) | Measured retrieval quality and long-horizon workloads, external-source freshness/import connectors, model-token-aware context selection, retention/scaling and multi-workspace ownership |
-| Artifact library | Content-addressed publication, search/previews/download, mission/session links, archival, immutable revisions, reviewed GitHub comment delivery, versioned checks, original assignment/environment evidence, source freshness capture and selected-check approval (`048-checked-approvals.md`, qualification in progress) | PR-head gates, continuous freshness and fresh whole-mission closure, large/streamed files, matched-environment imports and directory sync, retention and broader channel/repository delivery |
+| Artifact library | Content-addressed publication, search/previews/download, mission/session links, archival, immutable revisions, reviewed GitHub comment delivery, versioned checks, original assignment/environment evidence, source freshness capture and selected-check approval (`048-checked-approvals.md`) | PR-head gates, continuous freshness and fresh whole-mission closure, large/streamed files, matched-environment imports and directory sync, retention and broader channel/repository delivery |
 | Personas and skills | Immutable versioned definitions, model preferences, optional-tool guards, embedded skills, management UI, reviewed per-action assignment and worker/descendant resume binding; contract in `021-personas.md` | Multi-workspace ownership, stronger per-capability execution boundaries, role-quality evaluations and catalog retention |
 | Schedules and reflection | Versioned schedules, durable occurrences, timezone/DST, missed-run/run/open limits, scoped model budgets, bounded automatic reflection snapshots, reviewed memory/plan/new-mission proposals and operator UI (`044-scheduled-reflection.md`) | Reflection quality and long-horizon evaluation, broader provider budget acceptance, retention/scaling, multi-workspace ownership and broader deployment acceptance |
 | Usage and budgets | Worker concurrency, schedule run/open-mission reservations, managed Harness call/token ledger, versioned estimated pricing, scoped call/token/spend reservations, reconciliation and operator UI (`042-usage-budgets.md`) | Broader provider/adapter acceptance, invoice import, metadata generation binding, non-token fees, speculative admission integration, retention and multi-workspace ownership |
@@ -491,8 +491,8 @@ Linux-required checks fail when that confinement is unavailable. Code `6685cb6fe
 58.27 seconds, retaining actual artifact checks and freshness receipts across restart. Native Linux / Node 24 passed
 1,772 tests, typechecking and all builds in
 [run 42613515022](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42613515022).
-Selected-check binding for mission acceptance/publication, immediate pre-publication freshness and exact PR-head gates
-remain required, alongside all other full architecture/product requirements. Both owned installed-Harness / DeepSeek Flash
+These results preceded selected-check binding and immediate pre-publication freshness in increment 048. Exact PR-head
+gates remain required, alongside all other remaining full architecture/product requirements. Both owned installed-Harness / DeepSeek Flash
 scenarios passed in 278.79 seconds, retaining scheduled reflection, usage refusal/retry, artifact delivery and held recovery.
 Code and qualification receipts are pushed on the feature branch. The original app process remains running.
 
@@ -500,5 +500,11 @@ Checked approval integration: `048-checked-approvals.md` connects selected succe
 mission acceptance and to new worker artifact publication. Durable original-source captures bind the approval and the
 independent publisher checks a 60-second freshness window before dispatch. Original receipts are observed before any retry
 can capture or send again. Human-reviewed outcomes remain explicitly labelled; historical acceptance detects known source
-changes without continuous scanning. Qualification is in progress. Exact PR-head gates, a fresh whole-mission closure
-policy, continuous source freshness and all remaining full architecture requirements stay open.
+changes without continuous scanning. Final runtime/test revision `77142e7c8a5373fbf59a29f3900449a4e16a8bbb` passed 1,782
+local tests, typechecking and all five builds. Linux / Node 24 passed 1,787 tests with native confinement, typechecking and
+all builds in [run 42621744787](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42621744787).
+The dedicated installed-Harness / DeepSeek Flash scenario passed in 65.52 seconds and both owned scenarios in 306.30
+seconds, including actual acceptance/publication, renewal-compatible captures, original-receipt restart and the scheduled
+reflection/usage/recovery regressions. The original app remains running; code and receipts are pushed. Exact PR-head
+gates, a fresh whole-mission closure policy, continuous source freshness and all remaining full architecture requirements
+stay open. The full product objective remains active.
