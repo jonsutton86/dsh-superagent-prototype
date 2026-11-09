@@ -17,13 +17,21 @@ not a claim that the prototype already ships every feature or that the article s
 | Context and recall | Existing resources plus `src/workspace/library.ts`: immutable scoped records, provenance and FTS recall | Enforced total recall budgets, transitive freshness, measured retrieval and long-horizon validation |
 | Speculative work | Inferred mandates, observe/auto, configurable rules | Durable budgets, expiry and promotion/publication gates |
 | Full duplex | Harness job/subagent services, `src/executor/background.ts`, `src/app/delivery.ts`, remote receipts, durable assignment/tool ownership, receipt-only restart recovery and operator cancellation | Broader long-running job, process-failure and cross-host acceptance |
-| Compute/state separation | SQLite Store; Harness Session checkpoints, held import, checkpoint-bound claimant replacement and revision-bound independent receipt audits; ownership authority, endpoint handoff fencing, shared Runtime/pool/provider lifecycle and independently fenced artifact/mission delivery with directed inbound replies | Apply receipt observations, administrative-command/configuration reconciliation, authoritative input/state recovery, remapping, broader inbound discovery/admission and repository integration, clean-host activation and failover qualification |
+| Compute/state separation | SQLite Store; Harness Session checkpoints, held import, checkpoint-bound claimant replacement, revision-bound receipt audits and authenticated held receipt application; ownership authority, endpoint handoff fencing, shared Runtime/pool/provider lifecycle and independently fenced artifact/mission delivery with directed inbound replies | Administrative-command/configuration reconciliation, authoritative input/state recovery, remapping, broader inbound discovery/admission and repository integration, clean-host activation and failover qualification |
 | Remote environments | Paired local/remote providers, authenticated leased grants, durable revocation, mission/Session binding, endpoint-owned versioned credentials, remote profile and artifact/restart qualification, operator enrollment/reconciliation, generated profiles, managed world pool and exact per-action selection | Managed endpoint/machine launch, remote repository workflows, quotas and cross-host acceptance |
 | Watchdog | Existing health and bounded transient executor retry; now `src/supervision/*` | Live-provider and process-level acceptance, incident UI/alerts, retention, richer progress evidence and separately authorized recovery policies |
 | Delivery | Reports and PR binding/closure; content-addressed artifacts, stale mission-review invalidation, reviewed artifacts and plan-authorized mission replies to GitHub issue/review and Feishu/Lark destinations with independent receipts; exact participant/task inbound listeners | Host-collected check evidence, Git/environment revision binding, broader inbound discovery/admission, repository integration and speculative promotion/publication gates |
 | Operator control | Existing web panel, settings, pause/retry/stop and local/remote environment status and revocation, endpoint enrollment/reconciliation and private profile generation | Supervision, budgets and evidence surfaces |
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
+
+## Implemented increment: held receipt preparation
+
+[031 Receipt preparation](031-recovery-receipt-preparation.md) applies revision-bound original command/file/publication
+observations to a separate authenticated recovery image. It preserves source state, original ownership and request IDs,
+settles original channel Outbox receipts, verifies every image member and supports retry after interrupted publication.
+Both copies retain execution holds. Administrative-command/configuration reconciliation, authoritative input/state recovery,
+Session-backend validation, remapping, activation, clean-host drills and the remaining article/product ledger stay open.
 
 ## Implemented increment: recovery receipt audit
 
@@ -32,7 +40,7 @@ complete enrolled-resource coverage, original command/file/publication intent co
 unrecorded effects, missing receipts, changed identities/results and unsettled work; it observes completed original effects
 without replay. Every staged world/Session member is verified, and changed pages or authority invalidate the audit.
 
-Applying observations, administrative-command/configuration reconciliation, authoritative input/state recovery, actual
+Receipt application is now implemented by the held preparation increment. Administrative-command/configuration reconciliation, authoritative input/state recovery, actual
 Session-backend validation, world remapping, activation and clean-host drills remain required. No audit removes the hold.
 The full article and product architecture remain in progress. Code `44b3fa54685ee4cf471c5b26db1ccc4c918337ba` passed
 1,482 local tests, typechecking and all four builds. Both owned installed-Harness/DeepSeek Flash scenarios passed in
@@ -339,7 +347,7 @@ single writer, not a replicated consensus service. `025-runtime-ownership.md` co
 provider lifecycle to that authority. `026-artifact-publication.md` adds independently fenced artifact delivery;
 `027-mission-delivery.md` routes plan-authorized mission replies through the Outbox and publisher. `028-inbound-conversations.md`
 adds directed replies from authorized participants through that service. Next: complete broader source discovery/admission
-and repository integration, and reconcile original effects before activating a restored coordinator. The maintenance
+and repository integration. Receipt audits and held preparation are implemented; complete administrative/configuration, Session, world and authoritative-state reconciliation before activating a restored coordinator. The maintenance
 hold stays in place. Keep clean-host recovery and failover open until that complete path is qualified.
 
 Acceptance: crash after every enqueue/dispatch/receipt boundary; recover a consistent task/Session pair; reject two active

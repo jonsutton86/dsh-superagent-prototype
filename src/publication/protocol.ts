@@ -1,7 +1,7 @@
 /** Publication intents bind exact content and a host-configured destination; they never carry account credentials. */
 import { z } from 'zod'
 import { OwnershipStamp } from '../ownership/protocol.ts'
-import { InventoryRequest } from '../ownership/inventory.ts'
+import { InventoryRequest, ReceiptRequest } from '../ownership/inventory.ts'
 
 export const PUBLICATION_PATH = '/publication/v1'
 export const PublicationId = z.string().uuid()
@@ -48,7 +48,7 @@ export const ConversationPage = z.object({ destination: BaseDestination.shape.id
   items: z.array(ConversationMessage).max(10), next: z.string().min(1).max(4096).optional() }).strict()
 export type ConversationPage = z.infer<typeof ConversationPage>
 export const PublicationRpc = z.discriminatedUnion('op', [
-  InventoryRequest,
+  InventoryRequest, ReceiptRequest,
   z.object({ op: z.literal('identity') }).strict(), z.object({ op: z.literal('destinations') }).strict(),
   z.object({ op: z.literal('publish'), publication: Publication }).strict(),
   ConversationRead.extend({ op: z.literal('conversation.read') }),

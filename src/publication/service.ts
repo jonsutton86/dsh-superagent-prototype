@@ -1,7 +1,7 @@
 import { fingerprint, timestamp } from '../remote/journal.ts'
 import { OwnershipGate, sameOwner, type OwnershipFloor, type ResourceOwnershipConfig } from '../ownership/gate.ts'
 import { PublicationJournal } from './journal.ts'
-import { ConversationPage, Destination, DestinationConfig, ExternalReceipt, Publication, PublicationError, PublicationRpc, type PublicationIdentity, type PublicationReceipt } from './protocol.ts'
+import { ConversationPage, Destination, DestinationConfig, ExternalReceipt, Publication, PublicationError, PublicationRpc, type PublicationIdentity, PublicationReceipt } from './protocol.ts'
 import { contentHash, DeliveryRefused, type PublicationAdapter } from './github.ts'
 import { PublicationProviders } from './providers.ts'
 import { ResourceInventory } from '../ownership/inventory.ts'
@@ -34,7 +34,8 @@ export class PublicationService {
           requestHash: fingerprint(value), phase: 'configured', settled: true }) },
         { kind: 'publication', table: 'publication_receipt', project: ({ request, receipt }) => ({ kind: 'publication', id: receipt.id,
           requestHash: fingerprint(Publication.parse(request)), phase: receipt.phase, settled: !['accepted', 'started', 'unknown'].includes(receipt.phase),
-          ownership: receipt.ownership, resultHash: fingerprint(receipt.external ? ExternalReceipt.parse(receipt.external) : null) }) },
+          ownership: receipt.ownership, resultHash: fingerprint(receipt.external ? ExternalReceipt.parse(receipt.external) : null) }),
+          observe: ({ receipt }) => PublicationReceipt.parse(receipt) },
       ])
       this.gate = new OwnershipGate(config.ownership, {
         floor: () => { const value = this.journal.meta('floor'); return value ? JSON.parse(value) as OwnershipFloor : undefined },
@@ -68,11 +69,12 @@ export class PublicationService {
   private async dispatch(principal: 'admin' | 'client', request: PublicationRpc, proof?: string): Promise<unknown> {
     switch (request.op) {
       case 'identity': return this.identity()
-      case 'recovery.inventory': {
+      case 'recovery.inventory':
+      case 'recovery.receipt': {
         if (principal !== 'admin') throw new PublicationError(403, 'admin_required', 'Independent publication administrator required')
         const { id, ownership } = this.identity()
-        return this.inventory.page(request, { id, kind: 'publication', ...ownership },
-          this.calls === 0 && !this.working.size && !this.journal.unsettled().length)
+        const identity = { id, kind: 'publication' as const, ...ownership }, quiescent = this.calls === 0 && !this.working.size && !this.journal.unsettled().length
+        return request.op === 'recovery.inventory' ? this.inventory.page(request, identity, quiescent) : this.inventory.receipt(request, identity, quiescent)
       }
       case 'destinations': return [...this.destinations.values()].map(({ credentialFile: _, ...value }) => ({ ...value, hash: fingerprint(value) }))
       case 'conversation.read': {

@@ -3,7 +3,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { KV } from '../kv.ts'
 
 const identifier = (value: string) => '"' + value.replaceAll('"', '""') + '"'
-const maintenance = new Set<string>([KV.recovery.hold, KV.recovery.reservation, KV.recovery.audit])
+const maintenance = new Set<string>([KV.recovery.hold, KV.recovery.reservation, KV.recovery.audit, KV.recovery.preparation])
 
 /** Compare logical SQLite state, including row order and schema, without depending on WAL layout or loading all rows. */
 export function recoveryStateDigest(db: DatabaseSync, signal?: AbortSignal): string {

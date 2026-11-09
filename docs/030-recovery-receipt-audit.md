@@ -81,7 +81,7 @@ Use a new completion receipt path on each run or omit `receiptFile`. Read the re
 identities/revisions, comparison counts and bounded findings. The credential contents and original payloads never enter it.
 
 Before network inspection, maintenance reauthenticates the encrypted checkpoint and compares the entire staged logical
-database. Only the hold, reservation and audit metadata may differ. It also streams and checks every staged world and Session
+database. Only the hold, reservation, audit and receipt-preparation metadata may differ. It also streams and checks every staged world and Session
 member against its authenticated size/hash. The coordinator state lock stays held throughout. Once checkpoint validation
 succeeds, a new audit writes `running` before contacting resources; a failed or cancelled collection replaces any older
 matched report with the failed attempt. Validation failures do not modify the held database. Successful reruns replace the
@@ -140,7 +140,7 @@ The same code passed 1,484 tests, typechecking and all four builds on Ubuntu 22.
 Five opt-in cases were skipped. Model calls used the configured DeepSeek provider; message-provider traffic stayed on local
 contract servers. These checks establish neither live GitHub/Feishu account permissions nor cross-host restored activation.
 
-This implements receipt inventory and comparison. Applying observed outcomes to executable state, reconciling administrative
+This implements receipt inventory and comparison. `031-recovery-receipt-preparation.md` subsequently adds authenticated held receipt application. Reconciling administrative
 command history and credential configuration, validating actual restored Session backends, world/workspace remapping, and
 the activation transition remain required. Neither these inventories nor periodic checkpoints prove that no later input or
 in-memory decision was lost; that needs an authoritative input/state recovery contract. A matched audit does not prove a

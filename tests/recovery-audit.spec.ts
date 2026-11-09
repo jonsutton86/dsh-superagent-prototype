@@ -3,7 +3,13 @@ import Jsonl from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { MessageId } from '@deepseek-ai/dsh-llm'
 import { randomUUID } from 'node:crypto'
-import { appendFile, mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
+import { DatabaseSync } from 'node:sqlite'
+import { Runtime } from '../src/app/runtime.ts'
+import { testMachine } from './fixtures/deployment.ts'
+import { prepareCheckpointReceipts } from '../src/recovery/prepare.ts'
+import { verifyReceiptImage } from '../src/recovery/image.ts'
+import { recoveryStateDigest } from '../src/recovery/state.ts'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -13,7 +19,7 @@ import { createRecoveryKey } from '../src/recovery/crypto.ts'
 import { createCheckpoint, stageCheckpoint } from '../src/recovery/checkpoint.ts'
 import { reserveCheckpointOwnership } from '../src/recovery/ownership.ts'
 import { auditCheckpointReceipts } from '../src/recovery/audit.ts'
-import { InventoryPage } from '../src/ownership/inventory.ts'
+import { InventoryPage, InventoryReceipt } from '../src/ownership/inventory.ts'
 import { CoordinatorOwnership } from '../src/ownership/lease.ts'
 import { WorldJournal, worldBinding } from '../src/remote/world-journal.ts'
 import { RemoteClient } from '../src/remote/client.ts'
@@ -28,7 +34,7 @@ import { publicationFixture } from './fixtures/publication.ts'
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { vi.restoreAllMocks(); for (const close of cleanup.splice(0).reverse()) await close() })
 
-async function fixture(options: { pending?: boolean; extra?: boolean; revoked?: boolean; kind?: DestinationView['kind'] } = {}) {
+async function fixture(options: { pending?: boolean; channel?: boolean; extra?: boolean; revoked?: boolean; kind?: DestinationView['kind'] } = {}) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'dsh-receipt-audit-')))
   cleanup.push(() => rm(directory, { recursive: true, force: true }))
   const authority = await ownershipAuthority(cleanup, ['endpoint', 'publication']), owner = new CoordinatorOwnership(authority.config)
@@ -54,7 +60,7 @@ async function fixture(options: { pending?: boolean; extra?: boolean; revoked?: 
   const job = await remote.client.call<RemoteJob>(command); const settled = await remote.settled(job.id)
   if (!options.pending) world.effects.observed({ op: 'job.get', id: job.id }, settled)
   const mutation = world.effects.prepare({ op: 'fs.write' as const, requestId: randomUUID(), path: 'second', content: 'private-file-payload', expected: { kind: 'createIfAbsent' as const } }, scope)
-  const written = await remote.client.call<RemoteOperation>(mutation); world.effects.observed(mutation, written)
+  const written = await remote.client.call<RemoteOperation>(mutation); if (!options.pending) world.effects.observed(mutation, written)
   const destination = (await publisher.client.call<DestinationView[]>({ op: 'destinations' }))[0]!, text = 'private-publication-payload'
   const publication: Publication = { id: randomUUID(), destination: destination.id, destinationHash: destination.hash, text, hash: contentHash(text),
     artifact: { id: randomUUID(), revision: 1, hash: contentHash(text) } }
@@ -62,6 +68,17 @@ async function fixture(options: { pending?: boolean; extra?: boolean; revoked?: 
   store.db.exec('CREATE TABLE IF NOT EXISTS workspace_publication (id TEXT PRIMARY KEY,value TEXT NOT NULL)')
   store.db.prepare('INSERT INTO workspace_publication VALUES (?,?)').run(publication.id, JSON.stringify({ id: publication.id, intent: Object.fromEntries(Object.entries(publication).reverse()),
     attempts: [owner.status().owner], ...options.pending ? {} : { receipt } }))
+  let channel: Publication | undefined
+  if (options.channel) {
+    const { artifact: _, ...base } = publication
+    const message = { id: 'channel-message', channel: { source: 'publication', thread: 'test', address: {} }, text, kind: 'reply' as const, ticketId: 'ticket' }
+    channel = { ...base, id: randomUUID(), message: { id: message.id, ticketId: message.ticketId, missionId: randomUUID(), grantId: randomUUID(), planVersion: 1 } }
+    await publisher.client.call({ op: 'publish', publication: channel })
+    store.receipts.add(message)
+    store.db.exec('CREATE TABLE channel_publication (id TEXT PRIMARY KEY,message TEXT UNIQUE,mission TEXT,value TEXT NOT NULL)')
+    store.db.prepare('INSERT INTO channel_publication VALUES (?,?,?,?)').run(channel.id, message.id, channel.message!.missionId,
+      JSON.stringify({ id: channel.id, messageId: message.id, publication: channel, original: message, attempts: [owner.status().owner], phase: 'unknown', withdrawn: true }))
+  }
   if (options.revoked) {
     world.revoke('revoke-world', 'Qualification revocation')
     world.acknowledge(await remote.client.call<RevocationReceipt>({ op: 'grant.revoke', requestId: 'revoke-world', reason: 'Qualification revocation' }))
@@ -80,7 +97,7 @@ async function fixture(options: { pending?: boolean; extra?: boolean; revoked?: 
   const audit = { checkpoint: checkpoint.path, keyFile, destination: held, authority: connection,
     endpoints: [{ ...remote.connection, ownership: undefined, credentialFile: await realpath(remote.connection.credentialFile) }], publication: publisher.admin.config }
   const read = () => { const store = new Store(join(held, 'orchestrator.sqlite')); try { return { report: store.get(KV.recovery.audit), hold: store.get(KV.recovery.hold) } } finally { store.close() } }
-  return { directory, checkpoint, reserved, audit, authority, remote, publisher, publication, job: settled, written, read }
+  return { directory, checkpoint, reserved, audit, authority, remote, publisher, publication, job: settled, written, channel, read }
 }
 
 it.each(['github-comment', 'github-review', 'feishu-reply'] as const)('matches authentic execution and %s receipts without payloads, replay or removing the hold', async kind => {
@@ -98,7 +115,7 @@ it.each(['github-comment', 'github-review', 'feishu-reply'] as const)('matches a
 
 it('records settled original effects whose acknowledgements were absent from the checkpoint', async () => {
   const f = await fixture({ pending: true }), report = await auditCheckpointReceipts(f.audit)
-  expect(report).toMatchObject({ status: 'matched', observed: 2, matched: 5 })
+  expect(report).toMatchObject({ status: 'matched', observed: 3, matched: 5 })
   expect(f.read().hold?.state).toBe('staged'); expect(f.publisher.posts).toBe(1)
 })
 
@@ -210,5 +227,133 @@ it('checks staged world and Session bytes before inspecting independent receipts
   const f = await fixture(), member = f.checkpoint.manifest.files.find(item => item.kind === 'world')!
   await appendFile(join(f.audit.destination, member.member), 'altered')
   await expect(auditCheckpointReceipts(f.audit)).rejects.toThrow('authenticated size')
+  expect(f.read().hold?.state).toBe('staged')
+})
+
+it.each(['github-comment', 'github-review', 'feishu-reply'] as const)('prepares missing execution and %s acknowledgements in an authenticated held image', async kind => {
+  const f = await fixture({ kind, pending: true, channel: true }), audit = await auditCheckpointReceipts(f.audit)
+  const source = new DatabaseSync(join(f.audit.destination, 'orchestrator.sqlite'), { readOnly: true })
+  const before = recoveryStateDigest(source); source.close()
+  const options = { ...f.audit, requestId: randomUUID(), auditId: audit.id }, prepared = await prepareCheckpointReceipts(options)
+  expect(prepared.manifest.applied).toEqual({ commands: 1, mutations: 1, publications: 2 })
+  expect(await verifyReceiptImage(prepared.path, f.audit.keyFile)).toEqual(prepared.manifest)
+  expect(await prepareCheckpointReceipts(options)).toEqual(prepared)
+  const db = new DatabaseSync(join(prepared.path, 'orchestrator.sqlite'), { readOnly: true })
+  try {
+    expect(JSON.parse(String(db.prepare('SELECT value FROM kv WHERE key=?').get(KV.recovery.hold)!.value))).toMatchObject({ state: 'prepared', requestId: options.requestId })
+    for (const table of ['workspace_publication', 'channel_publication']) {
+      const value = JSON.parse(String(db.prepare(`SELECT value FROM ${table}`).get()!.value))
+      expect(value).toMatchObject({ phase: 'observed', receipt: { phase: 'sent' } })
+      if (table === 'channel_publication') expect(value.withdrawn).toBe(true)
+    }
+    expect(JSON.parse(String(db.prepare('SELECT value FROM outbox').get()!.value)).status).toBe('sent')
+  } finally { db.close() }
+  const file = prepared.manifest.files.find(file => file.kind === 'world')!, world = new DatabaseSync(join(prepared.path, file.member), { readOnly: true })
+  try { for (const row of world.prepare('SELECT value FROM execution_effect').all()) expect(JSON.parse(String(row.value))).toMatchObject({ phase: 'settled', quiescent: true, recovered: true }) }
+  finally { world.close() }
+  const original = new Store(join(f.audit.destination, 'orchestrator.sqlite'))
+  try { expect(recoveryStateDigest(original.db)).toBe(before); expect(original.replyStatus('channel-message')).toBe('pending') } finally { original.close() }
+  expect(f.read().hold?.state).toBe('staged'); expect(f.publisher.posts).toBe(2)
+  const context = new Context(); cleanup.push(() => context.fiber.dispose())
+  expect(() => new Runtime(context, testMachine({ stateDir: prepared.path }), () => {})).toThrow('staged checkpoint restore')
+  expect(await verifyReceiptImage(prepared.path, f.audit.keyFile)).toEqual(prepared.manifest)
+})
+
+it('exposes only safe revision-bound recovery observations to independent administrators', async () => {
+  const f = await fixture(), audit = await auditCheckpointReceipts(f.audit)
+  for (const [kind, id] of [['command', f.job.id], ['mutation', f.written.id]] as const) {
+    const revision = audit.resources.find(resource => resource.identity.kind === 'endpoint')!.revision
+    const request = { op: 'recovery.receipt' as const, kind, id, revision }, result = InventoryReceipt.parse(await f.remote.admin.call(request))
+    expect(result.item).toMatchObject({ kind, id, settled: true })
+    expect(JSON.stringify(result)).not.toMatch(/private-command-payload|private-file-payload|argv|content|"request"/)
+    await expect(f.remote.client.call(request)).rejects.toThrow('administration')
+  }
+  const revision = audit.resources.find(resource => resource.identity.kind === 'publication')!.revision
+  const request = { op: 'recovery.receipt' as const, kind: 'publication' as const, id: f.publication.id, revision }
+  expect(JSON.stringify(await f.publisher.admin.call(request))).not.toContain('private-publication-payload')
+  await expect(f.publisher.client.call(request)).rejects.toThrow('administrator')
+  await f.publisher.restart()
+  await expect(f.publisher.admin.call(request)).rejects.toThrow('changed')
+})
+
+it('refuses blocked or unselected audits before creating a preparation intent', async () => {
+  const f = await fixture({ extra: true }), audit = await auditCheckpointReceipts(f.audit)
+  for (const auditId of [audit.id, randomUUID()]) await expect(prepareCheckpointReceipts({ ...f.audit, auditId, requestId: randomUUID() })).rejects.toThrow('complete matched audit')
+  expect((await readdir(f.audit.destination)).filter(name => name.startsWith('prepared-') || name.startsWith('.prepare-'))).toEqual([])
+  const store = new Store(join(f.audit.destination, 'orchestrator.sqlite'))
+  try { expect(store.get(KV.recovery.preparation)).toBeUndefined() } finally { store.close() }
+})
+
+it('keeps the originally selected audit and request after an offline failure and an interrupted target reservation', async () => {
+  const f = await fixture(), audit = await auditCheckpointReceipts(f.audit), options = { ...f.audit, requestId: randomUUID(), auditId: audit.id }
+  f.remote.offline(true); await expect(prepareCheckpointReceipts(options)).rejects.toThrow(); f.remote.offline(false)
+  await mkdir(join(f.audit.destination, 'prepared-' + options.requestId), { mode: 0o700 })
+  const later = await auditCheckpointReceipts(f.audit)
+  await expect(prepareCheckpointReceipts({ ...options, auditId: later.id })).rejects.toThrow('request differs')
+  await expect(prepareCheckpointReceipts({ ...options, requestId: randomUUID() })).rejects.toThrow('request differs')
+  const prepared = await prepareCheckpointReceipts(options)
+  expect(prepared.manifest.auditId).toBe(audit.id)
+  // Simulate successful directory publication followed by a lost acknowledgement to the source Store.
+  const store = new Store(join(f.audit.destination, 'orchestrator.sqlite'))
+  try { const intent = store.get(KV.recovery.preparation)!; intent.phase = 'requested'; delete intent.image; store.set(KV.recovery.preparation, intent) } finally { store.close() }
+  f.remote.offline(true)
+  expect(await prepareCheckpointReceipts(options)).toEqual(prepared)
+  expect(f.read().hold?.state).toBe('staged')
+})
+
+it('refuses a resource revision that changed after audit without adopting a newer cut', async () => {
+  const f = await fixture(), audit = await auditCheckpointReceipts(f.audit), options = { ...f.audit, requestId: randomUUID(), auditId: audit.id }
+  f.remote.endpoint.journal.saveJob(f.job)
+  await expect(prepareCheckpointReceipts(options)).rejects.toThrow('changed')
+  const later = await auditCheckpointReceipts(f.audit)
+  await expect(prepareCheckpointReceipts({ ...options, auditId: later.id })).rejects.toThrow('request differs')
+  expect((await readdir(f.audit.destination)).some(name => name.startsWith('prepared-'))).toBe(false)
+})
+
+it('rechecks every resource after receipt collection and removes an unpublished image on revision change', async () => {
+  const f = await fixture({ pending: true }), audit = await auditCheckpointReceipts(f.audit), call = PublicationClient.prototype.call
+  vi.spyOn(PublicationClient.prototype, 'call').mockImplementation(async function<T>(this: PublicationClient, request: PublicationRpc, signal?: AbortSignal): Promise<T> {
+    const result = await call.call(this, request, signal)
+    if (request.op === 'recovery.receipt') f.publisher.service.journal.save(f.publisher.service.journal.get(f.publication.id)!)
+    return result as T
+  })
+  await expect(prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })).rejects.toThrow('changed')
+  expect((await readdir(f.audit.destination)).filter(name => name.startsWith('prepared-') || name.startsWith('.prepare-'))).toEqual([])
+  expect(f.read().hold?.state).toBe('staged'); expect(f.publisher.posts).toBe(1)
+})
+
+it('refuses an observation with changed attribution despite a matching inventory item', async () => {
+  const f = await fixture({ pending: true }), audit = await auditCheckpointReceipts(f.audit), call = RemoteClient.prototype.call
+  vi.spyOn(RemoteClient.prototype, 'call').mockImplementation(async function<T>(this: RemoteClient, request: RpcInput, signal?: AbortSignal): Promise<T> {
+    const result = await call.call(this, request, signal)
+    if (request.op !== 'recovery.receipt') return result as T
+    const value = InventoryReceipt.parse(result)
+    return { ...value, observation: { ...value.observation as object, owner: { kind: 'host', purpose: 'different' } } } as T
+  })
+  await expect(prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })).rejects.toThrow('original effect')
+  expect((await readdir(f.audit.destination)).filter(name => name.startsWith('prepared-') || name.startsWith('.prepare-'))).toEqual([])
+})
+
+it('cancels preparation before publishing and retains the original intent for retry', async () => {
+  const f = await fixture(), audit = await auditCheckpointReceipts(f.audit), call = PublicationClient.prototype.call, abort = new AbortController()
+  const spy = vi.spyOn(PublicationClient.prototype, 'call').mockImplementation(async function<T>(this: PublicationClient, request: PublicationRpc, signal?: AbortSignal): Promise<T> {
+    const result = await call.call(this, request, signal); if (request.op === 'recovery.receipt') abort.abort(new Error('Preparation cancelled')); return result as T
+  })
+  const options = { ...f.audit, requestId: randomUUID(), auditId: audit.id }
+  await expect(prepareCheckpointReceipts({ ...options, signal: abort.signal })).rejects.toThrow()
+  expect((await readdir(f.audit.destination)).filter(name => name.startsWith('prepared-') || name.startsWith('.prepare-'))).toEqual([])
+  spy.mockRestore(); expect((await prepareCheckpointReceipts(options)).manifest.auditId).toBe(audit.id)
+})
+
+it.each(['manifest', 'member', 'extra'] as const)('refuses a tampered prepared %s on verification and original-ID retry', async kind => {
+  const f = await fixture(), audit = await auditCheckpointReceipts(f.audit), options = { ...f.audit, requestId: randomUUID(), auditId: audit.id }
+  const prepared = await prepareCheckpointReceipts(options)
+  if (kind === 'manifest') {
+    const path = join(prepared.path, 'prepared.json'), value = JSON.parse(await readFile(path, 'utf8'))
+    value.manifest.applied.commands++; await writeFile(path, JSON.stringify(value))
+  } else if (kind === 'member') await appendFile(join(prepared.path, 'orchestrator.sqlite'), 'tampered')
+  else await writeFile(join(prepared.path, 'unlisted'), 'unlisted', { mode: 0o600 })
+  await expect(verifyReceiptImage(prepared.path, f.audit.keyFile)).rejects.toThrow()
+  await expect(prepareCheckpointReceipts(options)).rejects.toThrow()
   expect(f.read().hold?.state).toBe('staged')
 })

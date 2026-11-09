@@ -450,6 +450,8 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/recovery/index.ts` | Host-only maintenance plugin for checkpoint, verification, staging, held Session import, ownership reservation and receipt audit |
 | `src/recovery/checkpoint.ts` | Offline writer ownership, consistent manifests, database/world validation and execution-fenced staging |
 | `src/recovery/ownership.ts` | Verified checkpoint reservation, durable original intent, independent claimant replacement and private credential publication without activation |
+| `src/recovery/prepare.ts` | Original-ID held receipt preparation, revision-bound observation application and atomic recovery image publication |
+| `src/recovery/image.ts` | Authenticated prepared-state manifests, private member hashing and complete image verification |
 | `src/recovery/audit.ts` | Complete resource coverage, original receipt comparison, divergence/quiescence findings and durable held audit reports |
 | `src/recovery/state.ts` | Incremental logical SQLite comparison of held and authenticated state, excluding only hold/reservation/audit metadata |
 | `src/recovery/sessions.ts` | Public Harness logical Session export, full validation and non-destructive exact-prefix import |
@@ -501,7 +503,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/remote.spec.ts` | Real Harness/HTTP execution, acknowledgement loss, lease fencing, uncertain recovery, confined-helper semantics, output backpressure and opt-in native Linux qualification |
 | `tests/remote-harness.spec.ts` | Opt-in installed Harness qualification with a configured model, remote artifacts, restart, maintenance-plugin checkpoint/import/reservation and ownership-authority process handoff |
 | `tests/recovery.spec.ts` | Official JSONL round trips, exclusive ownership, corruption/cancellation refusal, fork imports, held restore, original reservation retries, competing restores and preserved remote receipts |
-| `tests/recovery-audit.spec.ts` | Real HTTP receipt inventories, late effects, original observations, revoked worlds, missing/mismatched resources, revision races, restart, cancellation and retained restore holds |
+| `tests/recovery-audit.spec.ts` | Real HTTP receipt inventories, late effects, original observations, revoked worlds, missing/mismatched resources, revision races, restart, cancellation, authenticated receipt preparation, interruption/retry, tamper refusal and retained restore holds |
 | `tests/remote-ownership.spec.ts` | Pre-dispatch persistence, concurrent attribution, lost responses, assignment fences, restart/cancel recovery and receipt mismatch refusal |
 | `tests/ownership.spec.ts` | Competing coordinators, all-resource barriers, claimant replacement/supersession, monotonic expiry/restart, endpoint handoff/outage and immutable receipt generations |
 | `tests/ownership-runtime.spec.ts` | Profile compatibility, owned Runtime startup/loss, managed command attribution, competing writers, startup cleanup and held-restore refusal |

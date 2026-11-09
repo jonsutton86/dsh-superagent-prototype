@@ -34,7 +34,7 @@ export const OwnershipView = z.object({ coordinatorId: id, epoch: z.number().int
     && value.owner?.coordinatorId === value.coordinatorId && value.owner.epoch === value.epoch, 'Invalid live ownership state')
 export type OwnershipView = z.infer<typeof OwnershipView>
 /** Recovery observations and explicit operator reconciliation do not issue new workspace authority or execute agent work. */
-const recoveryOperations = new Set(['identity', 'recovery.inventory', 'grant.get', 'grant.list', 'grant.status',
+const recoveryOperations = new Set(['identity', 'recovery.inventory', 'recovery.receipt', 'grant.get', 'grant.list', 'grant.status',
   'credential.list', 'job.catalog', 'operation.list', 'job.list', 'job.get', 'job.output', 'operation.get', 'job.reconcile', 'operation.reconcile'])
 export const requiresOwnership = (op: string): boolean => !recoveryOperations.has(op)
 export interface OwnershipBinding { authorityId: string; coordinatorId: string }

@@ -70,10 +70,16 @@ export class RemoteEndpoint {
           requestHash: worldBinding(this.journal.id, grant), phase: grant.enabled ? 'enabled' : 'disabled', settled: true, epoch: grant.epoch }) },
         { kind: 'command', table: 'remote_job', project: (job: RemoteJob) => ({ kind: 'command', id: job.id, requestHash: job.fingerprint,
           grantId: job.grantId, epoch: job.epoch, ownership: job.ownership, phase: job.phase, settled: job.quiescent === true,
-          resultHash: fingerprint(job.outcome ?? null) }) },
+          resultHash: fingerprint(job.outcome ?? null) }),
+          observe: (job: RemoteJob) => ({ id: job.id, grantId: job.grantId, epoch: job.epoch, fingerprint: job.fingerprint,
+            phase: job.phase, ownership: job.ownership, owner: job.request.owner, quiescent: job.quiescent, outcome: job.outcome,
+            failed: !!job.error, reconciledAt: job.reconciled?.at }) },
         { kind: 'mutation', table: 'remote_operation', project: (item: RemoteOperation) => ({ kind: 'mutation', id: item.id,
           requestHash: item.fingerprint, grantId: item.grantId, epoch: item.epoch, ownership: item.ownership, phase: item.phase,
-          settled: item.phase === 'settled' || !!item.reconciled, resultHash: fingerprint(item.value ?? item.error ?? null) }) },
+          settled: item.phase === 'settled' || !!item.reconciled, resultHash: fingerprint(item.value ?? item.error ?? null) }),
+          observe: (item: RemoteOperation) => ({ id: item.id, grantId: item.grantId, epoch: item.epoch, fingerprint: item.fingerprint,
+            phase: item.phase, ownership: item.ownership, owner: item.owner, quiescent: item.phase === 'settled' || !!item.reconciled,
+            failed: !!item.error, reconciledAt: item.reconciled?.at }) },
       ])
     }
     catch (error) { this.journal.close(); throw error }
@@ -406,11 +412,14 @@ export class RemoteEndpoint {
   private async dispatch(principal: Principal, request: RpcRequest): Promise<unknown> {
     switch (request.op) {
       case 'identity': return this.identity()
-      case 'recovery.inventory': {
+      case 'recovery.inventory':
+      case 'recovery.receipt': {
         this.admin(principal)
         const ownership = this.identity().ownership
         if (!ownership) throw new OwnershipError(409, 'ownership_required', 'Recovery inventories require independent ownership')
-        return this.inventory.page(request, { id: this.journal.id, kind: 'endpoint', ...ownership }, this.ownershipQuiescent())
+        const identity = { id: this.journal.id, kind: 'endpoint' as const, ...ownership }
+        return request.op === 'recovery.inventory' ? this.inventory.page(request, identity, this.ownershipQuiescent())
+          : this.inventory.receipt(request, identity, this.ownershipQuiescent())
       }
       case 'grant.get': this.admin(principal); return this.journal.grant(request.id)
       case 'grant.list': case 'operation.list': case 'job.catalog': {

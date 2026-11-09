@@ -1161,7 +1161,9 @@ describe('feishu event consumer', () => {
     const { ctx, health, store } = consumerSource(cli('never'))
     running = runFeishu(ctx, controller.signal)
     await vi.waitFor(() => expect(runs()).toBe(1), until)
-    const pid = Number(readFileSync(join(dir, 'pid'), 'utf8'))
+    // The shell writes runs before pid, and a newly truncated PID file can briefly be empty (Number('') is 0).
+    let pid = 0
+    await vi.waitFor(() => { pid = Number(readFileSync(join(dir, 'pid'), 'utf8')); expect(pid).toBeGreaterThan(0) }, until)
     await vi.advanceTimersByTimeAsync(45_000)
     await vi.waitFor(() => expect(health.feishu).toMatchObject({ state: 'error',
       detail: expect.stringContaining('did not become ready within 45 seconds') }), until)

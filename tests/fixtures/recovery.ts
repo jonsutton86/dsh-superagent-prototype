@@ -10,6 +10,7 @@ import { KV } from '../../src/kv.ts'
 import { OwnershipClient, type OwnershipConnection } from '../../src/ownership/client.ts'
 import type { OwnershipView } from '../../src/ownership/protocol.ts'
 import type { ReserveCheckpointOwnership } from '../../src/recovery/ownership.ts'
+import { verifyReceiptImage } from '../../src/recovery/image.ts'
 import type { AuditCheckpointReceipts } from '../../src/recovery/audit.ts'
 import { privateCredential } from '../../src/environments/endpoint-files.ts'
 import { randomUUID } from 'node:crypto'
@@ -29,11 +30,11 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
     running.kill('SIGINT'); const timer = setTimeout(() => running.kill('SIGKILL'), 8000)
     try { await exited } finally { clearTimeout(timer) }
   }
-  const run = async (mode: 'checkpoint' | 'verify' | 'stage' | 'import-sessions' | 'reserve-ownership' | 'audit-receipts', checkpoint?: string,
-    reservation?: Pick<ReserveCheckpointOwnership, 'requestId' | 'epoch' | 'generation' | 'authority'>) => {
+  const run = async (mode: 'checkpoint' | 'verify' | 'stage' | 'import-sessions' | 'reserve-ownership' | 'audit-receipts' | 'prepare-receipts', checkpoint?: string,
+    reservation?: Pick<ReserveCheckpointOwnership, 'requestId' | 'epoch' | 'generation' | 'authority'>, preparation?: { requestId: string; auditId: string }) => {
     const receiptFile = join(root, 'maintenance-receipt-' + invocation++ + '.json')
     const config = { mode, keyFile, outputDir, stateDir: input.stateDir, worldDirectories: input.worldDirectories, checkpoint, destination, receiptFile,
-      ...(reservation ? { reservation } : {}), ...(mode === 'audit-receipts' ? { audit: { authority: input.authority, ...input.audit } } : {}) }
+      ...(reservation ? { reservation } : {}), ...(preparation ? { preparation } : {}), ...(mode === 'audit-receipts' || mode === 'prepare-receipts' ? { audit: { authority: input.authority, ...input.audit } } : {}) }
     await writeFile(patch, JSON.stringify([
       { id: 'webserver', config: { host: '127.0.0.1', port: input.port } },
       { id: 'dsh-superagent', disabled: true },
@@ -48,6 +49,11 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
     child.stdout!.on('data', bytes => { log = (log + bytes.toString()).slice(-100_000) })
     child.stderr!.on('data', bytes => { log = (log + bytes.toString()).slice(-100_000) })
     try {
+      if (mode === 'prepare-receipts' && input.unrecordedPublications?.length) {
+        await vi.waitFor(() => expect(log).toContain('Preparing receipts requires the selected complete matched audit'), { timeout: 30_000, interval: 250 })
+        await expect(readFile(receiptFile, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+        return
+      }
       await vi.waitFor(async () => {
         if (child?.exitCode !== null && child?.exitCode !== undefined) throw new Error('Maintenance Harness exited before completion')
         const receipt = JSON.parse(await readFile(receiptFile, 'utf8'))
@@ -90,8 +96,10 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
       if (input.audit) {
         await run('audit-receipts', checkpoint); await run('audit-receipts', checkpoint)
         const store = new Store(join(destination, 'orchestrator.sqlite'))
+        let auditId: string
         try {
           const audit = store.get(KV.recovery.audit)!
+          auditId = audit.id
           expect(audit).toMatchObject({ phase: 'complete', complete: true, executionOwnership: false })
           expect(audit.resources).toHaveLength(2); expect(audit.matched).toBeGreaterThan(0)
           expect(audit.resources.every(resource => resource.quiescent)).toBe(true)
@@ -110,6 +118,22 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
           expect(audit.status).toBe(audit.issueCount ? 'blocked' : 'matched')
           expect(store.get(KV.recovery.hold)?.state).toBe('staged')
         } finally { store.close() }
+        const preparation = { requestId: randomUUID(), auditId: auditId! }
+        await run('prepare-receipts', checkpoint, undefined, preparation)
+        const preparedPath = join(destination, 'prepared-' + preparation.requestId)
+        if (!input.unrecordedPublications?.length) {
+          const image = await verifyReceiptImage(preparedPath, keyFile)
+          expect(image.executionOwnership).toBe(false); expect(image.applied.commands).toBeGreaterThan(0); expect(image.applied.publications).toBeGreaterThan(0)
+          expect(image.files.filter(file => file.kind === 'world')).toHaveLength(input.worlds)
+          expect(image.files.filter(file => file.kind === 'session')).toHaveLength(manifest.sessions.length)
+          await run('prepare-receipts', checkpoint, undefined, preparation)
+          expect(await verifyReceiptImage(preparedPath, keyFile)).toEqual(image)
+          const prepared = new DatabaseSync(join(preparedPath, 'orchestrator.sqlite'), { readOnly: true })
+          try {
+            expect(JSON.parse(String(prepared.prepare('SELECT value FROM kv WHERE key=?').get(KV.recovery.hold)!.value))).toMatchObject({ state: 'prepared', requestId: preparation.requestId })
+            for (const row of prepared.prepare('SELECT value FROM channel_publication').all()) expect(JSON.parse(String(row.value))).toMatchObject({ phase: 'observed', receipt: { phase: 'sent' } })
+          } finally { prepared.close() }
+        } else expect((await readdir(destination)).some(name => name.startsWith('prepared-'))).toBe(false)
       }
     }
   } finally { await stop() }

@@ -486,10 +486,12 @@ async function remoteMission(native: boolean) {
   expect(receipts.status).toBe(200); expect(receipts.body).toMatchObject({ items: [expect.objectContaining({ quiescent: true })], nextOffset: 1, blocked: 0 })
   expect((await host.api('GET', 'execution')).status).toBe(200)
   expect((await host.api('GET', 'tickets/missing/execution')).status).toBe(404)
-  const long = await host.withTool(id, 'bash', async () => host.ctx.subprocess.spawn({ argv: ['/bin/sh', '-c', 'sleep 30'],
+  const longScript = 'printf ready; sleep 30'
+  const long = await host.withTool(id, 'bash', async () => host.ctx.subprocess.spawn({ argv: ['/bin/sh', '-c', longScript],
     cwd: ticket.execution!.directory, graceMs: 100, stdio: { stdin: 'ignore', stdout: { maxBytes: 128 }, stderr: { maxBytes: 128 } } }))
-  await vi.waitFor(() => expect(h.endpoint.journal.jobs().some(job => job.request.argv.includes('sleep 30'))).toBe(true))
-  const runningId = h.endpoint.journal.jobs().find(job => job.request.argv.includes('sleep 30'))!.id
+  // An accepted receipt precedes native process dispatch. This scenario cancels an actually running command.
+  await vi.waitFor(() => expect(long.collected.stdout!.readFrom(0).text).toBe('ready'), { timeout: 10_000 })
+  const runningId = h.endpoint.journal.jobs().find(job => job.request.argv.includes(longScript))!.id
   await host.runTool(id, 'orchestrator_report', { state: 'ready', summary: 'Remote result is ready for review' })
   expect(host.runtime.library.read(artifact.id).content).toBe('remote result')
   expect(host.runtime.workspace.get(mission.id).actions[0]!.status).toBe('review')

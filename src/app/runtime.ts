@@ -10,8 +10,9 @@ import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-skill'
 import type {} from '@deepseek-ai/dsh-subprocess'
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { lockSync } from 'proper-lockfile'
 import { Engine, canStop, key, reasonText, type EngineForSettings, type ReceiveResult, type Ticket, type Trigger } from '../core/index.ts'
 import { allowedSender, settingsPolicy } from '../policy.ts'
@@ -125,8 +126,18 @@ export class Runtime extends Service implements SourceHost {
     this.releaseLock = async () => { release() }
     let opened: Store | undefined
     try {
+      // A held, authenticated image must be refused before Store changes journal mode or migrates any bytes.
+      const path = join(machine.stateDir, 'orchestrator.sqlite')
+      if (existsSync(path)) {
+        const existing = new DatabaseSync(path, { readOnly: true })
+        try {
+          if (existing.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='kv'").get()
+            && JSON.parse(String(existing.prepare('SELECT value FROM kv WHERE key=?').get(KV.recovery.hold)?.value ?? 'null')))
+            throw new Error('This is a staged checkpoint restore. Reconcile coordinator ownership, Sessions and external effects before enabling execution.')
+        } finally { existing.close() }
+      }
       const report = (error: unknown) => { ctx.logger.warn('dsh-superagent: %s', String(error)) }
-      const store = opened = this.store = new Store(join(machine.stateDir, 'orchestrator.sqlite'), report)
+      const store = opened = this.store = new Store(path, report)
       if (store.get(KV.recovery.hold)) throw new Error('This is a staged checkpoint restore. Reconcile coordinator ownership, Sessions and external effects before enabling execution.')
       const world = remoteWorld(ctx)
       if (machine.ownership && machine.executionMode !== 'local') throw new Error('Ownership-controlled repository publication requires a fenced publication service; use a general-mission profile until that integration is available')
