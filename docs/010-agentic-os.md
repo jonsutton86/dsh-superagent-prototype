@@ -193,3 +193,8 @@ cases (including the independent authority process restart/handoff), and 1,402 L
 four builds passed. Those model cases qualified existing coordinator workflows. The subsequent Runtime increment in
 `025-runtime-ownership.md` connects managed and dedicated providers to a shared process lease, stops work on loss and
 refuses unfenced local execution. Publication integration and restored activation remain open.
+
+Runtime qualification: code `ba17edd5fe09d9276b8d27168188f7f6d9b83abe` passed 1,406 local tests, all four installed
+Harness model scenarios, and 1,408 tests with native confinement in
+[Linux run 42537715231](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42537715231).
+Typechecking and all builds passed. The full product goal remains in progress.

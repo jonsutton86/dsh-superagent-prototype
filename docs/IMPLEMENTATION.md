@@ -33,6 +33,10 @@ separate-state competing coordinators cannot execute concurrently. Existing prof
 missions require matching remote endpoints; external account publication requires its own fenced integration. Staged
 restore remains held before acquisition. Publication, clean-host activation/failover and the full product ledger stay open.
 
+Verification: code `ba17edd5fe09d9276b8d27168188f7f6d9b83abe` passed 1,406 local tests, typechecking and all builds,
+all four installed-Harness model scenarios, and 1,408 native Linux tests in
+[run 42537715231](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42537715231).
+
 ## Implemented increment: ownership authority and endpoint fencing
 
 [024 Ownership and resource fencing](024-ownership-fencing.md) adds an independent Harness authority, process-instance

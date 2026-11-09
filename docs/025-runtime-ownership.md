@@ -90,3 +90,12 @@ The opt-in `tests/remote-harness.spec.ts` includes owned dedicated and managed v
 with the configured model, reject the bootstrap owner's stale proof, retain persona/Session/world bindings across owner
 changes, inspect original receipt stamps, resume a surviving managed world and preserve held checkpoint/import behavior.
 macOS qualification tests composition with a test-only unconfined endpoint; production confinement requires Linux.
+
+Verification on 2026-11-08: code `ba17edd5fe09d9276b8d27168188f7f6d9b83abe` passed local `pnpm check` with
+1,406 tests, typechecking and all four builds. The same code passed
+[Linux run 42537715231](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42537715231) with
+1,408 tests, including all six Runtime ownership cases with native endpoint confinement, typechecking and all builds.
+The installed Harness 0.2.1-rc.3 / DeepSeek Flash qualification passed all four dedicated/managed variants in 306.08 seconds.
+Both ownership-enabled variants passed again against the committed build in 132.91 seconds, including real persona work,
+child execution, ownership changes, managed-world resume and held checkpoint/Session import. These results qualify this
+increment; they do not qualify restored activation or external publication fencing.
