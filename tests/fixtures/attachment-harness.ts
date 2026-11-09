@@ -16,7 +16,7 @@ export async function qualifyAttachments(api: Api, port: number, task: string): 
     const id = randomUUID(), body = { requestId: id, name: source.name, bytes: source.bytes.length, mediaType: source.mediaType, sha256: sha(source.bytes) }
     await api('uploads', body); const chunk = { offset: 0, data: source.bytes.toString('base64') }
     await api(`uploads/${id}/chunks`, chunk); await api(`uploads/${id}/chunks`, chunk)
-    expect((await api(`uploads/${id}/finish`)).phase).toBe('ready'); expect((await api('uploads', body)).phase).toBe('ready'); ids.push(id)
+    expect((await api(`uploads/${id}/finish`, {})).phase).toBe('ready'); expect((await api('uploads', body)).phase).toBe('ready'); ids.push(id)
   }
   const view = await api(`inbox/${task}`), body = { requestId: randomUUID(), revision: view.item.revision,
     text: 'The requested evidence.csv and pixel.png are attached. Copy the CSV, verify the value sum is 42, then continue the original mission.', attachments: ids }
