@@ -44,6 +44,13 @@ it('blocks inherited and late agent-local execution through real Harness guards 
   expect(h.execute).toHaveBeenCalledTimes(3)
 })
 
+it('uses the Harness creation barrier without waiting for its own serial initialization listener', async () => {
+  const h = await fixture(), idle = vi.spyOn(h.agent, 'whenIdle').mockImplementation(async () => { throw new Error('Creation cannot wait for itself') })
+  await h.authority.prepare(true)
+  expect(idle).not.toHaveBeenCalled()
+  await h.call('orchestrator_read'); expect(h.execute).toHaveBeenCalledOnce()
+})
+
 it('retires tracked legacy coordinator jobs and descendants without touching worker jobs', async () => {
   const h = await fixture(), child = h.make('old-router-child'), rootJob = h.jobs.run(h.agent.id), childJob = h.jobs.run(child.id), workerJob = h.jobs.run(h.worker.id)
   h.ctx.reflect.provide('subagents', { listChildren: async (id: string) => id === h.agent.id ? [{ id: child.id }] : [],

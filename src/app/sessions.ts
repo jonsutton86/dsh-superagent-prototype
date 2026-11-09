@@ -114,7 +114,7 @@ export class Sessions {
       this.retryHealth.observe(agent.id, event)
       this.updateModelHealth()
     })
-    ctx.on('agent/created', async ({ agent }) => { await this.decorate(agent); return undefined })
+    ctx.on('agent/created', async ({ agent }) => { await this.decorate(agent, true); return undefined })
     // Opening a Session in DSH's Web UI before its first turn may select the default preset for it: select ours again. After
     // its first turn DSH refuses any selection, which leaves it as it is.
     ctx.inject(['agentPresets'], child => {
@@ -277,12 +277,12 @@ export class Sessions {
     const ticketId = ticketOfSession(agent.id)
     return ticketId === undefined ? undefined : this.host.store.tickets.get(ticketId)
   }
-  private decorate(agent: Agent): Promise<void> {
+  private decorate(agent: Agent, initializing = false): Promise<void> {
     const pending = this.decorating.get(agent); if (pending) return pending
-    const operation = this.decorateAgent(agent).finally(() => this.decorating.delete(agent))
+    const operation = this.decorateAgent(agent, initializing).finally(() => this.decorating.delete(agent))
     this.decorating.set(agent, operation); return operation
   }
-  private async decorateAgent(agent: Agent): Promise<void> {
+  private async decorateAgent(agent: Agent, initializing: boolean): Promise<void> {
     this.installWorldGuard(agent)
     const existing = this.bindings.get(agent)
     if (existing) { existing.router?.assertReady(); return }
@@ -296,7 +296,7 @@ export class Sessions {
     if (master) {
       binding.router = new RouterAuthority(this.ctx, agent, definitions.map(tool => tool.name), host.store, host.lifetime)
       binding.disposers.push(binding.router.dispose)
-      await binding.router.prepare()
+      await binding.router.prepare(initializing)
     }
     this.retryHealth.restore(agent.id, agent.session.snapshotEvents())
     if (agent.status === 'idle') this.retryHealth.clear(agent.id)

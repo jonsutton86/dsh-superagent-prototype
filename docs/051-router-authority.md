@@ -30,6 +30,9 @@ readers, scopes and bounds.
 ## Upgrade and recovery
 
 The deny guard is installed before asynchronous preparation. Concurrent decoration shares one preparation promise.
+During Harness's serial `agent/created` callback, its creation barrier already holds queued input; the listener must not
+wait for its own agent to become idle. Preparation uses that barrier for the newly created coordinator while still
+retiring tracked jobs and descendants. An already loaded coordinator is cancelled and awaited normally.
 The host cancels an active legacy coordinator turn while retaining inbox input, waits for that turn to settle, inventories
 its known descendants, and records their coordinator lineage before retiring their tracked jobs. Loaded descendants receive
 deny guards, and `session-router-owner:` anchors retain that classification across resume with unloaded parents. Worker-owned

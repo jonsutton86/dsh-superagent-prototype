@@ -3,11 +3,11 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { Store } from './store.ts'
 import { KV } from '../kv.ts'
-import { killJobs, runningJobs, stopSubagents, until } from '../executor/background.ts'
+import { killJobs, runningJobs, until } from '../executor/background.ts'
 
 export const ROUTER_ONLY = 'The coordinator has routing authority only. Use orchestrator_read, orchestrator_eval_read and workspace recall for context; dispatch authorized work to a ticket worker.'
 export const ROUTER_CHILD = 'Coordinator descendants cannot execute work. Start an authorized ticket; worker-local teams remain available.'
-type Subagents = { listChildren(id: string): Promise<readonly { id: string }[]> }
+type Subagents = { listChildren(id: string): Promise<readonly { id: string }[]>; drainChildren(parent: Agent, children: readonly string[]): Promise<void> }
 
 /** Session identity, rather than a selectable preset or prompt, determines the coordinator's execution boundary. */
 export class RouterAuthority {
@@ -24,17 +24,18 @@ export class RouterAuthority {
   }
   assertReady(): void { if (!this.ready) throw new Error(this.problem) }
   /** Retire known legacy router jobs/children before routing resumes; a timeout never proves quiescence. */
-  async prepare(): Promise<void> {
+  async prepare(initializing = false): Promise<void> {
     try {
       const signal = AbortSignal.any([this.lifetime, AbortSignal.timeout(15_000)])
-      if (this.agent.status !== 'idle') this.agent.cancel({ kind: 'user' }, { keepInbox: true })
-      if (await until(this.agent.whenIdle(), signal) === false || this.agent.status !== 'idle')
+      // Harness holds queued input during serial agent/created listeners. Waiting for our own creation to settle would deadlock.
+      if (!initializing && this.agent.status !== 'idle') this.agent.cancel({ kind: 'user' }, { keepInbox: true })
+      if (!initializing && await until(this.agent.whenIdle(), signal) === false || this.agent.status !== 'idle')
         throw new Error('Legacy coordinator turn has not quiesced; inspect it before resuming')
       const subagents = this.ctx.get('subagents') as Subagents | undefined, owners: string[] = [this.agent.id], seen = new Set(owners)
       for (let position = 0; position < owners.length; position++) {
         signal.throwIfAborted()
         const owner = this.ctx.agents.get(owners[position]! as SessionId)
-        if (owner && (await until(owner.whenIdle(), signal) === false || owner.status !== 'idle'))
+        if (owner && !(initializing && owner === this.agent) && (await until(owner.whenIdle(), signal) === false || owner.status !== 'idle'))
           throw new Error('Legacy coordinator descendant turn has not quiesced; inspect it before resuming')
         const children = await until(subagents?.listChildren(owners[position]!) ?? Promise.resolve([]), signal)
         if (children === false) throw new Error('Legacy coordinator descendant inventory is unavailable; inspect it before resuming')
@@ -49,8 +50,12 @@ export class RouterAuthority {
       signal.throwIfAborted()
       const stopped = await until((async () => {
         await Promise.all(owners.map(id => killJobs(this.ctx, id, 'Coordinator execution authority retired')))
-        await stopSubagents(this.ctx, this.agent, true)
-        await this.agent.whenIdle()
+        const children = owners.slice(1).filter(id => this.ctx.agents.get(id as SessionId))
+        if (children.length) await subagents!.drainChildren(this.agent, children)
+        if (!initializing) {
+          if (this.agent.status !== 'idle') this.agent.cancel({ kind: 'user' }, { keepInbox: true })
+          await this.agent.whenIdle()
+        }
       })(), signal)
       if (stopped === false || this.agent.status !== 'idle' || owners.some(id => runningJobs(this.ctx, id).length)
         || owners.slice(1).some(id => { const agent = this.ctx.agents.get(id as SessionId); return agent && agent.status !== 'idle' }))
