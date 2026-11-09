@@ -16,7 +16,7 @@ import { Runtime } from '../src/app/runtime.ts'
 import { testMachine } from './fixtures/deployment.ts'
 import { createRecoveryKey } from '../src/recovery/crypto.ts'
 import { createCheckpoint, importCheckpointSessions, stageCheckpoint, verifyCheckpoint } from '../src/recovery/checkpoint.ts'
-import { exportSession, importSession, inspectSession, ownSessions } from '../src/recovery/sessions.ts'
+import { exportSession, importSession, inspectSession, ownSessions, withVerifiedSessionBackend } from '../src/recovery/sessions.ts'
 import { WorldJournal, worldBinding } from '../src/remote/world-journal.ts'
 import type { RevocationReceipt } from '../src/remote/protocol.ts'
 import { remoteFixture } from './fixtures/remote.ts'
@@ -264,6 +264,24 @@ it('imports real Harness logs and fork metadata, retries an exact prefix, and re
   const prefix = await target.create(meta, { inheritedEventCount: SessionLogOffset(200) }); await prefix.append(initial); await prefix.close()
   await importSession(target, file, archive, signal()); await importSession(target, file, archive, signal())
   const empty = await backend(join(f.directory, 'empty-fork-target')); await importSession(empty, file, archive, signal())
+  const unrelated = await empty.create(header('unrelated')); await unrelated.flush(); await unrelated.close()
+  const create = vi.spyOn(empty, 'create'), opened = empty.open.bind(empty), reads: number[] = []
+  vi.spyOn(empty, 'open').mockImplementation(async (...args) => {
+    const handle = await opened(...args), read = handle.read.bind(handle)
+    vi.spyOn(handle, 'append').mockImplementation(async () => { throw new Error('Verification must not append') })
+    vi.spyOn(handle, 'read').mockImplementation(async (offset, length, options) => {
+      reads.push(length!); return read(offset, Math.min(length!, 17), options)
+    })
+    return handle
+  })
+  await withVerifiedSessionBackend(empty, f.directory, [{ ...archive, member: 'archive.jsonl' }], signal(), async (summary, recheck) => {
+    expect(summary).toEqual({ sessions: 1, events: 260 })
+    await expect(opened(id, 'write')).rejects.toThrow()
+    await recheck()
+  })
+  expect(create).not.toHaveBeenCalled(); expect(Math.max(...reads)).toBeLessThanOrEqual(128)
+  vi.mocked(empty.open).mockRestore()
+  const released = await opened(id, 'write'); await released.close()
   const complete = await empty.open(id, 'read'); expect((await complete.read()).events).toHaveLength(260); await complete.close()
   const restored = await target.open(id, 'write')
   expect((await restored.read()).events).toHaveLength(260)
@@ -273,6 +291,109 @@ it('imports real Harness logs and fork metadata, retries an exact prefix, and re
   const conflict = await different.create(meta, { inheritedEventCount: SessionLogOffset(200) }); await conflict.append([event(0, 'Different history'), ...initial.slice(1)]); await conflict.close()
   await expect(importSession(different, file, archive, signal())).rejects.toThrow('diverges')
   const unchanged = await different.open(id, 'read'); expect((await unchanged.read()).events).toHaveLength(201); await unchanged.close()
+})
+
+async function sessionVerificationFixture() {
+  const f = await fixture(), owned = await ownSessions(f.persistence, ['recovery-master'], signal()), file = join(f.directory, 'session.bin')
+  const archive = await exportSession(owned[0]!, file, 'session.bin', signal()); await owned[0]!.close()
+  const target = await backend(join(f.directory, 'destination-sessions'))
+  return { ...f, file, archive, target }
+}
+
+it.each(['missing', 'shorter', 'diverges', 'newer', 'cwd', 'parent', 'preset', 'depth'] as const)('refuses %s destination Session history without repairing it', async kind => {
+  const f = await sessionVerificationFixture(), changes: Partial<SessionHeader> = kind === 'cwd' ? { cwd: '/different' }
+    : kind === 'parent' ? { parentSession: SessionId('different-parent') } : kind === 'preset' ? { agentPreset: 'different-preset' }
+      : kind === 'depth' ? { delegationDepth: 1 } : {}
+  if (kind !== 'missing') {
+    const writer = await f.target.create({ ...f.archive.header, ...changes })
+    if (kind !== 'shorter') await writer.append([event(0, kind === 'diverges' ? 'different' : 'private archive evidence')])
+    if (kind === 'newer') await writer.append([event(1)])
+    await writer.flush(); await writer.close()
+  }
+  const action = vi.fn(), create = vi.spyOn(f.target, 'create')
+  const error = ['cwd', 'parent', 'preset', 'depth'].includes(kind) ? 'metadata differs' : kind
+  await expect(withVerifiedSessionBackend(f.target, f.directory, [f.archive], signal(), action)).rejects.toThrow(error)
+  expect(action).not.toHaveBeenCalled(); expect(create).not.toHaveBeenCalled()
+  if (kind !== 'missing') {
+    const writer = await f.target.open(SessionId('recovery-master'), 'write')
+    expect((await writer.read()).events).toHaveLength(kind === 'shorter' ? 0 : kind === 'newer' ? 2 : 1)
+    await writer.close()
+  }
+})
+
+it('requires the exact destination inherited boundary before reading history', async () => {
+  const f = await sessionVerificationFixture(), meta = header('fork', { parentSession: SessionId('recovery-master'), isSeeded: true })
+  const source = await f.persistence.create(meta, { inheritedEventCount: SessionLogOffset(1) })
+  await source.append([event(0), { type: 'session/end-seed', seq: SessionSeq(1), time: 1, data: { inherited: true } }])
+  const archive = await exportSession(source, join(f.directory, 'fork.bin'), 'fork.bin', signal()); await source.close()
+  const different = await f.target.create(meta, { inheritedEventCount: SessionLogOffset(2) })
+  await different.append([event(0), event(1), { type: 'session/end-seed', seq: SessionSeq(2), time: 2, data: { inherited: true } }]); await different.close()
+  await expect(withVerifiedSessionBackend(f.target, f.directory, [archive], signal(), vi.fn())).rejects.toThrow('inherited prefix differs')
+})
+
+it('refuses extra descendants, including descendants created after comparison, while permitting unrelated Sessions', async () => {
+  const f = await sessionVerificationFixture(); await importSession(f.target, f.file, f.archive, signal())
+  const unrelated = await f.target.create(header('independent')); await unrelated.flush(); await unrelated.close()
+  await expect(withVerifiedSessionBackend(f.target, f.directory, [f.archive], signal(), async (_, recheck) => {
+    const child = await f.target.create(header('late-child', { parentSession: SessionId('recovery-master') })); await child.flush(); await child.close()
+    await recheck()
+  })).rejects.toThrow('extra related descendant')
+  await expect(withVerifiedSessionBackend(f.target, f.directory, [f.archive], signal(), vi.fn())).rejects.toThrow('extra related descendant')
+  const released = await f.target.open(SessionId('recovery-master'), 'write'); await released.close()
+})
+
+it('releases all previously acquired destination writers when another Session is already owned', async () => {
+  const f = await sessionVerificationFixture(); await importSession(f.target, f.file, f.archive, signal())
+  const source = await f.persistence.create(header('z-child', { parentSession: SessionId('recovery-master') }))
+  await source.append([event(0)])
+  const archive = await exportSession(source, join(f.directory, 'child.bin'), 'child.bin', signal()); await source.close()
+  await importSession(f.target, join(f.directory, 'child.bin'), archive, signal())
+  const child = await f.target.open(SessionId('z-child'), 'write')
+  try {
+    await expect(withVerifiedSessionBackend(f.target, f.directory, [f.archive, archive], signal(), vi.fn())).rejects.toThrow()
+    const released = await f.target.open(SessionId('recovery-master'), 'write'); await released.close()
+  } finally { await child.close() }
+})
+
+it.each(['read', 'action'] as const)('releases destination writers after cancellation during %s', async phase => {
+  const f = await sessionVerificationFixture(); await importSession(f.target, f.file, f.archive, signal())
+  const abort = new AbortController(), opened = f.target.open.bind(f.target)
+  if (phase === 'read') vi.spyOn(f.target, 'open').mockImplementation(async (...args) => {
+    const handle = await opened(...args), read = handle.read.bind(handle)
+    vi.spyOn(handle, 'read').mockImplementation(async (...args) => { abort.abort(new Error('Cancelled verification')); return read(...args) })
+    return handle
+  })
+  await expect(withVerifiedSessionBackend(f.target, f.directory, [f.archive], abort.signal, async (_, recheck) => {
+    abort.abort(new Error('Cancelled verification')); await recheck()
+  })).rejects.toThrow('Cancelled verification')
+  const released = await opened(SessionId('recovery-master'), 'write'); await released.close()
+})
+
+it('rejects corrupted archives before claiming destination writers and rechecks bytes during comparison', async () => {
+  const f = await sessionVerificationFixture(); await importSession(f.target, f.file, f.archive, signal())
+  const original = await readFile(f.file, 'utf8'), open = vi.spyOn(f.target, 'open')
+  await writeFile(f.file, original.slice(0, -1))
+  await expect(withVerifiedSessionBackend(f.target, f.directory, [f.archive], signal(), vi.fn())).rejects.toThrow('digest')
+  expect(open).not.toHaveBeenCalled(); open.mockRestore(); await writeFile(f.file, original)
+  const opened = f.target.open.bind(f.target)
+  vi.spyOn(f.target, 'open').mockImplementation(async (...args) => {
+    const handle = await opened(...args); await writeFile(f.file, original.slice(0, -1)); return handle
+  })
+  await expect(withVerifiedSessionBackend(f.target, f.directory, [f.archive], signal(), vi.fn())).rejects.toThrow('digest')
+  const released = await opened(SessionId('recovery-master'), 'write'); await released.close()
+})
+
+it('refuses replacement of the selected backend while its original writer handles remain held', async () => {
+  const f = await sessionVerificationFixture(); await importSession(f.target, f.file, f.archive, signal())
+  let identity = f.target.identity
+  const persistence = new Proxy(f.target, { get(target, property) {
+    if (property === 'identity') return identity
+    const value = Reflect.get(target, property); return typeof value === 'function' ? value.bind(target) : value
+  } })
+  await expect(withVerifiedSessionBackend(persistence, f.directory, [f.archive], signal(), async (_, recheck) => {
+    identity = Symbol('replacement backend'); await recheck()
+  })).rejects.toThrow('backend changed')
+  const released = await f.target.open(SessionId('recovery-master'), 'write'); await released.close()
 })
 
 it('validates a complete Session archive before creating destination history and releases earlier claims on conflict', async () => {

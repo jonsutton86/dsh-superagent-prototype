@@ -31,7 +31,7 @@ Artifact and channel publication rows receive their exact independent terminal r
 attempts and withdrawn state remain. Channel receipt settlement uses the existing Outbox repository and original message
 ID, preserving its idempotence and delivery ordering. Preparation does not finish tasks, invent model/tool Session events,
 change source cursors or rewrite administrative command history. Session archive files remain unchanged; importing and
-validating a live Session backend is a separate recovery requirement.
+validating a live Session backend is specified in `035-session-backend-recovery.md` and is now required during preparation.
 
 ## Maintenance operation
 
@@ -73,6 +73,10 @@ connection catalog as the audit; omit publication only when no original publishe
 remain private owned files outside every recorded execution workspace. The exported `prepareCheckpointReceipts` helper
 provides the same operation; `verifyReceiptImage` authenticates an existing prepared image. No model tool or management
 HTTP mutation exposes this maintenance capability.
+
+Select the imported destination Session backend in the maintenance profile. Preparation now verifies its exact logical
+history under exclusive Session writer handles; the exported helper requires `persistence`. See
+`035-session-backend-recovery.md` for selection, catalog-race limits and the historical scope of original-ID retries.
 
 ## Original-request retries and atomic publication
 

@@ -3,6 +3,7 @@ import { realpathSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { backup, DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
+import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import { Store } from '../app/store.ts'
 import type { OutboundMessage } from '../core/index.ts'
 import { KV } from '../kv.ts'
@@ -27,8 +28,9 @@ import type { RecoveryIntent } from './ownership.ts'
 import type { AuditCheckpointReceipts, ReceiptAudit } from './audit.ts'
 import { recoveryKey } from './crypto.ts'
 import { ReceiptImage, recoveryFileDigest, sealReceiptImage, syncRecoveryPath, verifyReceiptImage } from './image.ts'
+import { withVerifiedSessionBackend, type SessionArchive } from './sessions.ts'
 
-export interface PrepareCheckpointReceipts extends AuditCheckpointReceipts { requestId: string; auditId: string }
+export interface PrepareCheckpointReceipts extends AuditCheckpointReceipts { requestId: string; auditId: string; persistence: SessionPersistence }
 export interface ReceiptPreparation {
   requestId: string; auditId: string; requestHash: string; phase: 'requested' | 'prepared'; audit: ReceiptAudit; image?: ReceiptImage
 }
@@ -134,110 +136,113 @@ export async function prepareCheckpointReceipts(options: PrepareCheckpointReceip
       return value
     }
     await validate()
-    const administration = { verified: 0, recovered: 0, superseded: 0 }
-    const revocations = { verified: 0, recovered: 0 }
-    const worlds: WorldRecord[] = []
-    let configurationChecks: WorldConfigurationCheck[] = []
-    const staging = await mkdtemp(join(root, '.prepare-')), applied = { commands: 0, mutations: 0, publications: 0 }
-    try {
-      const storePath = join(staging, 'orchestrator.sqlite'); await backup(db, storePath); await chmod(storePath, 0o600)
-      for (const file of manifest.files.filter(file => file.kind !== 'store')) { signal.throwIfAborted(); await copyFile(join(archive, file.member), join(staging, file.member)) }
-      for (const file of manifest.files.filter(file => file.kind === 'world')) {
-        const world = new DatabaseSync(join(staging, file.member)); world.exec('PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL')
-        try {
-          const record = JSON.parse(String(world.prepare('SELECT value FROM execution_world WHERE id=1').get()!.value)) as WorldRecord
-          worlds.push(record)
-          if (record.revocation) {
-            const resource = audit.resources.find(resource => resource.identity.id === record.endpointId), call = administrators.get(record.endpointId)
-            if (!resource || !call) throw new Error('Original revocation lacks its audited resource')
-            const observed = RevocationObservation.parse(await call({ op: 'recovery.revocation', revision: resource.revision, ...revocationRequest(record) }))
-            if (observed.revision !== resource.revision || fingerprint(observed.identity) !== fingerprint(resource.identity)) throw new Error('Prepared revocation resource identity differs')
-            const result = observeRevocation(record, observed)
-            const updated = world.prepare('UPDATE execution_world SET value=? WHERE id=1').run(JSON.stringify(result))
-            if (Number(updated.changes) !== 1) throw new Error('Prepared world revocation row is missing')
-            revocations.verified++; if (record.phase !== 'revoked' || !record.revocation.receipt?.quiescent) revocations.recovered++
-          } else if (record.phase !== 'active') throw new Error('Prepared revoked world lacks its original intent')
-          const originals = [...rows<ExecutionReceipt>(world, 'execution_effect')], effects = new ExecutionEffects(world)
-          for (const original of originals) {
-            signal.throwIfAborted(); if (original.phase === 'refused' && original.quiescent === true) continue
-            const remote = await receipt(record.endpointId, original.kind, original.id, original.fingerprint), value = observation.parse(remote.observation)
-            if (value.id !== original.id || value.grantId !== original.grantId || value.epoch !== original.epoch || value.fingerprint !== original.fingerprint
-              || fingerprint(value.owner) !== fingerprint(original.owner) || value.phase !== remote.item.phase || value.grantId !== remote.item.grantId
-              || value.epoch !== remote.item.epoch || !sameOwner(value.ownership, remote.item.ownership!)
-              || original.ownership && !sameOwner(value.ownership, original.ownership)
-              || original.quiescent && original.phase !== 'unknown' && original.phase !== value.phase
-              || original.kind === 'command' && (fingerprint(value.outcome ?? null) !== remote.item.resultHash || original.outcome && fingerprint(original.outcome) !== fingerprint(value.outcome))
-              || original.kind === 'mutation' && (value.outcome !== undefined || value.phase !== 'settled' && !value.reconciledAt))
-              throw new Error('Prepared endpoint observation differs from the original effect')
-            const reconciled = value.reconciledAt ? { at: value.reconciledAt, note: 'Independent endpoint reconciliation verified during held recovery' } : undefined
-            effects.observed({ op: original.kind === 'command' ? 'job.get' : 'operation.get', id: original.id }, { ...value, reconciled,
-              ...(original.kind === 'command' ? { request: { owner: value.owner }, error: value.failed ? 'Independent endpoint recorded a command failure' : undefined }
-                : { error: value.failed ? { code: 'recovered_failure', message: 'Independent endpoint recorded a mutation failure' } : undefined }) })
-            applied[original.kind === 'command' ? 'commands' : 'mutations']++
-          }
-          effects.close()
-        } finally { world.close() }
-      }
-      const store = new Store(storePath)
+    return withVerifiedSessionBackend(options.persistence, archive, manifest.sessions as unknown as SessionArchive[], signal, async (sessionBackend, recheckSessions) => {
+      const administration = { verified: 0, recovered: 0, superseded: 0 }
+      const revocations = { verified: 0, recovered: 0 }
+      const worlds: WorldRecord[] = []
+      let configurationChecks: WorldConfigurationCheck[] = []
+      const staging = await mkdtemp(join(root, '.prepare-')), applied = { commands: 0, mutations: 0, publications: 0 }
       try {
-        configurationChecks = worldConfigurations(options.worlds ?? [], store.db, worlds)
+        const storePath = join(staging, 'orchestrator.sqlite'); await backup(db, storePath); await chmod(storePath, 0o600)
+        for (const file of manifest.files.filter(file => file.kind !== 'store')) { signal.throwIfAborted(); await copyFile(join(archive, file.member), join(staging, file.member)) }
+        for (const file of manifest.files.filter(file => file.kind === 'world')) {
+          const world = new DatabaseSync(join(staging, file.member)); world.exec('PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL')
+          try {
+            const record = JSON.parse(String(world.prepare('SELECT value FROM execution_world WHERE id=1').get()!.value)) as WorldRecord
+            worlds.push(record)
+            if (record.revocation) {
+              const resource = audit.resources.find(resource => resource.identity.id === record.endpointId), call = administrators.get(record.endpointId)
+              if (!resource || !call) throw new Error('Original revocation lacks its audited resource')
+              const observed = RevocationObservation.parse(await call({ op: 'recovery.revocation', revision: resource.revision, ...revocationRequest(record) }))
+              if (observed.revision !== resource.revision || fingerprint(observed.identity) !== fingerprint(resource.identity)) throw new Error('Prepared revocation resource identity differs')
+              const result = observeRevocation(record, observed)
+              const updated = world.prepare('UPDATE execution_world SET value=? WHERE id=1').run(JSON.stringify(result))
+              if (Number(updated.changes) !== 1) throw new Error('Prepared world revocation row is missing')
+              revocations.verified++; if (record.phase !== 'revoked' || !record.revocation.receipt?.quiescent) revocations.recovered++
+            } else if (record.phase !== 'active') throw new Error('Prepared revoked world lacks its original intent')
+            const originals = [...rows<ExecutionReceipt>(world, 'execution_effect')], effects = new ExecutionEffects(world)
+            for (const original of originals) {
+              signal.throwIfAborted(); if (original.phase === 'refused' && original.quiescent === true) continue
+              const remote = await receipt(record.endpointId, original.kind, original.id, original.fingerprint), value = observation.parse(remote.observation)
+              if (value.id !== original.id || value.grantId !== original.grantId || value.epoch !== original.epoch || value.fingerprint !== original.fingerprint
+                || fingerprint(value.owner) !== fingerprint(original.owner) || value.phase !== remote.item.phase || value.grantId !== remote.item.grantId
+                || value.epoch !== remote.item.epoch || !sameOwner(value.ownership, remote.item.ownership!)
+                || original.ownership && !sameOwner(value.ownership, original.ownership)
+                || original.quiescent && original.phase !== 'unknown' && original.phase !== value.phase
+                || original.kind === 'command' && (fingerprint(value.outcome ?? null) !== remote.item.resultHash || original.outcome && fingerprint(original.outcome) !== fingerprint(value.outcome))
+                || original.kind === 'mutation' && (value.outcome !== undefined || value.phase !== 'settled' && !value.reconciledAt))
+                throw new Error('Prepared endpoint observation differs from the original effect')
+              const reconciled = value.reconciledAt ? { at: value.reconciledAt, note: 'Independent endpoint reconciliation verified during held recovery' } : undefined
+              effects.observed({ op: original.kind === 'command' ? 'job.get' : 'operation.get', id: original.id }, { ...value, reconciled,
+                ...(original.kind === 'command' ? { request: { owner: value.owner }, error: value.failed ? 'Independent endpoint recorded a command failure' : undefined }
+                  : { error: value.failed ? { code: 'recovered_failure', message: 'Independent endpoint recorded a mutation failure' } : undefined }) })
+              applied[original.kind === 'command' ? 'commands' : 'mutations']++
+            }
+            effects.close()
+          } finally { world.close() }
+        }
+        const store = new Store(storePath)
+        try {
+          configurationChecks = worldConfigurations(options.worlds ?? [], store.db, worlds)
+          for (const check of configurationChecks) await verifyWorldConfiguration(check,
+            audit.resources.find(resource => resource.identity.id === check.original.endpointId), manifest.executionWorkspaces, signal)
+          for (const original of rows<SavedAdministration>(store.db, 'operator_endpoint_command')) {
+            const resource = audit.resources.find(resource => resource.identity.id === original.endpointId), call = administrators.get(original.endpointId)
+            if (!resource || !call) throw new Error('Original administrative intent lacks its audited resource')
+            const observed = AdministrationObservation.parse(await call({ op: 'recovery.administration', revision: resource.revision, ...administrationRequest(original) }))
+            if (observed.revision !== resource.revision || fingerprint(observed.identity) !== fingerprint(resource.identity)) throw new Error('Prepared administrative resource identity differs')
+            const result = observeAdministration(original, observed)
+            if (result) {
+              const updated = store.db.prepare('UPDATE operator_endpoint_command SET value=? WHERE id=?').run(JSON.stringify(result), `${original.endpointId}:${original.id}`)
+              if (Number(updated.changes) !== 1) throw new Error('Original administrative row identity differs from its receipt')
+              administration.verified++; if (result.phase === 'recovered') administration.recovered++; if (result.phase === 'superseded') administration.superseded++
+            }
+          }
+          type Saved = { id: string; intent?: Publication; publication?: Publication; attempts: OwnershipStamp[]; receipt?: PublicationReceipt;
+            phase: string; problem?: string; updatedAt?: string; original?: OutboundMessage; messageId?: string }
+          for (const table of ['workspace_publication', 'channel_publication']) for (const original of rows<Saved>(store.db, table)) {
+            const publication = Publication.parse(original.intent ?? original.publication)
+            const remote = await receipt(options.publication!.serviceId, 'publication', original.id, fingerprint(publication)), value = PublicationReceipt.parse(remote.observation)
+            if (value.id !== original.id || publication.id !== original.id || value.destination !== publication.destination || value.destinationHash !== publication.destinationHash
+              || value.hash !== publication.hash || value.bytes !== Buffer.byteLength(publication.text) || fingerprint(value.artifact ?? value.message) !== fingerprint(publication.artifact ?? publication.message)
+              || !original.attempts.some(owner => sameOwner(owner, value.ownership)) || !sameOwner(value.ownership, remote.item.ownership!) || value.phase !== remote.item.phase
+              || ['accepted', 'started', 'unknown'].includes(value.phase) || fingerprint(value.external ? ExternalReceipt.parse(value.external) : null) !== remote.item.resultHash
+              || original.receipt && !['accepted', 'started', 'unknown'].includes(original.receipt.phase) && original.receipt.phase !== value.phase
+              || original.receipt?.external && fingerprint(ExternalReceipt.parse(original.receipt.external)) !== fingerprint(value.external))
+              throw new Error('Prepared publication observation differs from the original intent')
+            original.receipt = value; original.phase = 'observed'; original.updatedAt = new Date().toISOString(); delete original.problem
+            store.db.prepare(`UPDATE ${table} SET value=? WHERE id=?`).run(JSON.stringify(original), original.id)
+            if (table === 'channel_publication') {
+              if (!original.original || original.original.id !== publication.message?.id || original.messageId !== original.original.id)
+                throw new Error('Channel publication lacks its original Outbox identity')
+              store.receipts.settle(original.original, value.phase === 'sent' ? 'sent' : 'channelGone')
+            }
+            applied.publications++
+          }
+          store.set(KV.recovery.hold, { checkpoint: manifest.id, at: new Date().toISOString(), state: 'prepared', requestId: intent.requestId })
+          store.db.prepare('DELETE FROM kv WHERE key=?').run(KV.recovery.preparation)
+          store.db.exec('PRAGMA wal_checkpoint(TRUNCATE); PRAGMA journal_mode=DELETE')
+        } finally { store.close() }
+        const files: ReceiptImage['files'] = []
+        for (const file of manifest.files) {
+          const member = file.kind === 'store' ? 'orchestrator.sqlite' : file.member
+          files.push({ member, kind: file.kind, ...await recoveryFileDigest(join(staging, member), signal), ...(file.binding ? { binding: file.binding } : {}) })
+          await syncRecoveryPath(join(staging, member))
+        }
+        const image = ReceiptImage.parse({ version: 1, requestId: intent.requestId, requestHash, checkpoint: manifest.id, digest: fingerprint(manifest),
+          auditId: audit.id, at: new Date().toISOString(), recovery: audit.recovery, epoch: audit.epoch, resources: audit.resources, applied, files, executionOwnership: false, administration, revocations,
+          executionConfiguration: { worlds: configurationChecks.length, bindings: configurationChecks.reduce((total, check) => total + (check.original.grant.credentials?.length ?? 0), 0) }, sessionBackend })
+        const key = recoveryKey(options.keyFile)
+        try { await writeFile(join(staging, 'prepared.json'), sealReceiptImage(image, key), { flag: 'wx', mode: 0o600 }) } finally { key.fill(0) }
+        await syncRecoveryPath(join(staging, 'prepared.json')); await syncRecoveryPath(staging)
         for (const check of configurationChecks) await verifyWorldConfiguration(check,
           audit.resources.find(resource => resource.identity.id === check.original.endpointId), manifest.executionWorkspaces, signal)
-        for (const original of rows<SavedAdministration>(store.db, 'operator_endpoint_command')) {
-          const resource = audit.resources.find(resource => resource.identity.id === original.endpointId), call = administrators.get(original.endpointId)
-          if (!resource || !call) throw new Error('Original administrative intent lacks its audited resource')
-          const observed = AdministrationObservation.parse(await call({ op: 'recovery.administration', revision: resource.revision, ...administrationRequest(original) }))
-          if (observed.revision !== resource.revision || fingerprint(observed.identity) !== fingerprint(resource.identity)) throw new Error('Prepared administrative resource identity differs')
-          const result = observeAdministration(original, observed)
-          if (result) {
-            const updated = store.db.prepare('UPDATE operator_endpoint_command SET value=? WHERE id=?').run(JSON.stringify(result), `${original.endpointId}:${original.id}`)
-            if (Number(updated.changes) !== 1) throw new Error('Original administrative row identity differs from its receipt')
-            administration.verified++; if (result.phase === 'recovered') administration.recovered++; if (result.phase === 'superseded') administration.superseded++
-          }
-        }
-        type Saved = { id: string; intent?: Publication; publication?: Publication; attempts: OwnershipStamp[]; receipt?: PublicationReceipt;
-          phase: string; problem?: string; updatedAt?: string; original?: OutboundMessage; messageId?: string }
-        for (const table of ['workspace_publication', 'channel_publication']) for (const original of rows<Saved>(store.db, table)) {
-          const publication = Publication.parse(original.intent ?? original.publication)
-          const remote = await receipt(options.publication!.serviceId, 'publication', original.id, fingerprint(publication)), value = PublicationReceipt.parse(remote.observation)
-          if (value.id !== original.id || publication.id !== original.id || value.destination !== publication.destination || value.destinationHash !== publication.destinationHash
-            || value.hash !== publication.hash || value.bytes !== Buffer.byteLength(publication.text) || fingerprint(value.artifact ?? value.message) !== fingerprint(publication.artifact ?? publication.message)
-            || !original.attempts.some(owner => sameOwner(owner, value.ownership)) || !sameOwner(value.ownership, remote.item.ownership!) || value.phase !== remote.item.phase
-            || ['accepted', 'started', 'unknown'].includes(value.phase) || fingerprint(value.external ? ExternalReceipt.parse(value.external) : null) !== remote.item.resultHash
-            || original.receipt && !['accepted', 'started', 'unknown'].includes(original.receipt.phase) && original.receipt.phase !== value.phase
-            || original.receipt?.external && fingerprint(ExternalReceipt.parse(original.receipt.external)) !== fingerprint(value.external))
-            throw new Error('Prepared publication observation differs from the original intent')
-          original.receipt = value; original.phase = 'observed'; original.updatedAt = new Date().toISOString(); delete original.problem
-          store.db.prepare(`UPDATE ${table} SET value=? WHERE id=?`).run(JSON.stringify(original), original.id)
-          if (table === 'channel_publication') {
-            if (!original.original || original.original.id !== publication.message?.id || original.messageId !== original.original.id)
-              throw new Error('Channel publication lacks its original Outbox identity')
-            store.receipts.settle(original.original, value.phase === 'sent' ? 'sent' : 'channelGone')
-          }
-          applied.publications++
-        }
-        store.set(KV.recovery.hold, { checkpoint: manifest.id, at: new Date().toISOString(), state: 'prepared', requestId: intent.requestId })
-        store.db.prepare('DELETE FROM kv WHERE key=?').run(KV.recovery.preparation)
-        store.db.exec('PRAGMA wal_checkpoint(TRUNCATE); PRAGMA journal_mode=DELETE')
-      } finally { store.close() }
-      const files: ReceiptImage['files'] = []
-      for (const file of manifest.files) {
-        const member = file.kind === 'store' ? 'orchestrator.sqlite' : file.member
-        files.push({ member, kind: file.kind, ...await recoveryFileDigest(join(staging, member), signal), ...(file.binding ? { binding: file.binding } : {}) })
-        await syncRecoveryPath(join(staging, member))
-      }
-      const image = ReceiptImage.parse({ version: 1, requestId: intent.requestId, requestHash, checkpoint: manifest.id, digest: fingerprint(manifest),
-        auditId: audit.id, at: new Date().toISOString(), recovery: audit.recovery, epoch: audit.epoch, resources: audit.resources, applied, files, executionOwnership: false, administration, revocations,
-        executionConfiguration: { worlds: configurationChecks.length, bindings: configurationChecks.reduce((total, check) => total + (check.original.grant.credentials?.length ?? 0), 0) } })
-      const key = recoveryKey(options.keyFile)
-      try { await writeFile(join(staging, 'prepared.json'), sealReceiptImage(image, key), { flag: 'wx', mode: 0o600 }) } finally { key.fill(0) }
-      await syncRecoveryPath(join(staging, 'prepared.json')); await syncRecoveryPath(staging)
-      for (const check of configurationChecks) await verifyWorldConfiguration(check,
-        audit.resources.find(resource => resource.identity.id === check.original.endpointId), manifest.executionWorkspaces, signal)
-      await validate()
-      await mkdir(target, { mode: 0o700 }); await rename(staging, target); await syncRecoveryPath(root)
-      intent.phase = 'prepared'; intent.image = image; save()
-      return { path: target, manifest: image }
-    } finally { await rm(staging, { recursive: true, force: true }) }
+        await validate()
+        await recheckSessions()
+        await mkdir(target, { mode: 0o700 }); await rename(staging, target); await syncRecoveryPath(root)
+        intent.phase = 'prepared'; intent.image = image; save()
+        return { path: target, manifest: image }
+      } finally { await rm(staging, { recursive: true, force: true }) }
+    })
   })
 }

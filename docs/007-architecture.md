@@ -458,7 +458,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/recovery/image.ts` | Authenticated prepared-state manifests, private member hashing and complete image verification |
 | `src/recovery/audit.ts` | Complete resource coverage, original receipt comparison, divergence/quiescence findings and durable held audit reports |
 | `src/recovery/state.ts` | Incremental logical SQLite comparison of held and authenticated state, excluding only hold/reservation/audit metadata |
-| `src/recovery/sessions.ts` | Public Harness logical Session export, full validation and non-destructive exact-prefix import |
+| `src/recovery/sessions.ts` | Public Harness logical export/import and exact destination-backend verification under held Session writers |
 | `src/recovery/crypto.ts` | Private inputs, separate key files and streaming authenticated checkpoint encryption |
 | `src/remote/scoped-plugin.ts` | Harness preset-owned paired providers borrowing one managed execution world |
 | `src/client/provider.tsx` | What every page reads from its host: copy, calls, navigation, notices, the state poll, and `restart`, which reads the state quickly while dsh-superagent restarts |

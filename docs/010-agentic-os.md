@@ -308,3 +308,10 @@ including original private credential checks for an active world while retaining
 The same code passed 1,546 tests with native confinement, typechecking and all builds in
 [Linux run 42561413655](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42561413655).
 Provider-message traffic stayed local; the original app remained running. Broader configuration and activation remain open.
+
+Destination Session recovery: `035-session-backend-recovery.md` adds mandatory verification against the maintenance profile's
+actual imported Harness backend. It claims selected writers, compares immutable headers, inherited boundaries and exact
+logical events, rejects newer/divergent/short/missing history, and rechecks related descendants before held publication.
+Signed images record only Session/event counts. No history is repaired, no hold is removed, and historical retry evidence
+does not authorize activation. Runtime/account configuration, authoritative state, remapping, coordinated live ownership
+handoff, clean-host failure qualification and the full article/product ledger remain open.

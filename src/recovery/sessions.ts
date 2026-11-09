@@ -17,6 +17,8 @@ export interface SessionArchive {
 }
 const hash = () => createHash('sha256')
 const line = (value: unknown) => JSON.stringify(value) + '\n'
+// Harness's cold reader may materialize the absent delegation-depth default.
+const comparableHeader = (header: SessionHeader) => ({ ...header, delegationDepth: header.delegationDepth ?? 0 })
 
 /** Claim all selected writers before reading any history. The caller holds the coordinator's state lock first. */
 export async function ownSessions(persistence: SessionPersistence, roots: readonly string[], signal: AbortSignal): Promise<SessionHandle[]> {
@@ -60,7 +62,13 @@ export async function exportSession(handle: SessionHandle, file: string, member:
 
 /** Validate the entire authenticated archive before creating a Session or appending any event to a destination backend. */
 export async function inspectSession(file: string, expected: SessionArchive, signal: AbortSignal): Promise<void> {
+  await scanSession(file, expected, signal)
+}
+
+async function scanSession(file: string, expected: SessionArchive, signal: AbortSignal,
+  visit?: (events: SessionEvent[], offset: number) => Promise<void>): Promise<void> {
   let count = 0, bytes = 0, metadata = false
+  let pending: SessionEvent[] = []
   const digest = hash(), input = privateInput(file, signal), lines = createInterface({ input, crlfDelay: Infinity })
   input.on('data', chunk => { digest.update(chunk); bytes += Buffer.byteLength(chunk) })
   try {
@@ -74,10 +82,75 @@ export async function inspectSession(file: string, expected: SessionArchive, sig
         metadata = true; continue
       }
       validateStoredEvents(expected.header, [value]); assertContiguous(expected.header.id, [value], count++)
+      if (visit) {
+        pending.push(value)
+        if (pending.length === 128) { await visit(pending, count - pending.length); pending = [] }
+      }
     }
+    if (visit && pending.length) await visit(pending, count - pending.length)
   } finally { lines.close(); input.destroy() }
   if (!metadata || count !== expected.eventCount || expected.inheritedEventCount > count || bytes !== expected.bytes || digest.digest('hex') !== expected.sha256)
     throw new Error('Session archive does not match its checkpoint digest and offsets')
+}
+
+export interface SessionBackendVerification { sessions: number; events: number }
+
+/** Hold every restored writer while comparing the actual backend with authenticated logical history. */
+export async function withVerifiedSessionBackend<T>(persistence: SessionPersistence, directory: string, expected: readonly SessionArchive[], signal: AbortSignal,
+  action: (verified: SessionBackendVerification, recheck: () => Promise<void>) => Promise<T>): Promise<T> {
+  const selected = new Map(expected.map(session => [session.id, session])), identity = persistence.identity
+  if (!expected.length || selected.size !== expected.length) throw new Error('Destination Session verification requires a unique nonempty checkpoint set')
+  const recheck = async () => {
+    signal.throwIfAborted()
+    if (persistence.identity !== identity) throw new Error('Destination Session backend changed during verification')
+    const snapshots = await persistence.list({ signal }), found = new Set<string>()
+    for (const { header } of snapshots) {
+      const original = selected.get(header.id)
+      if (original) {
+        if (found.has(header.id) || !isDeepStrictEqual(comparableHeader(header), comparableHeader(original.header)))
+          throw new Error('Destination Session immutable metadata differs from the checkpoint')
+        found.add(header.id)
+      } else if (header.parentSession && selected.has(header.parentSession))
+        throw new Error('Destination Session backend contains an extra related descendant')
+    }
+    if (found.size !== selected.size) throw new Error('Destination Session backend is missing checkpoint history')
+    if (persistence.identity !== identity) throw new Error('Destination Session backend changed during verification')
+    signal.throwIfAborted()
+  }
+  // Validate complete archived history before interacting with destination writers.
+  for (const session of expected) await inspectSession(join(directory, session.member), session, signal)
+  await recheck()
+  const handles: SessionHandle[] = []
+  try {
+    for (const session of [...expected].sort((a, b) => a.id.localeCompare(b.id))) {
+      signal.throwIfAborted()
+      const handle = await persistence.open(session.id as SessionId, 'write', { signal }); handles.push(handle)
+      if (handle.id !== session.id || handle.access !== 'write' || !isDeepStrictEqual(comparableHeader(handle.header), comparableHeader(session.header)))
+        throw new Error('Destination Session immutable metadata differs from the checkpoint')
+      if (handle.inheritedEventCount !== session.inheritedEventCount) throw new Error('Destination Session inherited prefix differs from the checkpoint')
+    }
+    for (const handle of handles) {
+      const session = selected.get(handle.id)!
+      await scanSession(join(directory, session.member), session, signal, async (events, offset) => {
+        for (let index = 0; index < events.length;) {
+          signal.throwIfAborted()
+          const page = await handle.read(offset + index, events.length - index, { signal })
+          if (!page.events.length) throw new Error('Destination Session history is shorter than the checkpoint')
+          const actual = validateStoredEvents(handle.header, structuredClone([...page.events])); assertContiguous(handle.id, actual, offset + index)
+          if (actual.length > events.length - index || !isDeepStrictEqual(actual, events.slice(index, index + actual.length)))
+            throw new Error('Destination Session history diverges from the checkpoint')
+          index += actual.length
+        }
+      })
+      if ((await handle.read(session.eventCount, 1, { signal })).events.length) throw new Error('Destination Session history is newer than the checkpoint')
+    }
+    await recheck()
+    return await action({ sessions: expected.length, events: expected.reduce((total, session) => total + session.eventCount, 0) }, recheck)
+  } finally {
+    const closed = await Promise.allSettled(handles.map(handle => handle.close()))
+    const errors = closed.filter(result => result.status === 'rejected').map(result => result.reason)
+    if (errors.length) throw new AggregateError(errors, 'Destination Session writer release failed')
+  }
 }
 
 /** Restore into an empty backend or resume an interrupted exact-prefix import; never overwrite or truncate a Session. */
@@ -93,9 +166,7 @@ export async function importSession(persistence: SessionPersistence, file: strin
 async function importSnapshot(persistence: SessionPersistence, file: string, expected: SessionArchive, signal: AbortSignal): Promise<void> {
   await inspectSession(file, expected, signal)
   const id = expected.id as SessionId, present = await persistence.stat(id, { signal })
-  // Harness defines absent delegationDepth as zero; its JSONL cold reader may materialize that default.
-  const comparable = (header: SessionHeader) => ({ ...header, delegationDepth: header.delegationDepth ?? 0 })
-  if (present && !isDeepStrictEqual(comparable(present.header), comparable(expected.header))) throw new Error('A destination Session already has different immutable metadata')
+  if (present && !isDeepStrictEqual(comparableHeader(present.header), comparableHeader(expected.header))) throw new Error('A destination Session already has different immutable metadata')
   const handle = present ? await persistence.open(id, 'write', { signal }) : await persistence.create(expected.header, {
     inheritedEventCount: expected.inheritedEventCount as SessionLogOffset, signal })
   const input = createReadStream(file, { signal }), lines = createInterface({ input, crlfDelay: Infinity })

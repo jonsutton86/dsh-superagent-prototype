@@ -13,7 +13,7 @@ export { createCheckpoint, importCheckpointSessions, stageCheckpoint, verifyChec
 export { createRecoveryKey } from './crypto.ts'
 export { reserveCheckpointOwnership, type ReserveCheckpointOwnership, type RecoveryIntent } from './ownership.ts'
 export { auditCheckpointReceipts, type AuditCheckpointReceipts, type ReceiptAudit } from './audit.ts'
-export { exportSession, inspectSession, importSession, ownSessions, type SessionArchive } from './sessions.ts'
+export { exportSession, inspectSession, importSession, ownSessions, withVerifiedSessionBackend, type SessionArchive, type SessionBackendVerification } from './sessions.ts'
 export { prepareCheckpointReceipts, type PrepareCheckpointReceipts, type ReceiptPreparation } from './prepare.ts'
 export { verifyReceiptImage, type ReceiptImage } from './image.ts'
 export { type RecoveryWorldConnection } from './configuration.ts'
@@ -53,7 +53,7 @@ export async function apply(ctx: Context, config: RecoveryConfig): Promise<void>
   } else if (config.mode === 'prepare-receipts') {
     if (!config.audit || !config.preparation) throw new Error('Receipt preparation requires resource connections and the selected audit/request IDs')
     prepared = await prepareCheckpointReceipts({ ...config.audit, ...config.preparation, checkpoint: required(config.checkpoint, 'checkpoint'), keyFile: config.keyFile,
-      destination: required(config.destination, 'destination'), signal: abort.signal })
+      destination: required(config.destination, 'destination'), persistence: ctx.sessionPersistence, signal: abort.signal })
     checkpoint = prepared.manifest.checkpoint; path = prepared.path
     ctx.logger.info('Checkpoint %s receipts prepared in a separate authenticated image; execution remains held', checkpoint)
   } else if (config.mode === 'audit-receipts') {

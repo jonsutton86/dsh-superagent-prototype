@@ -25,6 +25,18 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: destination Session verification
+
+[035 Destination Sessions](035-session-backend-recovery.md) verifies the actual imported Harness backend during held
+preparation. It claims all selected Session writers, checks immutable metadata, inherited boundaries and exact logical
+events, and rejects missing, shorter, divergent, newer or extra related history. It rechecks the catalog before publishing
+and records only verified Session/event counts. No history is created, appended or truncated. Original-ID retries retain
+their historical meaning; the per-Session writer API supplies no global catalog lock or future activation permit.
+
+Broader private runtime/account configuration, authoritative input/state reconciliation, remapping, coordinated activation,
+clean-host failure qualification and the full article/product ledger remain open. Qualification evidence is recorded below
+after the local, installed-Harness and native Linux checks complete.
+
 ## Implemented increment: execution configuration during recovery
 
 [034 Execution configuration](034-execution-configuration-recovery.md) checks original active-world grant credentials,

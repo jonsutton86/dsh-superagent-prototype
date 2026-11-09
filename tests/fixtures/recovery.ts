@@ -40,7 +40,7 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
       { id: 'webserver', config: { host: '127.0.0.1', port: input.port } },
       { id: 'dsh-superagent', disabled: true },
       { id: 'session-title-llm', disabled: true },
-      { id: 'session-persistence-jsonl', config: { root: mode === 'import-sessions' ? importedRoot : input.sessionRoot, compression: 'none' } },
+      { id: 'session-persistence-jsonl', config: { root: mode === 'import-sessions' || mode === 'prepare-receipts' ? importedRoot : input.sessionRoot, compression: 'none' } },
       { insert: [{ id: 'checkpoint-qualification', name: 'dsh-superagent/recovery', config }] },
     ]), { mode: 0o600 })
     log = ''
@@ -135,6 +135,7 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
           expect(image.administration?.verified).toBe(administrative); expect(administrative).toBeGreaterThan(0)
           expect(image.revocations).toEqual({ verified: revokedWorlds.size, recovered: input.expectedRecoveredRevocations ?? 0 })
           expect(image.executionConfiguration).toEqual({ worlds: activeWorlds, bindings: activeBindings })
+          expect(image.sessionBackend).toEqual({ sessions: manifest.sessions.length, events: manifest.sessions.reduce((total, session) => total + session.eventCount, 0) })
           expect(activeWorlds).toBeGreaterThan(0); expect(activeBindings).toBeGreaterThan(0)
           for (const [member, original] of revokedWorlds) {
             const world = new DatabaseSync(join(preparedPath, member), { readOnly: true })

@@ -2,7 +2,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Jsonl from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { MessageId } from '@deepseek-ai/dsh-llm'
-import { randomUUID } from 'node:crypto'
+import { createHmac, randomUUID } from 'node:crypto'
 import { appendFile, chmod, copyFile, link, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { DatabaseSync } from 'node:sqlite'
 import { Runtime } from '../src/app/runtime.ts'
@@ -22,8 +22,8 @@ import type { EndpointCredential } from '../src/remote/protocol.ts'
 import { AdministrationObservation, RevocationObservation, WorldConfigurationObservation } from '../src/remote/recovery.ts'
 import { Store } from '../src/app/store.ts'
 import { KV } from '../src/kv.ts'
-import { createRecoveryKey } from '../src/recovery/crypto.ts'
-import { createCheckpoint, stageCheckpoint } from '../src/recovery/checkpoint.ts'
+import { createRecoveryKey, recoveryKey } from '../src/recovery/crypto.ts'
+import { createCheckpoint, importCheckpointSessions, stageCheckpoint } from '../src/recovery/checkpoint.ts'
 import { reserveCheckpointOwnership } from '../src/recovery/ownership.ts'
 import { auditCheckpointReceipts } from '../src/recovery/audit.ts'
 import { InventoryPage, InventoryReceipt } from '../src/ownership/inventory.ts'
@@ -164,7 +164,7 @@ async function fixture(options: { administration?: boolean; credential?: boolean
   const connection = { ...authority.admin.connection, coordinatorId: 'coordinator' }
   const reserved = await reserveCheckpointOwnership({ checkpoint: checkpoint.path, keyFile, destination: held, authority: connection,
     requestId: randomUUID(), epoch: 1, generation: 0 })
-  const audit = { checkpoint: checkpoint.path, keyFile, destination: held, authority: connection,
+  const audit = { checkpoint: checkpoint.path, keyFile, destination: held, authority: connection, persistence: context.sessionPersistence,
     endpoints: [{ ...remote.connection, ownership: undefined, credentialFile: await realpath(remote.connection.credentialFile) }], publication: publisher.admin.config,
     worlds: [{ binding: worldBinding(remote.connection.endpointId, remote.enrolled.grant), endpointId: remote.connection.endpointId, url: remote.url,
       credentialFile: await realpath(remote.client.connection.credentialFile) }] }
@@ -527,6 +527,7 @@ it.each(['github-comment', 'github-review', 'feishu-reply'] as const)('prepares 
   const before = recoveryStateDigest(source); source.close()
   const options = { ...f.audit, requestId: randomUUID(), auditId: audit.id }, prepared = await prepareCheckpointReceipts(options)
   expect(prepared.manifest.applied).toEqual({ commands: 1, mutations: 1, publications: 2 })
+  expect(prepared.manifest.sessionBackend).toEqual({ sessions: 1, events: 1 })
   expect(await verifyReceiptImage(prepared.path, f.audit.keyFile)).toEqual(prepared.manifest)
   expect(await prepareCheckpointReceipts(options)).toEqual(prepared)
   const db = new DatabaseSync(join(prepared.path, 'orchestrator.sqlite'), { readOnly: true })
@@ -548,6 +549,45 @@ it.each(['github-comment', 'github-review', 'feishu-reply'] as const)('prepares 
   const context = new Context(); cleanup.push(() => context.fiber.dispose())
   expect(() => new Runtime(context, testMachine({ stateDir: prepared.path }), () => {})).toThrow('staged checkpoint restore')
   expect(await verifyReceiptImage(prepared.path, f.audit.keyFile)).toEqual(prepared.manifest)
+})
+
+it('requires actual destination Sessions, then verifies an imported backend without appending or granting execution', async () => {
+  const f = await fixture(), audit = await auditCheckpointReceipts(f.audit), context = new Context()
+  cleanup.push(() => context.fiber.dispose())
+  await context.plugin(Jsonl, { root: join(f.directory, 'destination-sessions'), compression: 'none' })
+  const persistence = context.sessionPersistence, options = { ...f.audit, persistence, auditId: audit.id, requestId: randomUUID() }
+  await expect(prepareCheckpointReceipts(options)).rejects.toThrow('missing checkpoint history')
+  expect((await readdir(f.audit.destination)).filter(name => name.startsWith('prepared-') || name.startsWith('.prepare-'))).toEqual([])
+  await importCheckpointSessions(f.audit.checkpoint, f.audit.keyFile, f.audit.destination, persistence)
+  const create = vi.spyOn(persistence, 'create'), prepared = await prepareCheckpointReceipts(options)
+  expect(create).not.toHaveBeenCalled(); expect(prepared.manifest.sessionBackend).toEqual({ sessions: 1, events: 1 })
+  expect(await verifyReceiptImage(prepared.path, f.audit.keyFile)).toEqual(prepared.manifest)
+  expect(f.read().hold?.state).toBe('staged'); expect(prepared.manifest.executionOwnership).toBe(false)
+  const writer = await persistence.open(SessionId('audit-master'), 'write')
+  await writer.append([{ type: 'user/message', seq: SessionSeq(1), time: 1, surfaceOp: 'append', data: { role: 'user', id: MessageId('later'),
+    source: { kind: 'dsh-superagent', form: 'relay' }, content: [{ type: 'text', text: 'Later history' }] } }]); await writer.close()
+  // An original-ID retry retrieves historical authenticated evidence; it does not reauthorize activation.
+  expect(await prepareCheckpointReceipts(options)).toEqual(prepared)
+})
+
+it('keeps destination writers claimed throughout preparation and rejects a newly related Session before publication', async () => {
+  const f = await fixture(), audit = await auditCheckpointReceipts(f.audit), call = PublicationClient.prototype.call
+  let checked = false
+  vi.spyOn(PublicationClient.prototype, 'call').mockImplementation(async function<T>(this: PublicationClient, request: PublicationRpc, signal?: AbortSignal): Promise<T> {
+    const result = await call.call(this, request, signal)
+    if (request.op === 'recovery.receipt' && !checked) {
+      checked = true
+      await expect(f.audit.persistence.open(SessionId('audit-master'), 'write')).rejects.toThrow()
+      const child = await f.audit.persistence.create({ ...Session.create(SessionId('later-child')).header, parentSession: SessionId('audit-master') })
+      await child.flush(); await child.close()
+    }
+    return result as T
+  })
+  await expect(prepareCheckpointReceipts({ ...f.audit, auditId: audit.id, requestId: randomUUID() })).rejects.toThrow('extra related descendant')
+  expect(checked).toBe(true)
+  expect((await readdir(f.audit.destination)).filter(name => name.startsWith('prepared-') || name.startsWith('.prepare-'))).toEqual([])
+  const released = await f.audit.persistence.open(SessionId('audit-master'), 'write'); await released.close()
+  expect(f.read().hold?.state).toBe('staged'); expect(f.publisher.posts).toBe(1)
 })
 
 it('exposes only safe revision-bound recovery observations to independent administrators', async () => {
@@ -647,6 +687,18 @@ it.each(['manifest', 'member', 'extra'] as const)('refuses a tampered prepared %
   await expect(verifyReceiptImage(prepared.path, f.audit.keyFile)).rejects.toThrow()
   await expect(prepareCheckpointReceipts(options)).rejects.toThrow()
   expect(f.read().hold?.state).toBe('staged')
+})
+
+it('authenticates older held image manifests without treating absent Session evidence as a new verification', async () => {
+  const f = await fixture(), audit = await auditCheckpointReceipts(f.audit)
+  const prepared = await prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })
+  const { sessionBackend: _, ...manifest } = prepared.manifest, key = recoveryKey(f.audit.keyFile)
+  try {
+    const mac = createHmac('sha256', key).update('dsh-receipt-image:1\n').update(JSON.stringify(manifest)).digest('hex')
+    await writeFile(join(prepared.path, 'prepared.json'), JSON.stringify({ manifest, mac }))
+  } finally { key.fill(0) }
+  const verified = await verifyReceiptImage(prepared.path, f.audit.keyFile)
+  expect(verified).toEqual(manifest); expect(verified.sessionBackend).toBeUndefined(); expect(verified.executionOwnership).toBe(false)
 })
 
 it('reconciles all seven original administrative actions without resending or adopting newer grants and credentials', async () => {
