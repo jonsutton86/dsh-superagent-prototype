@@ -64,7 +64,26 @@ interrupted completion and original unknown capture recovery after restart. The 
 world and management routes and loses a successful completion response before refreshing the durable receipt.
 An additional Linux-only case requires actual native confinement. Installed-Harness scenarios bind a PR before execution,
 accept its checked output, complete all checked mission actions, reopen for subsequent recovery work and inspect the
-completion receipt after restart. Qualification results are recorded below after execution.
+completion receipt after restart.
+
+Runtime revision `4e414420d8e267bb2e05feac25ff079870282596` passed `pnpm check` locally:
+1,821 tests passed / 13 skipped across 119 passing / two skipped files in 109.76 seconds, typechecking and all five builds.
+The installed Harness with the configured DeepSeek Flash provider passed the dedicated scenario (54.63 seconds) and
+the owned dedicated scenario. The first combined owned run reached fresh completion in managed worlds but later failed
+an old fixture expectation that the independently accepted result would still be awaiting review.
+
+Initial native Linux run `42635157915` passed 1,827 tests / seven skipped with one failure: the new UI fixture incorrectly
+replaced the native bundled snapshot helper with the TypeScript source helper. Test-only revision
+`b10dcbea0274fbd44414f80cac86caf95763cd31` preserves the native helper, reports terminal check problems directly, and expects
+the accepted independent live result to be done. Its local typecheck and rendered UI test passed (7.80 seconds).
+Final native Linux / Node 24 [run 42636176258](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42636176258)
+passed 1,828 tests / seven skipped across 119 passing / two skipped files in 174.62 seconds, typechecking and all five
+builds. The corrected installed-Harness owned managed scenario passed in 219.39 seconds, including independently checked
+actions, fresh whole-mission completion, directed inbound work, world revocation, restart and receipt recovery. All three
+live scenarios therefore passed across the runtime revision and this test-only correction. Runtime code is unchanged by
+these corrections. External publication effects in qualification went to local GitHub/Feishu contract servers; real model
+calls used the configured API without copying credential values into repository files or logs. The original app remains
+running. Browser/accessibility and clean-host/cross-host qualification are not established by these tests.
 
 ## Remaining architecture
 

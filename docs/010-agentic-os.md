@@ -523,5 +523,10 @@ Mission repository results and fresh whole-mission completion are implemented in
 operator-selected PR identities become plan/mandate requirements, acceptance binds exact checked heads, and mission
 completion freshly captures every accepted checked result and rereads required heads. Durable completion attempts retain
 original evidence-review IDs across interruption/restart; the UI exposes binding, current-head review and attempt recovery.
-Qualification is in progress. These are point-in-time checks, not continuous monitoring, CI/branch-policy enforcement or
-merge receipts. Remote Git provisioning and all other remaining product/architecture requirements stay open.
+Runtime revision `4e41442` passed 1,821 local tests, typechecking and all five builds. Test correction `b10dcbe` passed
+1,828 native Linux tests and all builds/typechecking in
+[run 42636176258](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42636176258).
+Dedicated, owned dedicated and owned managed installed-Harness / DeepSeek Flash scenarios passed across those revisions;
+050 records the native-helper and accepted-state fixture corrections. The original app remains running. These are
+point-in-time checks, not continuous monitoring, CI/branch-policy enforcement or merge receipts. Remote Git provisioning
+and all other remaining product/architecture requirements stay open.

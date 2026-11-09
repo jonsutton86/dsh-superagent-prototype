@@ -25,14 +25,18 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
-## Current increment: PR-bound results and fresh mission completion
+## Implemented increment: PR-bound results and fresh mission completion
 
 [050 Mission PR targets and fresh completion](050-mission-pull-completion.md) binds operator-inspected PR identities into
 approved plans and worker mandates. Acceptance requires checks of the current observed head. Whole-mission completion
 freshly captures every accepted checked result in its original world and rereads required PR heads before the final
 transaction. Durable completion attempts preserve original per-action review/capture IDs through interruption and restart.
-The UI supports binding, head inspection, completion receipts and original-attempt recovery. Qualification is in progress;
-results and exact revision are recorded after the full local, native Linux and installed-Harness checks.
+The UI supports binding, head inspection, completion receipts and original-attempt recovery. Runtime revision `4e41442`
+passed 1,821 local tests, typechecking and all five builds. Final test revision `b10dcbe` passed 1,828 Linux / Node 24 tests
+with native confinement, typechecking and all builds in
+[run 42636176258](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42636176258).
+All three installed-Harness / DeepSeek Flash scenarios passed across the runtime revision and the test-only native-helper
+and accepted-state corrections documented in 050. The original app remains running.
 This point-in-time completion decision does not implement remote Git provisioning, branch policy, CI, merging or continuous
 freshness. Every remaining full architecture requirement stays active.
 
