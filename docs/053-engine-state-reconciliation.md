@@ -52,14 +52,16 @@ is produced by graph reconciliation.
 
 All graph checks and repairs run in one SQLite savepoint with cancellation checks and cooperative yields. Any conflict,
 limit breach or cancellation rolls back repairs; the surrounding preparation discards its unpublished temporary image.
-The source checkpoint and staged Store remain unchanged. Bounds are 250,000 aggregate/effect records, 512 MiB of serialized
+The source checkpoint and staged core records remain unchanged; the existing preparation-intent journal still records the
+request. Bounds are 250,000 aggregate/effect records, 512 MiB of serialized
 record values, 16 MiB per record and two million checked links/index entries, with smaller field/array limits. These bounds
 are explicit refusal thresholds, not a demonstrated deployment capacity.
 
 ## Proof and remaining work
 
 The signed image adds optional `stateGraph` version 1: record counts, retained historical evaluation count, projection repair
-counts, retired-effect count and SHA-256 of the reconciled core tables in deterministic order. File hashes and the existing
+counts, retired-effect count and SHA-256 of the reconciled core tables in deterministic order. The effect count records rows
+inspected before retirement. File hashes and the existing
 manifest HMAC authenticate the complete prepared image. Repeating reconciliation is idempotent; retrying the original
 preparation ID returns its authenticated image. Older signed images remain readable without acquiring a graph proof they
 never had. Every image still has `executionOwnership: false` and retains its recovery hold.
@@ -76,4 +78,14 @@ queue scheduling, index repair, conflicting authority, oversized records and rol
 Integration fixtures now contain the causal trigger/thread/decision history their tickets previously omitted. Receipt
 preparation tests cover signed graph proof, unchanged source/staged authority, historical image compatibility, original-ID
 retry and rejection without a published image. Installed-Harness managed recovery now requires a nonempty graph proof from
-the actual worker workload. Final local, native Linux and real-model receipts are pending this increment's qualification.
+the actual worker workload.
+
+Runtime/test revision `2606671c2b624da8eef117d250226e1977ce1022` passed 1,860 local tests (14 conditional skips),
+typechecking and all six builds. The same revision passed 1,867 tests (eight conditional skips), typechecking and all six
+builds on Linux / Node 24 with native confinement in
+[run 42654443599](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42654443599).
+The installed-Harness / DeepSeek Flash owned-managed scenario passed in 203.36 seconds. It exercised real worker inference,
+authenticated Session/input recovery, independent effect receipt reconciliation, nonempty graph proof, retained execution
+holds and retrieval of the same original prepared image on retry. External provider traffic stayed on local contract
+servers; inference used the configured real API. The original app remained running. This qualifies held preparation, not
+restored activation or the unfinished full architecture/product scope.

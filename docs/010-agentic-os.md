@@ -552,3 +552,16 @@ UI acknowledgement, real worker/assessor inference, abrupt process failure, orig
 052 records the human-answer observation gap found and corrected by the live drill and the replay-expiry clock guard.
 The original app remains running. Alert routing, broader diagnosis quality, cross-host/browser acceptance and all other
 outstanding architecture/product requirements remain active.
+
+Held Engine state recovery is implemented in `053-engine-state-reconciliation.md`: original trigger/decision/ticket
+authority, assignment/input references, directed recipients and Outbox/effect relations are checked before signing a
+prepared image. Only derived query indexes and effects whose existing handlers can no longer act are repaired; no new
+task, authorization or external delivery is created. The signed graph counts/digest accompany the existing receipt and
+consumption proofs. Historical evaluation metadata remains readable without granting it current authority. Runtime/test
+revision `2606671` passed 1,860 local tests and 1,867 Linux / Node 24 tests with native confinement, typechecking and all
+six builds; native evidence is
+[run 42654443599](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42654443599).
+The installed-Harness / DeepSeek Flash owned-managed scenario passed in 203.36 seconds, including actual worker state,
+authenticated recovery and retrieval of the original held image. The original app remains running. Source cursor and
+product-extension reconciliation, deployment binding/remapping, restored activation/failover, and every remaining full
+architecture/product requirement remain active.

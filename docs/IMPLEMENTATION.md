@@ -17,7 +17,7 @@ not a claim that the prototype already ships every feature or that the article s
 | Context and recall | Immutable scoped records, provenance/FTS search, host-enforced cumulative retrieval allowances, bounded chain context/transitive freshness and complete review dependency closure | Measured retrieval and long-horizon validation, external-source freshness/imports, model-token-aware context selection and retention/scaling |
 | Speculative work | Inferred mandates, observe/auto and rules; durable owner/provider/environment/workspace allocations, measured model usage, preemption, expiry, quiescence/recovery holds and separate promotion/publication approval | Long-horizon quality/waste measurements, multi-workspace/retention/scaling and stronger confinement |
 | Full duplex | Harness job/subagent services, `src/executor/background.ts`, `src/app/delivery.ts`, remote receipts, durable assignment/tool ownership, receipt-only restart recovery and operator cancellation | Broader long-running job, process-failure and cross-host acceptance |
-| Compute/state separation | SQLite Store; Harness Session checkpoints, held import, checkpoint-bound claimant replacement, revision-bound receipt audits and authenticated held receipt application including original administration; ownership authority, endpoint handoff fencing, shared Runtime/pool/provider lifecycle and independently fenced artifact/mission delivery with directed inbound replies | Private credential/runtime configuration validation, authoritative input/state recovery, remapping, broader inbound discovery/admission and repository integration, clean-host activation and failover qualification |
+| Compute/state separation | SQLite Store; Harness Session checkpoints, held import, checkpoint-bound claimant replacement, revision-bound receipt audits, authenticated held receipt application, consumed-input proof and core Engine graph reconciliation; ownership authority, endpoint handoff fencing, shared Runtime/pool/provider lifecycle and independently fenced artifact/mission delivery with directed inbound replies | Deployment binding, source cursors and product-extension state, remapping, broader inbound discovery/admission and repository integration, clean-host activation and failover qualification |
 | Remote environments | Paired local/remote providers, authenticated leased grants, durable revocation, mission/Session binding, endpoint-owned versioned credentials, remote profile and artifact/restart qualification, operator enrollment/reconciliation, generated profiles, managed world pool and exact per-action selection | Managed endpoint/machine launch, remote repository workflows, quotas and cross-host acceptance |
 | Watchdog | Independent Harness assessor and journal, standalone incident console, evidence-bound operator review/replay, bounded retention and actual-model main/watchdog process-failure recovery | Alert routing, broader diagnosis/productive-job quality, cross-host/process-failure acceptance, richer progress evidence and separately authorized recovery policies |
 | Delivery | Reports and PR binding/closure; content-addressed artifacts, stale mission-review invalidation, reviewed artifacts and plan-authorized mission replies with independent receipts; exact participant/task inbound listeners; versioned checks, original assignment/environment bindings, host-captured file/Git snapshots, original-job evidence, selected-check acceptance/publication, explicit-commit PR reviews, plan-bound PR result targets and fresh all-action mission completion | CI/branch-policy and merge integration, continuous freshness, broader inbound discovery/admission, remote Git provisioning and broader speculative quality evaluation |
@@ -32,9 +32,14 @@ triggers through decisions, tickets, assignments, inputs, receipts and queued ef
 image. It repairs only derived query indexes and removes effects whose existing handlers can no longer act; live queue
 metadata and aggregate authority remain unchanged. Directed input cannot move to another ticket, and conflicting mandates
 keep preparation held. Historical expired evaluation tags remain metadata, never execution authority. The signed image
-records graph counts, repairs and a deterministic digest. Source/staged state and the execution hold remain unchanged.
-Local, native Linux and installed-Harness qualification receipts are pending. Connector cursors, product-extension graphs,
-deployment remapping, activation/handoff and clean-host failover remain open, alongside the full product scope below.
+records graph counts, repairs and a deterministic digest. Source/staged core records and the execution hold remain unchanged.
+Runtime/test revision `2606671` passed 1,860 local tests and 1,867 Linux / Node 24 tests with native confinement,
+typechecking and all six builds. Native evidence is
+[run 42654443599](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42654443599).
+The installed-Harness / DeepSeek Flash owned-managed recovery scenario passed in 203.36 seconds, including a nonempty graph
+proof and the original held image on retry. Provider-message traffic stayed on local contract servers; the original app
+remained running. Connector cursors, product-extension graphs, deployment remapping, activation/handoff and clean-host
+failover remain open, alongside the full product scope below.
 
 ## Implemented increment: independent supervision console
 
@@ -732,7 +737,9 @@ single writer, not a replicated consensus service. `025-runtime-ownership.md` co
 provider lifecycle to that authority. `026-artifact-publication.md` adds independently fenced artifact delivery;
 `027-mission-delivery.md` routes plan-authorized mission replies through the Outbox and publisher. `028-inbound-conversations.md`
 adds directed replies from authorized participants through that service. Next: complete broader source discovery/admission
-and repository integration. Receipt audits and held preparation are implemented; complete private credential/runtime configuration, Session, world and authoritative-state reconciliation before activating a restored coordinator. The maintenance
+and repository integration. Receipt audits, configuration/Session checks, consumed-input reconciliation and the core Engine
+graph are implemented in held preparation. Complete source cursors, product-extension state, actual deployment binding and
+remapping before activating a restored coordinator. The maintenance
 hold stays in place. Keep clean-host recovery and failover open until that complete path is qualified.
 
 Acceptance: crash after every enqueue/dispatch/receipt boundary; recover a consistent task/Session pair; reject two active
