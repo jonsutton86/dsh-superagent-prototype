@@ -261,3 +261,9 @@ separate authenticated recovery image, preserving source state and execution hol
 artifact/channel receipts are applied without replay, with original-ID retries and Outbox settlement. Administrative and
 configuration reconciliation, authoritative input/state recovery, actual Session validation, remapping, activation and
 clean-host failure qualification remain open alongside the full product ledger.
+
+Receipt-preparation qualification: code `66b28a49f5a81dc08c6c5f19b0d31a5cfb66ba1e` passed 1,495 local tests, both
+owned installed-Harness/DeepSeek Flash cases, and 1,497 tests with native confinement in
+[Linux run 42554537411](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42554537411). Typechecking
+and all four builds passed. Managed recovery prepared the same held image twice; the dedicated case refused unrecorded
+publication effects. The original app remained running and no restored activation was performed.

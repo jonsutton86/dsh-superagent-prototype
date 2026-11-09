@@ -116,4 +116,14 @@ Local verification on 2026-11-08 passed 1,495 tests, typechecking and all four b
 skipped. All 27 recovery audit/preparation cases passed. The native mission cancellation fixture now waits for observed
 process output before cancelling, because an accepted endpoint receipt precedes process dispatch; its 30 local remote tests
 passed separately. The source-consumer timeout fixture waits for a positive PID rather than reading a briefly empty file.
-Installed-Harness and final native Linux qualification results are recorded after those checks finish.
+Code `66b28a49f5a81dc08c6c5f19b0d31a5cfb66ba1e` also passed both owned installed-Harness/DeepSeek Flash scenarios in
+201.43 seconds. The managed checkpoint produced and authenticated its held prepared image twice through the installed
+maintenance plugin. Original command and publication counts, world/Session coverage, channel observations and the prepared
+hold were checked. The dedicated case's four independent unrecorded publication probes caused the installed maintenance
+plugin to refuse preparation and create no image. Model calls used the configured provider; all message-provider traffic
+stayed on local contract servers. Actual restored activation and live GitHub/Feishu account acceptance remain open.
+
+The same code passed 1,497 tests, typechecking and all four builds on Ubuntu 22.04/Node 24 with native confinement in
+[run 42554537411](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42554537411). Five opt-in cases
+were skipped; all 27 receipt audit/preparation tests passed. The full Linux test phase took 124.06 seconds. These results
+qualify held preparation and the existing execution boundary, not cross-host restored activation.

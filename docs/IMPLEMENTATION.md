@@ -32,6 +32,11 @@ observations to a separate authenticated recovery image. It preserves source sta
 settles original channel Outbox receipts, verifies every image member and supports retry after interrupted publication.
 Both copies retain execution holds. Administrative-command/configuration reconciliation, authoritative input/state recovery,
 Session-backend validation, remapping, activation, clean-host drills and the remaining article/product ledger stay open.
+Local verification passed 1,495 tests, typechecking and four builds. Code `66b28a49f5a81dc08c6c5f19b0d31a5cfb66ba1e`
+passed both owned installed-Harness/DeepSeek Flash cases in 201.43 seconds, including repeated authenticated preparation
+and refusal of the checkpoint with unrecorded publication probes. The same code passed 1,497 native Linux tests,
+typechecking and all builds in [run 42554537411](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42554537411).
+Provider-message traffic used local contract servers; restored activation remains unqualified.
 
 ## Implemented increment: recovery receipt audit
 
