@@ -5,6 +5,7 @@ import { workerSessionId } from '../executor/dsh.ts'
 import type { Workspace } from './service.ts'
 import type { Library } from './library.ts'
 import { WorkspaceError } from './model.ts'
+import type { Attachments } from '../attachments/service.ts'
 import { InboxHistory, InboxQuery, InboxRead, InboxReply, InboxStart,
   type Conversation, type ConversationMessage, type InboxItem, type InboxPage } from './inbox-model.ts'
 
@@ -18,7 +19,7 @@ export class Inbox {
   private readonly hydrated = new Set<string>()
   private readonly loading = new Map<string, Promise<boolean>>()
   constructor(private readonly store: Store, private readonly workspace: Workspace, private readonly library: Library,
-    private readonly history: (sessionId: string) => Promise<readonly SessionEvent[]>) {
+    private readonly history: (sessionId: string) => Promise<readonly SessionEvent[]>, private readonly attachments?: Attachments) {
     store.db.exec(`CREATE TABLE IF NOT EXISTS workspace_inbox_read (ticket TEXT PRIMARY KEY, revision TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS workspace_inbox_message (id INTEGER PRIMARY KEY, ticket TEXT NOT NULL, identity TEXT NOT NULL,
         seq INTEGER NOT NULL, at TEXT NOT NULL, value TEXT NOT NULL, UNIQUE(ticket,identity));
@@ -122,12 +123,16 @@ export class Inbox {
   start(input: unknown): InboxItem {
     const request = InboxStart.parse(input), prefix = `inbox-${key(request.requestId)}`
     return this.command(request.requestId, { operation: 'start', ...request }, () => {
+      if (request.attachments?.length && !this.attachments) throw new WorkspaceError(409, 'Attachments are unavailable')
+      const files = this.attachments?.selection(request.attachments ?? []) ?? []
       let mission = this.workspace.create({ requestId: `${prefix}-mission`, title: request.title || request.text.split('\n')[0]!.slice(0, 160),
         objective: request.text, acceptance: 'The requested result is available with evidence and limitations, and has been explicitly reviewed.' })
       mission = this.workspace.add(mission.id, { requestId: `${prefix}-action`, revision: mission.revision, title: mission.title,
         instructions: request.text, owner: 'agent' })
       mission = this.workspace.act(mission.id, mission.actions[0]!.id, { requestId: `${prefix}-run`, revision: mission.revision, command: 'run' })
-      return mission.actions[0]!.ticket!.id
+      const id = mission.actions[0]!.ticket!.id, ticket = this.require(id)
+      this.attachments?.bind(id, `trigger:${ticket.origin.triggerId}`, files)
+      return id
     })
   }
   reply(id: string, input: unknown): InboxItem {
@@ -136,8 +141,16 @@ export class Inbox {
       const item = this.item(id)
       if (item.revision !== request.revision) throw new WorkspaceError(409, 'Conversation changed. Review the latest update before sending.')
       if (!item.canReply || !item.mission) throw new WorkspaceError(409, 'This conversation cannot receive new work. Open its mission or original Session.')
+      if (request.attachments?.length && !this.attachments) throw new WorkspaceError(409, 'Attachments are unavailable')
+      const files = this.attachments?.selection(request.attachments ?? []) ?? []
+      const prior = new Set(this.require(id).inputs.map(input => input.id))
       this.workspace.act(item.mission.id, item.mission.actionId, { requestId: `inbox-${key(request.requestId)}-reply`,
         revision: item.mission.revision, command: 'steer', text: request.text })
+      if (files.length) {
+        const added = this.require(id).inputs.filter(input => input.kind === 'trigger' && !prior.has(input.id))
+        if (added.length !== 1 || added[0]!.kind !== 'trigger') throw new WorkspaceError(409, 'Could not bind attachments to the accepted reply')
+        this.attachments!.bind(id, `trigger:${added[0]!.triggerId}`, files)
+      }
       return id
     })
   }
@@ -170,7 +183,8 @@ export class Inbox {
     const addTrigger = (triggerId: string, pending = false, context = false) => {
       const trigger = this.store.triggers.get(triggerId)
       if (trigger) messages.set(`trigger:${trigger.id}`, { id: `trigger:${trigger.id}`, at: trigger.at,
-        role: context ? 'context' : trigger.human ? 'person' : 'context', ...bounded(trigger.text), pending, source: trigger.source })
+        role: context ? 'context' : trigger.human ? 'person' : 'context', ...bounded(trigger.text), pending, source: trigger.source,
+        ...(this.attachments?.list(id, `trigger:${trigger.id}`).length ? { attachments: this.attachments.list(id, `trigger:${trigger.id}`) } : {}) })
     }
     current.origin.triggerIds.forEach(triggerId => addTrigger(triggerId))
     for (const value of current.inputs) {

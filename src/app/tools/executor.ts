@@ -19,8 +19,12 @@ import type { Personas } from '../../personas/service.ts'
 import type { WorldPool } from '../../environments/pool.ts'
 import type { Verification } from '../../verification/service.ts'
 import { verificationTools } from './verification.ts'
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { Attachments } from '../../attachments/service.ts'
+import { attachmentTools } from './attachments.ts'
 
 export interface ExecutorToolsHost {
+  readonly attachments?: Attachments
   readonly library: Library
   readonly verification?: Verification
   readonly planning: Planning
@@ -36,9 +40,10 @@ export interface ExecutorToolsHost {
   sendReplies(): Promise<void>
 }
 
-export function executorTools(host: ExecutorToolsHost, ticket: Ticket): Tool[] {
+export function executorTools(host: ExecutorToolsHost, ticket: Ticket, agent?: Agent): Tool[] {
   const ticketId = ticket.id, reflection = host.reflections?.forTicket(ticketId)
   return [
+    ...host.attachments ? attachmentTools(host.attachments, ticketId, agent) : [],
     ...reflection ? [] : libraryTools(host.library, { role: 'worker', ticketId }),
     ...!reflection && host.verification ? verificationTools(host.verification, ticketId) : [],
     ...(reflection ? reflectionTools(host.reflections!, ticketId) : ticket.mandate.actor.source === 'workspace' ? planningTools(host.planning, ticketId, host.personas, host.worlds) : []),

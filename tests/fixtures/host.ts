@@ -27,6 +27,7 @@ import { filesystem } from './filesystem.ts'
 import type { CoordinatorOwnershipConfig } from '../../src/ownership/lease.ts'
 import type { PublicationConnection } from '../../src/publication/client.ts'
 import type { VoiceConfig } from '../../src/voice/model.ts'
+import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 
 export const MEMBER = 'ou_alice'
 export const CHAT = 'oc_team'
@@ -142,7 +143,7 @@ export function subagentRuntime(agents: Map<string, FakeAgent>) {
 }
 
 /** @param seed - writes to the database before the Runtime opens it, such as records an earlier version stored. */
-export async function startRuntime(seed?: (store: Store) => void, options: { executionMode?: 'local' | 'repository'; noAccounts?: boolean; managed?: boolean; ownership?: CoordinatorOwnershipConfig; publication?: PublicationConnection; voice?: VoiceConfig;
+export async function startRuntime(seed?: (store: Store) => void, options: { executionMode?: 'local' | 'repository'; noAccounts?: boolean; managed?: boolean; ownership?: CoordinatorOwnershipConfig; publication?: PublicationConnection; voice?: VoiceConfig; attachments?: AttachmentStore;
   remote?: { world: RemoteWorld; filesystem: FileSystem; subprocess: SubprocessRuntime } } = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'orchestrator-host-'))
   const AGENT = join(directory, 'agent-gh'), BOT = join(directory, 'lark-bot')
@@ -262,6 +263,7 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
     return { agent, dispose: () => agent.ctx.fiber.dispose() }
   }) })
   const services = { agentDefaultModel: { currentSelection: () => ({ provider: 'test', model: 'test' }) }, fs: options.remote?.filesystem ?? filesystem, agents: registry, llm: { resolveCallConfig: vi.fn(async (value: unknown) => value) }, sessionController: controller,
+    ...(options.attachments ? { attachments: options.attachments } : {}),
     sessionPersistence: persistence, workspaceRegistry: { create: async (cwd: string) => ({ id: cwd }) }, permissionPresets: { set: () => {} },
     subprocess: options.remote?.subprocess ?? subprocess, webServer,
     ...(options.remote ? { superagentRemoteWorld: options.remote.world } : {}),
@@ -339,6 +341,6 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
   /** A step of the worker claims what waits for it, and is cut off before the Session took it. */
   const claim = (sessionId: string) => { claims.get(sessionId)!() }
   return { runtime, ctx, directory, agents, tools, deliveries, relays, candidates, runTool, withTool, route, acceptedTicket, api, controller, subprocess, hooks, resolveDefault, stop,
-    jobs, subagents, step, claim, presets }
+    jobs, subagents, step, claim, presets, http }
 }
 export type Host = Awaited<ReturnType<typeof startRuntime>>

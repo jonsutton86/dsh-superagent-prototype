@@ -19,6 +19,7 @@ import { qualifyPublication } from './fixtures/publication-harness.ts'
 import { qualifySchedules } from './fixtures/schedules.ts'
 import type { RemoteJob } from '../src/remote/protocol.ts'
 import { HostProcessIsolation } from '../src/verification/local.ts'
+import { attachmentInstructions, qualifyAttachments } from './fixtures/attachment-harness.ts'
 import type { CheckRun } from '../src/verification/contracts.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
@@ -85,6 +86,9 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
         ...(publisher ? { publication: publisher.connection } : {}) } },
       { id: 'session-title-llm', disabled: true }]))
   }
+  const attachmentQualification = process.env.DSH_ATTACHMENT_QUALIFICATION === '1', attachmentRoot = join(h.directory, 'native-input-store')
+  let verifyInputs: (() => Promise<void>) | undefined
+  if (attachmentQualification) await appendFile(join(directory, 'cordis.patch.yml'), '\n- id: attachment-local\n  config:\n    dshHome: ' + JSON.stringify(attachmentRoot) + '\n')
   const voiceModel = process.env.DSH_VOICE_MODEL
   if (voiceModel) {
     const patch = JSON.parse(await readFile(overlay, 'utf8')) as { id?: string; config?: Record<string, unknown> }[]
@@ -178,7 +182,7 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     const persona = await api('personas', { requestId: 'persona-proof-create', definition })
     let mission = await api('missions', { requestId: 'remote-live-mission', title: 'Remote Harness proof', objective: voiceObjective || 'Prove persona-bound execution', acceptance: 'The artifact follows the persona skill and the service credential check passes' })
     mission = await api(`missions/${mission.id}/actions`, { requestId: 'remote-live-action', revision: mission.revision, title: 'Produce proof', owner: 'agent',
-      persona: { id: persona.id, version: 1 }, ...(managed ? { environment: managed.id } : {}), instructions: `${publisher ? 'First use orchestrator_ack with the original trigger_id from your assignment and the exact text "Mission delivery qualification started." The host supplied publication Channel is explicitly authorized. ' : ''}In your assigned directory, use bash to verify that the SHA256 of the endpoint-provided SERVICE_API_KEY equals ${secretDigest}, without printing the credential itself. Only after that check succeeds, create result.txt following your persona instructions. Read it back, publish that exact content as an artifact with workspace_publish, then report ready. Do not use external services or background work. If any tool fails, immediately report failed with the exact error and end the turn; do not attempt to repair the execution environment.` })
+      persona: { id: persona.id, version: 1 }, ...(managed ? { environment: managed.id } : {}), instructions: `${attachmentQualification ? attachmentInstructions : ''}${publisher ? 'First use orchestrator_ack with the original trigger_id from your assignment and the exact text "Mission delivery qualification started." The host supplied publication Channel is explicitly authorized. ' : ''}In your assigned directory, use bash to verify that the SHA256 of the endpoint-provided SERVICE_API_KEY equals ${secretDigest}, without printing the credential itself. Only after that check succeeds, create result.txt following your persona instructions. Read it back, publish that exact content as an artifact with workspace_publish, then report ready. Do not use external services or background work. If any tool fails, immediately report failed with the exact error and end the turn; do not attempt to repair the execution environment.` })
     if (alternate) mission = await api(`missions/${mission.id}/actions`, { requestId: 'other-action', revision: mission.revision, title: 'Independent proof', owner: 'agent', environment: alternate.id,
       instructions: `Delegate this check to exactly one subagent using the subagent tool: in your assigned working directory, use one bash call to confirm SERVICE_API_KEY is unset or empty without printing it, then write exactly ${otherProof} to result.txt with no newline and return a brief completion message. Wait for the child to finish, read result.txt yourself, publish that exact content with workspace_publish and report ready. This is a small qualification: do not add todo lists, extra checks or other work. No external services; report failed immediately if a tool fails.` })
     if (publisher) {
@@ -193,6 +197,7 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     const request = { requestId: 'remote-live-proof', revision: mission.revision, command: 'run' }
     const runPath = `missions/${mission.id}/actions/${mission.actions[0].id}`
     const running = await api(runPath, request), task = { id: running.actions[0].runs[0] }
+    if (attachmentQualification) verifyInputs = await qualifyAttachments(api, port, task.id)
     let otherTask: string | undefined
     if (alternate) {
       let next = await api(`missions/${mission.id}`)
@@ -217,6 +222,11 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     expect(ticket.executionPersona).toMatchObject({ id: persona.id, version: 1, digest: persona.digest, definition })
     expect(await readFile(join(ticket.directory, 'result.txt'), 'utf8')).toBe(proof)
     expect(artifact?.content).toBe(proof)
+    if (attachmentQualification) {
+      expect(h.endpoint.journal.jobs().some(job => job.request.owner?.kind === 'assignment' && job.request.owner.ticketId === task.id
+        && job.request.owner.tool === 'workspace_attachment_copy' && job.outcome?.exitCode === 0), 'input copy ran through owned Harness subprocess').toBe(true)
+      await verifyInputs!()
+    }
     if (otherTask) await vi.waitFor(async () => expect((await api(`inbox/${otherTask}`)).item.status).toBe('review'), { timeout: 120_000, interval: 1000 })
     const inCheckWorld = async <T>(operation: () => Promise<T>): Promise<T> => {
       // Use the actual coordinator API, original artifact binding and production verification runner. Non-Linux
@@ -354,7 +364,8 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
       definition: { ...definition, instructions: 'A future run uses this version.' } }, 'PUT')
     await api(`personas/${persona.id}/archive`, { requestId: 'persona-proof-archive', revision: updated.revision, archived: true, reason: 'Qualification finished; preserve original execution' })
     const oldOwner = owned && (await api('state')).ownership.owner
-    await stop(); start(); await ready()
+    await stop(); if (attachmentQualification) await rm(attachmentRoot, { recursive: true, force: true }); start(); await ready()
+    await verifyInputs?.()
     await qualifyRouter()
     if (owned) {
       const nextOwner = (await api('state')).ownership.owner
@@ -434,7 +445,8 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
       url: config.url, credentialFile: config.credentialFile }))
     const unrecordedPublications = variant === 'owned-dedicated' && publisher && ownershipConfig
       ? await qualifyPublication({ cli, home, profile, directory, port, publisher, ownership: ownershipConfig }) : []
-    await qualifyRecovery({ cli, home, profile, directory, temporary: h.directory, port, stateDir, sessionRoot,
+    if (attachmentQualification) await rm(attachmentRoot, { recursive: true, force: true })
+    await qualifyRecovery({ verifyInputs, cli, home, profile, directory, temporary: h.directory, port, stateDir, sessionRoot,
       worldDirectories, worker: ticket.sessionId, worlds: mode === 'managed' ? owned ? 3 : 2 : 1, unrecordedPublications, expectedRecoveredRevocations: lostRevocation ? 1 : 0,
       expectedPublicationDestinations: publisher?.config.destinations.length,
       ...(authority ? { authority: { ...authority.admin.connection, coordinatorId: authority.config.coordinatorId }, originalClaimantFile: authority.config.credentialFile,

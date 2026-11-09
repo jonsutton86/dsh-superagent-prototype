@@ -2,6 +2,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import { z } from 'zod'
 import { THREAD_FILTERS, TICKET_FILTERS, type Api, type ApiResponse, type RouteParams } from './api.ts'
 import { sourceSkills } from './context.ts'
@@ -56,9 +58,12 @@ import type { VerificationReviews } from '../verification/reviews.ts'
 import { CheckCommandId } from '../verification/contracts.ts'
 import type { Voice } from '../voice/service.ts'
 import { VoiceError } from '../voice/model.ts'
+import type { Attachments } from '../attachments/service.ts'
+import { UploadError, UPLOAD_LIMITS } from '../attachments/model.ts'
 
 export interface HttpHost {
   readonly voice?: Voice
+  readonly attachments?: Attachments
   readonly ownership?: Pick<CoordinatorOwnership, 'status'>
   readonly publications?: Publications
   readonly channelPublications?: ChannelPublications
@@ -138,6 +143,7 @@ function failure(error: unknown): [number, Record<string, unknown>] {
   if (error instanceof RouteError) return [error.status, { error: error.message }]
   if (error instanceof WorkspaceError) return [error.status, { error: error.message }]
   if (error instanceof VoiceError) return [error.status, { error: error.message }]
+  if (error instanceof UploadError) return [error.status, { error: error.message }]
   if (error instanceof UsageError) return [error.status, { error: error.message }]
   if (error instanceof EnvironmentError) return [error.status, { error: error.message }]
   if (error instanceof RemoteError || error instanceof OwnershipError || error instanceof PublicationError) return [error.status, { error: error.message, code: error.code }]
@@ -295,6 +301,12 @@ function routes(runtime: HttpHost): Routes {
     'POST endpoints/:id/commands/:command/profile': async ({ params, body }) => runtime.endpoints.profile(params.id, params.command, await body()),
     'POST environments': async ({ body }) => runtime.environments.enroll(await body()),
     'PUT environments/:id': async ({ params, body }) => runtime.environments.update(params.id, await body()),
+    'GET uploads': () => runtime.attachments?.capabilities() ?? { available: false, fileBytes: UPLOAD_LIMITS.fileBytes, chunkBytes: UPLOAD_LIMITS.chunkBytes, perMessage: UPLOAD_LIMITS.perMessage, messageBytes: UPLOAD_LIMITS.messageBytes },
+    'POST uploads': async ({ body }) => { if (!runtime.attachments) throw new UploadError(503, 'Attachments unavailable'); return runtime.attachments.begin(await body()) },
+    'GET uploads/:id': ({ params }) => { if (!runtime.attachments) throw new UploadError(503, 'Attachments unavailable'); return runtime.attachments.get(params.id) },
+    'POST uploads/:id/chunks': async ({ params, body }) => { if (!runtime.attachments) throw new UploadError(503, 'Attachments unavailable'); return runtime.attachments.chunk(params.id, await body(512 * 1024)) },
+    'POST uploads/:id/finish': ({ params }) => { if (!runtime.attachments) throw new UploadError(503, 'Attachments unavailable'); return runtime.attachments.finish(params.id) },
+    'POST uploads/:id/cancel': ({ params }) => { if (!runtime.attachments) throw new UploadError(503, 'Attachments unavailable'); return runtime.attachments.cancel(params.id) },
     'GET voice': () => runtime.voice?.capabilities() ?? { input: null, output: null, recordingMs: 30000, inputBytes: 2097152, textChars: 2000 },
     'POST voice/transcribe': async ({ body }) => { if (!runtime.voice) throw new VoiceError(503, 'Speech is unavailable'); return runtime.voice.transcribe(await body(3 * 1024 * 1024)) },
     'POST voice/speak': async ({ body }) => { if (!runtime.voice) throw new VoiceError(503, 'Speech is unavailable'); return runtime.voice.speak(await body()) },
@@ -472,6 +484,19 @@ export function registerHttp(ctx: Context, runtime: HttpHost): () => void {
         }
         await runtime.ready
         if (mutation) runtime.authorizeMutation?.()
+        const attachment = /^\/orchestrator\/api\/uploads\/([0-9a-f-]{36})\/(download|image)$/.exec(url.pathname)
+        if (req.method === 'GET' && attachment) {
+          if (!runtime.attachments) throw new UploadError(503, 'Attachments unavailable')
+          if (attachment[2] === 'image') {
+            const image = await runtime.attachments.preview(attachment[1]!)
+            res.writeHead(200, { 'content-type': image.mediaType, 'content-length': image.data.byteLength, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' })
+            res.end(Buffer.from(image.data)); return
+          }
+          const download = runtime.attachments.download(attachment[1]!)
+          res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': download.value.bytes, 'cache-control': 'no-store',
+            'x-content-type-options': 'nosniff', 'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(Buffer.from(download.value.name).toString('utf8')).replace(/[!'()*]/g, character => '%' + character.charCodeAt(0).toString(16).toUpperCase())}` })
+          await pipeline(Readable.from(download.chunks), res); return
+        }
         const speechAudio = /^\/orchestrator\/api\/voice\/([0-9a-f-]{36})\/audio$/.exec(url.pathname)
         if (req.method === 'GET' && speechAudio) {
           if (!runtime.voice) throw new VoiceError(503, 'Speech is unavailable')
@@ -485,7 +510,7 @@ export function registerHttp(ctx: Context, runtime: HttpHost): () => void {
         json(res, 200, await route.run({ params: route.params as never, query, body: async maxBytes => {
           const input = await readBody(req, maxBytes); if (mutation) runtime.authorizeMutation?.(); return input
         } }))
-      } catch (error) { json(res, ...failure(error)) }
+      } catch (error) { if (res.headersSent) res.destroy(); else json(res, ...failure(error)) }
     } })]
   return () => { for (const dispose of disposers) dispose() }
 }

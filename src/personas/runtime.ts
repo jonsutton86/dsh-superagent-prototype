@@ -5,7 +5,7 @@ import type {} from '@deepseek-ai/dsh-skill'
 import type { PersonaSnapshot } from './model.ts'
 
 const CAPABILITY_TOOLS = {
-  read: ['read', 'read_image', 'glob', 'grep'], write: ['write', 'edit'], commands: ['bash', 'pwsh', 'job_output', 'job_list', 'job_kill'],
+  read: ['read', 'read_image', 'glob', 'grep', 'workspace_attachments', 'workspace_attachment_read'], write: ['write', 'edit', 'workspace_attachment_copy'], commands: ['bash', 'pwsh', 'job_output', 'job_list', 'job_kill', 'workspace_attachment_copy'],
   web: ['web_search', 'web_fetch'], delegation: ['subagent', 'list_subagent_models', 'send_message', 'list_agents', 'interrupt_agent'], skills: ['skill'],
 } as const
 export function personaDenial(persona: PersonaSnapshot, tool: string): string | undefined {

@@ -6,6 +6,16 @@ import { SETUP_PROBLEMS } from '../setup.ts'
 import { HEALTH_TEXT } from '../sources/host.ts'
 
 const TEXT = {
+  'attachment.add': ['添加文件', 'Attach files'],
+  'attachment.hint': ['最多 {count} 个文件，每个 {size}。上传不会发送消息；请审阅后发送。', 'Up to {count} files, {size} each. Uploading does not send a message; review before sending.'],
+  'attachment.limit': ['文件数量或总大小超过限制。请减少所选文件。', 'The selection exceeds the file count or size limit. Choose fewer or smaller files.'],
+  'attachment.ready': ['已准备好', 'Ready'],
+  'attachment.retry': ['重试上传', 'Retry upload'],
+  'attachment.remove': ['移除文件', 'Remove file'],
+  'attachment.download': ['下载文件', 'Download file'],
+  'attachment.preview': ['预览图像', 'Preview image'],
+  'attachment.unavailable': ['文件不可用或未通过完整性检查。', 'The file is unavailable or failed its integrity check.'],
+  'attachment.cancelled': ['此上传已取消或已过期。请重新选择文件。', 'This upload was cancelled or expired. Select the file again.'],
   'voice.record': ['录音', 'Record'],
   'voice.finish': ['完成录音', 'Finish recording'],
   'voice.cancel': ['取消语音', 'Cancel voice'],

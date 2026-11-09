@@ -19,7 +19,7 @@ import type { WorldRecord } from '../../src/remote/world-journal.ts'
 import { readInstallation } from '../../src/recovery/installation.ts'
 import { inside } from '../../src/remote/journal.ts'
 
-export async function qualifyRecovery(input: { cli: string; home: string; profile: string; directory: string; temporary: string;
+export async function qualifyRecovery(input: { verifyInputs?: () => Promise<void>; cli: string; home: string; profile: string; directory: string; temporary: string;
   stateDir: string; sessionRoot: string; port: number; worldDirectories: string[]; worker: string; worlds: number;
   authority?: OwnershipConnection & { coordinatorId: string }; originalClaimantFile?: string;
   audit?: Pick<AuditCheckpointReceipts, 'endpoints' | 'worlds' | 'publication'>; unrecordedPublications?: string[]; expectedRecoveredRevocations?: number; expectedPublicationDestinations?: number }) {
@@ -259,6 +259,7 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
             }
           }
           await start()
+          await input.verifyInputs?.()
           const available = (await api('worlds')).items.find((item: any) => item.enabled && item.ready)
           let mission = await api('missions', { requestId: 'restored-mission', title: 'Restored execution proof', objective: 'Execute through the restored Harness world', acceptance: 'Verified artifact' })
           mission = await api(`missions/${mission.id}/actions`, { requestId: 'restored-action', revision: mission.revision, title: 'Write recovery proof', owner: 'agent',

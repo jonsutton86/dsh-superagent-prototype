@@ -8,25 +8,28 @@ import { MarkdownLite, When } from './widgets.tsx'
 import { INBOX_FILTERS } from '../app/api.ts'
 import type { ConversationMessage, InboxFilter, InboxItem } from '../workspace/inbox-model.ts'
 import { Dictation, SpeakReply, VoiceProvider } from './voice.tsx'
+import { AttachmentCard, AttachmentPicker } from './attachments.tsx'
 
 function Composer({ send, done, fresh = false }: {
-  send: (text: string, requestId: string) => Promise<InboxItem>; done: (item: InboxItem) => void; fresh?: boolean
+  send: (text: string, requestId: string, attachments: string[]) => Promise<InboxItem>; done: (item: InboxItem) => void; fresh?: boolean
 }) {
   const { t } = usePanel(), [text, setText] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('')
   const running = useRef(false)
   const [dictating, setDictating] = useState(false)
   const [unapplied, setUnapplied] = useState('')
+  const [files, setFiles] = useState<string[]>([]), [uploading, setUploading] = useState(false), [resetUploads, setResetUploads] = useState(0)
   // Keep the original body/revision for ambiguous failures; a later poll must not turn a retry into a second message.
-  const pending = useRef<{ text: string; send: () => Promise<InboxItem> }>()
+  const pending = useRef<{ fingerprint: string; send: () => Promise<InboxItem> }>()
   const submit = async (event: FormEvent) => {
     event.preventDefault()
-    if (running.current || dictating || !text.trim()) return
-    if (!pending.current || pending.current.text !== text) {
-      const requestId = crypto.randomUUID(), submitted = text
-      pending.current = { text, send: () => send(submitted, requestId) }
+    if (running.current || dictating || uploading || !text.trim()) return
+    const fingerprint = JSON.stringify([text, files])
+    if (!pending.current || pending.current.fingerprint !== fingerprint) {
+      const requestId = crypto.randomUUID(), submitted = text, attachments = [...files]
+      pending.current = { fingerprint, send: () => send(submitted, requestId, attachments) }
     }
     running.current = true; setBusy(true); setError('')
-    try { const item = await pending.current.send(); pending.current = undefined; setText(''); done(item) }
+    try { const item = await pending.current.send(); pending.current = undefined; setText(''); setResetUploads(value => value + 1); done(item) }
     catch (failure) {
       if (failure instanceof ApiError && failure.status >= 400 && failure.status < 500) pending.current = undefined
       setError(errorText(failure))
@@ -42,7 +45,8 @@ function Composer({ send, done, fresh = false }: {
       else { setText(combined); setUnapplied('') }
     }} />
     {unapplied && <label>{t('voice.draftFull')}<textarea readOnly value={unapplied} rows={3} /></label>}
-    <Button variant="primary" type="submit" disabled={busy || dictating || !text.trim()}>{t(fresh ? 'inbox.start' : 'inbox.send')}</Button>
+    <AttachmentPicker disabled={busy} reset={resetUploads} onChange={(ids, active) => { setFiles(ids); setUploading(active) }} />
+    <Button variant="primary" type="submit" disabled={busy || dictating || uploading || !text.trim()}>{t(fresh ? 'inbox.start' : 'inbox.send')}</Button>
   </form>
 }
 
@@ -59,7 +63,7 @@ function ConversationList({ filter }: { filter: InboxFilter }) {
     {data && <p className="dt-hint">{t('inbox.counts', { unread: data.unread, questions: data.questions, review: data.review })}</p>}
     {creating && <><p className="dt-hint">{t('inbox.newHint')}</p>
       {state?.paused || state?.setup.problem || (state && !state.environment?.ready) ? <p role="status">{t('mission.executionUnavailable')}</p>
-        : <Composer fresh send={(text, requestId) => call('POST inbox', { body: { text, requestId } })}
+        : <Composer fresh send={(text, requestId, attachments) => call('POST inbox', { body: { text, requestId, ...(attachments.length ? { attachments } : {}) } })}
           done={item => navigate({ page: 'inbox', id: item.id })} />}</>}
     <div className="dt-filters">{INBOX_FILTERS.map(value => <Pill key={value} active={value === filter}
       onClick={() => { setOffset(0); navigate({ page: 'inbox', query: { filter: value } }, true) }}>{t(`inbox.filter.${value}`)}</Pill>)}</div>
@@ -117,12 +121,13 @@ function ConversationPage({ id }: { id: string }) {
         <div className="dt-inbox-item-meta"><strong>{t(`inbox.role.${message.role}`)}</strong><When at={message.at} />
           {message.pending && <span>{t('inbox.pending')}</span>}</div>
         <MarkdownLite text={message.text} />{message.truncated && <p className="dt-hint">{t('inbox.truncated')}</p>}
+        {!!message.attachments?.length && <div className="dt-attachments">{message.attachments.map(file => <AttachmentCard key={file.id} file={file} />)}</div>}
         {message.role === 'agent' && <SpeakReply id={message.id} text={message.text} />}
       </li>)}</ol>
       {!!data.artifacts.length && <section><h3>{t('library.missionRecords')}</h3><ul>{data.artifacts.map(artifact => <li key={artifact.id}>
         <button type="button" className="dt-textlink" onClick={() => navigate({ page: 'library', id: artifact.id })}>{artifact.title}</button>
       </li>)}</ul></section>}
-      {item.canReply ? <Composer send={(text, requestId) => call('POST inbox/:id/reply', { id, body: { text, requestId, revision: item.revision } })}
+      {item.canReply ? <Composer send={(text, requestId, attachments) => call('POST inbox/:id/reply', { id, body: { text, requestId, revision: item.revision, ...(attachments.length ? { attachments } : {}) } })}
         done={() => { void reload() }} /> : <p className="dt-hint">{t('inbox.readOnly')}</p>}
     </>}
   </section>

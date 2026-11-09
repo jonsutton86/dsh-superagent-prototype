@@ -456,3 +456,9 @@ a.dt-btn, a.dt-btn:hover { text-decoration: none; }
 .dt-inbox-message-person { margin-left: min(8%, 48px); }
 .dt-inbox-message-status, .dt-inbox-message-context { border-style: dashed; }
 .dt-inbox-question { border-left: 3px solid var(--dsw-alias-state-warn-primary); padding: 12px 16px; overflow-wrap: anywhere; }
+.dt-attachments { min-width: 0; }
+.dt-attachments input { max-width: 100%; }
+.dt-attachments ul { padding-left: 20px; }
+.dt-attachments li { margin: 8px 0; overflow-wrap: anywhere; }
+.dt-attachment-card { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; overflow-wrap: anywhere; }
+.dt-attachment-card img { display: block; max-width: 100%; max-height: 480px; object-fit: contain; }

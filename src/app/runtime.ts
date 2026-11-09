@@ -35,6 +35,7 @@ import { Effects } from './effects.ts'
 import { Prompts } from './prompts.ts'
 import { registerHttp, type HttpHost } from './http.ts'
 import { Voice } from '../voice/service.ts'
+import { Attachments } from '../attachments/service.ts'
 import { outsideRoots } from '../voice/adapters.ts'
 import type { LinkTarget } from './views/records.ts'
 import { candidateCard, repliedTo, sourceLink, type LinkHost } from './links.ts'
@@ -107,6 +108,7 @@ export class Runtime extends Service implements SourceHost {
   readonly usage: Usage
   readonly inbox: Inbox
   readonly voice: Voice
+  readonly attachments: Attachments
   readonly library: Library
   readonly verification: Verification
   readonly verificationReviews: VerificationReviews
@@ -192,6 +194,12 @@ export class Runtime extends Service implements SourceHost {
         controlFiles: machine.publication ? [machine.publication.credentialFile] : [],
         revoked: binding => { for (const ticket of store.tickets.open()) if (ticket.execution?.environment?.environmentId === binding && canStop(ticket)) runtime.engine.stopTicket(ticket.id, 'Managed execution world revoked by the operator') } })
       const library = this.library = new Library(store)
+      this.attachments = new Attachments({ store, lifetime: this.lifetime, backend: () => ctx.get('attachments'),
+        authorize: ticket => {
+          this.ownership?.proof(); this.lifetime.throwIfAborted()
+          if (!environments.allows(ticket.execution?.environment)) throw new Error('Attachment execution environment is unavailable')
+          const problem = runtime.speculation?.problem(ticket); if (problem) throw new Error(problem)
+        } })
       openedVoice = this.voice = new Voice({ store, stateDir: machine.stateDir, config: machine.voice, lifetime: this.lifetime,
         roots: () => [executionRoot(store.settings(), machine.stateDir, world?.grant.root),
           ...environments.list().items.filter(item => item.kind === 'local').flatMap(item => [item.root, item.configuredRoot]),
@@ -222,7 +230,7 @@ export class Runtime extends Service implements SourceHost {
         (occurrence, missionId, spec) => reflections.prepare(occurrence, missionId, spec))
       const usage = this.usage = new Usage(store, Date.now, call => runtime.speculation?.admitCall(call))
       const inbox = this.inbox = new Inbox(store, workspace, library,
-        async id => (await ctx.sessionController.inspect(id as SessionId, AbortSignal.any([this.lifetime, AbortSignal.timeout(15_000)]))).events)
+        async id => (await ctx.sessionController.inspect(id as SessionId, AbortSignal.any([this.lifetime, AbortSignal.timeout(15_000)]))).events, this.attachments)
       this.disposers.push(ctx.on('session/event', (session, event) => {
         const id = ticketOfSession(session.id)
         if (id) inbox.record(id, event)
@@ -264,10 +272,11 @@ export class Runtime extends Service implements SourceHost {
         promptVersion: id => this.sessions.promptVersion(id), mayRead: (id, revision) => this.sessions.mayRead(id, revision),
         feishuPageSize: () => feishuSettings(sources).readPageSize, sourceLink: link }
       const sessions = this.sessions = new Sessions({ context: ctx, store, prompts, effects, health: board.claim('models'), masterId,
+        attachments: this.attachments,
         lifetime: this.lifetime, remote, worlds: this.worlds, personas, ownership: this.ownership, environmentAllowed: ticket => environments.allows(ticket.execution?.environment),
         executionProblem: ticket => runtime.speculation?.problem(ticket),
         closing: () => this.closing(), environment,
-        tools: (agent, ticket) => ticket ? executorTools(this.toolHost, ticket) : mainTools(this.toolHost, agent) })
+        tools: (agent, ticket) => ticket ? executorTools(this.toolHost, ticket, agent) : mainTools(this.toolHost, agent) })
       const policyChanged: EngineForSettings['policyChanged'] = (from, to, effects) => { this.engine.policyChanged(from, to, effects) }
       this.settings = new Settings({ store, sources, engine: { policyChanged }, health: board, context: ctx, lifetime: this.lifetime, sessions,
         sourceHost: this, setup, requestPass: () => { this.passes.request() } })
@@ -324,7 +333,7 @@ export class Runtime extends Service implements SourceHost {
       this.sourceDeps = { store, engine, outbox, commands, sources, get ready() { return runtime.ready },
         get deployment() { return setup.deployment }, configured: () => setup.configured(),
         get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem }, receive: trigger => passes.receive(trigger) }
-      this.toolHost = { context: ctx, engine, store, prompts, sessions, settings: this.settings, assessor, resources, library, verification, planning: workspace.plans, reflections, personas, worlds: this.worlds,
+      this.toolHost = { context: ctx, engine, store, prompts, sessions, settings: this.settings, assessor, resources, library, verification, planning: workspace.plans, reflections, personas, worlds: this.worlds, attachments: this.attachments,
         get github() { return runtime.context({ kind: 'github', health: ['github'] }) },
         requestPass: () => { passes.request() }, sendReplies: () => outbox.sent(),
         quietly: run => { this.quiet++; try { return run() } finally { this.quiet-- } } }
@@ -401,6 +410,7 @@ export class Runtime extends Service implements SourceHost {
     if (this.remoteWorkspace && !this.environments.ready()) {
       this.runtimeHealth.set({ state: 'paused', detail: 'Remote execution environment requires authorization or enrollment', at: now() }); return
     }
+    await this.attachments.restoreImages()
     this.sessions.install()
     this.executor.install()
     await this.sessions.ensure(this.masterId, this.remoteWorkspace?.world.grant.root ?? this.machine.stateDir, 'dsh-superagent orchestrator', 'orchestrator')
@@ -420,7 +430,7 @@ export class Runtime extends Service implements SourceHost {
     const { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, sourceLinks, setup, passes } = this
     return { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, get ready() { return runtime.ready }, sourceLinks, remoteRoot: this.remoteWorkspace?.world.grant.root,
       ownership: this.ownership, authorizeMutation: () => { this.ownership?.proof(); this.lifetime.throwIfAborted() },
-      publications: this.publications, voice: this.voice,
+      publications: this.publications, voice: this.voice, attachments: this.attachments,
       verification: this.verification,
       verificationReviews: this.verificationReviews,
       channelPublications: this.channelPublications,
@@ -441,6 +451,7 @@ export class Runtime extends Service implements SourceHost {
     try {
       await reviews; await verification
       await this.voice.stop()
+      await this.attachments.stop()
       await this.endpoints.stop()
       await this.publications.stop()
       await this.workspace.pulls?.stop()

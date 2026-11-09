@@ -43,7 +43,14 @@ interface Paged { offset?: number; limit?: number }
 type Delivery = 'injected' | 'pending'
 
 import type { VoiceCapabilities, VoiceReceipt, TranscribeInput, SpeakInput } from '../voice/model.ts'
+import type { AttachmentCapabilities, BeginUploadInput, UploadChunkInput, UploadView } from '../attachments/model.ts'
 export interface Api {
+  'GET uploads': { response: AttachmentCapabilities }
+  'POST uploads': { body: BeginUploadInput; response: UploadView }
+  'GET uploads/:id': { response: UploadView }
+  'POST uploads/:id/chunks': { body: UploadChunkInput; response: UploadView }
+  'POST uploads/:id/finish': { response: UploadView }
+  'POST uploads/:id/cancel': { response: UploadView }
   'GET voice': { response: VoiceCapabilities }
   'POST voice/transcribe': { body: TranscribeInput; response: VoiceReceipt }
   'POST voice/speak': { body: SpeakInput; response: VoiceReceipt }

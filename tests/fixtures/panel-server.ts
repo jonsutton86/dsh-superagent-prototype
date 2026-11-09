@@ -291,6 +291,12 @@ const ticketOf = (id: string) =>
 const SourceSave = z.object({ enabled: z.boolean(), config: z.unknown() })
 
 const ROUTES: { [K in keyof Api]: Route<K> } = {
+  'GET uploads': { answer: () => ({ available: false, fileBytes: 67108864, chunkBytes: 262144, perMessage: 8, messageBytes: 134217728 }) },
+  'POST uploads': { body: true, answer: () => refuse(409, 'Attachment fixture not configured') },
+  'GET uploads/:id': { answer: () => refuse(404, 'Upload not found') },
+  'POST uploads/:id/chunks': { body: true, answer: () => refuse(409, 'Attachment fixture not configured') },
+  'POST uploads/:id/finish': { answer: () => refuse(409, 'Attachment fixture not configured') },
+  'POST uploads/:id/cancel': { answer: () => refuse(409, 'Attachment fixture not configured') },
   'GET voice': { answer: () => ({ input: null, output: null, recordingMs: 30000, inputBytes: 2097152, textChars: 2000 }) },
   'POST voice/transcribe': { body: true, answer: () => refuse(409, 'Speech fixture not configured') },
   'POST voice/speak': { body: true, answer: () => refuse(409, 'Speech fixture not configured') },

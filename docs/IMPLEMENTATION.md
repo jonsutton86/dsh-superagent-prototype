@@ -1,5 +1,10 @@
 # Article implementation tracker
 
+[063 Conversation attachments](063-attachments.md) adds resumable file uploads, exact task/reply bindings, native Harness image
+projection and verified copies through the existing scoped subprocess service. Source bytes reside in the checkpointed Store.
+Local verification passed 1,981 tests (16 skipped), typechecking and six builds. Native Linux and installed-Harness recovery qualification are pending; the remaining architecture
+and product requirements below are unchanged.
+
 [062 Voice](062-voice.md) adds optional local/cloud speech adapters, editable inbox dictation, reply playback,
 interruption and durable request/restart handling while preserving DeepSeek Harness execution. Qualification revision
 `da21f8fb37f891362f9c900f3aae6a1bd25deb8e` passed the installed Harness speech/inference/restart/recovery drill

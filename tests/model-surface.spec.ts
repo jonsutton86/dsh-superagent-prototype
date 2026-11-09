@@ -42,6 +42,8 @@ const BUDGET: Record<Role, number> = { orchestrator: 59_000, worker: 40_500 }
 // New library capabilities have a separate ceiling so they do not relax the original routing/work prompt budget.
 const LIBRARY_BUDGET: Record<Role, number> = { orchestrator: 2_200, worker: 4_500 }
 // Host verification adds a bounded tool surface without relaxing the existing prompt or library ceilings.
+// Operator input tools have their own ceiling; existing orchestration/library/check budgets stay unchanged.
+const ATTACHMENT_BUDGET: Record<Role, number> = { orchestrator: 2, worker: 2_200 }
 const CHECK_BUDGET: Record<Role, number> = { orchestrator: 2, worker: 3_600 }
 const PROMPTS = 'prompts/, skills/', TOOLS = 'src/app/tools/', SESSIONS = 'src/app/sessions.ts'
 const NOTICES = 'src/app/notices.ts', LINKS = 'src/app/links.ts', ASSESSMENT = 'src/app/assessment.ts'
@@ -355,7 +357,7 @@ function failures(): Map<string, string> {
 it('collects both roles\' tools, prompts, skills and inputs', () => {
   expect([...toolsOf('worker').keys()].sort()).toEqual(['orchestrator_ack', 'orchestrator_read', 'orchestrator_report',
     'orchestrator_thread_follow',
-    'orchestrator_thread_unrelated', 'orchestrator_trigger_handback', 'workspace_check_cancel', 'workspace_check_list', 'workspace_check_output',
+    'orchestrator_thread_unrelated', 'orchestrator_trigger_handback', 'workspace_attachment_copy', 'workspace_attachment_read', 'workspace_attachments', 'workspace_check_cancel', 'workspace_check_list', 'workspace_check_output',
     'workspace_check_read', 'workspace_check_request', 'workspace_publish', 'workspace_read', 'workspace_search'])
   expect(toolsOf('orchestrator').has('workspace_publish')).toBe(false)
   expect([...toolsOf('orchestrator').keys()]).toEqual(expect.arrayContaining(['orchestrator_route', 'orchestrator_eval_decide', 'orchestrator_reply']))
@@ -401,7 +403,9 @@ it.each(['orchestrator', 'worker'] as const)('keeps the %s within its character 
   const definitions = [...toolsOf(role).values()].map(({ name, description, parameters }) => ({ name, description, parameters }))
   const checks = JSON.stringify(definitions.filter(tool => tool.name.startsWith('workspace_check_'))).length
   expect(checks, `${checks} characters of verification tools`).toBeLessThanOrEqual(CHECK_BUDGET[role])
-  const library = JSON.stringify(definitions.filter(tool => tool.name.startsWith('workspace_') && !tool.name.startsWith('workspace_check_'))).length
+  const attachments = JSON.stringify(definitions.filter(tool => tool.name.startsWith('workspace_attachment'))).length
+  expect(attachments, `${attachments} characters of input attachment tools`).toBeLessThanOrEqual(ATTACHMENT_BUDGET[role])
+  const library = JSON.stringify(definitions.filter(tool => tool.name.startsWith('workspace_') && !tool.name.startsWith('workspace_check_') && !tool.name.startsWith('workspace_attachment'))).length
   expect(library, `${library} characters of library tools`).toBeLessThanOrEqual(LIBRARY_BUDGET[role])
   const tools = JSON.stringify(definitions.filter(tool => !tool.name.startsWith('workspace_'))).length
   expect(prompt + tools, `${prompt} characters of prompt and ${tools} of tools`).toBeLessThanOrEqual(BUDGET[role])
