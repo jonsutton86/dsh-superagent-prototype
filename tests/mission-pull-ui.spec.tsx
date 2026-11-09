@@ -25,8 +25,10 @@ const click = async (text: string) => { expect(button(text), text).toBeTruthy();
 
 async function fixture(lostCompletion = false) {
   const h = await channelPublicationFixture(cleanup, 'github-pr-review'), { host, publisher, mission } = h
-  if (process.env.DSH_REMOTE_ISOLATION !== '1') h.remote.host.isolation = new HostProcessIsolation()
-  h.remote.host.snapshotHelper = resolve('src/verification/snapshot-worker.ts')
+  if (process.env.DSH_REMOTE_ISOLATION !== '1') {
+    h.remote.host.isolation = new HostProcessIsolation()
+    h.remote.host.snapshotHelper = resolve('src/verification/snapshot-worker.ts')
+  }
   const nativeFetch = globalThis.fetch, requests: { path: string; body: any }[] = []; let lost = false
   vi.stubGlobal('fetch', async (input: string | URL | Request, init?: RequestInit) => {
     if (!String(input).startsWith('/orchestrator/api/')) return nativeFetch(input, init)
@@ -69,7 +71,9 @@ it('binds through the rendered operator form, accepts exact-head checks and clos
   const definition = h.host.runtime.verification.definitions.create({ requestId: randomUUID(), enabled: true, definition: { name: 'Verify PR bytes', description: 'Check actual file',
     artifactPath: 'result.txt', argv: ['/bin/sh', '-c', 'test -s result.txt'], confinement: process.env.DSH_REMOTE_ISOLATION === '1' ? 'linux-bubblewrap' : 'host-process' } })
   const run = await h.host.runtime.verification.request(artifact.id, { requestId: randomUUID(), artifactRevision: artifact.revision, artifactHash: artifact.hash, check: { id: definition.id, version: 1 } })
-  await vi.waitFor(() => expect(h.host.runtime.verification.get(run.id).status).toBe('passed'), { timeout: 10000 })
+  await vi.waitFor(() => expect(h.host.runtime.verification.get(run.id).quiescent).toBe(true), { timeout: 10000 })
+  const checked = h.host.runtime.verification.get(run.id)
+  expect(checked.status, checked.problem).toBe('passed')
   await h.host.runTool(`worker-${ticket.id}`, 'orchestrator_report', { state: 'ready', summary: 'Checked PR result ready' })
   await act(async () => { root!.render(<PanelProvider t={translator(en)} navigate={() => {}}><MissionsPage key="accepted" id={mission.id} /></PanelProvider>); await settle() })
   expect(button(en['mission.acceptResult']).disabled).toBe(true)

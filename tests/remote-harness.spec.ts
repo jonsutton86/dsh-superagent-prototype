@@ -295,7 +295,7 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
       expect((await api(`missions/${mission.id}/inbound/poll`, { rescan: true })).items).toEqual([inboundRecord])
     }
     if (otherTask) {
-      await vi.waitFor(async () => expect((await api(`inbox/${otherTask}`)).item.status).toBe('review'), { timeout: 120_000, interval: 1000 })
+      expect((await api(`inbox/${otherTask}`)).item.status).toBe('done')
       const other = await api(`tickets/${otherTask}`)
       expect(other.executionEnvironment.world).toBe(alternate.id)
       expect(other.directory).not.toBe(ticket.directory)
