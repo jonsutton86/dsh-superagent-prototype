@@ -63,6 +63,8 @@ A failure before the activation transaction retains the hold. An interrupted lea
 authority's epoch; retry still requires the same reserved checkpoint and unchanged independent resource inventories.
 After activation, restart verifies the original Session prefix while permitting genuine appended events and descendants,
 then acquires a fresh process lease. Ownership loss remains terminal for that process. It does not silently reacquire.
+An acknowledged quiescent revocation is terminal: world startup retains its receipt and observation access without sending
+the administrative mutation again. Unacknowledged or non-quiescent revocations still retry their original request.
 
 Subsequent checkpoints resolve the relocated journals and retained administrative paths. A newly staged checkpoint clears
 the preceding attempt's reservation/audit/preparation/activation metadata, while retaining operational bindings as
@@ -74,7 +76,19 @@ Local tests cover private installation, original-ID retries, changed Store/world
 refusal, exclusive-lock transfer, interrupted acquisition, legitimate continued history, unavailable old directories and a
 second complete backup/recovery cycle. The installed-Harness qualification additionally starts the installed Runtime,
 runs a new real-model mission in a restored execution world, checks its artifact and restarts with the continued history.
-Final qualification results are recorded after the checks finish.
+The initial live run reached restored startup, completed a new mission and restarted, then failed the final assertion
+because the world lifecycle resent an already-completed revocation. That production behavior was corrected; the assertion
+was retained, and a pool restart regression now checks that no completed revocation is sent again. Final qualification
+results follow below.
+
+The complete local `pnpm check` passed 1,938 tests, typechecking and all six builds in 127.77 seconds of test time.
+The terminal-revocation fix then passed 27 focused installation/pool/ownership tests plus repeated typechecking and all
+six builds. Final runtime/test revision `a1c22a3` passed installed-Harness / DeepSeek Flash owned-managed qualification
+in 203.47 seconds, including private installation, restored startup, a new mission/artifact, continued-history restart
+and zero additional sends of the completed revocation. Inference used the configured real API; publication traffic stayed
+on local contract servers. The original app remained running. The same revision passed 1,945 native Linux / Node 24 tests
+with bubblewrap, typechecking and all six builds in 273.76 seconds of test time in
+[run 42688097294](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42688097294).
 
 This is not yet clean-host or cross-machine failover acceptance. The external authority, endpoints, publisher, their
 provider credentials and worker roots remain independently deployed; their disaster recovery, automated provisioning,

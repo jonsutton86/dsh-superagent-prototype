@@ -642,5 +642,10 @@ Installed recovery and Runtime handoff are implemented in `060-installed-recover
 retains original state/Session identities and historical authority while relocating operational files. First startup checks
 original history, journals and independent resources, acquires ownership, then hands its exclusive lock and active lease to
 the real Harness Runtime. Restart preserves legitimate continued history. Subsequent backup/recovery resolves relocated
-journals and requires a new reservation. Final local, native and installed-Harness qualification is pending; cross-machine
-failover, dedicated-profile live startup and all remaining full product/architecture requirements remain open.
+journals and requires a new reservation. Full local verification passed 1,938 tests, typechecking and all builds; the
+terminal-revocation fix passed 27 focused tests and repeated typechecking/builds. Revision `a1c22a3` passed installed-Harness
+/ DeepSeek Flash qualification in 203.47 seconds, including a restored mission/artifact, restart and no completed-revocation
+replay. The same revision passed 1,945 native Linux / Node 24 tests with bubblewrap, typechecking and all builds in
+[run 42688097294](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42688097294).
+Cross-machine failover, dedicated-profile live startup and all remaining full
+product/architecture requirements remain open. The original app remains running.
