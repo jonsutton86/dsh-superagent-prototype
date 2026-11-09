@@ -87,7 +87,19 @@ ambiguous responses, preserved charges and navigation to a distant stale source.
 ceilings remain unchanged. Installed-Harness qualification reads a fresh verification code through three linked records,
 checks the actual model report and retrieval receipt, then restarts to verify the same persisted charges.
 
-Qualification results are recorded after these checks finish. Automatic reflection/proposals, retrieval-quality and
+Code `1aaa87cc87f577345bfb2fd5bc51d7d6f62b48ca` passed 1,708 tests (five skipped), typechecking and all builds
+with native Linux confinement in [run 42587579793](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42587579793),
+in 161.79 seconds. The full local check passed 1,704 tests (seven skipped), typechecking and all four builds in 107.51 seconds.
+The final publication freshness guard and focused recall/library/publication/UI/localization/documentation run passed 56
+tests, typechecking and all builds. Both owned installed-Harness / DeepSeek Flash scenarios passed in 254.46 seconds.
+The managed scenario retrieved a fresh code present only in the oldest of three linked records, reported the exact code,
+recorded at least three pages/nodes against its execution, and preserved the exact receipts across a process restart.
+It also retained the pre-inference usage refusal and explicit retry, scheduled file/artifact checks, and held recovery
+qualification. The independent publication test refused both stale and incompletely inspected source chains without a
+provider post. Actual inference used the configured API; channel traffic stayed on fixture servers. The original app
+remained running. Seven documentation checks passed after recording evidence.
+
+Automatic reflection/proposals, retrieval-quality and
 long-horizon evaluations, external imports/freshness, retention, multi-workspace, speculative admission, remote deployment,
 restored activation/failover, host verification, supervision UI, voice, packaging and the remaining architecture/product
 requirements remain open. Browser layout/accessibility verification remains open while browser use is disabled.

@@ -32,9 +32,16 @@ bounded source/revision traversal, exact returned UTF-8 byte ceilings, scope che
 Library freshness now follows source chains with explicit unknown results at inspection limits. Review fingerprints use the
 complete accessible dependency closure so distant changes invalidate acceptance even when the display traversal is bounded.
 Model token budgets remain in the inference ledger; retrieval bytes are not presented as exact model token counts.
-Deterministic, rendered and installed-Harness qualification results will be recorded after completion. Automatic reflection,
+Automatic reflection,
 retrieval quality/long-horizon evaluation, external-source imports/freshness, speculative admission, retention, multi-workspace,
 recovery activation/failover, voice and the remaining full architecture/product requirements stay open.
+
+Code `1aaa87cc87f577345bfb2fd5bc51d7d6f62b48ca` passed 1,708 Linux tests, typechecking and all builds in
+[run 42587579793](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42587579793).
+The full local check passed 1,704 tests; the final focused run passed 56. Both owned installed-Harness / DeepSeek Flash
+scenarios passed in 254.46 seconds, including an exact fact retrieved from a three-record source chain, persisted retrieval
+charges across restart, usage refusal/retry, scheduled execution and held recovery. Stale or unknown source chains were
+refused by the artifact publication gate in independent service tests. The original app remained running.
 
 ## Implemented increment: managed model usage and budgets
 

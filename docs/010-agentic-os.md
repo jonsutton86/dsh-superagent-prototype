@@ -427,3 +427,17 @@ eight focused checks, typechecking and all builds without changing the qualified
 architecture requirements remain active.
 Final code `f9eeb684c73da00cdbff86a170a57c1666affc0c` also passed 1,693 Linux tests, typechecking and all builds in
 [run 42583242628](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42583242628).
+
+Chain of Recall: `043-chain-recall.md` replaces the prompt-only recall guideline with durable per-execution/router-day
+allowances, atomic reservations, exact output-byte limits and bounded scoped graph reads. Source freshness follows
+transitive dependencies and reports incomplete checks as unknown. Mission review hashes the complete accessible source
+closure; distant changes invalidate acceptance even beyond the bounded display depth. Artifact publication refuses stale,
+contested or unknown chains. Operator controls expose limits, charges and stale-source navigation.
+Code `1aaa87cc87f577345bfb2fd5bc51d7d6f62b48ca` passed 1,708 Linux tests, typechecking and all builds in
+[run 42587579793](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42587579793).
+The full local check passed 1,704 tests, with 56 passing in the final focused run. Both owned installed-Harness / DeepSeek
+Flash scenarios passed in 254.46 seconds. A real worker obtained an exact code through three linked records and retained
+its exact retrieval receipts across restart. Usage refusal/retry, scheduled artifact production and held recovery also passed.
+The original app remained running. Automatic reflection, retrieval-quality/long-horizon evaluation, external imports and
+freshness, retention, multi-workspace, speculative admission, restored activation/failover, voice and all other full product
+and architecture requirements remain active.
