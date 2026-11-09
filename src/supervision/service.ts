@@ -38,6 +38,7 @@ export class Supervision {
       revision: key(JSON.stringify(ticket)), title: ticket.title.slice(0, 500), scope: ticket.mandate.scope.slice(0, 2000),
       stage: `${stage.stage}${stage.stage === 'person' ? '/' + stage.action : ''}`, updatedAt: ticket.updatedAt,
       report: report ? { ...report, summary: report.summary.slice(0, 2000) } : null,
+      question: ticket.attention?.question.slice(0, 2000) ?? null,
       canNudge: liveTicket(ticket) && assignment?.state === 'running' && stage.stage === 'working'
         && !this.host.store.get(nudged(assignment.id)),
     }

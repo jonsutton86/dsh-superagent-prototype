@@ -96,7 +96,7 @@ export class WatchdogJournal {
       const seen = new Set<string>()
       for (const observation of snapshot.tickets) {
         const working = observation.stage === 'working' && now - Date.parse(observation.updatedAt) >= staleMs
-        const blocked = observation.stage === 'person/blocked' || observation.stage === 'person/failed'
+        const blocked = observation.stage === 'person/blocked' || observation.stage === 'person/failed' || observation.stage === 'person/answer'
         if (snapshot.paused || !snapshot.configured || (!working && !blocked)) continue
         const id = key(`watchdog:${observation.id}:${observation.assignmentId ?? 'queued'}`), previous = this.get(id)
         seen.add(id)

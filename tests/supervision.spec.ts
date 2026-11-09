@@ -93,6 +93,16 @@ it('never nudges work awaiting a person, a completed assignment, or queued work'
   expect(note).not.toHaveBeenCalled()
 })
 
+it('includes bounded human questions in independent observations without permitting progress requests', () => {
+  const value = ticket(); value.attention = { id: 'question-one', question: 'Choose a platform. '.repeat(200) }
+  store.tickets.save(value)
+  const observed = supervisor.snapshot().tickets[0]!
+  expect(observed).toMatchObject({ stage: 'person/answer', canNudge: false, question: value.attention.question.slice(0, 2000) })
+  expect(observed.question).toHaveLength(2000)
+  expect(supervisor.intervene(command()).reason).toBe('intervention_not_allowed')
+  expect(note).not.toHaveBeenCalled()
+})
+
 async function serve() {
   const server = createServer(); servers.push(server)
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))

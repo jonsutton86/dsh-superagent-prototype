@@ -64,10 +64,12 @@ it('reviews an incident during a main outage and replays an unconfirmed acknowle
 it('refuses acknowledgement of evidence changed after rendering and escapes observed task content', async () => {
   host = await watchdogServer(); connect()
   host.snapshot.tickets[0]!.title = '<img src=x onerror=alert(1)> Suspicious task'
+  host.snapshot.tickets[0]!.stage = 'person/answer'; host.snapshot.tickets[0]!.question = 'Choose <script>Linux</script> or macOS.'
   host.snapshot.tickets[0]!.revision = 'new-title'; host.journal.reconcile(host.snapshot, host.now + 1, 1000, 3600000)
   await mount(); await click('<img src=x onerror=alert(1)> Suspicious task')
   await waitFor(() => expect(container!.querySelector('textarea')).not.toBeNull())
   expect(container!.querySelector('img')).toBeNull(); expect(container!.querySelector('script')).toBeNull()
+  expect(text()).toContain('Operator answer needed'); expect(text()).toContain('Choose <script>Linux</script> or macOS.')
   const incident = host.journal.open()[0]!
   host.journal.assess({ incidentId: incident.id, incidentRevision: incident.revision, finding: 'unknown', evidence: 'Evidence changed during review.' }, host.now + 2)
   await click('Acknowledge evidence')

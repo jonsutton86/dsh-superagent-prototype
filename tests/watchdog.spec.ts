@@ -134,3 +134,15 @@ it('coalesces concurrent polls and does not classify fresh or review-ready work 
   now += options.staleMs; snapshot.tickets[0]!.stage = 'person/review'; await monitor.poll()
   expect(journal.open()).toEqual([]); expect(assessor.send).not.toHaveBeenCalled()
 })
+
+it('keeps human-answer work visible as operator attention without authorizing an automated nudge', async () => {
+  snapshot.tickets[0]!.stage = 'person/answer'; snapshot.tickets[0]!.canNudge = false
+  snapshot.tickets[0]!.question = 'Choose Linux or macOS.'
+  await monitor.poll()
+  expect(journal.open()[0]!.observation.question).toBe('Choose Linux or macOS.')
+  const incident = stalled()
+  expect((await monitor.requestStatus(incident.id, incident.revision)).reason).toBe('intervention_not_allowed')
+  expect(client.intervene).not.toHaveBeenCalled()
+  snapshot.tickets[0]!.stage = 'working'; snapshot.tickets[0]!.updatedAt = new Date(now).toISOString()
+  await monitor.poll(); expect(journal.open()).toEqual([])
+})

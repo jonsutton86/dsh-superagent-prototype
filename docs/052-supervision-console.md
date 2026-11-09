@@ -11,6 +11,9 @@ open/unacknowledged counts. Overdue observations are distinct from a current hea
 unacknowledged, closed or all retained incidents; inspect scope, worker reports, model evidence and progress-request
 receipts; review paginated audit history; and acknowledge the specific evidence with an optional note. Text is rendered
 as text, including task content and raw receipt details. The console links to the configured main application origin.
+Tasks waiting for a human answer are included as operator-attention incidents with their bounded question. They are never
+eligible for an automated status nudge. The first complete live flow exposed their omission from the older watchdog filter;
+the regression covers visibility, refusal to nudge and closure when a human reply returns work to active execution.
 
 Acknowledgement means an operator reviewed evidence. It never closes an incident, suppresses the monitor, changes a mandate,
 retries a task or restarts a process. New observations, assessment findings, intervention outcomes and exhausted assessment

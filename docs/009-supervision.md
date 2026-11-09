@@ -48,8 +48,9 @@ retry shell commands, stop work, change policy or publish anything. Waiting-for-
 
 ## Semantic supervision
 
-The watcher opens incidents for working tickets whose ticket record has not changed for `staleMs`, and for blocked or
-failed tickets. A lack of updates is a reason to inspect work, not proof of deadlock. The current evidence is the bounded
+The watcher opens incidents for working tickets whose ticket record has not changed for `staleMs`, and for blocked,
+failed or human-answer tickets. Human-answer incidents require operator attention and are never nudged automatically.
+A lack of updates is a reason to inspect work, not proof of deadlock. The current evidence is the bounded
 scope, latest report and execution stage; it does not include raw shell output or the entire worker transcript.
 
 Its dedicated preset contains no shell, filesystem, subagent or general management tools. Inherited tools are masked,

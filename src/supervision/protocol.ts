@@ -5,6 +5,7 @@ export const ObservationSchema = z.object({
   id: z.string(), assignmentId: z.string().nullable(), revision: z.string(), title: z.string().max(500),
   scope: z.string().max(2000), stage: z.string(), updatedAt: z.string(),
   report: z.object({ state: z.string(), summary: z.string().max(2000), at: z.string() }).nullable(),
+  question: z.string().max(2000).nullable().optional(),
   canNudge: z.boolean(),
 })
 export const SnapshotSchema = z.object({

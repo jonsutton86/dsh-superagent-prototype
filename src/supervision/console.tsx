@@ -138,6 +138,7 @@ export function WatchdogConsole() {
           <div><dt>Evidence updated</dt><dd>{date(incident.updatedAt)}</dd></div><div><dt>Assessment deliveries</dt><dd>{incident.attempts} / 3{incident.attempts >= 3 && !incident.assessment ? ' · limit reached; operator review needed' : ''}</dd></div></dl>
         <h3>Task scope</h3><p className="wd-prewrap">{incident.observation.scope}</p><h3>Latest worker report</h3>
         <p className="wd-prewrap">{incident.observation.report?.summary ?? 'No report observed.'}</p>
+        {incident.observation.question && <><h3>Operator answer needed</h3><p className="wd-prewrap">{incident.observation.question}</p></>}
         <h3>Assessment evidence</h3><p className="wd-prewrap">{incident.assessment?.evidence ?? 'No recorded assessment. Quiet work alone does not prove a stall.'}</p>
         {incident.intervention && <p>Progress request: {incident.intervention.accepted ? 'accepted' : 'refused'} · {incident.intervention.reason}</p>}
         {incident.acknowledgement && <p className="wd-prewrap">{incident.acknowledged ? 'Acknowledged' : 'New evidence since acknowledgement'} at {date(incident.acknowledgement.at)}{incident.acknowledgement.note ? '\n' + incident.acknowledgement.note : ''}</p>}
