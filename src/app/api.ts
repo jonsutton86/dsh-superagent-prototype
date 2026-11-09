@@ -15,6 +15,7 @@ import type { PlanIndex, PlanProposal, PlanVersion, ProposePlanInput, ReviewPlan
 import type { CreateScheduleInput, SaveScheduleInput, ToggleScheduleInput, ScheduleView, ScheduleList, Schedule } from '../workspace/schedule-model.ts'
 import type { UsagePage, UsageCall, UsageConfiguration, SaveUsageInput, ReconcileUsageInput } from '../usage/model.ts'
 import type { ReflectionList, ReflectionView, ReflectionProposal, ReviewReflectionInput } from '../workspace/reflection-model.ts'
+import type { SpeculationState, SpeculationView, SpeculationConfiguration, SaveSpeculationInput, SpeculationCommandInput, ApproveSpeculationMessageInput } from '../speculation/model.ts'
 import type { RecallState, RecallConfiguration, SaveRecallInput } from '../workspace/recall-model.ts'
 import type { EnvironmentList, EnvironmentView, EnrollEnvironmentInput, EnvironmentCommandInput } from '../environments/model.ts'
 import type { ExecutionReceiptPage } from '../remote/effects.ts'
@@ -44,6 +45,12 @@ export interface Api {
   'GET usage/versions/:version': { response: UsageConfiguration }
   'POST usage/calls/:id/reconcile': { body: ReconcileUsageInput; response: UsageCall }
   'GET schedules': { query?: Paged; response: ScheduleList }
+  'GET speculation': { query?: Paged; response: SpeculationState }
+  'PUT speculation': { body: SaveSpeculationInput; response: SpeculationConfiguration }
+  'GET speculation/versions/:version': { response: SpeculationConfiguration }
+  'GET speculation/:id': { response: SpeculationView }
+  'POST speculation/:id/review': { body: SpeculationCommandInput; response: SpeculationView }
+  'POST speculation/:id/messages': { body: ApproveSpeculationMessageInput; response: SpeculationView }
   'GET reflections': { query?: Paged; response: ReflectionList }
   'GET reflections/:id': { response: ReflectionView }
   'POST reflections/:id/proposals/:proposal/review': { body: ReviewReflectionInput; response: ReflectionProposal }

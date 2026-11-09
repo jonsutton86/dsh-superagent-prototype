@@ -62,6 +62,10 @@ export class ExecutionEffects {
     return Number(this.db.prepare(`SELECT count(*) AS n FROM execution_effect WHERE json_extract(value, '$.quiescent') IS NOT 1
       AND (json_extract(value, '$.phase')='unknown' OR json_extract(value, '$.recovered')=1)`).get()!.n)
   }
+  /** Require an observed quiescent receipt for every ticket effect, independent of display pagination. */
+  quiescent(ticketId: string): boolean {
+    return !this.db.prepare("SELECT 1 FROM execution_effect WHERE json_extract(value,'$.owner.ticketId')=? AND json_extract(value,'$.quiescent') IS NOT 1 LIMIT 1").get(ticketId)
+  }
   prepare<T extends RpcInput & { requestId: string }>(request: T, authority: Authority): T {
     if (!effect(request)) return request
     if (this.closed) throw new Error('Execution receipt journal is closed')

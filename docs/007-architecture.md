@@ -291,6 +291,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 
 | Path | Responsibility |
 | --- | --- |
+| `src/speculation/model.ts`, `service.ts`, `src/client/speculation.tsx` | Durable speculative allocations, quotas, quiescence, evidence promotion, separate message approval and panel. |
 | `src/index.ts` | The main plugin entry: reads the machine settings, starts the Runtime, and gives it the restart that a save of a Source's account uses |
 | `src/supervision/protocol.ts` | Bounded observation, assessment and intervention schemas shared by independent processes |
 | `src/workspace/library-model.ts` | Scoped memory/artifact contracts, immutable provenance and bounded publication/recall schemas |
@@ -503,6 +504,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 
 | Test | Covers |
 | --- | --- |
+| `tests/speculation.spec.ts`, `tests/speculation-runtime.spec.ts`, `tests/speculation-ui.spec.tsx`, `tests/speculation-harness.spec.ts` | Reservation races, preemption, recovery, promotion/publication, HTTP/DOM and opt-in installed-Harness qualification. |
 | `tests/core-engine.spec.ts` | Domain rules on in-memory repositories: receiving, Eval, fan-out, resume and stop, interrupted Assignments, the pause, Policy changes, reports and outcomes, attaching, replies, failed deliveries and dismissed problems |
 | `tests/environments.spec.ts` | Runtime/API enrollment, persistent grants, paired-provider proof, races, revocation, replacement and legacy task binding |
 | `tests/environments-ui.spec.tsx` | Rendered enrollment/recovery and exact mutation retry after response loss and polling |

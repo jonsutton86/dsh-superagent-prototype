@@ -45,6 +45,7 @@ export interface SessionsHost {
   readonly personas?: Pick<Personas, 'verify'>
   readonly ownership?: OwnershipAccess
   environmentAllowed?(ticket: Ticket): boolean
+  executionProblem?(ticket: Ticket): string | undefined
   closing(): boolean
   /** Execution environment variables for `ticket`, rendered into its worker's system prompt. */
   environment(ticket: Ticket): Variable[]
@@ -396,6 +397,8 @@ export class Sessions {
       if (!current || !liveTicket(current)) return 'Ticket ended; new work needs a new authorized ticket'
       if ((current.execution?.persona?.digest ?? 'default') !== (persona?.digest ?? 'default')) return 'The task persona changed; authorize a new run'
       if (this.host.environmentAllowed && !this.host.environmentAllowed(current)) return 'Execution environment authorization is unavailable or revoked'
+      const problem = this.host.executionProblem?.(current)
+      if (problem) return problem
       return this.worldProblem(agent)
     })]
   }

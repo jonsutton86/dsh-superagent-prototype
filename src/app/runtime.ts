@@ -14,7 +14,7 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { lockSync } from 'proper-lockfile'
-import { Engine, canStop, key, reasonText, type EngineForSettings, type ReceiveResult, type Ticket, type Trigger } from '../core/index.ts'
+import { Engine, canStop, key, latestAssignment, reasonText, type EngineForSettings, type ReceiveResult, type Ticket, type Trigger } from '../core/index.ts'
 import { allowedSender, settingsPolicy } from '../policy.ts'
 import { SourceRegistry } from '../sources/registry.ts'
 import { sourceAvailable } from '../sources/contracts.ts'
@@ -53,6 +53,7 @@ import { Supervision } from '../supervision/service.ts'
 import { Workspace } from '../workspace/service.ts'
 import { Schedules } from '../workspace/schedules.ts'
 import { Reflections } from '../workspace/reflection.ts'
+import { Speculation } from '../speculation/service.ts'
 import { Usage } from '../usage/service.ts'
 import { UsageRuntime } from '../usage/runtime.ts'
 import { Inbox } from '../workspace/inbox.ts'
@@ -95,6 +96,7 @@ export class Runtime extends Service implements SourceHost {
   readonly workspace: Workspace
   readonly schedules: Schedules
   readonly reflections: Reflections
+  readonly speculation: Speculation
   readonly usage: Usage
   readonly inbox: Inbox
   readonly library: Library
@@ -163,6 +165,7 @@ export class Runtime extends Service implements SourceHost {
         revoked: binding => { for (const ticket of store.tickets.open()) if (ticket.execution?.environment?.environmentId === binding && canStop(ticket)) runtime.engine.stopTicket(ticket.id, 'Managed execution world revoked by the operator') } })
       const library = this.library = new Library(store)
       this.publications = new Publications({ store, library, ownership: this.ownership, connection: machine.publication, lifetime: this.lifetime,
+        preparationProblem: (ticketId, assignmentId) => runtime.speculation?.publicationProblem(ticketId, assignmentId),
         roots: () => [executionRoot(store.settings(), machine.stateDir, world?.grant.root), ...this.worlds.list().items.map(item => item.root)] })
       const personas = this.personas = new Personas(store, async model => { await resolveRoleModel(ctx, model) })
       const workspace = this.workspace = new Workspace(store, () => runtime.engine, () => !this.paused() && !this.closing(),
@@ -171,7 +174,7 @@ export class Runtime extends Service implements SourceHost {
       const reflections = this.reflections = new Reflections(store, workspace, library, () => !this.paused())
       const schedules = this.schedules = new Schedules(store, workspace, () => !this.paused(), Date.now,
         (occurrence, missionId, spec) => reflections.prepare(occurrence, missionId, spec))
-      const usage = this.usage = new Usage(store)
+      const usage = this.usage = new Usage(store, Date.now, call => runtime.speculation?.admitCall(call))
       const inbox = this.inbox = new Inbox(store, workspace, library,
         async id => (await ctx.sessionController.inspect(id as SessionId, AbortSignal.any([this.lifetime, AbortSignal.timeout(15_000)]))).events)
       this.disposers.push(ctx.on('session/event', (session, event) => {
@@ -201,7 +204,8 @@ export class Runtime extends Service implements SourceHost {
       }, id => sourceAvailable({ owned: !!this.ownership, publication: !!machine.publication, local: machine.executionMode === 'local' }, id))
       this.channelPublications = new ChannelPublications({ store, ownership: this.ownership, connection: machine.publication, lifetime: this.lifetime,
         mission: id => workspace.get(id, false), destinations: () => this.publications.destinations(),
-        authorized: ticket => workspace.policy(settingsPolicy(store.settings(), sources)).revalidate(ticket.mandate) && workspace.executionAllowed(ticket) })
+        authorized: ticket => workspace.policy(settingsPolicy(store.settings(), sources)).revalidate(ticket.mandate) && workspace.executionAllowed(ticket)
+          && !runtime.speculation?.publicationProblem(ticket.id) })
       this.conversations = new ConversationInbox({ store, ownership: this.ownership, connection: machine.publication, lifetime: this.lifetime, channels: this.channelPublications,
         engine: () => runtime.engine, requestPass: () => runtime.passes.request(),
         authorized: ticket => workspace.policy(settingsPolicy(store.settings(), sources)).revalidate(ticket.mandate) && workspace.executionAllowed(ticket) })
@@ -215,20 +219,38 @@ export class Runtime extends Service implements SourceHost {
         feishuPageSize: () => feishuSettings(sources).readPageSize, sourceLink: link }
       const sessions = this.sessions = new Sessions({ context: ctx, store, prompts, effects, health: board.claim('models'), masterId,
         lifetime: this.lifetime, remote, worlds: this.worlds, personas, ownership: this.ownership, environmentAllowed: ticket => environments.allows(ticket.execution?.environment),
+        executionProblem: ticket => runtime.speculation?.problem(ticket),
         closing: () => this.closing(), environment,
         tools: (agent, ticket) => ticket ? executorTools(this.toolHost, ticket) : mainTools(this.toolHost, agent) })
       const policyChanged: EngineForSettings['policyChanged'] = (from, to, effects) => { this.engine.policyChanged(from, to, effects) }
       this.settings = new Settings({ store, sources, engine: { policyChanged }, health: board, context: ctx, lifetime: this.lifetime, sessions,
         sourceHost: this, setup, requestPass: () => { this.passes.request() } })
       this.executor = new DshExecutor({ context: ctx, get engine() { return runtime.engine }, store, effects, health: board.claim('worker'), machine, environments, remote, personas,
+        get speculation() { return runtime.speculation },
         lifetime: this.lifetime, sessions, closing: () => this.closing(), paused: () => this.paused(), environment, sourceLink: link,
         repliedTo: trigger => repliedTo({ store, sources }, trigger) })
       this.assessor = new MasterAssessor({ get engine() { return runtime.engine }, commands, get deployment() { return setup.deployment }, effects,
         settings: () => store.settings(), paused: () => this.paused(), threadContext: trigger => sources.threadContext(trigger),
         deliver: async (id, text) => { await sessions.prompt(masterId, id, text, 'steer') }, candidateCard: candidate => candidateCard(links, candidate) })
-      const outbox = this.outbox = new Outbox({ store, effects, sources, commands, publication: this.channelPublications, paused: () => this.paused() })
+      const outbox = this.outbox = new Outbox({ store, effects, sources, commands, publication: this.channelPublications, paused: () => this.paused(),
+        publicationProblem: message => runtime.speculation?.messageProblem(message) })
       const { assessor, executor } = this
       const policy = () => environments.policy(this.conversations.policy(workspace.policy(settingsPolicy(store.settings(), sources))))
+      const speculation = this.speculation = new Speculation({ store, usage, authorized: ticket => policy().revalidate(ticket.mandate),
+        paused: () => this.paused(), capacity: () => store.settings().executor.maxWorkers, busy: id => executor.busy(id),
+        quiet: run => executor.quiescence(run), requestPass: () => runtime.passes?.request(),
+        evidence: ticket => key(JSON.stringify(ticket) + library.evidenceRevision(ticket.id)),
+        provider: async ticket => {
+          const selected = ticket.execution?.persona?.definition.model ?? store.settings().executor.model
+            ?? (ctx.get('agentDefaultModel') as { currentSelection(): { provider: string; model: string } } | undefined)?.currentSelection()
+          if (!selected) throw new Error('Configure a worker model before admitting speculative preparation')
+          return (await resolveRoleModel(ctx, selected)).provider
+        }, halt: (id, reason, assignmentId) => {
+          const ticket = store.tickets.get(id), assignment = ticket && latestAssignment(ticket)
+          if (ticket && !ticket.ended && assignment?.id === assignmentId && assignment.state !== 'ended' && assignment.report?.state !== 'ready'
+            && assignment.report?.summary !== reason) runtime.engine.report(id, { state: 'blocked', summary: reason })
+          executor.halt(id, reason, assignmentId)
+        } })
       const engine = this.engine = new Engine({ repo: store, scope: sources, policy, assessor, executor,
         outbox, prepareTicket: (ticket, outcome) => executor.prepare(ticket, outcome), emit: event => {
           // Notify the main Session only about domain events it did not initiate itself.
@@ -250,7 +272,7 @@ export class Runtime extends Service implements SourceHost {
         configured: () => setup.configured() && !this.closing() && !this.lifetime.aborted, health: () => this.health })
       // Update the `evals` health entry on every pass if an evaluation failed as unavailable within the last hour.
       const evals = board.claim('evals', { state: 'ready', detail: 'No unavailable Eval in the last hour' })
-      const evaluateDue = () => { schedules.tick(); engine.evaluateDue(); evals.set(evalsHealth(store)) }
+      const evaluateDue = async () => { await speculation.tick(); schedules.tick(); engine.evaluateDue(); evals.set(evalsHealth(store)) }
       const passes = this.passes = new Passes({ engine: { receive: trigger => engine.receive(trigger), evaluateDue }, effects,
         health: this.runtimeHealth, lifetime: this.lifetime, configured: () => setup.configured(), closing: () => this.closing() })
       this.sourceDeps = { store, engine, outbox, commands, sources, get ready() { return runtime.ready },
@@ -355,7 +377,7 @@ export class Runtime extends Service implements SourceHost {
       channelPublications: this.channelPublications,
       conversations: this.conversations,
       get health() { return runtime.health }, remoteEffects: this.remoteWorkspace?.world,
-      supervision: this.supervision, workspace: this.workspace, schedules: this.schedules, reflections: this.reflections, usage: this.usage, library: this.library, inbox: this.inbox, environments: this.environments, endpoints: this.endpoints, personas: this.personas, worlds: this.worlds,
+      supervision: this.supervision, workspace: this.workspace, schedules: this.schedules, reflections: this.reflections, speculation: this.speculation, usage: this.usage, library: this.library, inbox: this.inbox, environments: this.environments, endpoints: this.endpoints, personas: this.personas, worlds: this.worlds,
       get deployment() { return setup.deployment },
       get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem },
       configured: () => setup.configured(), links: () => runtime.links(), ticketEnvironment: ticket => runtime.ticketEnvironment(ticket),
@@ -377,6 +399,7 @@ export class Runtime extends Service implements SourceHost {
       const agents = ids.map(id => this.ctx.agents.get(id as SessionId)).filter((agent): agent is Agent => agent !== undefined)
       for (const agent of agents) agent.cancel({ kind: 'user' }, { keepInbox: true })
       await Promise.allSettled([passes, this.effects.drain(), ...agents.map(agent => agent.whenIdle())])
+      await this.speculation.close()
       // The workers' jobs and subagents stop too: their ends would start worker turns without the tool limits released below.
       await (this.quiescing ??= this.executor.shutdown())
       this.executor.dispose()

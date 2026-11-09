@@ -18,7 +18,8 @@ export interface PublicationRecord {
   createdAt: string; updatedAt: string; phase: 'pending' | 'unknown' | 'observed'; receipt?: PublicationReceipt; problem?: string
 }
 interface Stored extends PublicationRecord { intent: Publication; fingerprint: string; attempts: OwnershipStamp[] }
-interface PublicationHost { store: Store; library: Library; ownership?: CoordinatorOwnership; connection?: PublicationConnection; lifetime: AbortSignal; roots(): string[] }
+interface PublicationHost { store: Store; library: Library; ownership?: CoordinatorOwnership; connection?: PublicationConnection; lifetime: AbortSignal; roots(): string[];
+  preparationProblem?(ticketId: string, assignmentId?: string): string | undefined }
 const view = ({ intent: _, fingerprint: __, attempts: ___, ...record }: Stored): PublicationRecord => record
 
 /** Operator-approved immutable artifact delivery with original-ID transport recovery and independent service receipts. */
@@ -75,6 +76,8 @@ export class Publications {
   }
   private eligible(id: string, revision: number, hash: string) {
     const record = this.host.library.read(id)
+    const problem = record.provenance.ticketId && this.host.preparationProblem?.(record.provenance.ticketId, record.provenance.assignmentId)
+    if (problem) throw new PublicationError(409, 'artifact_changed', problem)
     if (record.kind !== 'artifact' || record.revision !== revision || record.hash !== hash || !record.text || record.archived || record.expired || record.superseded || record.conflicted || record.staleSources.length || record.freshness?.status !== 'current')
       throw new PublicationError(409, 'artifact_changed', 'Select a current, non-conflicting text artifact with a complete source check and review its exact content before publication')
     return record

@@ -133,7 +133,7 @@ async function start() {
   const resolveAgent = async (id: string) => agents.has(id) ? { agent: agents.get(id) } : { error: { code: 'session/not-found' } }
   const ctx = new Context()
   const history = { read: async () => ({ events: [] }), [Symbol.asyncDispose]: async () => {} }
-  const services = { fs: filesystem, agents, llm: { resolveCallConfig: async (value: unknown) => value },
+  const services = { agentDefaultModel: { currentSelection: () => ({ provider: 'test', model: 'test' }) }, fs: filesystem, agents, llm: { resolveCallConfig: async (value: unknown) => value },
     workspaceRegistry: { create: async (cwd: string) => ({ id: cwd }) },
     sessionController: { create, resolveAgent, selectModel: async () => {}, rename: async () => {}, inspect: async () => ({ events: [] }) },
     sessionPersistence: { flush: async () => {}, open: async () => history }, permissionPresets: { set: () => {} }, subprocess,
@@ -176,7 +176,7 @@ async function drive(host: Host) {
   const answer = { trigger_id: request.id, purpose: 'answer', text: '是配置。' }
   const refusal = await run(master, 'orchestrator_reply', answer).then(() => '', (error: Error) => error.message)
   const proposal = feishu('5', '把副标题改成“浏览网页”', { mentions: [] })
-  await runtime.receive(proposal)
+  await runtime.receive(proposal); await runtime.idle()
   vi.spyOn(Commands.prototype, 'lark').mockResolvedValue({ items: [{ message_id: 'om_5', chat_id: CHAT }] })
   await run(master, 'orchestrator_eval', { trigger_id: proposal.id })
   const proactive = (await run(master, 'orchestrator_eval_decide', { trigger_id: proposal.id, decision: 'accept', title: '文案修订', worktree_name: 'copy-fix',

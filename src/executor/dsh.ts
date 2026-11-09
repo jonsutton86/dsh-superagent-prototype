@@ -20,6 +20,8 @@ import type { Sessions } from '../app/sessions.ts'
 import { WorktreeNameSchema } from '../app/assessment.ts'
 import { resultRelay } from '../app/notices.ts'
 import type { HealthEntry } from '../infra/health.ts'
+import type { Speculation } from '../speculation/service.ts'
+import type { SpeculationRun } from '../speculation/model.ts'
 import { cancelled, collectJob, killJobs, runningJobs, stopBackground, stopSubagents, until, untilQuiet } from './background.ts'
 
 const now = (): string => new Date().toISOString()
@@ -60,6 +62,7 @@ export function transient(error: unknown): boolean {
 const ticketWorktreeName = (name: string, id: string): string => `${WorktreeNameSchema.parse(name)}-${id.slice(0, 12)}`
 /** Host dependencies used by `DshExecutor`. */
 export interface ExecutorHost {
+  speculation?: Pick<Speculation, 'queued' | 'admit' | 'problem'>
   /** Present in the application runtime; reusable executor-only hosts may supply their own admission boundary. */
   environments?: Environments
   personas?: Pick<Personas, 'snapshot'>
@@ -71,7 +74,7 @@ export interface ExecutorHost {
     | 'assignmentInterrupted'>
   readonly store: Pick<Store, 'tickets' | 'triggers' | 'set' | 'settings' | 'atomic' | 'afterCommit'>
   /** Durable effect queue through which launches and input deliveries run. */
-  readonly effects: Pick<Effects, 'enqueue' | 'handle'>
+  readonly effects: Pick<Effects, 'enqueue' | 'handle'> & Partial<Pick<Effects, 'cancel'>>
   /** The `worker` health entry, which reports whether background worker event handling failed. */
   readonly health: HealthEntry
   readonly machine: Pick<Machine, 'stateDir' | 'executionMode'>
@@ -207,6 +210,7 @@ export class WorkerSlots {
   }
   /** Releases `ticketId`'s starting slot once its worker session is running or the launch/wake attempt has ended. */
   free(ticketId: string): void { this.starting.delete(ticketId) }
+  holds(ticketId: string): boolean { return this.starting.has(ticketId) }
 }
 
 /**
@@ -291,6 +295,7 @@ export class DshExecutor implements Executor {
   }
   /** Enqueues a `launch` effect for an accepted or resumed assignment; launches start in queue order as worker slots free up. */
   start(ticket: Ticket, assignment: Assignment): void {
+    this.host.speculation?.queued(ticket, assignment)
     this.host.effects.enqueue('launch', assignment.id, { ticketId: ticket.id, assignmentId: assignment.id })
   }
   /** Enqueues a `delivery` effect to steer pending inputs into `ticket`'s running worker session. */
@@ -300,6 +305,7 @@ export class DshExecutor implements Executor {
     const ticket = this.host.store.tickets.get(ticketId)
     const assignment = ticket && latestAssignment(ticket)
     if (!ticket || !liveTicket(ticket) || assignment?.id !== assignmentId || assignment.state !== 'pending') return
+    await this.host.speculation?.admit(ticket, assignment)
     this.slots.reserve(ticketId, 'launch')
     try { await this.launch(ticket, assignment); this.transient.delete(`launch:${assignmentId}`) }
     catch (error) {
@@ -360,6 +366,8 @@ export class DshExecutor implements Executor {
     const live = () => {
       const current = this.host.store.tickets.get(ticket.id)
       if (!current || !liveTicket(current) || runningAssignment(current)?.id !== assignment.id) throw new Error('The ticket ended or another Assignment took it over')
+      const problem = this.host.speculation?.problem(current)
+      if (problem) throw new Later(problem)
       // A stop of the worker's background work that started meanwhile ends with a cancel, which would drop the Input.
       if (this.stopping.has(ticket.id)) throw new Later('The worker\'s background work is stopping')
     }
@@ -415,6 +423,52 @@ export class DshExecutor implements Executor {
     const stopping = this.stopping.get(ticketId)
     if (stopping) await until(stopping, this.host.lifetime)
   }
+  /** Host-governed stop without impersonating a human cancellation or discarding saved preparation. */
+  halt(ticketId: string, reason: string, assignmentId?: string): void {
+    const ticket = this.host.store.tickets.get(ticketId), assignment = ticket && latestAssignment(ticket)
+    if (assignmentId ?? assignment?.id) this.host.effects.cancel?.('launch', assignmentId ?? assignment!.id)
+    if (!assignmentId || assignment?.id === assignmentId) this.host.effects.cancel?.('delivery', ticketId)
+    this.host.store.afterCommit(() => {
+      this.host.context.agents.get(workerSessionId(ticketId) as SessionId)?.cancel({ kind: 'user' }, { keepInbox: false })
+      this.stopWork(ticketId, reason)
+    })
+  }
+  /** Runtime activity, including a launch that reserved a slot but has not delivered an assignment. */
+  busy(ticketId: string): boolean {
+    const ticket = this.host.store.tickets.get(ticketId)
+    return this.slots.holds(ticketId) || !!ticket && this.running(ticket)
+  }
+  /** Prove known work quiet; a missing local process after restart needs an evidenced operator attestation. */
+  async quiescence(run: SpeculationRun): Promise<string | undefined> {
+    if (this.slots.holds(run.ticketId) || this.stopping.has(run.ticketId)) return
+    const ticket = this.host.store.tickets.get(run.ticketId)
+    if (!ticket) return
+    const ctx = this.host.context, queue = [workerSessionId(run.ticketId)], seen = new Set<string>()
+    const children = ctx.get('subagents') as { listChildren(id: string): Promise<readonly { id: string }[]> } | undefined
+    while (queue.length) {
+      const id = queue.shift()!
+      if (seen.has(id)) continue
+      if (seen.size >= 128) return
+      seen.add(id)
+      if (ctx.agents.get(id as SessionId)?.status === 'running' || runningJobs(ctx, id).length) return
+      if (children) {
+        const result = await until(children.listChildren(id), this.host.lifetime, 2000)
+        if (result === false) return
+        queue.push(...result.map(item => item.id))
+      }
+    }
+    let remote: RemoteWorkspace | undefined
+    try { remote = this.remoteFor({ ...ticket, execution: run.execution }) } catch { return }
+    if (remote) {
+      if (await until(remote.world.refreshEffects(), this.host.lifetime, 2000) === false) return
+      if (!remote.world.quiescent(run.ticketId)) return
+    }
+    if (this.slots.holds(run.ticketId) || this.stopping.has(run.ticketId)
+      || [...seen].some(id => ctx.agents.get(id as SessionId)?.status === 'running' || runningJobs(ctx, id).length)) return
+    if (remote) return 'Harness workers/jobs and original endpoint effect receipts are quiescent'
+    if (run.recovered && !run.attestation) return
+    return run.attestation ? 'Local recovery attestation and current Harness activity checked' : 'Current Harness workers, descendants and owned jobs are idle'
+  }
   /**
    * On a host stop, for a bounded time: stop each loaded worker's background work, keeping its inbox; then end the collecting
    * of the jobs left to a person, which were killed, and cancel a worker turn that started meanwhile, keeping its inbox.
@@ -462,6 +516,8 @@ export class DshExecutor implements Executor {
       if (this.host.closing() || !current || !liveTicket(current) || latestAssignment(current)?.id !== assignment.id)
         throw new PrepareFailed('Assignment changed before remote workspace preparation')
       if (this.host.paused()) throw new Later('Processing is paused')
+      const problem = this.host.speculation?.problem(current)
+      if (problem) throw new Later(problem)
     }, () => this.launchOwned(ticket, assignment))
   }
   private async launchOwned(ticket: Ticket, assignment: Assignment): Promise<void> {
@@ -469,6 +525,8 @@ export class DshExecutor implements Executor {
       if (this.host.closing()) throw new Error('dsh-superagent is stopping')
       if (this.host.paused()) throw new Later('Processing is paused')
       const stored = this.host.store.tickets.get(ticket.id)
+      const problem = stored && this.host.speculation?.problem(stored)
+      if (problem) throw new Later(problem)
       return !!stored && liveTicket(stored) && latestAssignment(stored)?.id === assignment.id
     }
     const source = sourceTrigger(this.host, ticket)

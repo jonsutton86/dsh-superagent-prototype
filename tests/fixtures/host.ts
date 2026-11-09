@@ -260,7 +260,7 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
     catch (error) { agents.delete(options.sessionId); await agent.ctx.fiber.dispose(); throw error }
     return { agent, dispose: () => agent.ctx.fiber.dispose() }
   }) })
-  const services = { fs: options.remote?.filesystem ?? filesystem, agents: registry, llm: { resolveCallConfig: vi.fn(async (value: unknown) => value) }, sessionController: controller,
+  const services = { agentDefaultModel: { currentSelection: () => ({ provider: 'test', model: 'test' }) }, fs: options.remote?.filesystem ?? filesystem, agents: registry, llm: { resolveCallConfig: vi.fn(async (value: unknown) => value) }, sessionController: controller,
     sessionPersistence: persistence, workspaceRegistry: { create: async (cwd: string) => ({ id: cwd }) }, permissionPresets: { set: () => {} },
     subprocess: options.remote?.subprocess ?? subprocess, webServer,
     ...(options.remote ? { superagentRemoteWorld: options.remote.world } : {}),

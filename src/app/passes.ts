@@ -4,7 +4,7 @@ import type { HealthEntry } from '../infra/health.ts'
 import type { Effects } from './effects.ts'
 
 export interface PassesHost {
-  readonly engine: Pick<Engine, 'receive' | 'evaluateDue'>
+  readonly engine: Pick<Engine, 'receive'> & { evaluateDue(): void | Promise<void> }
   readonly effects: Pick<Effects, 'kick' | 'idle'>
   readonly health: HealthEntry
   readonly lifetime: AbortSignal
@@ -64,6 +64,6 @@ export class Passes {
     this.host.effects.kick()
     if (this.host.closing()) return
     // While processing is paused, the Engine only records the pause on active Evals so they do not expire.
-    this.host.engine.evaluateDue()
+    await this.host.engine.evaluateDue()
   }
 }

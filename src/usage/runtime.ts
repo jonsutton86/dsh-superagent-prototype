@@ -6,6 +6,7 @@ import type {} from '@deepseek-ai/dsh-api-session-controller'
 import type { Store } from '../app/store.ts'
 import type { HealthEntry } from '../infra/health.ts'
 import { ticketOfSession, workerSessionId } from '../executor/dsh.ts'
+import { latestAssignment } from '../core/index.ts'
 import type { Mission } from '../workspace/model.ts'
 import { UsageError, type UsageOwner } from './model.ts'
 import { Usage } from './service.ts'
@@ -50,7 +51,7 @@ export class UsageRuntime {
     if (root === this.masterId) return { sessionId, root, role: 'orchestrator' }
     const ticket = this.store.tickets.get(ticketOfSession(root) ?? '')
     if (!ticket) throw new UsageError(409, 'The owning task for model accounting is missing')
-    const owner: UsageOwner = { sessionId, root: workerSessionId(ticket.id), role: 'worker', ticketId: ticket.id,
+    const owner: UsageOwner = { sessionId, root: workerSessionId(ticket.id), role: 'worker', ticketId: ticket.id, assignmentId: latestAssignment(ticket)?.id,
       ...(ticket.execution?.persona ? { personaId: ticket.execution.persona.id } : {}) }
     const trigger = this.store.triggers.get(ticket.origin.triggerId)
     if (trigger?.source === 'workspace' && typeof trigger.meta.mission === 'string') {

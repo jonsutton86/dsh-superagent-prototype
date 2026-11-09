@@ -28,7 +28,7 @@ export type SaveUsageInput = z.input<typeof SaveUsage>
 export const ReconcileUsage = z.object({ requestId: id, tokens: UsageTokens, cost: count.max(1e12).optional(),
   note: z.string().trim().min(1).max(2000) }).strict()
 export type ReconcileUsageInput = z.input<typeof ReconcileUsage>
-export interface UsageOwner { sessionId: string; root: string; role: 'orchestrator' | 'worker'; ticketId?: string; missionId?: string; scheduleId?: string; personaId?: string }
+export interface UsageOwner { sessionId: string; root: string; role: 'orchestrator' | 'worker'; ticketId?: string; assignmentId?: string; speculationId?: string; missionId?: string; scheduleId?: string; personaId?: string }
 export interface UsageCall {
   id: string; owner: UsageOwner; provider: string; model: string; purpose: string; startedAt: string; settledAt?: string
   phase: 'pending' | 'reported' | 'unknown' | 'reconciled'; outcome?: string; configRevision: number

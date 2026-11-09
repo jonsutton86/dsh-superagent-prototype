@@ -27,7 +27,8 @@ const matches = (scope: UsageScope, owner: UsageOwner): boolean => scope.kind ==
 
 /** Keeps accounting facts, in-flight reservations and configuration history in the coordinator Store, across process restarts. */
 export class Usage {
-  constructor(private readonly store: Store, private readonly clock: () => number = Date.now) {
+  constructor(private readonly store: Store, private readonly clock: () => number = Date.now,
+    private readonly admission?: (call: UsageCall) => string | undefined) {
     store.db.exec(`CREATE TABLE IF NOT EXISTS usage_configuration (revision INTEGER PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS usage_call (id TEXT PRIMARY KEY, value TEXT NOT NULL, at TEXT AS (value ->> '$.startedAt'),
         phase TEXT AS (value ->> '$.phase'), mission TEXT AS (value ->> '$.owner.missionId'), schedule TEXT AS (value ->> '$.owner.scheduleId'), persona TEXT AS (value ->> '$.owner.personaId'));
@@ -35,6 +36,7 @@ export class Usage {
       CREATE INDEX IF NOT EXISTS usage_call_mission ON usage_call(mission,at);
       CREATE INDEX IF NOT EXISTS usage_call_schedule ON usage_call(schedule,at);
       CREATE INDEX IF NOT EXISTS usage_call_persona ON usage_call(persona,at);
+      CREATE INDEX IF NOT EXISTS usage_call_speculation ON usage_call(json_extract(value,'$.owner.speculationId'),at);
       CREATE TABLE IF NOT EXISTS usage_command (id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS usage_session (id TEXT PRIMARY KEY, root TEXT NOT NULL);`)
     if (!store.db.prepare('SELECT 1 FROM usage_configuration LIMIT 1').get()) {
@@ -84,13 +86,21 @@ export class Usage {
   }
   totals(scope: UsageScope, from: string): UsageTotals {
     const filter = this.filter(scope, from)
+    return this.aggregate(filter.sql, filter.args)
+  }
+  /** Internal allocation accounting uses the host-bound speculative run, including uncertain reservations and descendants. */
+  speculation(id: string, from = '0000-01-01T00:00:00.000Z', provider?: string): UsageTotals {
+    return this.aggregate("json_extract(value,'$.owner.speculationId')=? AND at>=?" + (provider ? " AND value ->> '$.provider'=?" : ''),
+      [id, from, ...provider ? [provider] : []])
+  }
+  private aggregate(where: string, args: SQLInputValue[]): UsageTotals {
     const row = this.store.db.prepare(`SELECT count(*) AS calls,
       coalesce(sum(value ->> '$.totalTokens'),0) AS tokens, coalesce(sum(value ->> '$.cost'),0) AS cost,
       coalesce(sum(CASE WHEN phase IN ('pending','unknown') THEN coalesce(value ->> '$.reservedTokens',0) ELSE 0 END),0) AS reservedTokens,
       coalesce(sum(CASE WHEN value ->> '$.cost' IS NULL THEN coalesce(value ->> '$.reservedCost',0) ELSE 0 END),0) AS reservedCost,
       count(CASE WHEN value ->> '$.totalTokens' IS NULL AND value ->> '$.reservedTokens' IS NULL THEN 1 END) AS unknownTokens,
       count(CASE WHEN value ->> '$.cost' IS NULL AND value ->> '$.reservedCost' IS NULL THEN 1 END) AS unknownCost,
-      count(CASE WHEN phase='pending' THEN 1 END) AS pending FROM usage_call WHERE ${filter.sql}`).get(...filter.args)!
+      count(CASE WHEN phase='pending' THEN 1 END) AS pending FROM usage_call WHERE ${where}`).get(...args)!
     return Object.fromEntries(Object.entries(row).map(([name, value]) => [name, valid(Number(value))])) as unknown as UsageTotals
   }
   private budgetView(budget: UsageBudget): BudgetView {
@@ -119,8 +129,10 @@ export class Usage {
         if (budget.cost !== undefined && (reservedCost === undefined || totals.unknownCost || totals.cost + totals.reservedCost + reservedCost > budget.cost))
           throw new UsageError(409, `Estimated spend reservation unavailable: ${budget.title}. Check prices, unresolved calls and remaining allowance.`)
       }
-      const value: UsageCall = { id: randomUUID(), owner, provider, model, purpose, startedAt: this.now(), phase: 'pending',
+      const value: UsageCall = { id: randomUUID(), owner: { ...owner }, provider, model, purpose, startedAt: this.now(), phase: 'pending',
         configRevision: config.revision, ...(reservedTokens !== undefined ? { reservedTokens } : {}), ...(reservedCost !== undefined ? { reservedCost } : {}), ...(price ? { price } : {}) }
+      const speculationId = this.admission?.(value)
+      if (speculationId) value.owner.speculationId = speculationId
       this.store.db.prepare('INSERT INTO usage_call(id,value) VALUES (?,?)').run(value.id, JSON.stringify(value)); return value
     })
   }

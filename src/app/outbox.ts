@@ -13,6 +13,7 @@ export interface OutboxHost {
   readonly commands: Commands
   readonly publication?: { observe(message: OutboundMessage): Promise<'sent' | 'gone' | 'pending' | undefined>; withdraw(id: string): boolean }
   paused(): boolean
+  publicationProblem?(message: OutboundMessage): string | undefined
 }
 
 /**
@@ -49,6 +50,9 @@ export class Outbox implements OutboxPort {
     if (store.receipts.behind(id, receipt.channel.source === 'publication' ? Number.MAX_SAFE_INTEGER : FAILURES_BEFORE_ERROR))
       throw new Later('An earlier message of this ticket to this conversation waits')
     if (!sources.channelAllowed(receipt.channel)) { store.receipts.settle(receipt, 'channelIgnored'); return }
+    // Observation settles an already accepted external request; a new dispatch needs current authority.
+    const problem = this.host.publicationProblem?.(receipt)
+    if (problem) throw new Later(problem)
     // A permanently unreachable target (such as a recalled message or deleted Issue) settles as `channelGone` so its receipt prevents retries.
     const result = await sources.send(receipt, commands)
     if (result === 'waiting') throw new Later('The Source is not installed')

@@ -15,15 +15,25 @@ not a claim that the prototype already ships every feature or that the article s
 | Two-level coordination | `src/core/engine.ts`, `src/app/sessions.ts`, `src/executor/dsh.ts` | Separate router execution authority from routing; retain worker-local subagents |
 | Event admission and routing | `src/policy.ts`, `src/core/intake.ts`, `src/core/evals.ts`, `src/sources/*` | Extend source scope only where required; retain subscription ownership and handback invariants |
 | Context and recall | Immutable scoped records, provenance/FTS search, host-enforced cumulative retrieval allowances, bounded chain context/transitive freshness and complete review dependency closure | Measured retrieval and long-horizon validation, external-source freshness/imports, model-token-aware context selection and retention/scaling |
-| Speculative work | Inferred mandates, observe/auto, configurable rules | Durable budgets, expiry and promotion/publication gates |
+| Speculative work | Inferred mandates, observe/auto and rules; durable owner/provider/environment/workspace allocations, measured model usage, preemption, expiry, quiescence/recovery holds and separate promotion/publication approval | Long-horizon quality/waste measurements, multi-workspace/retention/scaling and stronger confinement |
 | Full duplex | Harness job/subagent services, `src/executor/background.ts`, `src/app/delivery.ts`, remote receipts, durable assignment/tool ownership, receipt-only restart recovery and operator cancellation | Broader long-running job, process-failure and cross-host acceptance |
 | Compute/state separation | SQLite Store; Harness Session checkpoints, held import, checkpoint-bound claimant replacement, revision-bound receipt audits and authenticated held receipt application including original administration; ownership authority, endpoint handoff fencing, shared Runtime/pool/provider lifecycle and independently fenced artifact/mission delivery with directed inbound replies | Private credential/runtime configuration validation, authoritative input/state recovery, remapping, broader inbound discovery/admission and repository integration, clean-host activation and failover qualification |
 | Remote environments | Paired local/remote providers, authenticated leased grants, durable revocation, mission/Session binding, endpoint-owned versioned credentials, remote profile and artifact/restart qualification, operator enrollment/reconciliation, generated profiles, managed world pool and exact per-action selection | Managed endpoint/machine launch, remote repository workflows, quotas and cross-host acceptance |
 | Watchdog | Existing health and bounded transient executor retry; now `src/supervision/*` | Live-provider and process-level acceptance, incident UI/alerts, retention, richer progress evidence and separately authorized recovery policies |
-| Delivery | Reports and PR binding/closure; content-addressed artifacts, stale mission-review invalidation, reviewed artifacts and plan-authorized mission replies to GitHub issue/review and Feishu/Lark destinations with independent receipts; exact participant/task inbound listeners | Host-collected check evidence, Git/environment revision binding, broader inbound discovery/admission, repository integration and speculative promotion/publication gates |
+| Delivery | Reports and PR binding/closure; content-addressed artifacts, stale mission-review invalidation, reviewed artifacts and plan-authorized mission replies to GitHub issue/review and Feishu/Lark destinations with independent receipts; exact participant/task inbound listeners | Host-collected check evidence, Git/environment revision binding, broader inbound discovery/admission, repository integration and broader speculative quality evaluation |
 | Operator control | Existing web panel, settings, pause/retry/stop, scoped usage/limits/prices and reconciliation, local/remote environment status and revocation, endpoint enrollment/reconciliation and private profile generation | Supervision, broader workload budgets and evidence surfaces |
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
+
+## Implemented increment: speculative preparation and review
+
+[045 Speculative preparation](045-speculative-preparation.md) adds assignment-bound durable owner/provider/environment
+and workspace reservations, spare-capacity admission, explicit-work preemption, expiry, model usage integration,
+quiescence/recovery holds and operator promotion. Exact-message approval is separate from promotion; artifact publication
+also requires current promotion. API and bilingual review controls expose the lifecycle and reconciliation path.
+The executor remains DeepSeek Harness. Qualification results are recorded below when each check completes.
+This does not close long-horizon evaluation, stronger confinement, managed machine launch, host-collected verification,
+recovery activation/failover, supervision, voice, packaging, onboarding or any remaining full-scope requirement below.
 
 ## Implemented increment: scheduled reflection and reviewed proposals
 
@@ -616,7 +626,7 @@ retrieval quality on real work, not only the article's synthetic scheduling expe
 
 ### 5. Speculative work with measurable budgets
 
-Add an explicit speculative lifecycle on top of inferred mandates: proposal, admitted background preparation, evidence-ready,
+Implemented in 045: an explicit speculative lifecycle on top of inferred mandates: proposal, admitted background preparation, evidence-ready,
 promoted, expired or cancelled. Allocate per-owner/provider/environment concurrency, time and usage budgets durably before
 starting work. Speculation consumes spare capacity and yields to explicit work. Promotion rechecks current authorization;
 external publication uses a separate gate. Cancellation releases reservations only after execution quiesces or its outcome
@@ -624,7 +634,8 @@ has been reconciled.
 
 Acceptance: competing admissions cannot overspend the same reservation; explicit work can preempt speculation; expired
 work cannot publish; a restart preserves spent usage and active reservations; promotion keeps provenance and does not
-repeat completed work. Provider usage reporting and enforceable limits must be distinguished from approximate cost estimates.
+repeat completed work. Provider usage reporting and enforceable limits remain distinguished from approximate cost estimates. Long-horizon
+quality/waste measurement, scaling, multi-workspace ownership and stronger confinement still require acceptance evidence.
 
 ### 6. Verified artifacts and delivery
 

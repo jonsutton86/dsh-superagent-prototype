@@ -456,3 +456,8 @@ snapshots/receipts/dispatch after restart. The original app remained running. Re
 evaluation, imports/freshness, retention/scaling, multi-workspace ownership, speculative admission/promotion, managed
 machine launch, host-collected verification, recovery activation/failover, supervision, voice, packaging and onboarding
 remain in the full implementation scope.
+
+Speculative preparation: `045-speculative-preparation.md` adds durable reservations before execution, actual Harness model
+accounting, explicit-work preemption, quiescence and recovery holds, evidence promotion and separate message publication
+approval. The original Engine and Harness remain the execution path. Qualification is in progress; long-horizon quality,
+confinement, retention/scaling and all remaining full architecture/product requirements remain active.

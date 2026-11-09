@@ -33,6 +33,7 @@ import type { Workspace } from '../workspace/service.ts'
 import type { Schedules } from '../workspace/schedules.ts'
 import type { Reflections } from '../workspace/reflection.ts'
 import type { Usage } from '../usage/service.ts'
+import type { Speculation } from '../speculation/service.ts'
 import { UsageScope, UsageError } from '../usage/model.ts'
 import { WorkspaceError } from '../workspace/model.ts'
 import type { Library } from '../workspace/library.ts'
@@ -69,6 +70,7 @@ export interface HttpHost {
   readonly schedules?: Schedules
   readonly reflections?: Reflections
   readonly usage?: Usage
+  readonly speculation?: Speculation
   readonly supervision?: Supervision
   readonly store: Store
   /** Feishu message links resolved since startup, used by search to match AppLink URLs. */
@@ -198,6 +200,7 @@ function routes(runtime: HttpHost): Routes {
   const usage = () => { if (!runtime.usage) throw new UsageError(409, 'Model accounting is unavailable'); return runtime.usage }
   const schedules = () => { if (!runtime.schedules) throw new WorkspaceError(409, 'Schedules are unavailable'); return runtime.schedules }
   const reflections = () => { if (!runtime.reflections) throw new WorkspaceError(409, 'Reflection is unavailable'); return runtime.reflections }
+  const speculation = () => { if (!runtime.speculation) throw new WorkspaceError(409, 'Speculation is unavailable'); return runtime.speculation }
   const { store } = runtime
   const ticket = (id: string) => { if (!store.tickets.get(id)) throw new RouteError(404, 'Ticket not found'); return id }
   const execution = (id?: string, binding?: string) => {
@@ -292,6 +295,12 @@ function routes(runtime: HttpHost): Routes {
     'GET library/:id/content': ({ params }) => runtime.library.content(params.id),
     'PUT library/:id': async ({ params, body }) => runtime.library.archive(params.id, await body()),
     'GET schedules': ({ query }) => schedules().list(offset.parse(query.offset), limit(30, 100).parse(query.limit)),
+    'GET speculation': ({ query }) => speculation().page(offset.parse(query.offset), limit(30, 100).parse(query.limit)),
+    'PUT speculation': async ({ body }) => speculation().configure(await body()),
+    'GET speculation/versions/:version': ({ params }) => speculation().configuration(z.coerce.number().int().nonnegative().parse(params.version)),
+    'GET speculation/:id': ({ params }) => speculation().get(params.id),
+    'POST speculation/:id/review': async ({ params, body }) => speculation().review(params.id, await body()),
+    'POST speculation/:id/messages': async ({ params, body }) => speculation().approveMessage(params.id, await body()),
     'GET reflections': ({ query }) => reflections().list(offset.parse(query.offset), limit(30, 100).parse(query.limit)),
     'GET reflections/:id': ({ params }) => reflections().get(params.id),
     'POST reflections/:id/proposals/:proposal/review': async ({ params, body }) => reflections().review(params.id, params.proposal, await body()),
