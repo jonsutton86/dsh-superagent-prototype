@@ -5,12 +5,12 @@ import type { SetupPlace } from '../setup.ts'
 import { DECISION_FILTERS, type DecisionFilter } from './api.ts'
 import type { T } from './text.ts'
 
-export const TABS = ['inbox', 'missions', 'schedules', 'reflections', 'speculation', 'library', 'personas', 'usage', 'environments', 'overview', 'source', 'trigger', 'eval', 'execution', 'settings'] as const
+export const TABS = ['guide', 'inbox', 'missions', 'schedules', 'reflections', 'speculation', 'library', 'personas', 'usage', 'environments', 'overview', 'source', 'trigger', 'eval', 'execution', 'settings'] as const
 export type Tab = typeof TABS[number]
 export const SETTINGS_GROUPS = ['source', 'eval', 'execution', 'prompts', 'deployment'] as const
 export type SettingsGroup = typeof SETTINGS_GROUPS[number]
-export type Route = { page: 'overview' | 'source' | 'environments' | 'personas'; id?: undefined; query?: undefined }
-  | { page: 'inbox'; id?: string; query?: { filter?: InboxFilter } }
+export type Route = { page: 'overview' | 'source' | 'environments' | 'personas' | 'guide'; id?: undefined; query?: undefined }
+  | { page: 'inbox'; id?: string; query?: { filter?: InboxFilter; compose?: boolean } }
   | { page: 'missions'; id?: string; query?: undefined }
   | { page: 'reflections' | 'speculation'; id?: string; query?: undefined }
   | { page: 'schedules'; id?: string; query?: { mission?: string } }
@@ -41,7 +41,7 @@ export function parseRoute(value: unknown): Route | undefined {
   const text = (name: string) => typeof query?.[name] === 'string' ? query[name] as string : undefined
   const record = typeof id === 'string' && id ? id : undefined
   switch (page) {
-    case 'inbox': return record ? { page, id: record } : { page, query: compact({ filter: pick(INBOX_FILTERS, query?.filter) }) }
+    case 'inbox': return record ? { page, id: record } : { page, query: compact({ filter: pick(INBOX_FILTERS, query?.filter), compose: query?.compose === true ? true : undefined }) }
     case 'library': return { page, ...(record ? { id: record } : {}), query: compact({ scope: text('scope') }) }
     case 'missions': case 'reflections': case 'speculation': return record ? { page, id: record } : { page }
     case 'usage': {
@@ -50,7 +50,7 @@ export function parseRoute(value: unknown): Route | undefined {
       return scope && scope !== 'workspace' && subject && /^[a-zA-Z0-9_-]{1,100}$/.test(subject) ? { page, query: { scope, subject } } : { page }
     }
     case 'schedules': return record ? { page, id: record } : { page, query: compact({ mission: text('mission') }) }
-    case 'overview': case 'source': case 'environments': case 'personas': return { page }
+    case 'overview': case 'source': case 'environments': case 'personas': case 'guide': return { page }
     case 'trigger': return record ? { page, id: record, query: compact({ trigger: text('trigger') }) }
       : { page, query: compact({ filter: pick(THREAD_FILTERS, query?.filter) }) }
     case 'eval': return { page, query: compact({ filter: pick(DECISION_FILTERS, query?.filter),

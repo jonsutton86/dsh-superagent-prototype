@@ -54,16 +54,16 @@ function Composer({ send, done, fresh = false, available = true }: {
   </form>
 }
 
-export function InboxPage({ id, filter = 'all' }: { id?: string; filter?: InboxFilter }) {
-  return <VoiceProvider key={id ?? 'list'}>{id ? <ConversationPage id={id} /> : <ConversationList filter={filter} />}</VoiceProvider>
+export function InboxPage({ id, filter = 'all', compose = false }: { id?: string; filter?: InboxFilter; compose?: boolean }) {
+  return <VoiceProvider key={id ?? 'list'}>{id ? <ConversationPage id={id} /> : <ConversationList filter={filter} compose={compose} />}</VoiceProvider>
 }
-function ConversationList({ filter }: { filter: InboxFilter }) {
+function ConversationList({ filter, compose }: { filter: InboxFilter; compose: boolean }) {
   const { t, call, navigate } = usePanel(), { state } = usePanelData()
-  const [offset, setOffset] = useState(0), [search, setSearch] = useState(''), [query, setQuery] = useState(''), [creating, setCreating] = useState(false)
+  const [offset, setOffset] = useState(0), [search, setSearch] = useState(''), [query, setQuery] = useState(''), [creating, setCreating] = useState(compose)
   const { data, error, reload } = usePoll(() => call('GET inbox', { query: { filter, q: query, offset } }), [call, filter, query, offset])
   return <section className="dt-inbox">
     <div className="dt-mission-heading"><div><h2>{t('tab.inbox')}</h2><p>{t('inbox.intro')}</p></div>
-      <Button variant="primary" onClick={() => setCreating(!creating)}>{t(creating ? 'cancel' : 'inbox.new')}</Button></div>
+      <Button variant="primary" onClick={() => { setCreating(!creating); if (compose) navigate({ page: 'inbox', query: { filter } }, true) }}>{t(creating ? 'cancel' : 'inbox.new')}</Button></div>
     {data && <p className="dt-hint">{t('inbox.counts', { unread: data.unread, questions: data.questions, review: data.review })}</p>}
     {creating && <><p className="dt-hint">{t('inbox.newHint')}</p>
       <Composer fresh available={!!state && !state.paused && !state.setup.problem && !!state.environment?.ready}

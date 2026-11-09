@@ -311,6 +311,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/workspace/inbox.ts` | Durable read receipts and text projections, atomic new tasks, authorized replies and bounded history pages |
 | `src/client/inbox.tsx` | Inbox filters, conversation reading, task/reply forms and mission/artifact navigation |
 | `src/client/inbox-settings.tsx` | Reviewed persona versions and default/managed execution selection, stale-grant review and captured task settings |
+| `src/client/getting-started.tsx` | Read-only model/environment guidance, private provider setup instructions, task draft entry and fresh mission review status |
 | `src/workspace/service.ts` | Durable missions, dependency checks, operator dispatch, review and transactional request receipts |
 | `src/workspace/schedule-model.ts`, `cadence.ts`, `schedules.ts` | Versioned schedule authorization, timezone-aware occurrences, durable run limits and bounded transactional mission dispatch |
 | `src/client/schedules.tsx` | Plan snapshot scheduling, calendar/interval controls, limits, original-request retries and occurrence navigation |
@@ -564,6 +565,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/inbox.spec.ts` | Inbox persistence, dispatch/reply replay, read races, authority, history projection and follow-up review/cancellation gates |
 | `tests/inbox-ui.spec.tsx` | Rendered task/question/reply flow, lost reply response, safe text and artifact/mission links |
 | `tests/inbox-settings.spec.ts`, `tests/inbox-settings-ui.spec.tsx` | Pinned persona/default grants, managed-world dispatch, stale/revoked selection refusal and accepted Send replay after catalog changes |
+| `tests/getting-started-ui.spec.tsx` | Guided draft navigation without dispatch, model overrides/catalog failure, managed selection, pause/offline recovery and stale mission review display |
 | `tests/attachments.spec.ts`, `tests/attachments-ui.spec.tsx` | Native image reconstruction, upload/Send replay, copy authority and recovery, streamed HTTP and file-picker/preview DOM lifecycle |
 | `tests/voice.spec.ts`, `tests/voice-ui.spec.tsx` | Speech lifecycle contracts, real local qualification, and microphone/draft/playback/cancellation DOM flows |
 | `tests/local-execution.spec.ts` | General local missions without accounts, filesystem/process probes, mode mismatch, local prompts and GitHub exclusion |

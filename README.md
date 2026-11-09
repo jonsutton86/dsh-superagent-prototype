@@ -44,6 +44,8 @@ human/agent actions, dependencies, actual Harness dispatch, steering, and review
 publication tools. The workspace ledger distinguishes these increments from the remaining full product and live deployment requirements.
 The [local execution profile](docs/012-local-execution.md) runs general missions without mandatory GitHub setup, using
 the same Engine, Harness Sessions, library, and completion review.
+The [Start here guide](docs/065-guided-setup.md) walks through model and environment setup, optional personas/budgets,
+an empty inbox task draft, and review of the resulting mission. Provider credentials stay in Harness Settings → Models.
 The [mission planner](docs/014-mission-plans.md) adds editable plans, agent proposals, explicit review and immutable history.
 The [Environments tab](docs/015-execution-environments.md) enrolls local workspaces, verifies paired Harness filesystem/process
 access, and manages task-bound execution grants with revocation and replacement.

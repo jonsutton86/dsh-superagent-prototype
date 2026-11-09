@@ -1,5 +1,11 @@
 # Article implementation tracker
 
+[065 Guided setup](065-guided-setup.md) adds model and environment guidance, private Harness provider-setup instructions,
+optional persona/budget/context navigation, empty inbox draft entry and current mission review status. The guide reads
+existing authorities and does not equate catalog presence with inference success or create work while navigating.
+Local typechecking, six builds and 1,994 tests passed (16 skipped; 135.12 seconds); 36 focused checks passed. Native Linux
+qualification is in progress; live inference, browser acceptance and the remaining full architecture stay open.
+
 [064 Inbox execution settings](064-inbox-execution-settings.md) adds reviewed persona versions and default/managed
 environment selection to new inbox tasks, exact default-grant preconditions and captured execution details. Ambiguous Send
 retries retain their original request even after persona archival or environment revocation. Execution continues through

@@ -467,3 +467,9 @@ a.dt-btn, a.dt-btn:hover { text-decoration: none; }
 .dt-inbox-settings > div { margin-bottom: 12px; }
 .dt-inbox-settings summary { cursor: pointer; }
 .dt-inbox-selection { border-left: 2px solid var(--dsw-alias-border-l3); padding-left: 12px; }
+.dt-guide { display: grid; gap: 1rem; }
+.dt-guide-step { border: 1px solid var(--dsw-alias-border-l, #d0d5dd); border-radius: 8px; padding: 1rem; min-width: 0; }
+.dt-guide-models, .dt-guide-missions { display: grid; gap: .75rem; padding-left: 1.25rem; }
+.dt-guide-actions { display: flex; gap: .5rem; flex-wrap: wrap; margin: .75rem 0; }
+.dt-guide-path, .dt-guide-models p, .dt-guide-missions { overflow-wrap: anywhere; }
+.dt-guide-intro { margin-bottom: 1rem; }
