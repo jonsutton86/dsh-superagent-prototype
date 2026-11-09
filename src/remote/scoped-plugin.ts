@@ -12,5 +12,5 @@ export const Config = s.object({ binding: s.string().pattern(/^[a-f0-9]{64}$/).r
 export function apply(ctx: Context, config: { binding: string }): void {
   const { world } = ctx.superagentWorlds.borrow(config.binding), client = world.executionClient()
   new RemoteFileSystem(ctx, client, world.grant)
-  new RemoteSubprocess(ctx, client, world.grant)
+  new RemoteSubprocess(ctx, client, world.grant, world.commands)
 }

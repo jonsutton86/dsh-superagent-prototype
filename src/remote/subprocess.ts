@@ -41,16 +41,39 @@ class OutputTail implements SubprocessOutputReader {
 }
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
 
+/** Ephemeral command ownership shared only by providers borrowed from one live host-owned execution world. */
+export class RemoteCommandScope {
+  private readonly active = new Set<string>()
+  private readonly observations = new Set<Set<string>>()
+  readonly uncertain = new Set<string>()
+  constructor(readonly binding: string) {}
+  assertReady(): void {
+    if (this.uncertain.size) throw new RemoteUncertain([...this.uncertain][0]!, 'A prior command still needs reconciliation')
+  }
+  track(id: string): void {
+    this.active.add(id)
+    for (const tracked of this.observations) tracked.add(id)
+  }
+  release(id: string): void { this.active.delete(id) }
+  /** Retain IDs for exactly the lifetime of each catalog request, including commands started during that request. */
+  async observe<T>(read: () => Promise<T>): Promise<{ value: T; tracked: ReadonlySet<string> }> {
+    const tracked = new Set(this.active)
+    this.observations.add(tracked)
+    try { return { value: await read(), tracked } }
+    finally { this.observations.delete(tracked) }
+  }
+}
+
 /** Harness process handles use remote command receipts and byte cursors; service disposal requests cancellation and observes quiescence. */
 export class RemoteSubprocess extends SubprocessRuntime {
   readonly executionBinding: string
   private readonly active = new Set<SubprocessHandle>()
-  private readonly ids = new Set<string>()
-  private readonly uncertain = new Set<string>()
-  constructor(ctx: Context, private readonly client: RemoteClient, private readonly grant: RemoteGrant) {
+  constructor(ctx: Context, private readonly client: RemoteClient, private readonly grant: RemoteGrant,
+    private readonly commands = new RemoteCommandScope(worldBinding(client.connection.endpointId, grant))) {
     super(ctx)
     client.bindGrant(grant)
     this.executionBinding = worldBinding(client.connection.endpointId, grant)
+    if (commands.binding !== this.executionBinding) throw new Error('Command scope belongs to a different execution world')
     ctx.effect(() => async () => {
       const deadline = AbortSignal.timeout(10_000)
       for (const handle of this.active) handle.terminate()
@@ -66,12 +89,12 @@ export class RemoteSubprocess extends SubprocessRuntime {
   async reconcileCommand(id: string): Promise<RemoteJob> {
     const job = await this.client.call<RemoteJob>({ op: 'job.get', id })
     if (!job.quiescent) throw new RemoteUncertain(id, 'The managed process range is not confirmed quiescent')
-    this.uncertain.delete(id)
+    this.commands.uncertain.delete(id)
     return job
   }
   spawn(spec: SubprocessSpawnSpec): SubprocessHandle {
     spec.signal?.throwIfAborted()
-    if (this.uncertain.size) throw new RemoteUncertain([...this.uncertain][0]!, 'A prior command still needs reconciliation')
+    this.commands.assertReady()
     if (!spec.argv.length || spec.argv.some(value => typeof value !== 'string' || value.includes('\0')) || !spec.cwd
       || !Number.isFinite(spec.graceMs) || spec.graceMs <= 0 || spec.graceMs > 30_000) throw new Error('Invalid remote process specification')
     if (spec.stdio.stdin === 'pipe' || spec.stdio.control) throw new Error('This endpoint does not provide interactive stdin or a control channel')
@@ -103,19 +126,23 @@ export class RemoteSubprocess extends SubprocessRuntime {
     const aborted = requestCancel
     spec.signal?.addEventListener('abort', aborted, { once: true })
     this.active.add(handle)
-    this.ids.add(id)
+    this.commands.track(id)
     const run = async () => {
       const status = await this.client.call<{ grant: RemoteGrant; authorized: boolean }>({ op: 'grant.status' })
       if (!status.authorized || status.grant.id !== this.grant.id || status.grant.epoch !== this.grant.epoch) throw new Error('Remote execution grant changed')
       let offset = 0
       for (let page = 0; ; page++) {
         if (page >= 100) throw new Error('Remote command catalog exceeds reconciliation bound')
-        const catalog = await this.client.call<{ items: RemoteJob[]; nextOffset: number | null }>({ op: 'job.list', offset })
-        const orphan = catalog.items.find(job => !job.quiescent && !this.ids.has(job.id))
+        // A tracked command can finish while this observation is in flight. Retain only this request's
+        // snapshot, not an unbounded history of completed commands. New sibling commands are also tracked.
+        const { value: catalog, tracked } = await this.commands.observe(() =>
+          this.client.call<{ items: RemoteJob[]; nextOffset: number | null }>({ op: 'job.list', offset }))
+        const orphan = catalog.items.find(job => !job.quiescent && !tracked.has(job.id))
         if (orphan) throw new RemoteUncertain(orphan.id, 'A command from a previous provider instance needs reconciliation')
         if (catalog.nextOffset === null) break
         offset = catalog.nextOffset
       }
+      this.commands.assertReady()
       if (cancel) throw new Error('Command cancelled before remote dispatch')
       let job = await this.client.intent<RemoteJob>({ op: 'job.spawn', requestId: id, revision: status.grant.revision, argv: [...spec.argv], cwd: spec.cwd,
         graceMs: spec.graceMs, ...(typeof spec.stdio.stdin === 'object' ? { stdin: spec.stdio.stdin.data } : {}),
@@ -188,12 +215,12 @@ export class RemoteSubprocess extends SubprocessRuntime {
     void run().catch(error => {
       const failure = !submitted && !(error instanceof RemoteUncertain) || quiescent ? error
         : error instanceof RemoteUncertain ? error : new RemoteUncertain(id, error instanceof Error ? error.message : String(error))
-      if (!quiescent && failure instanceof RemoteUncertain) this.uncertain.add(failure.operationId)
+      if (!quiescent && failure instanceof RemoteUncertain) this.commands.uncertain.add(failure.operationId)
       if (!settled) outcome.reject(failure)
       if (!submitted && !(failure instanceof RemoteUncertain)) stopped.resolve(true)
       else if (!quiescent) stopped.reject(failure)
       pipes.stdout?.destroy(); pipes.stderr?.destroy()
-    }).finally(() => { this.active.delete(handle); this.ids.delete(id); spec.signal?.removeEventListener('abort', aborted) })
+    }).finally(() => { this.active.delete(handle); this.commands.release(id); spec.signal?.removeEventListener('abort', aborted) })
     // Consumers may inspect outcome before waiting for quiescence; keep the independent rejection observed.
     void stopped.promise.catch(() => {})
     return handle

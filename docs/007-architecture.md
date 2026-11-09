@@ -361,7 +361,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/client/execution-receipts.tsx` | Paginated task/global remote receipts, explicit outcome and quiescence, read-only refresh and same-ID command cancellation |
 | `src/remote/presets.ts` | Authority-specific Harness presets for remote workers, children and the typed-tool router |
 | `src/remote/search.ts` | Bounded remote glob/grep tools using endpoint ripgrep and grant-checked paths |
-| `src/remote/filesystem.ts`, `subprocess.ts` | Paired Harness filesystem/process services, scoped targets, guarded writes, stream cursors and independent exit observation |
+| `src/remote/filesystem.ts`, `subprocess.ts` | Paired Harness filesystem/process services, scoped targets, guarded writes, stream cursors, world-scoped live command ownership and independent exit observation |
 | `src/remote/endpoint-plugin.ts`, `provider-plugin.ts` | Dedicated endpoint and execution-world Harness composition; bounded lease renewal |
 | `src/ownership/protocol.ts` | Separate coordinator ownership generations, role-scoped RPC and protected endpoint operations |
 | `src/ownership/authority.ts` | Independent single-writer authority, monotonic lease deadlines, persistent epochs, checkpoint claimant replacement and all-resource handoff barrier |
@@ -502,7 +502,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/inbox.spec.ts` | Inbox persistence, dispatch/reply replay, read races, authority, history projection and follow-up review/cancellation gates |
 | `tests/inbox-ui.spec.tsx` | Rendered task/question/reply flow, lost reply response, safe text and artifact/mission links |
 | `tests/local-execution.spec.ts` | General local missions without accounts, filesystem/process probes, mode mismatch, local prompts and GitHub exclusion |
-| `tests/remote.spec.ts` | Real Harness/HTTP execution, acknowledgement loss, lease fencing, uncertain recovery, confined-helper semantics, output backpressure and opt-in native Linux qualification |
+| `tests/remote.spec.ts` | Real Harness/HTTP execution, acknowledgement loss, lease fencing, sibling command concurrency, delayed catalog observations, uncertain recovery, confined-helper semantics, output backpressure and opt-in native Linux qualification |
 | `tests/remote-harness.spec.ts` | Opt-in installed Harness qualification with a configured model, remote artifacts, restart, maintenance-plugin checkpoint/import/reservation and ownership-authority process handoff |
 | `tests/recovery.spec.ts` | Official JSONL round trips, exclusive ownership, corruption/cancellation refusal, fork imports, held restore, original reservation retries, competing restores and preserved remote receipts |
 | `tests/recovery-audit.spec.ts` | Real HTTP receipt inventories, late effects, original observations, revoked worlds, missing/mismatched resources, revision races, restart, cancellation, authenticated receipt preparation, interruption/retry, tamper refusal, historical administrative recovery, credential binding comparison and retained restore holds |

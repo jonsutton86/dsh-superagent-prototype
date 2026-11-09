@@ -289,7 +289,8 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
         diagnostics.push({ id: item.id, status: item.status, messages: conversation.messages.filter((message: any) => message.role === 'agent' || message.role === 'status')
           .map((message: any) => String(message.text).replaceAll(secret, '[redacted]').slice(-2000)).slice(-6) })
       }
-      diagnostics.push({ jobs: h.endpoint.journal.jobs().map(job => ({ owner: job.request.owner, program: job.request.argv[0], outcome: job.outcome })) })
+      diagnostics.push({ jobs: h.endpoint.journal.jobs().map(job => ({ id: job.id, phase: job.phase, quiescent: job.quiescent,
+        owner: job.request.owner, program: job.request.argv[0], outcome: job.outcome })) })
     } catch { /* The process may have exited before read-only diagnostics. */ }
     const redacted = log.split('\n').filter(line => !/api.?key|authorization|secret|credential|token/i.test(line)).slice(-65).join('\n')
     throw new Error(`${String(error)}\nHarness qualification log (sensitive lines omitted):\n${redacted}\nQualification status: ${JSON.stringify(diagnostics)}`, { cause: error })

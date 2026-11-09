@@ -13,7 +13,7 @@ import { RemoteEndpoint } from '../src/remote/endpoint.ts'
 import { remoteHandler } from '../src/remote/http.ts'
 import { RemoteClient, RemoteUncertain } from '../src/remote/client.ts'
 import { RemoteFileSystem } from '../src/remote/filesystem.ts'
-import { RemoteSubprocess } from '../src/remote/subprocess.ts'
+import { RemoteCommandScope, RemoteSubprocess } from '../src/remote/subprocess.ts'
 import { RemoteJournal } from '../src/remote/journal.ts'
 import { confinedFilesystem } from '../src/remote/filesystem-runner.ts'
 import { BubblewrapIsolation, type ExecutionIsolation } from '../src/remote/isolation.ts'
@@ -259,6 +259,82 @@ it('requires reconciliation before a replacement provider can launch over a prio
   await h.remoteProcess.reconcileCommand(old.id)
   expect((await h.remoteProcess.spawn({ argv: ['/bin/sh', '-c', 'true'], cwd: h.enrolled.grant.root, graceMs: 100,
     stdio: { stdin: 'ignore', stdout: { maxBytes: 1024 }, stderr: { maxBytes: 1024 } } }).done).exitCode).toBe(0)
+})
+
+it('allows sibling providers in one live world to overlap commands without treating each other as abandoned', async () => {
+  const h = await fixture(), { world, ctx } = await persistentWorld(h), child = new Context()
+  cleanup.push(() => child.fiber.dispose())
+  const sibling = new RemoteSubprocess(child, world.executionClient(), world.grant, world.commands)
+  const spec = { cwd: world.grant.root, graceMs: 100,
+    stdio: { stdin: 'ignore' as const, stdout: { maxBytes: 1024 }, stderr: { maxBytes: 1024 } } }
+  const parent = ctx.subprocess.spawn({ ...spec, argv: ['/bin/sh', '-c', 'printf ready; sleep 20'] })
+  await vi.waitFor(() => expect(parent.collected.stdout!.readFrom(0).text).toBe('ready'))
+  try {
+    const concurrent = sibling.spawn({ ...spec, argv: ['/bin/sh', '-c', 'printf child'] })
+    expect((await concurrent.done).exitCode).toBe(0)
+    expect(await concurrent.waitForExit()).toBe(true)
+    expect(concurrent.collected.stdout!.readFrom(0).text).toBe('child')
+    expect(await parent.waitForExit(AbortSignal.timeout(10))).toBe(false)
+  } finally { parent.terminate(); await parent.done; expect(await parent.waitForExit()).toBe(true) }
+  expect(world.status()).toMatchObject({ ready: true, effectsBlocked: 0 })
+})
+
+it.each(['before', 'during'] as const)('does not abandon a command started %s a delayed catalog observation', async start => {
+  const h = await fixture(), spec = { cwd: h.enrolled.grant.root, graceMs: 100,
+    stdio: { stdin: 'ignore' as const, stdout: { maxBytes: 1024 }, stderr: { maxBytes: 1024 } } }
+  const spawnFirst = async () => {
+    const handle = h.remoteProcess.spawn({ ...spec, argv: ['/bin/sh', '-c', 'printf ready; while [ ! -f release ]; do sleep 0.02; done'] })
+    await vi.waitFor(() => expect(handle.collected.stdout!.readFrom(0).text).toBe('ready'))
+    return handle
+  }
+  let first = start === 'before' ? await spawnFirst() : undefined
+  const call = h.client.call.bind(h.client)
+  let delayed = false
+  vi.spyOn(h.client, 'call').mockImplementation(async (request, signal) => {
+    if (request.op === 'job.list' && !delayed) {
+      delayed = true
+      first ??= await spawnFirst()
+      const result = await call(request, signal)
+      expect((result as { items: RemoteJob[] }).items.some(job => !job.quiescent)).toBe(true)
+      await writeFile(join(h.enrolled.grant.root, 'release'), '')
+      await first.done; expect(await first.waitForExit()).toBe(true)
+      await new Promise(resolve => setImmediate(resolve))
+      return result
+    }
+    return call(request, signal)
+  })
+  const second = h.remoteProcess.spawn({ ...spec, argv: ['/bin/sh', '-c', 'printf next'] })
+  expect((await second.done).exitCode).toBe(0)
+  expect(await second.waitForExit()).toBe(true)
+  expect(delayed).toBe(true)
+  expect(h.endpoint.journal.jobs()).toHaveLength(2)
+})
+
+it('fences every sibling after uncertain dispatch until the original command is reconciled as quiescent', async () => {
+  const h = await fixture(), ctx = new Context(), child = new Context()
+  cleanup.push(() => ctx.fiber.dispose(), () => child.fiber.dispose())
+  const scope = new RemoteCommandScope(h.remoteProcess.executionBinding)
+  const parent = new RemoteSubprocess(ctx, h.client, h.enrolled.grant, scope)
+  const sibling = new RemoteSubprocess(child, new RemoteClient(h.client.connection), h.enrolled.grant, scope)
+  const spec = { cwd: h.enrolled.grant.root, graceMs: 100,
+    stdio: { stdin: 'ignore' as const, stdout: { maxBytes: 1024 }, stderr: { maxBytes: 1024 } } }
+  const intent = h.client.intent.bind(h.client)
+  vi.spyOn(h.client, 'intent').mockImplementationOnce(async (request, signal) => {
+    await intent(request, signal)
+    throw new RemoteUncertain(request.requestId, 'Dispatch acknowledgement lost')
+  })
+  const uncertain = parent.spawn({ ...spec, argv: ['/bin/sh', '-c', 'sleep 20'] })
+  await expect(uncertain.done).rejects.toThrow('acknowledgement lost')
+  const original = h.endpoint.journal.jobs()[0]!
+  expect(() => sibling.spawn({ ...spec, argv: ['/bin/sh', '-c', 'true'] })).toThrow('prior command')
+  await expect(sibling.reconcileCommand(original.id)).rejects.toMatchObject({ operationId: original.id })
+  expect(h.endpoint.journal.jobs()).toHaveLength(1)
+  await h.client.intent({ op: 'job.cancel', requestId: 'cancel-shared-unknown', id: original.id })
+  await h.settled(original.id)
+  await sibling.reconcileCommand(original.id)
+  const resumed = parent.spawn({ ...spec, argv: ['/bin/sh', '-c', 'true'] })
+  expect((await resumed.done).exitCode).toBe(0)
+  expect(await resumed.waitForExit()).toBe(true)
 })
 
 it('keeps an existing world fenced when a replacement credential is installed at the same path', async () => {

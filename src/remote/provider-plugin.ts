@@ -33,7 +33,7 @@ export async function apply(ctx: Context, config: RemoteProviderConfig): Promise
     ctx.provide('superagentRemoteWorld', world)
     const client = world.executionClient()
     new RemoteFileSystem(ctx, client, world.grant)
-    new RemoteSubprocess(ctx, client, world.grant)
+    new RemoteSubprocess(ctx, client, world.grant, world.commands)
     world.maintain(error => ctx.logger.warn('Remote execution world: %s', String(error)))
   } catch (error) { await world.close(); throw error }
 }

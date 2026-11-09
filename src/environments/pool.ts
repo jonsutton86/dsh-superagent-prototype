@@ -174,7 +174,7 @@ export class WorldPool extends Service {
         credentialReader: () => privateCredential(record.config.credentialFile, record.credentialPin) })
       await world.start()
       context = new Context()
-      const client = world.executionClient(), filesystem = new RemoteFileSystem(context, client, world.grant), subprocess = new RemoteSubprocess(context, client, world.grant)
+      const client = world.executionClient(), filesystem = new RemoteFileSystem(context, client, world.grant), subprocess = new RemoteSubprocess(context, client, world.grant, world.commands)
       const workspace = new RemoteWorkspace(world, filesystem, subprocess, this.host.lifetime)
       presets = new RemotePresets(this.ctx, world, true)
       const entry: Entry = { world, filesystem, subprocess, workspace, presets, context, prepared: false }

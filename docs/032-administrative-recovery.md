@@ -87,5 +87,18 @@ crash/failover qualification remain required. This step reconciles administrativ
 it does not prove that no later operator input or in-memory decision was lost.
 
 Local verification on 2026-11-08 passed 1,504 tests, typechecking and all four builds, with seven opt-in/platform cases
-skipped. The recovery audit/preparation suite covers 36 cases. Final installed-Harness and native Linux qualification
-results are recorded after those checks finish.
+skipped. The recovery audit/preparation suite covers 36 cases. Code `c18ae00b8e5e3f35252547cbaba436cb86940d8f` passed
+1,506 tests with native Linux confinement, typechecking and all four builds in
+[run 42557150746](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42557150746).
+
+The first installed-Harness qualification passed owned-dedicated but failed owned-managed before recovery. A successful
+subagent command was followed by a false abandoned-command refusal. Deterministic tests reproduced two process-provider
+defects: sibling providers did not share live command ownership, and a delayed catalog response could outlive a tracked
+command. Providers now borrow a binding-checked, ephemeral command scope from their live `RemoteWorld`. Each catalog
+observation retains IDs for commands active at any point during that request, then releases that observation's tracking.
+Provider disposal still cancels only that provider's own handles. A replacement world receives an empty scope and still
+requires reconciliation for untracked commands. Unknown dispatch fences every sibling until the original receipt confirms
+quiescence; no command is replayed. Outcome and managed-process quiescence remain separate observations.
+
+Regression tests cover overlapping parent/child providers, commands starting before or during a delayed catalog request,
+and uncertain-dispatch fencing/reconciliation across siblings. Final live qualification of this correction remains pending.

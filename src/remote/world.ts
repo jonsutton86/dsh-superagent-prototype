@@ -7,6 +7,7 @@ import { RemoteError, Rpc, type EndpointIdentity, type GrantReceipt, type Remote
 import { WorldJournal, worldBinding, type WorldRecord } from './world-journal.ts'
 import { ownershipReady } from '../ownership/runtime.ts'
 import { requiresOwnership } from '../ownership/protocol.ts'
+import { RemoteCommandScope } from './subprocess.ts'
 
 export interface RemoteWorldConfig extends RemoteConnection { stateDir: string }
 export interface RemoteWorldStatus {
@@ -29,6 +30,7 @@ export class RemoteWorld {
   private closed = false
   private timer?: ReturnType<typeof setInterval>
   private maintaining?: Promise<void>
+  private commandScope?: RemoteCommandScope
   constructor(private readonly config: RemoteWorldConfig, private readonly expected?: { grant: RemoteGrant; credentialReader: () => string }) {
     if (!isAbsolute(config.stateDir) || !isAbsolute(config.credentialFile)) throw new Error('Remote world state and credential paths must be absolute')
     // Keep host-side receipt observation available after execution lifetime loss; close() still aborts all transport.
@@ -52,6 +54,8 @@ export class RemoteWorld {
     return structuredClone(this.record.grant)
   }
   get ownershipBinding() { return this.config.ownership && { authorityId: this.config.ownership.authorityId, coordinatorId: this.config.ownership.coordinatorId } }
+  /** Sibling Sessions share live command ownership; a restarted world always begins with an empty scope. */
+  get commands(): RemoteCommandScope { return this.commandScope ??= new RemoteCommandScope(this.status().binding) }
   /** Initialize once, refusing endpoint/credential replacement before renewing or exposing execution providers. */
   async start(): Promise<void> {
     if (this.record || this.closed) throw new Error('Remote world cannot be started twice')
