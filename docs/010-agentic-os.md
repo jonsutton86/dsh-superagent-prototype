@@ -565,3 +565,15 @@ The installed-Harness / DeepSeek Flash owned-managed scenario passed in 203.36 s
 authenticated recovery and retrieval of the original held image. The original app remains running. Source cursor and
 product-extension reconciliation, deployment binding/remapping, restored activation/failover, and every remaining full
 architecture/product requirement remain active.
+
+Built-in connector recovery is implemented in `054-connector-state-recovery.md`: retained GitHub/Feishu cursor families,
+owned listener revisions, original task/participant/grant authority, partial-page state and inbound deduplication receipts
+are verified without polling or moving cursors. New receipts retain native provider IDs for identity and supported-content
+hash checks; historical receipts without that evidence remain explicit legacy records. Local verification passed 1,869
+tests, typechecking and all six builds, plus the final legacy-cursor regression. Runtime/test revision `5383677` passed
+1,876 Linux / Node 24 tests with native confinement, typechecking and all builds in
+[run 42659022305](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42659022305).
+The exact revision passed installed-Harness / DeepSeek Flash owned-managed recovery in 207.46 seconds with nonempty signed
+listener/message evidence and native IDs for every captured receipt. The original app remains running. Product authority
+graphs—including missions, plans and schedules—deployment binding/remapping, activation/failover, broader connector
+admission and all remaining architecture/product requirements stay active. These held checks do not activate a restore.

@@ -70,7 +70,16 @@ backlog, reconstruction of the listener component under the existing fixture own
 seven messages, and deduplication after rescan. This component reconstruction is not held-coordinator activation.
 Corruption cases cover participant/task/destination substitution, revision and watermark changes, cursor/hash disagreement,
 missing receipts, native identity/content mismatches, altered Trigger/channel/disposition authority and physical grant indexes. Legacy-family tests cover
-byte-preserving validation, unknown plugin exclusion, duplicate CI names, invalid cursors, missing Feishu threads, limits
+byte-preserving validation, unknown plugin exclusion, duplicate/blank CI names, invalid cursors, missing Feishu threads, limits
 and cancellation. Pipeline checks cover signed proof, historical manifests, original-ID retry and unpublished-image cleanup.
-Installed-Harness managed recovery requires nonempty listener/message evidence from the actual workload. Final local,
-native Linux and real-model qualification receipts are pending.
+Installed-Harness managed recovery requires nonempty listener/message evidence from the actual workload.
+
+Local verification passed 1,869 tests (14 conditional skips), typechecking and all six builds; the final legacy-cursor
+regression also passed. Runtime/test revision `5383677d65bfe845b2797fc91d0216bb5ad26257` passed 1,876 tests (eight
+conditional skips), typechecking and all six builds on Linux / Node 24 with native confinement in
+[run 42659022305](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42659022305).
+The same revision passed the installed-Harness / DeepSeek Flash owned-managed recovery scenario in 207.46 seconds. Its
+signed prepared image contained nonempty listener/message evidence, native IDs for every captured inbound receipt and
+zero legacy receipts. Original-ID retry retrieved the same held image. Inference used the configured real API; external
+provider operations stayed on local contract servers. The original app remained running. These results qualify the held
+connector checks and receipt preservation, not restored activation or completion of the full architecture/product goal.
