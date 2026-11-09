@@ -31,7 +31,11 @@ No new runtime, orchestration database, or workflow framework is assumed. Work i
 context, immutable pre-dispatch snapshots, assignment-bound reads, durable memory/plan/new-mission candidates and operator
 review. Promotion rechecks cited evidence, preserves provenance and uses existing Workspace and Library transactions;
 approval never dispatches the candidate work. The Reflections UI creates schedules and displays captured context,
-omission bounds, review notes and promoted results. Exact qualification evidence will be recorded after execution.
+omission bounds, review notes and promoted results.
+Code `b53a3fd2d268a23175f85bb024660f4ae5567ec1` passed 1,718 local tests, typechecking and all builds, and 1,720 Linux
+tests in [run 42591703174](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42591703174).
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 289.10 seconds, including the managed reflection
+candidate, explicit approval and unchanged evidence/receipts/dispatch after restart. The original app remained running.
 Reflection quality and long-horizon evaluation, external freshness/imports, retention/scaling, multi-workspace ownership,
 speculative budgets/promotion, managed machine launch, host-collected checks, recovery activation/failover, supervision,
 voice, packaging, onboarding and the remaining full article/product requirements stay open.

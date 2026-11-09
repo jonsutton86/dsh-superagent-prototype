@@ -56,6 +56,8 @@ Changed, expired, archived, conflicting or unknown evidence refuses approval; a 
 available for stale candidates. Scope checks prevent private source references from being published into another scope.
 An operator can explicitly approve a new shared-memory candidate derived from captured mission text; its destination is
 displayed before approval. Agent submissions remain unverified claims after approval.
+Mission citations remain in the immutable reflection record; promoted memory does not automatically track subsequent
+changes to mission text. Library source links continue to participate in ordinary transitive freshness checks.
 
 Review revisions, idempotency fingerprints, promotion and receipts commit together. A lost response retries the original
 request without a second memory, mission or plan version. Active affected actions must stop or finish before plan changes;
@@ -84,7 +86,20 @@ capture rollback, stale and private evidence, active-work protection, durable al
 commands. Rendered qualification creates a schedule and reviews a proposal through real API routes, including approval
 response loss. Installed-Harness qualification supplies a fresh verification value only in captured evidence, checks a
 real agent's pending candidate, verifies no direct publication, approves once and restarts to check unchanged snapshots,
-receipts and dispatch counts. Exact qualification results are recorded after execution.
+receipts and dispatch counts.
+
+Code `b53a3fd2d268a23175f85bb024660f4ae5567ec1` passed the full local check: 1,718 tests (seven skipped),
+typechecking and all four builds; the test phase took 108.25 seconds. The initial full run exposed two existing navigation
+assertions needing the added Reflections tab; the corrected full run passed. The focused reflection/schedule/locale run
+passed 32 tests, including both rendered flows. Exact-code Linux
+[run 42591703174](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42591703174), job `129074607888`,
+passed 1,720 tests (five skipped), typechecking and all builds; its test phase took 173.06 seconds.
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 289.10 seconds (two passed, two unselected cases skipped).
+They retained the existing artifact, usage-limit/retry, Chain of Recall, scheduled execution and held-recovery checks;
+the managed-world schedule flow additionally verified a real reflection candidate against captured-only evidence,
+operator-only publication, source/agent provenance, usage attribution, identical approval replay and snapshot/dispatch
+preservation after restart. GitHub/Feishu traffic used fixture services. The operator's inference credential was used
+without displaying it. The original app process remained running throughout.
 
 This completes the scheduled reflection/proposal path, not the full Agentic OS objective. Reflection quality and long-horizon
 evaluation, semantic source verification, tokenizer-aware selection, external refresh/imports, retention/scaling,

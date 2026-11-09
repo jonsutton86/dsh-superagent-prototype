@@ -150,8 +150,9 @@ replace the article's isolated execution environments. It uses the existing SQLi
 
 1. Persistent state ownership, checkpoint/backup restore and failover that preserve Harness Sessions, world authority and original effect receipts.
 2. Managed endpoint/machine deployment, remote repository workflows, quotas and host-verified artifacts.
-3. Enforced recall budgets and transitive freshness, richer imports and large files, speculative reservations, durable schedules,
-   reviewable reflection and usage reporting; multi-workspace ownership and optional voice remain in scope.
+3. Speculative reservations/expiry/promotion, richer imports and large files, retrieval/reflection quality and long-horizon
+   evaluation, broader provider accounting and retention. Recall budgets, transitive freshness, schedules, reviewed reflection
+   and usage reporting now have implementation evidence; multi-workspace ownership and optional voice remain in scope.
 4. Supervision and incident UI, actual model/tool user flows, process/host failure, restore drills, packaging and browser/desktop acceptance. Record supported provider/OS
    combinations and audit every row above before declaring the goal achieved.
 
@@ -441,3 +442,17 @@ its exact retrieval receipts across restart. Usage refusal/retry, scheduled arti
 The original app remained running. Automatic reflection, retrieval-quality/long-horizon evaluation, external imports and
 freshness, retention, multi-workspace, speculative admission, restored activation/failover, voice and all other full product
 and architecture requirements remain active.
+
+Scheduled reflection: `044-scheduled-reflection.md` adds bounded selection of recent missions, activity and scoped library
+records into immutable pre-dispatch snapshots. Harness workers submit memory, plan-change or new-mission candidates;
+operator review checks cited evidence and applies changes transactionally without dispatch. Captured context, omission
+counts, proposal review and resulting records are available in the Reflections tab. Private relationship filtering,
+durable snapshot-read/proposal limits, active-work protection, restart persistence and exact approval retries are covered.
+Code `b53a3fd2d268a23175f85bb024660f4ae5567ec1` passed 1,718 local tests, typechecking and all builds, and 1,720 Linux
+tests in [run 42591703174](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42591703174).
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 289.10 seconds; the managed-world flow verified a
+candidate from captured-only evidence, no direct publication, explicit approval, source/agent provenance and unchanged
+snapshots/receipts/dispatch after restart. The original app remained running. Reflection/retrieval quality and long-horizon
+evaluation, imports/freshness, retention/scaling, multi-workspace ownership, speculative admission/promotion, managed
+machine launch, host-collected verification, recovery activation/failover, supervision, voice, packaging and onboarding
+remain in the full implementation scope.
