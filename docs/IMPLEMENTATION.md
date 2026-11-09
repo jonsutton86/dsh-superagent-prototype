@@ -4,9 +4,14 @@
 environment selection to new inbox tasks, exact default-grant preconditions and captured execution details. Ambiguous Send
 retries retain their original request even after persona archival or environment revocation. Execution continues through
 the existing Workspace, Engine and DeepSeek Harness. Local typechecking, six builds and 1,988 tests passed (16 skipped;
-130.32 seconds); native Linux and live Harness qualification remain pending. Broader browser/provider acceptance
+130.32 seconds). Exact runtime/test revision `432f4aeeca76177f32a2944932db48899a8d77db` passed native Linux / Node 24
+typechecking, six builds and 1,996 tests (10 skipped; 244.42 seconds) in
+[run 42716861135](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42716861135).
+Live Harness qualification remains pending. Broader browser/provider acceptance
 and all remaining full architecture and product requirements below remain open. After resuming, the prior temporary Harness
-installation and app process were absent; the existing code and task history are not evidence of a currently running app.
+installation and app process were absent. A new persistent local profile is running and passed authenticated page,
+management-health and default-environment HTTP checks. It does not recover the removed instance's history, and live
+inference awaits provider configuration in the Harness Models page.
 
 [063 Conversation attachments](063-attachments.md) adds resumable file uploads, exact task/reply bindings, native Harness image
 projection and verified copies through the existing scoped subprocess service. Source bytes reside in the checkpointed Store.

@@ -49,10 +49,16 @@ the worker to produce and publish the original proof through real inference, and
 provenance after Runtime restart and authenticated installed recovery. Attachment qualification can run in the same drill.
 
 Local `pnpm check` passed typechecking, all six builds and 1,988 tests (16 skipped; 136 passing test files and three skipped;
-130.32 seconds). The focused service/UI/environment/persona/world-pool selection checks passed 34 tests. Native Linux and
-installed-Harness receipts remain pending. On resumption the previous temporary Harness installation and app process were
+130.32 seconds). The focused service/UI/environment/persona/world-pool selection checks passed 34 tests. Exact runtime/test
+revision `432f4aeeca76177f32a2944932db48899a8d77db` passed native Linux / Node 24 typechecking, six builds and 1,996 tests
+(10 skipped; 244.42 seconds) in [run 42716861135](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42716861135).
+Installed-Harness inference/restart/recovery qualification remains pending. On resumption the previous temporary Harness installation and app process were
 absent, and no configured provider credential was found in the checked project/profile locations. The pinned Harness was
-reinstalled outside temporary storage; live inference cannot be claimed until a configured provider is available again.
+reinstalled outside temporary storage. A new persistent local profile now serves the built application: authenticated page
+access, management health and the reviewed default environment endpoint all returned HTTP 200. Its Store resides outside
+temporary storage. This is a new instance, not recovery of the removed instance's history. Its credential store has no
+DeepSeek API-key reference; live inference cannot be claimed until a configured provider is available again. The running
+instance is left available for private provider setup through the Harness Models page.
 Real browser acceptance, broader provider/persona quality, multi-workspace enrollment, retention and every remaining
 requirement in the full Agentic OS and article implementation ledgers remain open. This increment does not declare the
-whole architecture complete or replace the existing running application.
+whole architecture complete.
