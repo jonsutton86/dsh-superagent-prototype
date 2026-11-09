@@ -20,6 +20,16 @@ export interface RecoveryInferenceHost {
 }
 export interface InferenceConfigurationVerification { routes: number; sessions: number; selections: string; resolved: string }
 export interface InferenceConfigurationCheck { verify(): Promise<InferenceConfigurationVerification> }
+/** Optional services are looked up lazily through Cordis's public get API, so offline modes and historical retries need no inference dependency. */
+export function recoveryInferenceHost(ctx: Context): RecoveryInferenceHost {
+  return { get llm() { return ctx.get('llm') as Context['llm'] },
+    get projections() { return ctx.get('sessionProjections') as Context['sessionProjections'] },
+    currentSelection: () => {
+      const defaults = ctx.get('agentDefaultModel') as { currentSelection(): unknown } | undefined
+      if (!defaults) throw new ConfigurationMismatch('configuration_missing')
+      return defaults.currentSelection()
+    } }
+}
 const selectionState = z.object({ pending: RoleModelSchema.nullable() })
 const get = (db: DatabaseSync, key: string): unknown => {
   const row = db.prepare('SELECT value FROM kv WHERE key=?').get(key)
@@ -32,22 +42,27 @@ const selectedHeader = (header: EpochHeader): RoleModel => model({ provider: hea
 /** Derive current routes from authenticated state using Harness's public cold projection fold, never its private adapter configuration. */
 export async function inferenceConfigurationCheck(host: RecoveryInferenceHost, db: DatabaseSync, archive: string,
   sessions: readonly SessionArchive[], masterId: string, signal: AbortSignal): Promise<InferenceConfigurationCheck> {
-  try { return await deriveInferenceCheck(host, db, archive, sessions, masterId, signal) }
+  const stage = { value: 'host-services' }
+  try { return await deriveInferenceCheck(host, db, archive, sessions, masterId, signal, stage) }
   catch (error) {
     if (error instanceof ConfigurationMismatch) throw error
-    throw new ConfigurationMismatch('configuration_unavailable')
+    const failure = new ConfigurationMismatch('configuration_unavailable')
+    failure.message += ': inference/' + stage.value
+    throw failure
   }
 }
 
 async function deriveInferenceCheck(host: RecoveryInferenceHost, db: DatabaseSync, archive: string,
-  sessions: readonly SessionArchive[], masterId: string, signal: AbortSignal): Promise<InferenceConfigurationCheck> {
+  sessions: readonly SessionArchive[], masterId: string, signal: AbortSignal, stage: { value: string }): Promise<InferenceConfigurationCheck> {
   if (!host?.llm || !host.projections || !host.currentSelection) throw new ConfigurationMismatch('configuration_missing')
+  stage.value = 'settings'
   let defaultModel: RoleModel | undefined
   const defaults = () => defaultModel ??= model(host.currentSelection())
   const revision = get(db, KV.settings.revision)
   const version = revision === undefined ? undefined : get(db, KV.settings.version(z.number().int().nonnegative().parse(revision)))
   if (revision !== undefined && (!version || typeof version !== 'object' || !('settings' in version))) throw new ConfigurationMismatch('configuration_missing')
   const settings = SettingsSchema.parse(version ? (version as { settings: unknown }).settings : {})
+  stage.value = 'ticket-catalog'
   const tickets = [...db.prepare('SELECT value FROM ticket ORDER BY id').iterate()].map(row => JSON.parse(String(row.value)) as Ticket)
     .filter(ticket => !ticket.ended || ticket.ended.by !== 'human' && ticket.undelivered.length > 0)
   const roots = new Map<string, RoleModel | null>([[masterId, settings.eval.model],
@@ -66,23 +81,30 @@ async function deriveInferenceCheck(host: RecoveryInferenceHost, db: DatabaseSyn
     if (routes.size > 256) throw new ConfigurationMismatch('configuration_unavailable')
   }
   // New work uses the current role setting. Existing Sessions below retain their own durable selection.
+  stage.value = 'role-selection'
   add('role:orchestrator', settings.eval.model ?? defaults())
   add('role:worker', settings.executor.model ?? defaults())
   let count = 0
   for (const session of sessions.filter(session => selected.has(session.id)).sort((a, b) => a.id.localeCompare(b.id))) {
     signal.throwIfAborted()
     let header: EpochHeader | undefined
+    stage.value = 'projection-initialization'
     let projected = host.projections.restore({}, [], SessionLogOffset(0), session.header, SessionLogOffset(session.inheritedEventCount))
+    stage.value = 'archive'
     await scanSession(join(archive, session.member), session, signal, async (events, offset) => {
+      stage.value = 'projection-page'
       projected = host.projections.restore(projected.checkpoint, events, SessionLogOffset(offset), session.header, SessionLogOffset(session.inheritedEventCount))
       header = foldRequestHeader(events, header)
+      stage.value = 'archive'
     })
+    stage.value = 'session-selection'
     const state = selectionState.safeParse(projected.checkpoint.modelSelection?.val)
     if (!state.success) throw new ConfigurationMismatch('configuration_missing')
     add('session:' + session.id, state.data.pending ?? (header ? selectedHeader(header) : roots.get(session.id) ?? defaults()))
     roots.delete(session.id); count++
   }
   // A queued ticket may not have created its worker Session yet. Its immutable persona still controls that first call.
+  stage.value = 'queued-selection'
   for (const [id, route] of roots) add('queued:' + id, route ?? defaults())
   const selectionsDigest = fingerprint(selections.sort((a, b) => a.id.localeCompare(b.id)))
   let resolvedDigest: string | undefined
@@ -125,8 +147,10 @@ async function probe(llm: RecoveryInferenceHost['llm'], route: RoleModel, parent
       if (finished || ++chunks > 4096) throw new ConfigurationMismatch('configuration_unavailable')
       if (chunk.type === 'tool-call-delta' || chunk.type === 'block-start' && chunk.blockType === 'tool-call'
         || chunk.type === 'block-end' && chunk.block.type === 'tool-call') throw new ConfigurationMismatch('configuration_unavailable')
-      if (chunk.type === 'text-delta' || chunk.type === 'reasoning-delta') {
-        characters += chunk.text.length; content ||= chunk.text.trim().length > 0
+      const text = chunk.type === 'text-delta' || chunk.type === 'reasoning-delta' ? chunk.text
+        : chunk.type === 'block-end' && (chunk.block.type === 'text' || chunk.block.type === 'reasoning') ? chunk.block.text : undefined
+      if (text !== undefined) {
+        characters += text.length; content ||= text.trim().length > 0
         if (characters > 262144) throw new ConfigurationMismatch('configuration_unavailable')
       }
       if (chunk.type === 'finish') {

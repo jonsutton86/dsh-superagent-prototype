@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { afterEach, expect, it, vi } from 'vitest'
 import { Store } from '../src/app/store.ts'
 import { KV } from '../src/kv.ts'
-import { inferenceConfigurationCheck } from '../src/recovery/inference.ts'
+import { inferenceConfigurationCheck, recoveryInferenceHost, type RecoveryInferenceHost } from '../src/recovery/inference.ts'
 import { exportSession, type SessionArchive } from '../src/recovery/sessions.ts'
 import { inferenceFixture } from './fixtures/inference.ts'
 
@@ -43,6 +43,18 @@ it('deduplicates effective routes, uses real Harness dispatch, and sends no hist
     expect(call.maxTokens).toBe(64); expect(call.tools).toBeUndefined(); expect(call.sessionId).toBeUndefined()
     expect(call.signal?.aborted).toBe(true)
   }
+})
+it('resolves optional inference services from a maintenance fiber without requiring them for offline work', async () => {
+  const f = await fixture(); await f.session('master')
+  f.ctx.reflect.provide('sessionProjections', f.host.projections)
+  f.ctx.reflect.provide('agentDefaultModel', { currentSelection: f.host.currentSelection })
+  let host: RecoveryInferenceHost | undefined
+  await f.ctx.plugin({ name: 'inference-maintenance', inject: ['sessionPersistence'], apply(ctx: Context) {
+    expect(() => ctx.llm).toThrow('without inject')
+    host = recoveryInferenceHost(ctx)
+  } })
+  const check = await inferenceConfigurationCheck(host!, f.store.db, f.directory, f.archives, 'master', f.abort.signal)
+  expect((await check.verify()).routes).toBe(1)
 })
 it('uses a pending selection after a different request header and never probes retired historical routes', async () => {
   const f = await fixture(); await f.session('master', session => {
@@ -93,7 +105,7 @@ it('sanitizes errors from default resolution and inference middleware', async ()
   const check = await f.check(); f.adapter.before = async () => { throw new Error('synthetic-secret') }
   await expect(check.verify()).rejects.toMatchObject({ message: 'configuration_unavailable' })
   f.host.currentSelection = () => { throw new Error('synthetic-secret') }
-  await expect(f.check()).rejects.toMatchObject({ message: 'configuration_unavailable' })
+  await expect(f.check()).rejects.toMatchObject({ message: 'configuration_unavailable: inference/role-selection' })
 })
 it('refuses default changes during a probe and between verification passes', async () => {
   const f = await fixture(); await f.session('master'); const check = await f.check()
@@ -114,6 +126,11 @@ it.each([
 it('accepts bounded reasoning progress without demanding an exact model answer', async () => {
   const f = await fixture(); await f.session('master')
   f.adapter.chunks = [{ type: 'reasoning-delta', index: 0, text: 'Ready' }, { type: 'finish', reason: { kind: 'max-tokens' } }]
+  expect((await (await f.check()).verify()).routes).toBe(1)
+})
+it.each(['text', 'reasoning'] as const)('accepts completed %s blocks without requiring delta events', async type => {
+  const f = await fixture(); await f.session('master')
+  f.adapter.chunks = [{ type: 'block-end', index: 0, block: { type, text: 'OK' } }, { type: 'finish', reason: { kind: 'stop' } }]
   expect((await (await f.check()).verify()).routes).toBe(1)
 })
 it('bounds a noncooperative provider on caller cancellation', async () => {

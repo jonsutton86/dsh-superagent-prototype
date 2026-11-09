@@ -8,6 +8,7 @@ import { createCheckpoint, importCheckpointSessions, stageCheckpoint, verifyChec
 import { reserveCheckpointOwnership, type ReserveCheckpointOwnership } from './ownership.ts'
 import { prepareCheckpointReceipts, type PrepareCheckpointReceipts } from './prepare.ts'
 import { auditCheckpointReceipts, type AuditCheckpointReceipts, type ReceiptAudit } from './audit.ts'
+import { recoveryInferenceHost } from './inference.ts'
 
 export { createCheckpoint, importCheckpointSessions, stageCheckpoint, verifyCheckpoint, type CheckpointManifest } from './checkpoint.ts'
 export { createRecoveryKey } from './crypto.ts'
@@ -57,11 +58,7 @@ export async function apply(ctx: Context, config: RecoveryConfig): Promise<void>
     if (!config.audit || !config.preparation) throw new Error('Receipt preparation requires resource connections and the selected audit/request IDs')
     prepared = await prepareCheckpointReceipts({ ...config.audit, ...config.preparation, checkpoint: required(config.checkpoint, 'checkpoint'), keyFile: config.keyFile,
       destination: required(config.destination, 'destination'), persistence: ctx.sessionPersistence, signal: abort.signal,
-      inference: { get llm() { return ctx.llm }, get projections() { return ctx.sessionProjections }, currentSelection: () => {
-        const defaults = ctx.get('agentDefaultModel') as { currentSelection(): unknown } | undefined
-        if (!defaults) throw new Error('Recovery requires the Harness default model service')
-        return defaults.currentSelection()
-      } } })
+      inference: recoveryInferenceHost(ctx) })
     checkpoint = prepared.manifest.checkpoint; path = prepared.path
     ctx.logger.info('Checkpoint %s receipts prepared in a separate authenticated image; execution remains held', checkpoint)
   } else if (config.mode === 'audit-receipts') {

@@ -10,6 +10,8 @@ publishing a prepared image. This supplements [Session history](035-session-back
 services. The maintenance entry point obtains these from its host; no provider key or model override is accepted in the
 recovery configuration. Mount the intended inference adapters and Session Controller projection in that maintenance profile.
 Missing services, the required model-selection projection, or a referenced settings revision fail preparation.
+Optional inference services use Cordis's public lazy `get` lookup from the maintenance fiber; direct service properties
+require declared injection. This keeps offline modes and historical original-ID retries independent of inference availability.
 
 Recovery reads the authenticated current settings and each eligible Session archive in pages of 128 events. It uses
 Harness's public `sessionProjections.restore` and `foldRequestHeader`, preserving fork boundaries. A pending model selection
@@ -37,7 +39,7 @@ A successful probe requires nonempty text or reasoning and exactly one successfu
 Tool calls, empty/incomplete streams, errors, cancellation and excessive output fail. No exact answer text is demanded.
 The caller deadline bounds even a noncooperative adapter; cancellation is signaled, but cannot prove a broken remote
 provider has stopped processing. Provider exceptions, response text and private configuration are not saved in recovery
-evidence. Errors expose only a safe configuration code.
+evidence. Errors expose only a safe configuration code and, for selection reconstruction, a fixed stage label.
 
 The public Harness stream includes its installed middleware. A replay or synthetic middleware response can therefore pass
 this check: it proves that configured inference path, not independent credential authentication or direct provider origin.
