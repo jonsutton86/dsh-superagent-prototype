@@ -51,6 +51,8 @@ The [managed world pool](docs/022-managed-worlds.md) maintains independent remot
 with exact per-action selection, paired worker/child providers, durable revocation and world-specific execution receipts.
 The [checkpoint maintenance plugin](docs/023-checkpoint-recovery.md) captures encrypted coordinator, Session and world state,
 verifies backups, and imports Sessions into a staged restore that remains blocked from execution pending ownership reconciliation.
+[Recovery reservations](docs/029-recovery-reservations.md) bind replacement acquisition authority to a verified checkpoint,
+invalidate the source claimant, and recover lost acknowledgements without removing that hold.
 The [ownership authority](docs/024-ownership-fencing.md) provides separate coordinator generations and endpoint handoff
 barriers, cancelling prior work and preserving its receipts before a successor can execute.
 [Runtime ownership](docs/025-runtime-ownership.md) connects dedicated and managed worlds to that lease and stops work on

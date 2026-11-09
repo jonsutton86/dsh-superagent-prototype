@@ -32,7 +32,7 @@ export function openRuntimeOwnership(store: Store, config: CoordinatorOwnershipC
   if (stored && !sameOwnership(stored, config)) throw new Error('Persisted coordinator ownership binding cannot be removed or replaced')
   if (!config) return
   assertOwnershipCredential(config, roots)
-  const ownership = new CoordinatorOwnership(config)
+  const ownership = new CoordinatorOwnership(config, store.get(KV.recovery.reservation)?.recovery)
   store.set(KV.runtime.ownership, { authorityId: config.authorityId, coordinatorId: config.coordinatorId, credentialFile: config.credentialFile })
   return ownership
 }

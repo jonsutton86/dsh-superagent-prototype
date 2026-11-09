@@ -7,9 +7,15 @@ import { createRecoveryKey } from '../../src/recovery/crypto.ts'
 import type { CheckpointManifest } from '../../src/recovery/checkpoint.ts'
 import { Store } from '../../src/app/store.ts'
 import { KV } from '../../src/kv.ts'
+import { OwnershipClient, type OwnershipConnection } from '../../src/ownership/client.ts'
+import type { OwnershipView } from '../../src/ownership/protocol.ts'
+import type { ReserveCheckpointOwnership } from '../../src/recovery/ownership.ts'
+import { privateCredential } from '../../src/environments/endpoint-files.ts'
+import { randomUUID } from 'node:crypto'
 
 export async function qualifyRecovery(input: { cli: string; home: string; profile: string; directory: string; temporary: string;
-  stateDir: string; sessionRoot: string; port: number; worldDirectories: string[]; worker: string; worlds: number }) {
+  stateDir: string; sessionRoot: string; port: number; worldDirectories: string[]; worker: string; worlds: number;
+  authority?: OwnershipConnection & { coordinatorId: string }; originalClaimantFile?: string }) {
   const root = await realpath(input.temporary), keyFile = join(root, 'recovery-key'), outputDir = join(root, 'checkpoints')
   createRecoveryKey(keyFile)
   const destination = join(root, 'restored'), importedRoot = join(root, 'imported-sessions'), patch = join(input.directory, 'recovery.json')
@@ -20,9 +26,10 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
     running.kill('SIGINT'); const timer = setTimeout(() => running.kill('SIGKILL'), 8000)
     try { await exited } finally { clearTimeout(timer) }
   }
-  const run = async (mode: 'checkpoint' | 'verify' | 'stage' | 'import-sessions', checkpoint?: string) => {
+  const run = async (mode: 'checkpoint' | 'verify' | 'stage' | 'import-sessions' | 'reserve-ownership', checkpoint?: string,
+    reservation?: Pick<ReserveCheckpointOwnership, 'requestId' | 'epoch' | 'generation' | 'authority'>) => {
     const receiptFile = join(root, 'maintenance-receipt-' + invocation++ + '.json')
-    const config = { mode, keyFile, outputDir, stateDir: input.stateDir, worldDirectories: input.worldDirectories, checkpoint, destination, receiptFile }
+    const config = { mode, keyFile, outputDir, stateDir: input.stateDir, worldDirectories: input.worldDirectories, checkpoint, destination, receiptFile, ...(reservation ? { reservation } : {}) }
     await writeFile(patch, JSON.stringify([
       { id: 'webserver', config: { host: '127.0.0.1', port: input.port } },
       { id: 'dsh-superagent', disabled: true },
@@ -61,5 +68,21 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
     const store = new Store(join(destination, 'orchestrator.sqlite'))
     try { expect(store.get(KV.recovery.hold)).toMatchObject({ checkpoint: manifest.id, state: 'staged' }) } finally { store.close() }
     expect((await readdir(importedRoot)).length).toBeGreaterThan(0)
+    if (input.authority) {
+      const admin = new OwnershipClient(input.authority), before = await admin.call<OwnershipView>({ op: 'coordinator.inspect', id: input.authority.coordinatorId })
+      expect(before.phase).toBe('vacant')
+      const reservation = { requestId: randomUUID(), epoch: before.epoch, generation: before.recovery?.generation ?? 0, authority: input.authority }
+      await run('reserve-ownership', checkpoint, reservation); await run('reserve-ownership', checkpoint, reservation)
+      const held = new Store(join(destination, 'orchestrator.sqlite'))
+      try {
+        const value = held.get(KV.recovery.reservation)!
+        expect(value).toMatchObject({ phase: 'reserved', request: { requestId: reservation.requestId }, recovery: { checkpoint: manifest.id, generation: 1 } })
+        expect(held.get(KV.recovery.hold)?.state).toBe('staged')
+        expect(JSON.stringify(value)).not.toContain(privateCredential(value.credentialFile))
+        expect((await admin.call<OwnershipView>({ op: 'coordinator.inspect', id: input.authority.coordinatorId })).recovery).toEqual(value.recovery)
+      } finally { held.close() }
+      await expect(new OwnershipClient({ ...input.authority, credentialFile: input.originalClaimantFile! }).call({ op: 'lease.acquire',
+        requestId: randomUUID(), instanceId: randomUUID(), leaseMs: 3000 })).rejects.toThrow('replaced')
+    }
   } finally { await stop() }
 }

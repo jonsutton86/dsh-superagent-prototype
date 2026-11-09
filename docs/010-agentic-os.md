@@ -58,7 +58,7 @@ refer to the same environment. Remote access requires authentication; do not exp
 | Usage and budgets | Worker concurrency and health | Provider usage, estimated/reported costs, durable reservations/limits and spend/workload UI |
 | Models and connectors | Harness configuration, optional GitHub/Feishu, local grants, authenticated remote transport, paired Harness services, persistent remote authority/revocation and native Linux namespace/cancellation CI, whole-profile and per-action world binding, durable command/file ownership and operator receipts, endpoint-owned versioned credentials, real model artifact/restart qualification, endpoint enrollment/reconciliation and independent managed worlds | Managed endpoint/runtime launch, cross-host deployment qualification and connector scope |
 | Voice | None | Optional input/output adapters, interruption, local/cloud modes and text fallback |
-| Supervision and recovery | Watchdog foundation, encrypted checkpoints/held Session import, independent ownership authority, endpoint and artifact/mission publication fencing and owned Runtime/dedicated/managed provider lifecycle | Inbound connector/repository integration, clean-host activation/failover, incident UI and broader live failure tests |
+| Supervision and recovery | Watchdog foundation, encrypted checkpoints/held Session import, checkpoint-bound claimant replacement, independent ownership authority, endpoint and artifact/mission publication fencing and owned Runtime/dedicated/managed provider lifecycle | Receipt reconciliation/divergence checks, configuration remapping, inbound connector/repository integration, clean-host activation/failover, incident UI and broader live failure tests |
 | Whole-product qualification | Deterministic unit, API/DOM flows, actual Harness restarts, live local model/tool, inbox and planner-to-execution missions | Browser/desktop layout, broader provider acceptance, backup/restore drills, accessibility and packaging |
 
 ## Missions increment
@@ -230,3 +230,9 @@ installed-Harness/DeepSeek Flash scenarios, including actual task resumption and
 artifact preservation, restart and native-message deduplication. It also passed 1,459 native Linux tests, typechecking and
 all builds in [run 42546908912](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42546908912).
 Provider traffic remained local; live tenant/account acceptance and the broader product requirements remain open.
+
+Recovery reservation increment: `029-recovery-reservations.md` binds independent claimant replacement to the exact
+authenticated held checkpoint. The original installation loses acquisition authority; durable original requests survive
+response loss and private-file failures without silently rotating again or adopting a newer reservation. Selected process
+clients still require the resource barrier. Maintenance retains the execution hold. Receipt reconciliation, post-checkpoint
+divergence, configuration remapping, activation and clean-host failure drills remain required.

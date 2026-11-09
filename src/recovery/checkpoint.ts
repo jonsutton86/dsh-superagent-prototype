@@ -16,6 +16,7 @@ import { worldBinding, type WorldRecord } from '../remote/world-journal.ts'
 import { privateDirectory } from '../environments/endpoint-files.ts'
 import { recoveryKey, seal, unseal } from './crypto.ts'
 import { exportSession, importSession, inspectSession, ownSessions, type SessionArchive } from './sessions.ts'
+import { recoveryStateDigest } from './state.ts'
 
 const member = z.string().regex(/^[a-z0-9-]+\.bin$/), digest = z.string().regex(/^[a-f0-9]{64}$/)
 const sealed = z.object({ member, iv: z.string().regex(/^[a-f0-9]{24}$/), tag: z.string().regex(/^[a-f0-9]{32}$/),
@@ -227,6 +228,30 @@ async function unpack(path: string, keyFile: string, signal: AbortSignal): Promi
 export async function verifyCheckpoint(path: string, keyFile: string, signal = new AbortController().signal): Promise<CheckpointManifest> {
   const verified = await unpack(path, keyFile, signal)
   try { return verified.manifest } finally { await rm(verified.directory, { recursive: true, force: true }) }
+}
+
+/** Hold the staged writer lock and prove its entire logical database still matches the authenticated source checkpoint. */
+export async function withVerifiedStagedCheckpoint<T>(path: string, keyFile: string, destination: string, requestedSignal: AbortSignal,
+  operation: (context: { root: string; manifest: CheckpointManifest; db: DatabaseSync; signal: AbortSignal }) => Promise<T>): Promise<T> {
+  const root = privateDirectory(await realpath(destination)), abort = new AbortController(), signal = AbortSignal.any([requestedSignal, abort.signal])
+  const release = lockSync(root, { stale: 30_000, onCompromised: error => abort.abort(error) })
+  let verified: Awaited<ReturnType<typeof unpack>> | undefined, original: DatabaseSync | undefined, db: DatabaseSync | undefined
+  try {
+    verified = await unpack(path, keyFile, signal)
+    original = await database(join(verified.directory, verified.manifest.files.find(file => file.kind === 'store')!.member))
+    const file = join(root, 'orchestrator.sqlite'); await regular(file)
+    db = new DatabaseSync(file); db.exec('PRAGMA synchronous=FULL'); integrity(db)
+    const hold = kv(db, RESTORE_HOLD) as { checkpoint?: string; state?: string } | null
+    if (hold?.checkpoint !== verified.manifest.id || hold.state !== 'staged' || identity(db) !== verified.manifest.masterId)
+      throw new Error('Recovery requires the matching staged coordinator with its execution hold intact')
+    if (recoveryStateDigest(original, signal) !== recoveryStateDigest(db, signal)) throw new Error('Staged coordinator data differs from the authenticated checkpoint')
+    signal.throwIfAborted()
+    return await operation({ root, manifest: verified.manifest, db, signal })
+  } finally {
+    try { try { db?.close() } finally { original?.close() } } finally {
+      try { if (verified) await rm(verified.directory, { recursive: true, force: true }) } finally { release() }
+    }
+  }
 }
 
 /** Stage a verified restore without executing anything. Ownership reconciliation is a separate required state transition. */

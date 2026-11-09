@@ -6,10 +6,11 @@ import { performance } from 'node:perf_hooks'
 import { DatabaseSync } from 'node:sqlite'
 import { lockSync } from 'proper-lockfile'
 import { privateCredential, privateDirectory, privateFile } from '../environments/endpoint-files.ts'
-import { OwnershipError, OwnershipRequest, type OwnershipPrincipal, type OwnershipStamp, type OwnershipView, type OwnershipEnrollment } from './protocol.ts'
+import { OwnershipError, OwnershipRequest, type OwnershipPrincipal, type OwnershipStamp, type OwnershipView, type OwnershipEnrollment, type RecoveryReservation, type RecoveryClaim } from './protocol.ts'
 
 interface Coordinator {
   id: string; epoch: number; resources: string[]
+  claim?: { nonce: string; recovery: RecoveryReservation }
   owner?: { stamp: OwnershipStamp; phase: 'preparing' | 'active'; expiresAt: string }
   acknowledged: string[]
 }
@@ -77,7 +78,12 @@ export class OwnershipAuthority {
     const [role, coordinatorId, a, b, c] = parts
     if (!coordinatorId || !/^[a-zA-Z0-9_-]{1,100}$/.test(coordinatorId)) throw new OwnershipError(401, 'unauthorized', 'Invalid ownership credential')
     const coordinator = this.get(coordinatorId)
-    if (role === 'claim' && parts.length === 2) return { role: 'claimant', coordinatorId }
+    if (role === 'claim') {
+      if (!coordinator.claim && parts.length === 2) return { role: 'claimant', coordinatorId }
+      if (coordinator.claim && parts.length === 4 && a === String(coordinator.claim.recovery.generation) && b === coordinator.claim.nonce)
+        return { role: 'claimant', coordinatorId, generation: coordinator.claim.recovery.generation }
+      throw new OwnershipError(401, 'claimant_replaced', 'This coordinator acquisition credential was replaced by a recovery reservation')
+    }
     if (role === 'resource' && parts.length === 3 && coordinator.resources.includes(a!)) return { role: 'resource', coordinatorId, resourceId: a! }
     if (role === 'lease' && parts.length === 5 && Number.isSafeInteger(Number(a)) && Number(a) > 0)
       return { role: 'lease', coordinatorId, epoch: Number(a), nonce: b!, instanceId: c! }
@@ -90,6 +96,7 @@ export class OwnershipAuthority {
   private view(coordinator: Coordinator): OwnershipView {
     const remainingMs = this.remaining(coordinator)
     return { coordinatorId: coordinator.id, epoch: coordinator.epoch, phase: remainingMs ? coordinator.owner!.phase : 'vacant', remainingMs,
+      ...(coordinator.claim ? { recovery: coordinator.claim.recovery } : {}),
       ...(remainingMs ? { owner: coordinator.owner!.stamp } : {}), resources: coordinator.resources,
       acknowledged: remainingMs ? coordinator.acknowledged : [] }
   }
@@ -101,8 +108,11 @@ export class OwnershipAuthority {
     return coordinator
   }
   private enrollment(coordinator: Coordinator): OwnershipEnrollment {
-    return { coordinatorId: coordinator.id, credential: this.sign('claim.' + coordinator.id),
+    return { coordinatorId: coordinator.id, credential: this.claimantCredential(coordinator.id, coordinator.claim),
       resources: coordinator.resources.map(id => ({ id, credential: this.sign('resource.' + coordinator.id + '.' + id) })) }
+  }
+  private claimantCredential(id: string, claim?: Coordinator['claim']): string {
+    return this.sign(claim ? `claim.${id}.${claim.recovery.generation}.${claim.nonce}` : 'claim.' + id)
   }
   private replay(principal: OwnershipPrincipal, request: OwnershipRequest & { requestId: string }): { value: unknown } | undefined {
     const id = digest({ principal, requestId: request.requestId }), fingerprint = digest(request)
@@ -127,6 +137,24 @@ export class OwnershipAuthority {
     if (this.closed) throw new OwnershipError(503, 'unavailable', 'Ownership authority is unavailable')
     const request = OwnershipRequest.parse(input)
     if (request.op === 'identity') return { id: this.id, protocol: 1 }
+    if (request.op === 'coordinator.inspect') {
+      if (principal.role !== 'admin') throw new OwnershipError(403, 'admin_required', 'Ownership administration required')
+      return this.view(this.get(request.id))
+    }
+    if (request.op === 'coordinator.recover') {
+      if (principal.role !== 'admin') throw new OwnershipError(403, 'admin_required', 'Recovery reservations require independent ownership administration')
+      const claim = this.intent(principal, request, () => {
+        const coordinator = this.get(request.id), generation = coordinator.claim?.recovery.generation ?? 0
+        if (this.remaining(coordinator) || coordinator.epoch !== request.epoch || generation !== request.generation)
+          throw new OwnershipError(409, 'recovery_changed', 'Recovery requires vacant ownership at the reviewed epoch and claimant generation')
+        if (generation >= Number.MAX_SAFE_INTEGER) throw new OwnershipError(409, 'generation_exhausted', 'Recovery claimant generation exhausted')
+        const claim = { nonce: randomUUID(), recovery: { ...request.selection, generation: generation + 1 } }
+        coordinator.claim = claim; delete coordinator.owner; coordinator.acknowledged = []; this.save(coordinator)
+        return claim
+      })
+      // Original-intent replay returns the original generation, even after another reservation supersedes it.
+      return { coordinatorId: request.id, recovery: claim.recovery, credential: this.claimantCredential(request.id, claim) } satisfies RecoveryClaim
+    }
     if (request.op === 'coordinator.create') {
       if (principal.role !== 'admin') throw new OwnershipError(403, 'admin_required', 'Ownership administration required')
       const id = this.intent(principal, request, () => {
@@ -148,6 +176,8 @@ export class OwnershipAuthority {
     }
     if (request.op === 'lease.acquire') {
       if (principal.role !== 'claimant') throw new OwnershipError(403, 'claimant_required', 'Coordinator acquisition credential required')
+      if ((principal.generation ?? 0) !== (this.get(principal.coordinatorId).claim?.recovery.generation ?? 0))
+        throw new OwnershipError(401, 'claimant_replaced', 'Coordinator acquisition authority changed')
       let created = false
       const stamp = this.intent(principal, request, () => {
         const coordinator = this.get(principal.coordinatorId)

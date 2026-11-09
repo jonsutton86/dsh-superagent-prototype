@@ -6,9 +6,16 @@ const id = z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/), epoch = z.number().int().
 const requestId = id, leaseMs = z.number().int().min(1000).max(60_000)
 export const OwnershipStamp = z.object({ coordinatorId: id, epoch, nonce: z.string().uuid(), instanceId: z.string().uuid() }).strict()
 export type OwnershipStamp = z.infer<typeof OwnershipStamp>
+export const RecoverySelection = z.object({ checkpoint: z.string().uuid(), digest: z.string().regex(/^[a-f0-9]{64}$/) }).strict()
+export type RecoverySelection = z.infer<typeof RecoverySelection>
+export const RecoveryReservation = RecoverySelection.extend({ generation: epoch })
+export type RecoveryReservation = z.infer<typeof RecoveryReservation>
 export const OwnershipRequest = z.discriminatedUnion('op', [
   z.object({ op: z.literal('identity') }).strict(),
   z.object({ op: z.literal('coordinator.create'), requestId, id, resources: z.array(id).min(1).max(256) }).strict(),
+  z.object({ op: z.literal('coordinator.inspect'), id }).strict(),
+  z.object({ op: z.literal('coordinator.recover'), requestId, id, epoch: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    generation: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), selection: RecoverySelection }).strict(),
   z.object({ op: z.literal('resources.add'), requestId, id, epoch: z.number().int().nonnegative(), resources: z.array(id).min(1).max(256) }).strict(),
   z.object({ op: z.literal('lease.acquire'), requestId, instanceId: z.string().uuid(), leaseMs }).strict(),
   z.object({ op: z.literal('lease.renew'), requestId, leaseMs }).strict(),
@@ -20,6 +27,7 @@ export const OwnershipRequest = z.discriminatedUnion('op', [
 ])
 export type OwnershipRequest = z.infer<typeof OwnershipRequest>
 export const OwnershipView = z.object({ coordinatorId: id, epoch: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  recovery: RecoveryReservation.optional(),
   phase: z.enum(['vacant', 'preparing', 'active']), remainingMs: z.number().int().nonnegative().max(60_000),
   owner: OwnershipStamp.optional(), resources: z.array(id).min(1).max(256), acknowledged: z.array(id).max(256) }).strict()
   .refine(value => value.phase === 'vacant' ? value.remainingMs === 0 && !value.owner : value.remainingMs > 0
@@ -33,7 +41,8 @@ export interface OwnershipBinding { authorityId: string; coordinatorId: string }
 export interface OwnershipAccess extends OwnershipBinding { proof(): string }
 export interface OwnershipClaim { lease: OwnershipView; credential: string }
 export interface OwnershipEnrollment { coordinatorId: string; credential: string; resources: { id: string; credential: string }[] }
-export type OwnershipPrincipal = { role: 'admin' } | { role: 'claimant'; coordinatorId: string }
+export interface RecoveryClaim { coordinatorId: string; recovery: RecoveryReservation; credential: string }
+export type OwnershipPrincipal = { role: 'admin' } | { role: 'claimant'; coordinatorId: string; generation?: number }
   | { role: 'resource'; coordinatorId: string; resourceId: string } | ({ role: 'lease' } & OwnershipStamp)
 /** Typed, non-secret refusal. Transport ambiguity never supplies permission to acquire a replacement lease. */
 export class OwnershipError extends Error {

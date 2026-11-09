@@ -25,6 +25,17 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: recovery ownership reservations
+
+[029 Recovery reservations](029-recovery-reservations.md) authenticates the selected held checkpoint, compares its logical
+database with staged state, and reserves a replacement claimant generation through independent administration. The source
+claimant becomes invalid. Durable original requests survive lost responses, authority restart and credential-write failure;
+superseded retries never adopt the newest credential. Resource drain barriers and the staged execution hold remain intact.
+
+Receipt inventory/reconciliation, post-checkpoint divergence, Session/world validation for activation, explicit path and
+credential remapping, clean-host activation/failover and every remaining article/product capability still require work.
+This increment does not make a staged restore executable. Qualification evidence follows the completed checks.
+
 ## Implemented increment: inbound task conversations
 
 [028 Inbound conversations](028-inbound-conversations.md) adds explicit participant/task listeners to the independently owned

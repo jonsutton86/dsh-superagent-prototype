@@ -3,12 +3,13 @@ import Jsonl from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { MessageId } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId, SessionSeq, type SessionHeader, type SessionEvent, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
-import { mkdtemp, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, readdir, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { DatabaseSync } from 'node:sqlite'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { lockSync } from 'proper-lockfile'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
+import { randomUUID } from 'node:crypto'
 import { Store } from '../src/app/store.ts'
 import { KV } from '../src/kv.ts'
 import { Runtime } from '../src/app/runtime.ts'
@@ -20,9 +21,16 @@ import { WorldJournal, worldBinding } from '../src/remote/world-journal.ts'
 import type { RevocationReceipt } from '../src/remote/protocol.ts'
 import { remoteFixture } from './fixtures/remote.ts'
 import * as Recovery from '../src/recovery/index.ts'
+import { reserveCheckpointOwnership } from '../src/recovery/ownership.ts'
+import { ownershipAuthority } from './fixtures/ownership-authority.ts'
+import { OwnershipClient } from '../src/ownership/client.ts'
+import { CoordinatorOwnership } from '../src/ownership/lease.ts'
+import type { OwnershipRequest, OwnershipView, RecoveryClaim } from '../src/ownership/protocol.ts'
+import { OwnershipError } from '../src/ownership/protocol.ts'
+import { privateCredential } from '../src/environments/endpoint-files.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
-afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close() })
+afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close(); vi.restoreAllMocks() })
 const signal = () => new AbortController().signal
 const header = (id: string, extra: Partial<SessionHeader> = {}) => ({ ...Session.create(SessionId(id)).header, ...extra })
 const event = (seq: number, text = `Evidence ${seq}`): SessionEvent => ({ type: 'user/message', seq: SessionSeq(seq), time: seq,
@@ -43,6 +51,141 @@ async function fixture() {
   await writer.append([event(0, 'private archive evidence')]); await writer.close()
   return { directory, stateDir, outputDir, keyFile, persistence, context }
 }
+
+async function ownedCheckpoint() {
+  const f = await fixture(), authority = await ownershipAuthority(cleanup)
+  const store = new Store(join(f.stateDir, 'orchestrator.sqlite'))
+  store.set(KV.runtime.ownership, { authorityId: authority.config.authorityId, coordinatorId: authority.config.coordinatorId, credentialFile: authority.config.credentialFile })
+  store.close()
+  const saved = await createCheckpoint(f), destination = join(f.directory, 'held')
+  await stageCheckpoint(saved.path, f.keyFile, destination)
+  const options = { checkpoint: saved.path, keyFile: f.keyFile, destination, authority: { ...authority.admin.connection, coordinatorId: 'coordinator' },
+    requestId: randomUUID(), epoch: 0, generation: 0 }
+  return { ...f, authority, saved, destination, options }
+}
+
+it('reserves only the authenticated held snapshot, writes a private replacement credential and keeps execution held', async () => {
+  const f = await ownedCheckpoint(), result = await reserveCheckpointOwnership(f.options)
+  expect(result).toMatchObject({ phase: 'reserved', recovery: { checkpoint: f.saved.manifest.id, generation: 1 } })
+  expect(await reserveCheckpointOwnership(f.options)).toEqual(result)
+  const credential = privateCredential(result.credentialFile)
+  expect(JSON.stringify(result)).not.toContain(credential)
+  const store = new Store(join(f.destination, 'orchestrator.sqlite'))
+  expect(store.get(KV.recovery.hold)).toMatchObject({ state: 'staged', checkpoint: f.saved.manifest.id })
+  expect(store.get(KV.recovery.reservation)).toEqual(result); store.close()
+  await expect(f.authority.claimant.call({ op: 'lease.acquire', requestId: randomUUID(), instanceId: randomUUID(), leaseMs: 3000 })).rejects.toThrow('replaced')
+  const context = new Context(); cleanup.push(() => context.fiber.dispose())
+  expect(() => new Runtime(context, testMachine({ stateDir: f.destination }), () => {})).toThrow('staged checkpoint restore')
+  const wrongState = new CoordinatorOwnership({ ...f.authority.config, credentialFile: result.credentialFile })
+  cleanup.push(() => wrongState.close())
+  await expect(wrongState.start()).rejects.toThrow('does not match the independently reserved')
+  await wrongState.close()
+  expect(await f.authority.admin.call({ op: 'coordinator.inspect', id: 'coordinator' })).toMatchObject({ phase: 'vacant' })
+  const moved = join(f.directory, 'moved'); await rename(f.destination, moved)
+  await expect(reserveCheckpointOwnership({ ...f.options, destination: moved })).rejects.toThrow('automatic remapping is not supported')
+})
+
+it('recovers a lost reservation acknowledgement with its original request after the authority restarts', async () => {
+  const f = await ownedCheckpoint(), call = OwnershipClient.prototype.call; let lose = true, unauthorized = false
+  vi.spyOn(OwnershipClient.prototype, 'call').mockImplementation(async function<T>(this: OwnershipClient, request: OwnershipRequest, signal?: AbortSignal): Promise<T> {
+    if (request.op === 'coordinator.recover' && unauthorized) throw new OwnershipError(401, 'unauthorized', 'Administrator unavailable')
+    const result = await call.call(this, request, signal)
+    if (request.op === 'coordinator.recover' && lose) { lose = false; throw new Error('Lost committed reservation response') }
+    return result as T
+  })
+  await expect(reserveCheckpointOwnership(f.options)).rejects.toThrow('Lost committed')
+  unauthorized = true
+  await expect(reserveCheckpointOwnership(f.options)).rejects.toThrow('Administrator unavailable')
+  await expect(reserveCheckpointOwnership({ ...f.options, requestId: randomUUID(), generation: 1 })).rejects.toThrow('original recovery reservation')
+  unauthorized = false
+  f.authority.restart()
+  const result = await reserveCheckpointOwnership(f.options)
+  expect(result.recovery?.generation).toBe(1)
+  expect((await f.authority.admin.call<{ recovery: unknown }>({ op: 'coordinator.inspect', id: 'coordinator' })).recovery).toEqual(result.recovery)
+})
+
+it('retains the committed reservation when private credential publication fails and retries without rotating again', async () => {
+  const f = await ownedCheckpoint(), call = OwnershipClient.prototype.call, file = join(f.destination, 'recovery-claimant.token'); let interfere = true
+  vi.spyOn(OwnershipClient.prototype, 'call').mockImplementation(async function<T>(this: OwnershipClient, request: OwnershipRequest, signal?: AbortSignal): Promise<T> {
+    const result = await call.call(this, request, signal)
+    if (request.op === 'coordinator.recover' && interfere) { interfere = false; await writeFile(file, 'x'.repeat(40), { mode: 0o600 }) }
+    return result as T
+  })
+  await expect(reserveCheckpointOwnership(f.options)).rejects.toThrow('existing operator file differs')
+  const held = new Store(join(f.destination, 'orchestrator.sqlite'))
+  expect(held.get(KV.recovery.reservation)?.phase).toBe('requested'); expect(held.get(KV.recovery.hold)?.state).toBe('staged'); held.close()
+  await rm(file)
+  expect((await reserveCheckpointOwnership(f.options)).recovery?.generation).toBe(1)
+})
+
+it('does not publish a credential after cancellation following committed reservation inspection', async () => {
+  const f = await ownedCheckpoint(), call = OwnershipClient.prototype.call, abort = new AbortController()
+  vi.spyOn(OwnershipClient.prototype, 'call').mockImplementation(async function<T>(this: OwnershipClient, request: OwnershipRequest, signal?: AbortSignal): Promise<T> {
+    const result = await call.call(this, request, signal)
+    if (request.op === 'coordinator.inspect') abort.abort(new Error('Maintenance cancelled'))
+    return result as T
+  })
+  await expect(reserveCheckpointOwnership({ ...f.options, signal: abort.signal })).rejects.toThrow('Maintenance cancelled')
+  expect(await readdir(f.destination)).not.toContain('recovery-claimant.token')
+  vi.restoreAllMocks()
+  expect((await reserveCheckpointOwnership(f.options)).recovery?.generation).toBe(1)
+})
+
+it('refuses a superseded reservation instead of writing or adopting the newer selection', async () => {
+  const f = await ownedCheckpoint(), call = OwnershipClient.prototype.call; let lose = true
+  vi.spyOn(OwnershipClient.prototype, 'call').mockImplementation(async function<T>(this: OwnershipClient, request: OwnershipRequest, signal?: AbortSignal): Promise<T> {
+    const result = await call.call(this, request, signal)
+    if (request.op === 'coordinator.recover' && lose) { lose = false; throw new Error('Lost reservation response') }
+    return result as T
+  })
+  await expect(reserveCheckpointOwnership(f.options)).rejects.toThrow('Lost reservation response')
+  const newer = await f.authority.admin.call<RecoveryClaim>({ op: 'coordinator.recover', requestId: randomUUID(), id: 'coordinator', epoch: 0,
+    generation: 1, selection: { checkpoint: randomUUID(), digest: 'a'.repeat(64) } })
+  await expect(reserveCheckpointOwnership(f.options)).rejects.toThrow('reservation was superseded')
+  expect(await readdir(f.destination)).not.toContain('recovery-claimant.token')
+  expect(await f.authority.admin.call({ op: 'coordinator.inspect', id: 'coordinator' })).toMatchObject({ recovery: newer.recovery })
+})
+
+it('selects one of two competing held copies and still requires the selected ownership client to clear the resource barrier', async () => {
+  const f = await ownedCheckpoint(), other = join(f.directory, 'other-held')
+  await stageCheckpoint(f.saved.path, f.keyFile, other)
+  const results = await Promise.allSettled([reserveCheckpointOwnership(f.options), reserveCheckpointOwnership({ ...f.options,
+    destination: other, requestId: randomUUID() })])
+  expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1)
+  const reserved = results.find(result => result.status === 'fulfilled')!.value
+  const owner = new CoordinatorOwnership({ ...f.authority.config, credentialFile: reserved.credentialFile }, reserved.recovery)
+  cleanup.push(() => owner.close())
+  const started = owner.start()
+  try {
+    await vi.waitFor(() => expect(owner.status().phase).toBe('preparing'))
+    expect(() => owner.proof()).toThrow('unavailable')
+    const view = await f.authority.admin.call<OwnershipView>({ op: 'coordinator.inspect', id: 'coordinator' })
+    await new OwnershipClient(f.authority.resource).call({ op: 'resource.acknowledge', requestId: randomUUID(), stamp: view.owner! })
+    await started; expect(owner.proof()).toMatch(/^lease\./)
+  } finally { await owner.close(); await started.catch(() => {}) }
+  const held = new Store(join(reserved.credentialFile, '..', 'orchestrator.sqlite'))
+  expect(held.get(KV.recovery.hold)?.state).toBe('staged'); held.close()
+})
+
+it('permits a reviewed replacement only after a definitive refusal, and refuses tampered checkpoint data before rotating authority', async () => {
+  const f = await ownedCheckpoint()
+  await expect(reserveCheckpointOwnership({ ...f.options, epoch: 4 })).rejects.toThrow('reviewed epoch')
+  await expect(reserveCheckpointOwnership(f.options)).rejects.toThrow('original recovery reservation')
+  const accepted = await reserveCheckpointOwnership({ ...f.options, requestId: randomUUID() })
+  expect(accepted.phase).toBe('reserved')
+  const store = new Store(join(f.destination, 'orchestrator.sqlite')); store.set(KV.runtime.masterId, 'substituted'); store.close()
+  await expect(reserveCheckpointOwnership({ ...f.options, requestId: accepted.request.requestId })).rejects.toThrow('matching staged coordinator')
+})
+
+it('detects changed queued effects and conflicting replacement files before changing recovery authority', async () => {
+  const f = await ownedCheckpoint(), file = join(f.destination, 'recovery-claimant.token')
+  await writeFile(file, 'x'.repeat(40), { mode: 0o600 })
+  await expect(reserveCheckpointOwnership(f.options)).rejects.toThrow('pre-existing replacement')
+  await rm(file)
+  const store = new Store(join(f.destination, 'orchestrator.sqlite')); store.set('unverified-input', 'extra work'); store.close()
+  await expect(reserveCheckpointOwnership(f.options)).rejects.toThrow('differs from the authenticated checkpoint')
+  expect(await f.authority.admin.call({ op: 'coordinator.inspect', id: 'coordinator' })).not.toHaveProperty('recovery')
+})
 
 it('captures encrypted coordinator data and owned Session descendants, verifies every member, and stages a fenced restore', async () => {
   const f = await fixture()

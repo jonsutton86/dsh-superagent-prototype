@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import { privateCredential } from '../environments/endpoint-files.ts'
 import { OwnershipClient, type OwnershipConnection } from './client.ts'
-import { OwnershipError, OwnershipView, type OwnershipAccess, type OwnershipClaim } from './protocol.ts'
+import { OwnershipError, OwnershipView, type OwnershipAccess, type OwnershipClaim, type RecoveryReservation } from './protocol.ts'
 
 export interface CoordinatorOwnershipConfig extends OwnershipConnection { coordinatorId: string; leaseMs?: number; prepareTimeoutMs?: number }
 /** One process lifetime owns one instance identity. Loss is terminal: it never silently reacquires a new generation. */
@@ -26,7 +26,7 @@ export class CoordinatorOwnership implements OwnershipAccess {
   private updating?: Promise<void>
   private closing?: Promise<void>
   private problem?: string
-  constructor(readonly config: CoordinatorOwnershipConfig) {
+  constructor(readonly config: CoordinatorOwnershipConfig, private readonly recovery?: RecoveryReservation) {
     this.authorityId = config.authorityId; this.coordinatorId = config.coordinatorId
     this.leaseMs = config.leaseMs ?? 30_000
     if (!Number.isSafeInteger(this.leaseMs) || this.leaseMs < 1000 || this.leaseMs > 60_000) throw new Error('Ownership lease must be between 1 and 60 seconds')
@@ -51,6 +51,8 @@ export class CoordinatorOwnership implements OwnershipAccess {
   }
   private observe(input: unknown, started: number): void {
     const view = OwnershipView.parse(input)
+    if (view.recovery?.checkpoint !== this.recovery?.checkpoint || view.recovery?.digest !== this.recovery?.digest || view.recovery?.generation !== this.recovery?.generation)
+      throw new OwnershipError(409, 'recovery_mismatch', 'Execution state does not match the independently reserved recovery checkpoint')
     if (!view.owner || view.coordinatorId !== this.coordinatorId || view.owner.instanceId !== this.instanceId
       || this.view?.owner && (this.view.owner.epoch !== view.owner.epoch || this.view.owner.nonce !== view.owner.nonce))
       throw new OwnershipError(409, 'owner_superseded', 'Authority response does not belong to this coordinator instance')

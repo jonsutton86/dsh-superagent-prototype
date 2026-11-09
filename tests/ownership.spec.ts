@@ -7,7 +7,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { OwnershipAuthority } from '../src/ownership/authority.ts'
 import { OwnershipClient } from '../src/ownership/client.ts'
 import { ownershipHandler } from '../src/ownership/http.ts'
-import type { OwnershipClaim, OwnershipEnrollment, OwnershipView } from '../src/ownership/protocol.ts'
+import type { OwnershipClaim, OwnershipEnrollment, OwnershipView, RecoveryClaim } from '../src/ownership/protocol.ts'
 import { remoteFixture } from './fixtures/remote.ts'
 import { RemoteClient } from '../src/remote/client.ts'
 import type { RemoteJob } from '../src/remote/protocol.ts'
@@ -55,6 +55,39 @@ it('elects one writer over real HTTP and requires every resource to fence its ex
   expect(await owner.call({ op: 'lease.activate', requestId: rid() })).toMatchObject({ phase: 'active' })
   expect(await h.participants[0]!.client.call({ op: 'lease.verify', proof: claim.credential })).toMatchObject({ phase: 'active', owner: claim.lease.owner })
   await expect(h.acquire()).rejects.toThrow('Another coordinator')
+})
+
+it('reserves recovery only at the reviewed vacant epoch, invalidates the old claimant and retains the resource barrier', async () => {
+  const h = await fixture(), original = await h.acquire(), owner = h.admin.withCredential(original.credential)
+  const request = { op: 'coordinator.recover' as const, requestId: rid(), id: 'coordinator', epoch: 1, generation: 0,
+    selection: { checkpoint: rid(), digest: 'a'.repeat(64) } }
+  await expect(h.claimant.call(request)).rejects.toThrow('independent ownership administration')
+  await expect(h.admin.call(request)).rejects.toThrow('vacant ownership')
+  await owner.call({ op: 'lease.release', requestId: rid() })
+  await expect(h.admin.call({ ...request, epoch: 0 })).rejects.toThrow('reviewed epoch')
+  const reserved = await h.admin.call<RecoveryClaim>(request)
+  expect(reserved.recovery).toEqual({ ...request.selection, generation: 1 })
+  await expect(h.acquire()).rejects.toThrow('replaced by a recovery reservation')
+  const replacement = await h.admin.withCredential(reserved.credential).call<OwnershipClaim>({ op: 'lease.acquire', requestId: rid(), instanceId: rid(), leaseMs: 5000 })
+  expect(replacement.lease).toMatchObject({ phase: 'preparing', epoch: 2, recovery: reserved.recovery, acknowledged: [] })
+  const successor = h.admin.withCredential(replacement.credential)
+  await expect(successor.call({ op: 'lease.activate', requestId: rid() })).rejects.toThrow('All enrolled resources')
+  await h.acknowledge(replacement)
+  expect(await successor.call({ op: 'lease.activate', requestId: rid() })).toMatchObject({ phase: 'active', recovery: reserved.recovery })
+  await expect(h.participants[0]!.client.call({ op: 'lease.verify', proof: original.credential })).rejects.toThrow('superseded')
+})
+
+it('recovers original reservation credentials after response loss or authority restart without adopting a later selection', async () => {
+  const h = await fixture(), request = { op: 'coordinator.recover' as const, requestId: rid(), id: 'coordinator', epoch: 0, generation: 0,
+    selection: { checkpoint: rid(), digest: 'b'.repeat(64) } }
+  const first = await h.admin.call<RecoveryClaim>(request)
+  h.restart(); expect(await h.admin.call(request)).toEqual(first)
+  await expect(h.admin.call({ ...request, selection: { ...request.selection, checkpoint: rid() } })).rejects.toThrow('different payload')
+  const second = await h.admin.call<RecoveryClaim>({ ...request, requestId: rid(), generation: 1, selection: { checkpoint: rid(), digest: 'c'.repeat(64) } })
+  expect(second.recovery.generation).toBe(2); expect(await h.admin.call(request)).toEqual(first)
+  await expect(h.admin.withCredential(first.credential).call({ op: 'lease.acquire', requestId: rid(), instanceId: rid(), leaseMs: 5000 })).rejects.toThrow('replaced')
+  expect(await h.admin.call({ op: 'coordinator.inspect', id: 'coordinator' })).toMatchObject({ phase: 'vacant', recovery: second.recovery })
+  await expect(h.participants[0]!.client.call({ op: 'coordinator.inspect', id: 'coordinator' })).rejects.toThrow('administration')
 })
 
 it('keeps acquisition and renewal retries idempotent and rejects stale proofs without widening workspace authority', async () => {

@@ -272,11 +272,12 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     const executionProfile = JSON.parse(await readFile(overlay, 'utf8')) as any[]
     const stateDir = executionProfile.find(entry => entry.id === 'dsh-superagent').config.stateDir
     const worldDirectories = executionProfile.flatMap(entry => entry.insert ?? []).filter(entry => entry.id === 'operator-remote-world').map(entry => entry.config.stateDir)
-    await qualifyRecovery({ cli, home, profile, directory, temporary: h.directory, port, stateDir, sessionRoot,
-      worldDirectories, worker: ticket.sessionId, worlds: mode === 'managed' ? 2 : 1 })
-    if (mode === 'dedicated' && !owned) await qualifyOwnership({ cli, home, profile, directory, temporary: h.directory, port, native })
     if (mode === 'dedicated' && publisher && ownershipConfig)
       await qualifyPublication({ cli, home, profile, directory, port, publisher, ownership: ownershipConfig })
+    await qualifyRecovery({ cli, home, profile, directory, temporary: h.directory, port, stateDir, sessionRoot,
+      worldDirectories, worker: ticket.sessionId, worlds: mode === 'managed' ? 2 : 1,
+      ...(authority ? { authority: { ...authority.admin.connection, coordinatorId: authority.config.coordinatorId }, originalClaimantFile: authority.config.credentialFile } : {}) })
+    if (mode === 'dedicated' && !owned) await qualifyOwnership({ cli, home, profile, directory, temporary: h.directory, port, native })
   } catch (error) {
     const diagnostics: unknown[] = []
     try {

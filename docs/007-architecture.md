@@ -363,7 +363,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/remote/filesystem.ts`, `subprocess.ts` | Paired Harness filesystem/process services, scoped targets, guarded writes, stream cursors and independent exit observation |
 | `src/remote/endpoint-plugin.ts`, `provider-plugin.ts` | Dedicated endpoint and execution-world Harness composition; bounded lease renewal |
 | `src/ownership/protocol.ts` | Separate coordinator ownership generations, role-scoped RPC and protected endpoint operations |
-| `src/ownership/authority.ts` | Independent single-writer authority, monotonic lease deadlines, persistent epochs and all-resource handoff barrier |
+| `src/ownership/authority.ts` | Independent single-writer authority, monotonic lease deadlines, persistent epochs, checkpoint claimant replacement and all-resource handoff barrier |
 | `src/ownership/http.ts`, `client.ts` | Bounded, identity-pinned ownership HTTP with private role credentials and original-ID intents |
 | `src/ownership/gate.ts` | Resource verification, durable generation floor, cancellation and quiescence acknowledgement |
 | `src/ownership/lease.ts` | Process-instance acquisition, conservative deadlines, renewal and terminal loss without silent reacquisition |
@@ -446,8 +446,10 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/client/app.tsx` | The panel: header, search, glossary, tabs and the page of the current route |
 | `src/client/environments.tsx` | Environment enrollment, proof status, revocation, reauthorization and replacement controls |
 | `src/client/worlds.tsx` | Managed-world activation, lifecycle, receipts and exact-generation action selectors |
-| `src/recovery/index.ts` | Host-only maintenance plugin for checkpoint, verification, staging and held Session import |
+| `src/recovery/index.ts` | Host-only maintenance plugin for checkpoint, verification, staging, held Session import and ownership reservation |
 | `src/recovery/checkpoint.ts` | Offline writer ownership, consistent manifests, database/world validation and execution-fenced staging |
+| `src/recovery/ownership.ts` | Verified checkpoint reservation, durable original intent, independent claimant replacement and private credential publication without activation |
+| `src/recovery/state.ts` | Incremental logical SQLite comparison of held and authenticated state, excluding only hold/reservation metadata |
 | `src/recovery/sessions.ts` | Public Harness logical Session export, full validation and non-destructive exact-prefix import |
 | `src/recovery/crypto.ts` | Private inputs, separate key files and streaming authenticated checkpoint encryption |
 | `src/remote/scoped-plugin.ts` | Harness preset-owned paired providers borrowing one managed execution world |
@@ -495,10 +497,10 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/inbox-ui.spec.tsx` | Rendered task/question/reply flow, lost reply response, safe text and artifact/mission links |
 | `tests/local-execution.spec.ts` | General local missions without accounts, filesystem/process probes, mode mismatch, local prompts and GitHub exclusion |
 | `tests/remote.spec.ts` | Real Harness/HTTP execution, acknowledgement loss, lease fencing, uncertain recovery, confined-helper semantics, output backpressure and opt-in native Linux qualification |
-| `tests/remote-harness.spec.ts` | Opt-in installed Harness qualification with a configured model, remote artifacts, restart, maintenance-plugin checkpoint/import and ownership-authority process handoff |
-| `tests/recovery.spec.ts` | Official JSONL round trips, exclusive ownership, corruption/cancellation refusal, fork imports, missing references, held restore and preserved remote receipts |
+| `tests/remote-harness.spec.ts` | Opt-in installed Harness qualification with a configured model, remote artifacts, restart, maintenance-plugin checkpoint/import/reservation and ownership-authority process handoff |
+| `tests/recovery.spec.ts` | Official JSONL round trips, exclusive ownership, corruption/cancellation refusal, fork imports, held restore, original reservation retries, competing restores and preserved remote receipts |
 | `tests/remote-ownership.spec.ts` | Pre-dispatch persistence, concurrent attribution, lost responses, assignment fences, restart/cancel recovery and receipt mismatch refusal |
-| `tests/ownership.spec.ts` | Competing coordinators, all-resource barriers, monotonic expiry/restart, real endpoint handoff/outage, immutable receipt generations and durable binding/floor refusal |
+| `tests/ownership.spec.ts` | Competing coordinators, all-resource barriers, claimant replacement/supersession, monotonic expiry/restart, endpoint handoff/outage and immutable receipt generations |
 | `tests/ownership-runtime.spec.ts` | Profile compatibility, owned Runtime startup/loss, managed command attribution, competing writers, startup cleanup and held-restore refusal |
 | `tests/publication.spec.ts` | Provider/service acknowledgement loss, late commits, ownership barriers, account checks, exact intents and independent reconciliation |
 | `tests/publication-runtime.spec.ts` | Management approval, stale artifact/destination refusal, duplicate prevention and observation after ownership loss |
@@ -589,6 +591,7 @@ A generated column is computed from its row's JSON and is empty outside its set,
 | Settings versions | `settings-revision`, `settings-version:<n>`, `settings-block-revision:<block>`; snapshots include origin, Policy version and affected Tickets |
 | Prompt versions | `prompt-revision`, `prompt-version:<n>` |
 | Main Session | `master-id` |
+| Recovery maintenance | Restore hold and immutable ownership-reservation request, selection, phase and private credential path; no credential value |
 | Session prompt history | `session-prompts:<session id>` |
 | Source state | Read positions such as `github-cursor:<number>`, PR CI fingerprints and seen Feishu-topic messages; keys begin with the kind or `thread-` plus a Thread key |
 | Display names | `source-labels:<source id>` |
