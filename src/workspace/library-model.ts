@@ -32,11 +32,14 @@ export type CreateRecordInput = z.input<typeof CreateRecord>
 export type LibraryQueryInput = z.input<typeof LibraryQuery>
 export type ArchiveRecordInput = z.input<typeof ArchiveRecord>
 export type LibraryActor = { role: 'operator' } | { role: 'router' } | { role: 'worker'; ticketId: string }
+/** Host-selected read scopes for an authorized reflection snapshot; never accepted by a model or publication schema. */
+export type LibraryReader = LibraryActor | { role: 'reflection'; scopes: string[] }
 export interface LibraryRecord {
   id: string; kind: 'memory' | 'artifact'; scope: string; title: string; summary: string; mime: string; filename: string
   hash: string; bytes: number; createdAt: string; expiresAt?: string; text: boolean
   provenance: { actor: 'operator' | 'worker'; trust: 'operator_submission' | 'agent_submission'; ticketId?: string
     sessionId?: string; assignmentId?: string; triggerId?: string; triggerHash?: string }
+  reflectionReview?: { runId: string; proposalId: string; ticketId: string; assignmentId: string }
   sources: { id: string; relation: z.infer<typeof LibraryRelation>; hash: string }[]
 }
 export interface LibraryEntry extends LibraryRecord {

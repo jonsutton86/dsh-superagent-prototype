@@ -5,13 +5,15 @@ import type { Store } from '../app/store.ts'
 import type { Workspace } from './service.ts'
 import { WorkspaceError } from './model.ts'
 import { firstOccurrence, occurrenceAt, validateCadence } from './cadence.ts'
+import { reflectionPlan, type ReflectionSpec } from './reflection-model.ts'
 import { CreateSchedule, SaveSchedule, ToggleSchedule, RetryOccurrence, type Schedule, type ScheduleDefinition,
   type ScheduleList, type ScheduleView, type ScheduleOccurrence } from './schedule-model.ts'
 
 /** Persisted standing authorizations, bounded occurrence reservations, and resumable mission dispatch; no separate runner or credentials. */
 export class Schedules {
   constructor(private readonly store: Store, private readonly workspace: Workspace, private readonly runnable: () => boolean,
-    private readonly clock: () => number = Date.now) {
+    private readonly clock: () => number = Date.now,
+    private readonly prepareReflection?: (occurrence: ScheduleOccurrence, missionId: string, spec: ReflectionSpec) => void) {
     store.db.exec(`CREATE TABLE IF NOT EXISTS workspace_schedule (id TEXT PRIMARY KEY, value TEXT NOT NULL, checked INTEGER NOT NULL DEFAULT 0,
         enabled INTEGER AS (value ->> '$.enabled'), due TEXT AS (value ->> '$.nextAt'));
       CREATE INDEX IF NOT EXISTS workspace_schedule_due ON workspace_schedule(enabled,due);
@@ -78,6 +80,10 @@ export class Schedules {
     })
   }
   private validate(definition: ScheduleDefinition): void {
+    if (definition.reflection) {
+      if (!this.prepareReflection) throw new WorkspaceError(409, 'Reflection is unavailable')
+      definition.plan = reflectionPlan(definition.reflection)
+    }
     try { validateCadence(definition.cadence); firstOccurrence(definition.cadence) }
     catch { throw new WorkspaceError(400, 'Choose a valid calendar and named time zone') }
   }
@@ -180,6 +186,10 @@ export class Schedules {
       const { definition } = this.version(occurrence.scheduleId, occurrence.revision)
       occurrence.missionId = this.workspace.createScheduled(key('scheduled-mission', occurrence.id), definition.plan,
         { id: occurrence.scheduleId, revision: occurrence.revision, occurrence: occurrence.id, due: occurrence.due }).id
+      if (definition.reflection) {
+        if (!this.prepareReflection) throw new WorkspaceError(409, 'Reflection is unavailable')
+        this.prepareReflection(occurrence, occurrence.missionId, definition.reflection)
+      }
       this.saveOccurrence(occurrence)
     }
     const mission = this.workspace.get(occurrence.missionId, false)

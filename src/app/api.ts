@@ -14,6 +14,7 @@ import type { Conversation, InboxFilter, InboxItem, InboxPage, InboxReplyInput, 
 import type { PlanIndex, PlanProposal, PlanVersion, ProposePlanInput, ReviewPlanInput, RequestPlanInput } from '../workspace/plan-model.ts'
 import type { CreateScheduleInput, SaveScheduleInput, ToggleScheduleInput, ScheduleView, ScheduleList, Schedule } from '../workspace/schedule-model.ts'
 import type { UsagePage, UsageCall, UsageConfiguration, SaveUsageInput, ReconcileUsageInput } from '../usage/model.ts'
+import type { ReflectionList, ReflectionView, ReflectionProposal, ReviewReflectionInput } from '../workspace/reflection-model.ts'
 import type { RecallState, RecallConfiguration, SaveRecallInput } from '../workspace/recall-model.ts'
 import type { EnvironmentList, EnvironmentView, EnrollEnvironmentInput, EnvironmentCommandInput } from '../environments/model.ts'
 import type { ExecutionReceiptPage } from '../remote/effects.ts'
@@ -43,6 +44,9 @@ export interface Api {
   'GET usage/versions/:version': { response: UsageConfiguration }
   'POST usage/calls/:id/reconcile': { body: ReconcileUsageInput; response: UsageCall }
   'GET schedules': { query?: Paged; response: ScheduleList }
+  'GET reflections': { query?: Paged; response: ReflectionList }
+  'GET reflections/:id': { response: ReflectionView }
+  'POST reflections/:id/proposals/:proposal/review': { body: ReviewReflectionInput; response: ReflectionProposal }
   'GET schedules/:id': { query?: Paged; response: ScheduleView }
   'GET schedules/:id/versions/:version': { response: Schedule }
   'POST schedules': { body: CreateScheduleInput; response: ScheduleView }

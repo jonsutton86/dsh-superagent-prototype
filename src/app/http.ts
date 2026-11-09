@@ -31,6 +31,7 @@ import { decisionList, search, threadDetail, threadList } from './views/threads.
 import { executorLoad, ticketDetail, ticketList } from './views/tickets.ts'
 import type { Workspace } from '../workspace/service.ts'
 import type { Schedules } from '../workspace/schedules.ts'
+import type { Reflections } from '../workspace/reflection.ts'
 import type { Usage } from '../usage/service.ts'
 import { UsageScope, UsageError } from '../usage/model.ts'
 import { WorkspaceError } from '../workspace/model.ts'
@@ -66,6 +67,7 @@ export interface HttpHost {
   readonly library: Library
   readonly workspace: Workspace
   readonly schedules?: Schedules
+  readonly reflections?: Reflections
   readonly usage?: Usage
   readonly supervision?: Supervision
   readonly store: Store
@@ -195,6 +197,7 @@ const SaveRequest = z.object({ value: z.unknown(), revision: z.number().int().no
 function routes(runtime: HttpHost): Routes {
   const usage = () => { if (!runtime.usage) throw new UsageError(409, 'Model accounting is unavailable'); return runtime.usage }
   const schedules = () => { if (!runtime.schedules) throw new WorkspaceError(409, 'Schedules are unavailable'); return runtime.schedules }
+  const reflections = () => { if (!runtime.reflections) throw new WorkspaceError(409, 'Reflection is unavailable'); return runtime.reflections }
   const { store } = runtime
   const ticket = (id: string) => { if (!store.tickets.get(id)) throw new RouteError(404, 'Ticket not found'); return id }
   const execution = (id?: string, binding?: string) => {
@@ -289,6 +292,9 @@ function routes(runtime: HttpHost): Routes {
     'GET library/:id/content': ({ params }) => runtime.library.content(params.id),
     'PUT library/:id': async ({ params, body }) => runtime.library.archive(params.id, await body()),
     'GET schedules': ({ query }) => schedules().list(offset.parse(query.offset), limit(30, 100).parse(query.limit)),
+    'GET reflections': ({ query }) => reflections().list(offset.parse(query.offset), limit(30, 100).parse(query.limit)),
+    'GET reflections/:id': ({ params }) => reflections().get(params.id),
+    'POST reflections/:id/proposals/:proposal/review': async ({ params, body }) => reflections().review(params.id, params.proposal, await body()),
     'GET schedules/:id': ({ params, query }) => schedules().get(params.id, offset.parse(query.offset), limit(30, 100).parse(query.limit)),
     'GET schedules/:id/versions/:version': ({ params }) => schedules().version(params.id, z.coerce.number().int().positive().parse(params.version)),
     'POST schedules': async ({ body }) => schedules().create(await body(512 * 1024 + 8192)),

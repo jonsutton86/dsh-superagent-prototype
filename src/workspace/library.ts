@@ -8,7 +8,7 @@ import { WorkspaceError, type Mission } from './model.ts'
 import { FreshnessInspector } from './freshness.ts'
 import { Recall } from './recall.ts'
 import { ArchiveRecord, CreateRecord, LibraryId, LibraryPage, LibraryQuery, LIBRARY_MAX_BYTES, PublishRecord,
-  type LibraryActor, type LibraryContent, type LibraryEntry, type LibraryList, type LibraryRead, type LibraryRecord } from './library-model.ts'
+  type LibraryActor, type LibraryReader, type LibraryContent, type LibraryEntry, type LibraryList, type LibraryRead, type LibraryRecord } from './library-model.ts'
 
 const OPERATOR: LibraryActor = { role: 'operator' }
 const digest = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex')
@@ -32,8 +32,9 @@ export class Library {
         record TEXT NOT NULL, PRIMARY KEY(actor,id));`)
     this.recall = new Recall(store, this, now)
   }
-  private scope(actor: LibraryActor, writing = false): string[] | undefined {
+  private scope(actor: LibraryReader, writing = false): string[] | undefined {
     if (actor.role === 'operator') return undefined
+    if (actor.role === 'reflection') return actor.scopes
     if (actor.role === 'router') return ['workspace']
     const ticket = this.store.tickets.get(actor.ticketId)
     if (!ticket || (writing && !liveTicket(ticket))) throw new WorkspaceError(409, 'An active ticket is required to publish results')
@@ -51,11 +52,11 @@ export class Library {
     }
     return [`ticket:${ticket.id}`, 'workspace']
   }
-  private allowed(scope: string, actor: LibraryActor): void {
+  private allowed(scope: string, actor: LibraryReader): void {
     const scopes = this.scope(actor)
     if (scopes && !scopes.includes(scope)) throw new WorkspaceError(404, 'Library record not found')
   }
-  private require(id: string, actor: LibraryActor): { record: LibraryRecord; row: Row } {
+  private require(id: string, actor: LibraryReader): { record: LibraryRecord; row: Row } {
     LibraryId.parse(id)
     const row = this.store.db.prepare('SELECT value,revision,archived FROM workspace_library WHERE id=?').get(id) as Row | undefined
     if (!row) throw new WorkspaceError(404, 'Library record not found')
@@ -63,7 +64,7 @@ export class Library {
     this.allowed(record.scope, actor)
     return { record, row }
   }
-  private incoming(id: string, actor: LibraryActor, activeOnly: boolean, relation?: string) {
+  private incoming(id: string, actor: LibraryReader, activeOnly: boolean, relation?: string) {
     const scopes = this.scope(actor), values: SQLInputValue[] = [id]
     let where = 'e.target=?'
     if (relation) { where += ' AND e.relation=?'; values.push(relation) }
@@ -74,7 +75,7 @@ export class Library {
       { id: string; relation: LibraryRecord['sources'][number]['relation']; hash: string }[]
   }
   /** Freshness is metadata/provenance state, never a claim that a source is factually correct. */
-  inspector(actor: LibraryActor, admit?: (id: string) => boolean): FreshnessInspector {
+  inspector(actor: LibraryReader, admit?: (id: string) => boolean): FreshnessInspector {
     let remaining = 512; const until = performance.now() + 100
     return new FreshnessInspector(id => {
       const { record, row } = this.require(id, actor)
@@ -83,7 +84,7 @@ export class Library {
         conflicted: record.sources.some(edge => edge.relation === 'contradicts') || this.incoming(id, actor, true, 'contradicts').length > 0 }
     }, admit ?? (() => --remaining >= 0 && performance.now() <= until))
   }
-  private view(record: LibraryRecord, row: Row, actor: LibraryActor, inspector = this.inspector(actor)): LibraryEntry {
+  private view(record: LibraryRecord, row: Row, actor: LibraryReader, inspector = this.inspector(actor)): LibraryEntry {
     const freshness = inspector.inspect(record.id), node = inspector.node(record.id)
     return { ...record, revision: Number(row.revision), archived: !!row.archived,
       expired: !!record.expiresAt && record.expiresAt <= this.now(),
@@ -110,9 +111,16 @@ export class Library {
     })
   }
   publish(input: unknown, actor: LibraryActor = OPERATOR): LibraryEntry {
+    return this.write(input, actor)
+  }
+  /** Internal operator promotion: preserve original agent authorship after a reflection proposal has passed review. */
+  publishReviewed(input: unknown, review: NonNullable<LibraryRecord['reflectionReview']>): LibraryEntry {
+    return this.write(input, OPERATOR, review)
+  }
+  private write(input: unknown, actor: LibraryActor, review?: NonNullable<LibraryRecord['reflectionReview']>): LibraryEntry {
     if (actor.role === 'router') throw new WorkspaceError(409, 'The router cannot publish knowledge')
     const request = actor.role === 'operator' ? CreateRecord.parse(input) : PublishRecord.parse(input)
-    return this.command(actor, request.requestId, { operation: 'publish', ...request }, () => {
+    return this.command(actor, request.requestId, { operation: 'publish', ...request, ...(review ? { review } : {}) }, () => {
       const scopes = this.scope(actor, true)
       const scope = actor.role === 'operator' ? (request as ReturnType<typeof CreateRecord.parse>).scope : scopes![0]!
       if (scope.startsWith('mission:')) {
@@ -133,13 +141,14 @@ export class Library {
           throw new WorkspaceError(409, 'Provenance cannot expose another private scope; supersession must stay in its scope')
         return { ...edge, hash: record.hash }
       })
-      const hash = digest(bytes), ticket = actor.role === 'worker' ? this.store.tickets.get(actor.ticketId)! : undefined
+      const hash = digest(bytes), ticket = review ? this.store.tickets.get(review.ticketId) : actor.role === 'worker' ? this.store.tickets.get(actor.ticketId)! : undefined
       const trigger = ticket && this.store.triggers.get(ticket.origin.triggerId)
       const record: LibraryRecord = { id: randomUUID(), kind: request.kind, scope, title: request.title, summary: request.summary,
         mime: request.mime, filename: request.filename, hash, bytes: bytes.length, text: isText(request.mime), createdAt: this.now(),
         ...(expiresAt ? { expiresAt } : {}), sources,
-        provenance: { actor: actor.role, trust: actor.role === 'worker' ? 'agent_submission' : 'operator_submission',
-          ...(ticket ? { ticketId: ticket.id, sessionId: workerSessionId(ticket.id), assignmentId: latestAssignment(ticket)?.id } : {}),
+        ...(review ? { reflectionReview: { ...review } } : {}),
+        provenance: { actor: review ? 'worker' : actor.role, trust: review || actor.role === 'worker' ? 'agent_submission' : 'operator_submission',
+          ...(ticket ? { ticketId: ticket.id, sessionId: workerSessionId(ticket.id), assignmentId: review?.assignmentId ?? latestAssignment(ticket)?.id } : {}),
           ...(trigger ? { triggerId: trigger.id, triggerHash: key(JSON.stringify(trigger)) } : {}) } }
       const count = Number(this.store.db.prepare('SELECT count(*) AS count FROM workspace_library').get()!.count)
       if (count >= 50_000) throw new WorkspaceError(409, 'Library record capacity reached')
@@ -155,7 +164,7 @@ export class Library {
       return record.id
     })
   }
-  list(input: unknown = {}, actor: LibraryActor = OPERATOR, inspector = this.inspector(actor)): LibraryList {
+  list(input: unknown = {}, actor: LibraryReader = OPERATOR, inspector = this.inspector(actor)): LibraryList {
     const query = LibraryQuery.parse(input), scopes = this.scope(actor), values: SQLInputValue[] = []
     if (query.scope) this.allowed(query.scope, actor)
     let where = '1=1', from = 'workspace_library l'
@@ -179,7 +188,7 @@ export class Library {
     return { items: rows.slice(0, query.limit).map(row => this.view(JSON.parse(row.value) as LibraryRecord, row, actor, inspector)),
       nextOffset: rows.length > query.limit ? query.offset + query.limit : null }
   }
-  read(id: string, input: unknown = {}, actor: LibraryActor = OPERATOR, inspector = this.inspector(actor)): LibraryRead {
+  read(id: string, input: unknown = {}, actor: LibraryReader = OPERATOR, inspector = this.inspector(actor)): LibraryRead {
     const page = LibraryPage.parse(input), { record, row } = this.require(id, actor), incoming = this.incoming(id, actor, false)
     const text = record.text ? this.bytes(record).toString('utf8') : null
     return { ...this.view(record, row, actor, inspector), contextOnly: true, content: text?.slice(page.offset, page.offset + page.limit) ?? null,

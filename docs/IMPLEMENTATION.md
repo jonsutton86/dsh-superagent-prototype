@@ -25,6 +25,17 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: scheduled reflection and reviewed proposals
+
+[044 Scheduled reflection](044-scheduled-reflection.md) adds bounded automatic selection of recent mission/activity/library
+context, immutable pre-dispatch snapshots, assignment-bound reads, durable memory/plan/new-mission candidates and operator
+review. Promotion rechecks cited evidence, preserves provenance and uses existing Workspace and Library transactions;
+approval never dispatches the candidate work. The Reflections UI creates schedules and displays captured context,
+omission bounds, review notes and promoted results. Exact qualification evidence will be recorded after execution.
+Reflection quality and long-horizon evaluation, external freshness/imports, retention/scaling, multi-workspace ownership,
+speculative budgets/promotion, managed machine launch, host-collected checks, recovery activation/failover, supervision,
+voice, packaging, onboarding and the remaining full article/product requirements stay open.
+
 ## Implemented increment: bounded Chain of Recall
 
 [043 Chain of Recall](043-chain-recall.md) adds persisted per-execution/router-day retrieval allowances, atomic reservations,

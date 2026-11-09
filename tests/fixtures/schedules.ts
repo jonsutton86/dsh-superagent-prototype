@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, vi } from 'vitest'
+import { defaultReflection, reflectionPlan } from '../../src/workspace/reflection-model.ts'
 
 /** Real scheduled Harness work, with a persisted disabled definition, operator enable, artifact checks and restart deduplication. */
 export async function qualifySchedules(api: (path: string, body?: unknown, method?: string) => Promise<any>, environment: string, restart: () => Promise<void>): Promise<void> {
@@ -42,6 +43,44 @@ export async function qualifySchedules(api: (path: string, body?: unknown, metho
   expect((await api(`tickets/${task}`)).assignments).toHaveLength(1)
   expect((await api(`usage?scope=schedule&subject=${saved.id}`)).totals).toEqual(usage.totals)
   await qualifyUsageLimit(api, environment, restart)
+  await qualifyReflection(api, environment, restart)
+}
+
+/** Live Harness reads host-captured evidence and submits a candidate; only the operator review publishes it, once across restart. */
+async function qualifyReflection(api: (path: string, body?: unknown, method?: string) => Promise<any>, environment: string, restart: () => Promise<void>): Promise<void> {
+  const proof = `reflection-${randomUUID()}`
+  const source = await api('library', { requestId: 'reflection-evidence', kind: 'memory', title: 'Reflection qualification evidence', summary: 'Exact verification content', content: proof })
+  const spec = { ...defaultReflection, maxMissions: 0, maxRecords: 1, environment,
+    guidance: 'Read the captured snapshot using workspace_reflection_read. Submit exactly one memory candidate using workspace_reflection_propose, titled Verified reflection candidate. '
+      + 'Copy the captured record content exactly into the candidate content, without additions or newline. Cite that captured record ID in evidence.records; leave evidence.missions empty. '
+      + 'Use a brief summary and rationale. Do not run commands, use services, delegate or publish directly. Report ready after the candidate is stored.' }
+  const schedule = await api('schedules', { requestId: 'reflection-qualification', enabled: true, definition: { title: 'Reflection qualification',
+    cadence: { kind: 'once', at: new Date().toISOString() }, missed: 'latest', graceSeconds: 60, maxRuns: 1, maxOpen: 1, reflection: spec, plan: reflectionPlan(spec) } })
+  let run: any, mission: any
+  await vi.waitFor(async () => {
+    const current = await api(`schedules/${schedule.id}`)
+    expect(current.runs).toBe(1)
+    run = await api(`reflections/${current.occurrences[0].id}`)
+    mission = await api(`missions/${run.missionId}`)
+    expect(mission.actions[0].status).toBe('review')
+    expect(run.proposals).toHaveLength(1)
+  }, { timeout: 120_000, interval: 1000 })
+  const proposal = run.proposals[0]
+  expect(proposal).toMatchObject({ status: 'pending', evidence: { records: [source.id], missions: [] }, candidate: { kind: 'memory', content: proof } })
+  expect((await api('library?scope=workspace&limit=50')).items.some((item: any) => item.reflectionReview?.runId === run.id)).toBe(false)
+  const review = { requestId: 'reflection-review', revision: proposal.revision, decision: 'approve', note: 'Exact source and candidate content independently checked' }
+  const approved = await api(`reflections/${run.id}/proposals/${proposal.id}/review`, review)
+  expect(await api(`reflections/${run.id}/proposals/${proposal.id}/review`, review)).toEqual(approved)
+  expect(await api(`library/${approved.review.result.id}`)).toMatchObject({ content: proof, provenance: { trust: 'agent_submission', ticketId: proposal.ticketId },
+    reflectionReview: { runId: run.id, proposalId: proposal.id } })
+  expect((await api(`usage?scope=schedule&subject=${schedule.id}`)).totals.tokens).toBeGreaterThan(0)
+  await restart()
+  const restored = await api(`reflections/${run.id}`)
+  expect(restored.snapshot).toEqual(run.snapshot); expect(restored.snapshotHash).toBe(run.snapshotHash)
+  expect(restored.proposals).toEqual([approved])
+  expect(await api(`reflections/${run.id}/proposals/${proposal.id}/review`, review)).toEqual(approved)
+  expect((await api(`missions/${run.missionId}`)).actions[0].runs).toEqual(mission.actions[0].runs)
+  expect((await api(`schedules/${schedule.id}`)).runs).toBe(1)
 }
 
 /** A real worker is refused before inference, then resumes on operator retry after its scoped allowance changes. */

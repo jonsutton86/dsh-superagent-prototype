@@ -10,6 +10,7 @@ import { GLOSSARY, GLOSSARY_VALUES, en, zh, type DshSuperagentKey } from './loca
 import { OverviewPage } from './overview.tsx'
 import { MissionsPage } from './missions.tsx'
 import { SchedulesPage } from './schedules.tsx'
+import { ReflectionsPage } from './reflections.tsx'
 import { UsagePage } from './usage.tsx'
 import { LibraryPage } from './library.tsx'
 import { InboxPage } from './inbox.tsx'
@@ -160,6 +161,7 @@ function Pages({ route, openTab, deploymentForm }: { route: Route; openTab: (tab
       case 'library': return <LibraryPage key={`${route.id ?? 'list'}:${route.query?.scope ?? ''}`} id={route.id} scope={route.query?.scope} />
       case 'missions': return <MissionsPage key={route.id ?? 'list'} id={route.id} />
       case 'schedules': return <SchedulesPage key={`${route.id ?? 'list'}:${route.query?.mission ?? ''}`} id={route.id} missionId={route.query?.mission} />
+      case 'reflections': return <ReflectionsPage key={route.id ?? 'list'} id={route.id} />
       case 'overview': return <OverviewPage />
       case 'source': return <SourceStatus />
       case 'trigger': return route.id !== undefined ? <ThreadPage key={route.id} id={route.id} target={route.query?.trigger} />

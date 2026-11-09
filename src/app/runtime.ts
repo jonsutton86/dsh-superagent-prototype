@@ -52,6 +52,7 @@ import { executorTools, type ExecutorToolsHost } from './tools/executor.ts'
 import { Supervision } from '../supervision/service.ts'
 import { Workspace } from '../workspace/service.ts'
 import { Schedules } from '../workspace/schedules.ts'
+import { Reflections } from '../workspace/reflection.ts'
 import { Usage } from '../usage/service.ts'
 import { UsageRuntime } from '../usage/runtime.ts'
 import { Inbox } from '../workspace/inbox.ts'
@@ -93,6 +94,7 @@ export class Runtime extends Service implements SourceHost {
   readonly supervision: Supervision
   readonly workspace: Workspace
   readonly schedules: Schedules
+  readonly reflections: Reflections
   readonly usage: Usage
   readonly inbox: Inbox
   readonly library: Library
@@ -166,7 +168,9 @@ export class Runtime extends Service implements SourceHost {
       const workspace = this.workspace = new Workspace(store, () => runtime.engine, () => !this.paused() && !this.closing(),
         id => library.evidenceRevision(id), ticket => environments.allows(ticket.execution?.environment), reference => personas.snapshot(reference), reference => environments.select(reference),
         (mission, action) => runtime.channelPublications?.channel(mission, action))
-      const schedules = this.schedules = new Schedules(store, workspace, () => !this.paused())
+      const reflections = this.reflections = new Reflections(store, workspace, library, () => !this.paused())
+      const schedules = this.schedules = new Schedules(store, workspace, () => !this.paused(), Date.now,
+        (occurrence, missionId, spec) => reflections.prepare(occurrence, missionId, spec))
       const usage = this.usage = new Usage(store)
       const inbox = this.inbox = new Inbox(store, workspace, library,
         async id => (await ctx.sessionController.inspect(id as SessionId, AbortSignal.any([this.lifetime, AbortSignal.timeout(15_000)]))).events)
@@ -252,7 +256,7 @@ export class Runtime extends Service implements SourceHost {
       this.sourceDeps = { store, engine, outbox, commands, sources, get ready() { return runtime.ready },
         get deployment() { return setup.deployment }, configured: () => setup.configured(),
         get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem }, receive: trigger => passes.receive(trigger) }
-      this.toolHost = { context: ctx, engine, store, prompts, sessions, settings: this.settings, assessor, resources, library, planning: workspace.plans, personas, worlds: this.worlds,
+      this.toolHost = { context: ctx, engine, store, prompts, sessions, settings: this.settings, assessor, resources, library, planning: workspace.plans, reflections, personas, worlds: this.worlds,
         get github() { return runtime.context({ kind: 'github', health: ['github'] }) },
         requestPass: () => { passes.request() }, sendReplies: () => outbox.sent(),
         quietly: run => { this.quiet++; try { return run() } finally { this.quiet-- } } }
@@ -351,7 +355,7 @@ export class Runtime extends Service implements SourceHost {
       channelPublications: this.channelPublications,
       conversations: this.conversations,
       get health() { return runtime.health }, remoteEffects: this.remoteWorkspace?.world,
-      supervision: this.supervision, workspace: this.workspace, schedules: this.schedules, usage: this.usage, library: this.library, inbox: this.inbox, environments: this.environments, endpoints: this.endpoints, personas: this.personas, worlds: this.worlds,
+      supervision: this.supervision, workspace: this.workspace, schedules: this.schedules, reflections: this.reflections, usage: this.usage, library: this.library, inbox: this.inbox, environments: this.environments, endpoints: this.endpoints, personas: this.personas, worlds: this.worlds,
       get deployment() { return setup.deployment },
       get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem },
       configured: () => setup.configured(), links: () => runtime.links(), ticketEnvironment: ticket => runtime.ticketEnvironment(ticket),

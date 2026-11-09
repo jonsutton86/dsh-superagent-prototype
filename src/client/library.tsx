@@ -167,6 +167,7 @@ function RecordDetail({ id, scope }: { id: string; scope?: string }) {
         <Button onClick={() => setReplacing(!replacing)}>{t(replacing ? 'cancel' : 'library.replace')}</Button>
         {record.scope.startsWith('mission:') && <Button onClick={() => navigate({ page: 'missions', id: record.scope.slice(8) })}>{t('tab.missions')}</Button>}
         {record.provenance.ticketId && <Button onClick={() => navigate({ page: 'execution', id: record.provenance.ticketId! })}>{t('mission.execution')}</Button>}
+        {record.reflectionReview && <Button onClick={() => navigate({ page: 'reflections', id: record.reflectionReview!.runId })}>{t('reflection.review')}</Button>}
         {record.provenance.sessionId && <Button onClick={() => { void openSession(record.provenance.sessionId!).catch(error => notify(errorText(error))) }}>{t('mission.chat')}</Button>}
       </div>
       {replacing && <RecordForm scope={record.scope} replaces={record} onSaved={next => link(next.id)} />}

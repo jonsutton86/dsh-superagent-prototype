@@ -5,6 +5,9 @@ import { usePoll } from './api.ts'
 import { Button } from './controls.tsx'
 import { usePanel } from './provider.tsx'
 import { useOperatorCommand } from './operator-command.ts'
+import { defaultReflection, reflectionPlan, type ReflectionSpec } from '../workspace/reflection-model.ts'
+import { PersonaSelector } from './personas.tsx'
+import { WorldSelector } from './worlds.tsx'
 
 export function SchedulesPage({ id, missionId }: { id?: string; missionId?: string }) {
   return id ? <ScheduleDetail id={id} /> : missionId ? <FromMission id={missionId} /> : <ScheduleList />
@@ -14,6 +17,7 @@ function ScheduleList() {
   const { data, error, reload } = usePoll(() => call('GET schedules', { query: { offset } }), [call, offset])
   return <section className="dt-missions"><h2>{t('tab.schedules')}</h2><p>{t('schedule.intro')}</p>
     <Button onClick={() => navigate({ page: 'missions' })}>{t('schedule.chooseMission')}</Button>
+    <Button onClick={() => navigate({ page: 'reflections' })}>{t('tab.reflections')}</Button>
     {error && <p role="alert">{error.message}<Button onClick={() => { void reload() }}>{t('mission.refresh')}</Button></p>}
     {!data && !error && <p role="status">{t('loading')}</p>}
     {data && !data.items.length && <p>{t('schedule.empty')}</p>}
@@ -61,6 +65,7 @@ function ScheduleDetail({ id }: { id: string }) {
         <p>{t(`schedule.state.${occurrence.state}`)} · {t('schedule.version')} {occurrence.revision}</p>
         {occurrence.error && <p role="alert">{occurrence.error}</p>}
         {occurrence.missionId && <Button onClick={() => navigate({ page: 'missions', id: occurrence.missionId })}>{t('schedule.viewMission')}</Button>}
+        {occurrence.missionId && data.definition.reflection && <Button onClick={() => navigate({ page: 'reflections', id: occurrence.id })}>{t('reflection.review')}</Button>}
         {occurrence.state === 'blocked' && <Button disabled={command.busy} onClick={() => { void command.run({ id, occurrence: occurrence.id }, requestId =>
           call('POST schedules/:id/occurrences/:occurrence/retry', { id, occurrence: occurrence.id, body: { requestId } })) }}>{t('schedule.retryOccurrence')}</Button>}
       </article>)}</div><div className="dt-mission-buttons">
@@ -68,8 +73,9 @@ function ScheduleDetail({ id }: { id: string }) {
         {data.nextOffset != null && <Button onClick={() => setOffset(data.nextOffset!)}>{t('mission.next')}</Button>}</div></>}
   </section>
 }
-function ScheduleForm({ existing, plan, done }: { existing?: ScheduleView; plan: PlanDefinition; done: (value: ScheduleView) => void }) {
+export function ScheduleForm({ existing, plan, reflection, done }: { existing?: ScheduleView; plan: PlanDefinition; reflection?: ReflectionSpec; done: (value: ScheduleView) => void }) {
   const { call, t } = usePanel(), [kind, setKind] = useState<Cadence['kind']>(existing?.definition.cadence.kind ?? 'calendar')
+  const [spec, setSpec] = useState(existing?.definition.reflection ?? reflection)
   const command = useOperatorCommand(() => {})
   // A successful response is handled inside send; the hook retains its exact payload and request ID after an ambiguous response.
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -77,8 +83,10 @@ function ScheduleForm({ existing, plan, done }: { existing?: ScheduleView; plan:
     const form = new FormData(event.currentTarget), value = (key: string) => String(form.get(key) ?? '')
     const cadence: Cadence = kind === 'calendar' ? { kind, time: value('time'), timeZone: value('timeZone'), startDate: value('startDate'), weekdays: form.getAll('weekday').map(Number) }
       : kind === 'once' ? { kind, at: value('instant') } : { kind, start: value('instant'), everyMinutes: Number(value('minutes')) }
-    const definition: ScheduleDefinition = { title: value('title'), plan, cadence, missed: value('missed') as ScheduleDefinition['missed'],
-      graceSeconds: Number(value('grace')), maxRuns: Number(value('maxRuns')), maxOpen: Number(value('maxOpen')) }
+    const reflection = spec ? { ...spec, guidance: value('guidance'), lookbackHours: Number(value('lookbackHours')),
+      maxMissions: Number(value('maxMissions')), maxRecords: Number(value('maxRecords')), maxBytes: Number(value('maxBytes')) } : undefined
+    const definition: ScheduleDefinition = { title: value('title'), plan: reflection ? reflectionPlan(reflection) : plan, cadence, missed: value('missed') as ScheduleDefinition['missed'],
+      graceSeconds: Number(value('grace')), maxRuns: Number(value('maxRuns')), maxOpen: Number(value('maxOpen')), ...(reflection ? { reflection } : {}) }
     const body = { definition, enabled: form.has('enabled'), ...(existing ? { revision: existing.revision } : {}) }
     void command.run({ id: existing?.id, body }, async requestId => {
       const result = existing ? await call('PUT schedules/:id', { id: existing.id, body: { ...body, revision: existing.revision, requestId } })
@@ -88,16 +96,17 @@ function ScheduleForm({ existing, plan, done }: { existing?: ScheduleView; plan:
   }
   const cadence = existing?.definition.cadence
   return <form className="dt-mission-form" onSubmit={submit}>
-    <p>{t('schedule.snapshot')}</p><details><summary>{plan.title} · {plan.actions.length} {t('schedule.actions')}</summary>
+    {spec && <ReflectionFields value={spec} change={setSpec} />}
+    <p>{t(spec ? 'reflection.authority' : 'schedule.snapshot')}</p><details><summary>{plan.title} · {plan.actions.length} {t('schedule.actions')}</summary>
       <p>{plan.objective}</p><p>{plan.acceptance}</p><ol>{plan.actions.map(action => <li key={action.id}><strong>{action.title}</strong> ({action.owner})
         <p>{action.instructions}</p>{!!action.dependsOn.length && <p>{t('mission.dependencies')}: {action.dependsOn.map(id => plan.actions.find(item => item.id === id)?.title).join(', ')}</p>}</li>)}</ol></details>
-    <label>{t('schedule.title')}<input name="title" required maxLength={160} defaultValue={existing?.definition.title ?? plan.title} /></label>
+    <label>{t('schedule.title')}<input name="title" required maxLength={160} defaultValue={existing?.definition.title ?? (spec ? t('reflection.new') : plan.title)} /></label>
     <label>{t('schedule.cadence')}<select value={kind} onChange={event => setKind(event.target.value as Cadence['kind'])}>
       <option value="calendar">{t('schedule.calendar')}</option><option value="interval">{t('schedule.interval')}</option><option value="once">{t('schedule.once')}</option></select></label>
     {kind === 'calendar' ? <>
       <label>{t('schedule.zone')}<input name="timeZone" required defaultValue={cadence?.kind === 'calendar' ? cadence.timeZone : Intl.DateTimeFormat().resolvedOptions().timeZone} /></label>
       <label>{t('schedule.startDate')}<input name="startDate" type="date" required defaultValue={cadence?.kind === 'calendar' ? cadence.startDate : new Date().toLocaleDateString('en-CA')} /></label>
-      <label>{t('schedule.time')}<input name="time" type="time" required defaultValue={cadence?.kind === 'calendar' ? cadence.time : '09:00'} /></label>
+      <label>{t('schedule.time')}<input name="time" type="time" required defaultValue={cadence?.kind === 'calendar' ? cadence.time : spec ? '02:00' : '09:00'} /></label>
       <fieldset><legend>{t('schedule.weekdays')}</legend>{[1, 2, 3, 4, 5, 6, 7].map(day => <label className="dt-mission-check" key={day}>
         <input type="checkbox" name="weekday" value={day} defaultChecked={cadence?.kind === 'calendar' ? cadence.weekdays.includes(day) : true} />
         {new Intl.DateTimeFormat(t('lang'), { weekday: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(2026, 10, 8 + day)))}</label>)}</fieldset>
@@ -113,4 +122,30 @@ function ScheduleForm({ existing, plan, done }: { existing?: ScheduleView; plan:
     {command.error && <p role="alert">{command.error}{command.retry && <Button disabled={command.busy} onClick={() => { void command.retry?.() }}>{t('schedule.retryRequest')}</Button>}</p>}
     <Button type="submit" variant="primary" disabled={command.busy || !plan.actions.length}>{t(existing ? 'schedule.save' : 'schedule.create')}</Button>
   </form>
+}
+
+function ReflectionFields({ value, change }: { value: ReflectionSpec; change: (value: ReflectionSpec) => void }) {
+  const { call, t } = usePanel(), [offset, setOffset] = useState(0)
+  const { data, error } = usePoll(() => call('GET missions', { query: { offset } }), [call, offset])
+  return <fieldset><legend>{t('reflection.context')}</legend>
+    <label>{t('reflection.guidance')}<textarea name="guidance" required maxLength={4000} defaultValue={value.guidance} /></label>
+    {(['lookbackHours', 'maxMissions', 'maxRecords', 'maxBytes'] as const).map(name => <label key={name}>{t(`reflection.${name}`)}
+      <input name={name} type="number" required min={name === 'lookbackHours' ? 1 : name === 'maxBytes' ? 8192 : 0}
+        max={name === 'lookbackHours' ? 8760 : name === 'maxBytes' ? 262144 : name === 'maxMissions' ? 10 : 20} defaultValue={value[name]} /></label>)}
+    <p>{t('reflection.selection')}</p><Button onClick={() => change({ ...value, missionIds: [] })}>{t('reflection.allRecent')}</Button>
+    <p>{value.missionIds.length} {t('reflection.selected')}</p>
+    {error && <p role="alert">{error.message}</p>}
+    {data?.items.map(mission => <label className="dt-mission-check" key={mission.id}><input type="checkbox" checked={value.missionIds.includes(mission.id)}
+      disabled={!value.missionIds.includes(mission.id) && value.missionIds.length >= 20}
+      onChange={event => change({ ...value, missionIds: event.target.checked ? [...value.missionIds, mission.id] : value.missionIds.filter(id => id !== mission.id) })} />{mission.title}</label>)}
+    {offset > 0 && <Button onClick={() => setOffset(offset - 30)}>{t('mission.previous')}</Button>}
+    {data?.nextOffset != null && <Button onClick={() => setOffset(data.nextOffset!)}>{t('mission.next')}</Button>}
+    <PersonaSelector value={value.persona} change={persona => change({ ...value, persona })} />
+    <WorldSelector value={value.environment} change={environment => change({ ...value, environment })} />
+  </fieldset>
+}
+
+export function NewReflectionSchedule() {
+  const { navigate } = usePanel()
+  return <ScheduleForm reflection={defaultReflection} plan={reflectionPlan(defaultReflection)} done={schedule => navigate({ page: 'schedules', id: schedule.id })} />
 }

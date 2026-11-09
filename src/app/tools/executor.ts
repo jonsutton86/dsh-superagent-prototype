@@ -12,6 +12,8 @@ import { AcknowledgementSchema, readTool, tool, type Tool } from './tool.ts'
 import type { Library } from '../../workspace/library.ts'
 import { libraryTools } from './library.ts'
 import { planningTools } from './planning.ts'
+import type { Reflections } from '../../workspace/reflection.ts'
+import { reflectionTools } from './reflection.ts'
 import type { Planning } from '../../workspace/plans.ts'
 import type { Personas } from '../../personas/service.ts'
 import type { WorldPool } from '../../environments/pool.ts'
@@ -19,6 +21,7 @@ import type { WorldPool } from '../../environments/pool.ts'
 export interface ExecutorToolsHost {
   readonly library: Library
   readonly planning: Planning
+  readonly reflections?: Reflections
   readonly personas?: Pick<Personas, 'list'>
   readonly worlds?: Pick<WorldPool, 'list'>
   readonly engine: Pick<EngineForExecutor, 'report' | 'reply' | 'markUnrelated' | 'handback' | 'followForContext'>
@@ -31,10 +34,10 @@ export interface ExecutorToolsHost {
 }
 
 export function executorTools(host: ExecutorToolsHost, ticket: Ticket): Tool[] {
-  const ticketId = ticket.id
+  const ticketId = ticket.id, reflection = host.reflections?.forTicket(ticketId)
   return [
-    ...libraryTools(host.library, { role: 'worker', ticketId }),
-    ...(ticket.mandate.actor.source === 'workspace' ? planningTools(host.planning, ticketId, host.personas, host.worlds) : []),
+    ...reflection ? [] : libraryTools(host.library, { role: 'worker', ticketId }),
+    ...(reflection ? reflectionTools(host.reflections!, ticketId) : ticket.mandate.actor.source === 'workspace' ? planningTools(host.planning, ticketId, host.personas, host.worlds) : []),
     readTool('Read one page of a resource of this ticket that the resource parameter lists. Follow next_offset, and next_resource where a page names one.',
       true, (resource, offset, limit, signal) => readResource(host.resources, resource, offset, limit, ticketId, signal)),
     tool({

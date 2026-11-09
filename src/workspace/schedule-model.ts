@@ -1,6 +1,7 @@
 /** Operator-authored recurring mission definitions and durable occurrence records. */
 import { z } from 'zod'
 import { PlanDefinition } from './plan-model.ts'
+import { ReflectionSpec } from './reflection-model.ts'
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/)
 const instant = z.iso.datetime({ offset: true }).transform(value => new Date(value).toISOString())
@@ -15,7 +16,7 @@ export type Cadence = z.infer<typeof Cadence>
 export const ScheduleDefinition = z.object({ title: z.string().trim().min(1).max(160), cadence: Cadence,
   plan: PlanDefinition.refine(plan => plan.actions.length > 0, 'Add at least one action'),
   missed: z.enum(['skip', 'latest', 'all']), graceSeconds: z.number().int().min(1).max(3600).default(60),
-  maxRuns: z.number().int().min(1).max(10000), maxOpen: z.number().int().min(1).max(20) }).strict()
+  maxRuns: z.number().int().min(1).max(10000), maxOpen: z.number().int().min(1).max(20), reflection: ReflectionSpec.optional() }).strict()
 export const CreateSchedule = z.object({ requestId: id, definition: ScheduleDefinition, enabled: z.boolean() }).strict()
 export const SaveSchedule = CreateSchedule.extend({ revision: z.number().int().positive() })
 export const ToggleSchedule = z.object({ requestId: id, revision: z.number().int().positive(), enabled: z.boolean() }).strict()

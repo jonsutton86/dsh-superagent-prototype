@@ -310,6 +310,9 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/workspace/service.ts` | Durable missions, dependency checks, operator dispatch, review and transactional request receipts |
 | `src/workspace/schedule-model.ts`, `cadence.ts`, `schedules.ts` | Versioned schedule authorization, timezone-aware occurrences, durable run limits and bounded transactional mission dispatch |
 | `src/client/schedules.tsx` | Plan snapshot scheduling, calendar/interval controls, limits, original-request retries and occurrence navigation |
+| `src/workspace/reflection-model.ts`, `reflection.ts` | Bounded automatic context snapshots, durable reflection proposals, scoped reads and operator-only promotion with evidence checks |
+| `src/app/tools/reflection.ts` | Assignment-bound snapshot paging and candidate submission without approval or execution tools |
+| `src/client/reflections.tsx` | Reflection scheduling, captured evidence, candidate review, original-request retries and result navigation |
 | `src/usage/model.ts`, `service.ts`, `runtime.ts` | Scoped accounting contracts, versioned prices/limits, atomic reservations, reconciliation and managed Harness stream attribution |
 | `src/client/usage.tsx` | Usage totals, scoped limits, price editing, paginated calls and evidenced operator reconciliation |
 | `src/personas/model.ts` | Bounded immutable persona definitions, exact version references, management commands and catalog contracts |
@@ -512,6 +515,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/library-ui.spec.tsx` | Rendered library creation/revision/archive and worker artifact preview through actual management routes |
 | `tests/workspace.spec.ts` | Mission persistence, deduplication, dependencies, review freshness, rollback and Runtime/Harness wiring |
 | `tests/schedules.spec.ts`, `tests/schedules-ui.spec.tsx` | DST and missed runs, standing authorization, restart deduplication, limits, dispatch rollback, review gates and rendered API retry/pause/navigation |
+| `tests/reflection.spec.ts`, `tests/reflection-ui.spec.tsx` | Snapshot scope/UTF-8 bounds/reopen/integrity, dispatch rollback, stale-evidence and active-work refusals, proposal/read limits, review retry and rendered schedule/review flow |
 | `tests/usage.spec.ts`, `tests/usage-ui.spec.tsx` | Pricing, atomic overlapping limits, uncertain calls, SQLite reopen, Harness middleware/ancestry, scoped API forms and reconciliation |
 | `tests/workspace-ui.spec.tsx` | Rendered mission forms through management routes, Harness adapter, worker result review and completion |
 | `tests/plans.spec.ts` | Plan persistence, migration, approval races, dependency invalidation, active work protection, worker scope and planner integration |
