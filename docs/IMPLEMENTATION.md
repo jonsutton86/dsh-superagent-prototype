@@ -21,7 +21,7 @@ not a claim that the prototype already ships every feature or that the article s
 | Remote environments | Paired local/remote providers, authenticated leased grants, durable revocation, mission/Session binding, endpoint-owned versioned credentials, remote profile and artifact/restart qualification, operator enrollment/reconciliation, generated profiles, managed world pool and exact per-action selection | Managed endpoint/machine launch, remote repository workflows, quotas and cross-host acceptance |
 | Watchdog | Existing health and bounded transient executor retry; now `src/supervision/*` | Live-provider and process-level acceptance, incident UI/alerts, retention, richer progress evidence and separately authorized recovery policies |
 | Delivery | Reports and PR binding/closure; content-addressed artifacts, stale mission-review invalidation, reviewed artifacts and plan-authorized mission replies to GitHub issue/review and Feishu/Lark destinations with independent receipts; exact participant/task inbound listeners | Host-collected check evidence, Git/environment revision binding, broader inbound discovery/admission, repository integration and speculative promotion/publication gates |
-| Operator control | Existing web panel, settings, pause/retry/stop and local/remote environment status and revocation, endpoint enrollment/reconciliation and private profile generation | Supervision, budgets and evidence surfaces |
+| Operator control | Existing web panel, settings, pause/retry/stop, scoped usage/limits/prices and reconciliation, local/remote environment status and revocation, endpoint enrollment/reconciliation and private profile generation | Supervision, broader workload budgets and evidence surfaces |
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
@@ -30,10 +30,19 @@ No new runtime, orchestration database, or workflow framework is assumed. Work i
 [042 Usage and budgets](042-usage-budgets.md) adds managed Harness call/token accounting, immutable price snapshots,
 workspace/mission/schedule/persona limits, atomic admission reservations, uncertain-outcome reconciliation and operator UI.
 Missing reports retain reservations across restart. Prices are explicit operator inputs and displayed costs are estimates;
-provider invoices, exact prepared-generation metadata and non-token fees remain outside this increment. Deterministic,
-rendered and installed-Harness qualification results will be recorded after completion. Speculative admission integration,
+provider invoices, exact prepared-generation metadata and non-token fees remain outside this increment. Speculative admission integration,
 retention, multi-workspace ownership, reflection, recovery activation/failover, voice and all other full-scope requirements
 remain open.
+
+Accounting code `fd6b18542dea7df48a5ff1d67b1f50e9c7424118` passed 1,693 tests with native Linux confinement,
+typechecking and all builds in [run 42582670631](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42582670631).
+The full local check passed 1,690 tests; the final shutdown-guard focused run passed 27. Both owned installed-Harness /
+DeepSeek Flash scenarios passed in 249.58 seconds, including scheduled usage/restart persistence, pre-inference budget
+refusal and explicit retry after allowance changes. The original app remained running. UI follow-up
+`f9eeb684c73da00cdbff86a170a57c1666affc0c` fixes switching between providers sharing a model name; eight focused
+checks, typechecking and all builds passed with the live-qualified runtime unchanged.
+The final UI code also passed all 1,693 Linux tests, typechecking and builds in
+[run 42583242628](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42583242628).
 
 ## Implemented increment: persistent mission schedules
 

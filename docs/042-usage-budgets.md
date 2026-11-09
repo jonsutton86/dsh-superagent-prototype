@@ -50,7 +50,7 @@ request and revision. Stale edits and conflicting ID reuse are refused.
 ## Operator surface and API
 
 The Usage tab shows tracking coverage, reported tokens, estimates, reservations, missing values and recent calls. It edits
-limits and model prices and exposes evidenced reconciliation. Mission and schedule pages link directly to their usage and
+limits and model prices and exposes evidenced reconciliation. Mission, schedule and persona pages link directly to their usage and
 limits. Call history links to execution and mission/persona scope. Controls use the existing bilingual panel, labeled form
 fields, keyboard-capable buttons, alerts and bounded pagination. Limits take effect on the next stream admission; increasing
 allowance does not automatically retry failed work. The operator retries from its mission or execution page.
@@ -70,7 +70,23 @@ Unit and rendered tests cover price arithmetic and snapshots, concurrent admissi
 period rollover, SQLite reopen, immutable ancestry, real Harness middleware with a synthetic provider, incomplete streams,
 shutdown, mission/schedule attribution, stale commands, lost responses and reconciliation through real API routes.
 Installed-Harness qualification checks actual provider-reported scheduled usage, restart persistence and scoped refusal
-before inference followed by an explicit retry after allowance changes. Qualification results are recorded after completion.
+before inference followed by an explicit retry after allowance changes.
+
+The full local check passed 1,690 tests (seven skipped), typechecking and all four builds. The final shutdown guard and
+focused usage/persona/localization/documentation suite passed 27 tests, followed by typechecking and all builds. Accounting
+code `fd6b18542dea7df48a5ff1d67b1f50e9c7424118` passed 1,693 tests (five skipped), typechecking and all builds with
+native Linux confinement in [run 42582670631](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42582670631).
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 249.58 seconds. Scheduled model calls reported real
+tokens with task/mission/schedule attribution, preserved identical totals across restart, and a separate mission's token
+limit refused its first inference with zero admitted calls. Disabling that limit and explicitly retrying the action produced
+a result awaiting operator review and reported usage. Actual inference used the configured API; channel-provider traffic used fixtures.
+The original app remained running.
+
+UI follow-up `f9eeb684c73da00cdbff86a170a57c1666affc0c` separates editor state for providers sharing a model name.
+The rendered regression checks the selected provider and unchanged other-provider price. Its eight focused UI/documentation
+checks, typechecking and all builds passed. The Harness accounting/runtime code is unchanged from the live-qualified commit.
+That final code also passed 1,693 tests (five skipped), typechecking and all builds with native Linux confinement in
+[run 42583242628](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42583242628), in 170.62 seconds.
 
 Provider invoice import, prepared-generation metadata, non-token charges, retention/index scaling, multi-workspace ownership,
 speculative-work admission integration and broader providers remain open. This increment does not complete reflection,

@@ -54,7 +54,7 @@ refer to the same environment. Remote access requires authentication; do not exp
 | Shared memory and recall | Immutable scoped capsules, typed/hash-bound provenance, FTS search, source freshness/conflict flags, worker tools and library UI | Host-enforced total recall budgets, transitive freshness, measured recall quality, import connectors and multi-workspace ownership |
 | Artifact library | Content-addressed publication, search/previews/download, mission/session links, archival, immutable revisions and reviewed GitHub comment delivery with persistent receipts | Large/streamed files, matched-environment imports and directory sync, retention, host verification and broader channel/repository delivery |
 | Personas and skills | Immutable versioned definitions, model preferences, optional-tool guards, embedded skills, management UI, reviewed per-action assignment and worker/descendant resume binding; contract in `021-personas.md` | Multi-workspace ownership, stronger per-capability execution boundaries, role-quality evaluations and catalog retention |
-| Schedules and reflection | Versioned complete-plan schedules, durable occurrences, restart deduplication, timezone/DST, missed-run policies, run/open-mission limits and operator UI | Automatic reflection context and reviewable proposals, provider spend limits, retention, multi-workspace ownership and broader deployment acceptance |
+| Schedules and reflection | Versioned complete-plan schedules, durable occurrences, restart deduplication, timezone/DST, missed-run policies, run/open-mission limits, scoped model budgets and operator UI | Automatic reflection context and reviewable proposals, broader provider budget acceptance, retention, multi-workspace ownership and broader deployment acceptance |
 | Usage and budgets | Worker concurrency, schedule run/open-mission reservations, managed Harness call/token ledger, versioned estimated pricing, scoped call/token/spend reservations, reconciliation and operator UI (`042-usage-budgets.md`) | Broader provider/adapter acceptance, invoice import, metadata generation binding, non-token fees, speculative admission integration, retention and multi-workspace ownership |
 | Models and connectors | Harness configuration, optional GitHub/Feishu, local grants, authenticated remote transport, paired Harness services, persistent remote authority/revocation and native Linux namespace/cancellation CI, whole-profile and per-action world binding, durable command/file ownership and operator receipts, endpoint-owned versioned credentials, real model artifact/restart qualification, endpoint enrollment/reconciliation and independent managed worlds | Managed endpoint/runtime launch, cross-host deployment qualification and connector scope |
 | Voice | None | Optional input/output adapters, interruption, local/cloud modes and text fallback |
@@ -412,3 +412,18 @@ Both owned installed-Harness / DeepSeek Flash scenarios passed in 235.73 seconds
 its enabled occurrence produced independently checked file/artifact bytes, and a later restart preserved exactly one run
 and assignment. The focused run passed 40 tests. The original app remained running. Reflection proposals, spend accounting,
 multi-workspace ownership, restored activation, voice, packaging and the remaining full architecture/product scope stay open.
+
+Managed usage: `042-usage-budgets.md` adds durable managed Harness calls and provider-reported tokens, explicit versioned
+prices, conservative scoped reservations, uncertain-call reconciliation and a bilingual usage/limits surface. Mission,
+schedule and persona pages link to their limits. Costs remain estimates; invoice import, prepared-generation metadata,
+non-token fees, speculative admission integration, retention and multi-workspace ownership remain open.
+Accounting code `fd6b18542dea7df48a5ff1d67b1f50e9c7424118` passed 1,693 Linux tests with typechecking/builds in
+[run 42582670631](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42582670631).
+Local validation passed 1,690 tests and a 27-test final focused run. Both owned installed-Harness / DeepSeek Flash scenarios
+passed in 249.58 seconds: real scheduled tokens and ownership survived restart; a scoped limit refused inference before
+any admitted call; an explicit retry after disabling that limit completed and reported usage. The original app remained
+running. UI follow-up `f9eeb684c73da00cdbff86a170a57c1666affc0c` fixes provider-specific price editing and passed
+eight focused checks, typechecking and all builds without changing the qualified runtime. All other full product and
+architecture requirements remain active.
+Final code `f9eeb684c73da00cdbff86a170a57c1666affc0c` also passed 1,693 Linux tests, typechecking and all builds in
+[run 42583242628](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42583242628).
