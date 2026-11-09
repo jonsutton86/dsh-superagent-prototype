@@ -496,6 +496,8 @@ async function remoteMission(native: boolean) {
   await expect(host.withTool(id, 'bash', async () => {})).rejects.toThrow('Ticket ended')
   expect((await host.api('POST', `tickets/${ticketId}/execution/${runningId}/cancel`, { requestId: 'operator-stop' })).status).toBe(200)
   await long.done
+  // The outcome precedes native managed-range shutdown; only confirmed quiescence can satisfy the receipt assertion.
+  expect(await long.waitForExit(AbortSignal.timeout(5000))).toBe(true)
   expect((await host.api('POST', `tickets/${ticketId}/execution/refresh`)).status).toBe(200)
   expect(p.world.effects(ticketId).items.find(item => item.id === runningId)?.quiescent).toBe(true)
   const wrong = host.runtime.store.get(KV.sessions.world(id))!
