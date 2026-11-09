@@ -19,12 +19,13 @@ import { AdministrationObservation, RevocationObservation } from '../remote/reco
 import { RemoteError, type AdministrationRead, type RevocationRead } from '../remote/protocol.ts'
 import { observeRevocation, revocationRequest, RevocationMismatch } from './revocation.ts'
 import { ConfigurationMismatch, worldConfigurations, verifyWorldConfiguration, type RecoveryWorldConnection, type WorldConfigurationCheck } from './configuration.ts'
+import { controlConfigurationChecks, type ControlConfigurationCheck } from './control.ts'
 import type { z } from 'zod'
 import { withVerifiedStagedCheckpoint } from './checkpoint.ts'
 
 export interface AuditCheckpointReceipts {
   checkpoint: string; keyFile: string; destination: string; authority: OwnershipConnection & { coordinatorId: string };
-  endpoints: Omit<RemoteConnection, 'lifetime' | 'ownership'>[]; worlds?: RecoveryWorldConnection[]; publication?: PublicationConnection; signal?: AbortSignal
+  endpoints: Omit<RemoteConnection, 'lifetime' | 'ownership'>[]; worlds?: RecoveryWorldConnection[]; publication?: PublicationConnection; publicationClient?: PublicationConnection; signal?: AbortSignal
 }
 export interface ReceiptAudit {
   id: string; checkpoint: string; digest: string; at: string; phase: 'running' | 'complete' | 'failed'; status: 'matched' | 'blocked';
@@ -179,6 +180,16 @@ export async function auditCheckpointReceipts(options: AuditCheckpointReceipts):
           }
         }
         for (const check of configurationChecks) if (await configuration(check)) verifiedConfigurations.push(check)
+        const controlChecks = controlConfigurationChecks(options, db, reservation, report, [...manifest.executionWorkspaces, ...worlds.map(world => world.grant.root)], signal)
+        const verifiedControls: ControlConfigurationCheck[] = []
+        const control = async (check: ControlConfigurationCheck) => {
+          try { await check.verify(); return true }
+          catch (error) {
+            if (error instanceof ConfigurationMismatch) { issue(error.code, check.resource, { kind: 'configuration', id: check.kind }); return false }
+            throw error
+          }
+        }
+        for (const check of controlChecks) if (await control(check)) verifiedControls.push(check)
         for (const original of revocations) {
           if (++expectedCount > 100_000) throw new Error('Checkpoint receipt inventory exceeds the audit bound')
           const resource = report.resources.find(resource => resource.identity.id === original.endpointId)
@@ -214,6 +225,7 @@ export async function auditCheckpointReceipts(options: AuditCheckpointReceipts):
         }
         // Private files are outside SQLite revision tracking; check them again, then revalidate every inventory and ownership cut.
         for (const check of verifiedConfigurations) await configuration(check)
+        for (const check of verifiedControls) await control(check)
         for (const resource of report.resources) {
           const page = InventoryPage.parse(await clients.find(client => client.id === resource.identity.id)!.call({
             op: 'recovery.inventory', revision: resource.revision, offset: resource.total }))

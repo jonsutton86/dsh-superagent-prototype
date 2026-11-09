@@ -22,6 +22,7 @@ export const OwnershipRequest = z.discriminatedUnion('op', [
   z.object({ op: z.literal('lease.activate'), requestId }).strict(),
   z.object({ op: z.literal('lease.release'), requestId }).strict(),
   z.object({ op: z.literal('lease.inspect') }).strict(),
+  z.object({ op: z.literal('recovery.claimant') }).strict(),
   z.object({ op: z.literal('lease.verify'), proof: z.string().min(32).max(1024) }).strict(),
   z.object({ op: z.literal('resource.acknowledge'), requestId, stamp: OwnershipStamp }).strict(),
 ])

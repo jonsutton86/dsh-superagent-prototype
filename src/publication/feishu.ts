@@ -54,12 +54,21 @@ export class FeishuPublication implements PublicationAdapter {
     return { id: message.message_id, bodyHash: contentHash(parsed.data.text),
       url: `https://applink.${destination.brand === 'lark' ? 'larksuite.com' : 'feishu.cn'}/client/chat/open?openChatId=${destination.chatId}` }
   }
-  async prepare(destination: DestinationConfig, publication: Publication, signal: AbortSignal): Promise<PreparedPublication> {
-    if (destination.kind !== 'feishu-reply') throw new Error('Feishu destination required')
+  private async preflight(destination: FeishuDestination, signal: AbortSignal): Promise<string> {
     const token = await this.token(destination, signal)
     const bot = await this.request(destination, 'bot/v3/info', signal, token)
     if (z.object({ open_id: z.string() }).parse(bot.bot).open_id !== destination.botId) throw new Error('Feishu bot identity differs from the pinned account')
     await this.parent(destination, token, signal)
+    privateCredential(destination.credentialFile, this.pins.get(destination.credentialFile))
+    return token
+  }
+  async check(destination: DestinationConfig, signal: AbortSignal): Promise<void> {
+    if (destination.kind !== 'feishu-reply') throw new Error('Feishu destination required')
+    await this.preflight(destination, signal)
+  }
+  async prepare(destination: DestinationConfig, publication: Publication, signal: AbortSignal): Promise<PreparedPublication> {
+    if (destination.kind !== 'feishu-reply') throw new Error('Feishu destination required')
+    const token = await this.preflight(destination, signal)
     return { send: async signal => {
       const result = await this.request(destination, `im/v1/messages/${destination.messageId}/reply`, signal, token,
         { msg_type: 'text', content: JSON.stringify({ text: text(publication) }), reply_in_thread: true, uuid: publication.id })

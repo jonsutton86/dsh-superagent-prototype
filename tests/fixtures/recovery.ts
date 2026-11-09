@@ -136,6 +136,7 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
           expect(image.revocations).toEqual({ verified: revokedWorlds.size, recovered: input.expectedRecoveredRevocations ?? 0 })
           expect(image.executionConfiguration).toEqual({ worlds: activeWorlds, bindings: activeBindings })
           expect(image.sessionBackend).toEqual({ sessions: manifest.sessions.length, events: manifest.sessions.reduce((total, session) => total + session.eventCount, 0) })
+          expect(image.controlConfiguration).toEqual({ claimant: true, publication: true, destinations: 1 })
           expect(activeWorlds).toBeGreaterThan(0); expect(activeBindings).toBeGreaterThan(0)
           for (const [member, original] of revokedWorlds) {
             const world = new DatabaseSync(join(preparedPath, member), { readOnly: true })

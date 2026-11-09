@@ -1,7 +1,7 @@
 /** Publication intents bind exact content and a host-configured destination; they never carry account credentials. */
 import { z } from 'zod'
 import { OwnershipStamp } from '../ownership/protocol.ts'
-import { InventoryRequest, ReceiptRequest } from '../ownership/inventory.ts'
+import { InventoryPage, InventoryRequest, ReceiptRequest } from '../ownership/inventory.ts'
 
 export const PUBLICATION_PATH = '/publication/v1'
 export const PublicationId = z.string().uuid()
@@ -49,6 +49,8 @@ export const ConversationPage = z.object({ destination: BaseDestination.shape.id
 export type ConversationPage = z.infer<typeof ConversationPage>
 export const PublicationRpc = z.discriminatedUnion('op', [
   InventoryRequest, ReceiptRequest,
+  z.object({ op: z.literal('recovery.destination'), revision: InventoryPage.shape.revision,
+    destination: BaseDestination.shape.id, destinationHash: Digest }).strict(),
   z.object({ op: z.literal('identity') }).strict(), z.object({ op: z.literal('destinations') }).strict(),
   z.object({ op: z.literal('publish'), publication: Publication }).strict(),
   ConversationRead.extend({ op: z.literal('conversation.read') }),
@@ -63,6 +65,8 @@ export const PublicationIdentity = z.object({ protocol: z.literal(1), id: Public
 export type PublicationIdentity = z.infer<typeof PublicationIdentity>
 export const DestinationView = z.union(destinationShapes.map(shape => shape.extend({ hash: Digest }).strict()))
 export type DestinationView = z.infer<typeof DestinationView>
+export const PublicationConfigurationObservation = z.object({ revision: InventoryPage.shape.revision, identity: InventoryPage.shape.identity,
+  destination: BaseDestination.shape.id, destinationHash: Digest, account: z.literal(true), target: z.literal(true), quiescent: z.literal(true) }).strict()
 /** Safe protocol refusal; account/provider diagnostics are never copied into HTTP responses. */
 export class PublicationError extends Error {
   constructor(readonly status: number, readonly code: string, message: string) { super(message) }

@@ -20,7 +20,7 @@ export async function publicationFixture(cleanup: (() => Promise<unknown>)[], ow
   let botId = 'ou_bot', parentChat = 'oc_chat'
   let loseProviderReply: boolean | string = false
   const shouldLose = (body: string) => loseProviderReply === true || typeof loseProviderReply === 'string' && body.includes(`dsh-publication:${loseProviderReply}:`)
-  let posts = 0, reads = 0, refuse = false, unavailable = false, login = 'agent-bot', hold: Promise<void> | undefined, prepareHold: Promise<void> | undefined, readHold: Promise<void> | undefined
+  let posts = 0, reads = 0, inspections = 0, refuse = false, unavailable = false, login = 'agent-bot', hold: Promise<void> | undefined, prepareHold: Promise<void> | undefined, readHold: Promise<void> | undefined
   const provider = createServer((req, res) => { void (async () => {
     res.setHeader('content-type', 'application/json')
     const url = new URL(req.url!, 'http://127.0.0.1'), path = url.pathname
@@ -31,7 +31,7 @@ export async function publicationFixture(cleanup: (() => Promise<unknown>)[], ow
     }
     if (path.startsWith('/open-apis/')) {
       if (req.headers.authorization !== `Bearer ${tenantToken}`) { res.writeHead(401); res.end('{"code":1}'); return }
-      if (path === '/open-apis/bot/v3/info') { res.end(JSON.stringify({ code: 0, bot: { open_id: botId } })); return }
+      if (path === '/open-apis/bot/v3/info') { inspections++; await prepareHold; res.end(JSON.stringify({ code: 0, bot: { open_id: botId } })); return }
       if (path === '/open-apis/im/v1/messages/om_root') { res.end(JSON.stringify({ code: 0, data: { items: [{ message_id: 'om_root', chat_id: parentChat, msg_type: 'text', thread_id: 'omt_thread' }] } })); return }
       if (path === '/open-apis/im/v1/messages/om_root/reply') {
         const chunks: Buffer[] = []; for await (const chunk of req) chunks.push(Buffer.from(chunk))
@@ -54,7 +54,7 @@ export async function publicationFixture(cleanup: (() => Promise<unknown>)[], ow
       res.end(JSON.stringify({ code: 0, data: { items: message ? [message] : [] } })); return
     }
     if (req.headers.authorization !== `Bearer ${secret}`) { res.writeHead(401); res.end('{}'); return }
-    if (path === '/user') { await prepareHold; res.end(JSON.stringify({ login })); return }
+    if (path === '/user') { inspections++; await prepareHold; res.end(JSON.stringify({ login })); return }
     if (path === '/repos/acme/project/issues/7') { res.end(JSON.stringify({ number: 7 })); return }
     if (path === '/repos/acme/project/pulls/comments/11') { res.end(JSON.stringify({ id: 11, body: 'Review question', user: { login: 'reviewer' }, pull_request_url: 'https://api.github.com/repos/acme/project/pulls/7' })); return }
     if (path === '/repos/acme/project/issues/7/comments' || path === '/repos/acme/project/pulls/7/comments' || path === '/repos/acme/project/pulls/7/comments/11/replies') {
@@ -104,7 +104,7 @@ export async function publicationFixture(cleanup: (() => Promise<unknown>)[], ow
     await Promise.all([new Promise<void>(resolve => server.close(() => resolve())), new Promise<void>(resolve => provider.close(() => resolve()))])
     await rm(directory, { recursive: true, force: true })
   })
-  return { directory, config, connection, destination, comments, messages, secret, providerOrigin: origin, get service() { return service }, get posts() { return posts }, get reads() { return reads },
+  return { directory, config, connection, destination, comments, messages, secret, providerOrigin: origin, get service() { return service }, get posts() { return posts }, get reads() { return reads }, get inspections() { return inspections },
     client: new PublicationClient(connection, access), admin: new PublicationClient({ ...connection, credentialFile: join(directory, 'service/admin.token') }, access),
     loseProviderReply: (id?: string) => { loseProviderReply = id ?? true }, loseServiceReply: () => { loseServiceReply = true },
     refuse: (value: boolean) => { refuse = value }, login: (value: string) => { login = value }, hold: (value?: Promise<void>) => { hold = value },

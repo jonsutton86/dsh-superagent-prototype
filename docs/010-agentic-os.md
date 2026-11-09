@@ -323,3 +323,9 @@ Both owned installed-Harness / DeepSeek Flash scenarios passed in 192.86 seconds
 imported destination and signed Session/event counts. Linux passed 1,564 tests with native confinement, typechecking and all
 builds in [run 42562981301](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42562981301).
 Provider-message traffic stayed local; the original app remained running. Broader configuration and activation remain open.
+
+Control configuration recovery: `036-control-configuration-recovery.md` adds read-only proof of the reserved claimant and
+the coordinator's publisher credential. It checks pinned provider account identity and target access at the audited revision,
+repeats private-file checks before publishing, and records only safe successful check counts. No lease or message is created.
+Inference/source configuration, authoritative state, remapping, coordinated activation and clean-host failure qualification
+remain required alongside the complete article/product scope.

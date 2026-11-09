@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto'
+import { chmod, rm, writeFile } from 'node:fs/promises'
 import { afterEach, expect, it, vi } from 'vitest'
 import { ownershipAuthority } from './fixtures/ownership-authority.ts'
 import { publicationFixture } from './fixtures/publication.ts'
 import { CoordinatorOwnership } from '../src/ownership/lease.ts'
 import { contentHash } from '../src/publication/github.ts'
-import { DestinationView, PublicationReceipt, type Publication } from '../src/publication/protocol.ts'
+import { DestinationView, PublicationReceipt, PublicationConfigurationObservation, type Publication } from '../src/publication/protocol.ts'
+import { InventoryPage } from '../src/ownership/inventory.ts'
 import { PublicationService } from '../src/publication/service.ts'
 import type { OwnershipView } from '../src/ownership/protocol.ts'
 
@@ -37,12 +39,72 @@ it('publishes once, preserves exact original receipts through lost acknowledgeme
   expect(JSON.stringify(original)).not.toContain(host.secret)
 })
 
+it.each(['github-comment', 'github-review', 'feishu-reply'] as const)('verifies %s account and destination configuration without a lease, publication or administrator substitution', async kind => {
+  const { host, publication, owner, authority } = await fixture(kind); await owner.close()
+  const before = await authority.admin.call({ op: 'coordinator.inspect', id: 'coordinator' })
+  const inventory = InventoryPage.parse(await host.admin.call({ op: 'recovery.inventory', offset: 0 }))
+  const request = { op: 'recovery.destination' as const, revision: inventory.revision, destination: publication.destination, destinationHash: publication.destinationHash }
+  const observation = PublicationConfigurationObservation.parse(await host.client.call(request))
+  expect(observation).toEqual({ revision: inventory.revision, identity: inventory.identity, destination: request.destination,
+    destinationHash: request.destinationHash, account: true, target: true, quiescent: true })
+  expect(JSON.stringify(observation)).not.toContain(host.secret); expect(JSON.stringify(observation)).not.toContain(host.destination.credentialFile)
+  await expect(host.admin.call(request)).rejects.toThrow('coordinator publication credential')
+  await expect(host.client.call({ ...request, destinationHash: '0'.repeat(64) })).rejects.toThrow('changed')
+  expect(await host.admin.call({ op: 'recovery.inventory', offset: 0 })).toEqual(inventory)
+  expect(await authority.admin.call({ op: 'coordinator.inspect', id: 'coordinator' })).toEqual(before)
+  expect(host.posts).toBe(0)
+})
+
+it.each(['missing', 'public', 'changed', 'account'] as const)('refuses %s publication configuration and keeps private diagnostics off the wire', async kind => {
+  const { host, publication, owner } = await fixture(); await owner.close()
+  const inventory = InventoryPage.parse(await host.admin.call({ op: 'recovery.inventory', offset: 0 }))
+  const request = { op: 'recovery.destination' as const, revision: inventory.revision, destination: publication.destination, destinationHash: publication.destinationHash }
+  await host.client.call(request)
+  if (kind === 'missing') await rm(host.destination.credentialFile)
+  else if (kind === 'public') await chmod(host.destination.credentialFile, 0o644)
+  else if (kind === 'changed') await writeFile(host.destination.credentialFile, 'synthetic-replacement-credential-value')
+  else host.login('another-account')
+  await expect(host.client.call(request)).rejects.toMatchObject({ code: 'configuration_unavailable', message: 'Publication account or destination configuration is unavailable' })
+  expect(host.posts).toBe(0)
+})
+
+it.each(['bot', 'chat'] as const)('rejects an altered Feishu %s during read-only recovery verification', async kind => {
+  const { host, publication, owner } = await fixture('feishu-reply'); await owner.close()
+  const inventory = InventoryPage.parse(await host.admin.call({ op: 'recovery.inventory', offset: 0 }))
+  if (kind === 'bot') host.bot('ou_other'); else host.parentChat('oc_other')
+  await expect(host.client.call({ op: 'recovery.destination', revision: inventory.revision,
+    destination: publication.destination, destinationHash: publication.destinationHash })).rejects.toMatchObject({ code: 'configuration_unavailable' })
+  expect(host.posts).toBe(0)
+})
+
+it.each(['credential', 'inventory'] as const)('rechecks publication %s after the asynchronous account lookup', async kind => {
+  const { host, publication, owner } = await fixture(); await owner.close()
+  const inventory = InventoryPage.parse(await host.admin.call({ op: 'recovery.inventory', offset: 0 }))
+  let release!: () => void
+  host.holdPrepare(new Promise<void>(resolve => { release = resolve }))
+  const checking = host.client.call({ op: 'recovery.destination', revision: inventory.revision,
+    destination: publication.destination, destinationHash: publication.destinationHash })
+  void checking.catch(() => {})
+  try {
+    await vi.waitFor(() => expect(host.inspections).toBe(1))
+    if (kind === 'credential') await writeFile(host.destination.credentialFile, 'synthetic-replacement-credential-value')
+    else host.service.journal.db.prepare("UPDATE resource_inventory_revision SET value=? WHERE id=1").run('0'.repeat(32))
+    release()
+    await expect(checking).rejects.toMatchObject({ code: kind === 'credential' ? 'configuration_unavailable' : 'inventory_changed' })
+    expect(host.posts).toBe(0)
+  } finally { release(); host.holdPrepare() }
+})
+
 it('retains an unknown provider commit and blocks ownership handoff until read-only observation confirms the exact comment', async () => {
   const { host, publication, authority, owner } = await fixture()
   host.loseProviderReply()
   const unknown = await host.client.call<PublicationReceipt>({ op: 'publish', publication })
   expect(unknown.phase).toBe('unknown'); expect(host.posts).toBe(1)
   await host.restart(); await owner.close()
+  const inventory = InventoryPage.parse(await host.admin.call({ op: 'recovery.inventory', offset: 0 })), inspections = host.inspections
+  await expect(host.client.call({ op: 'recovery.destination', revision: inventory.revision,
+    destination: publication.destination, destinationHash: publication.destinationHash })).rejects.toMatchObject({ code: 'recovery_busy' })
+  expect(host.inspections).toBe(inspections)
   const successor = new CoordinatorOwnership(authority.config); cleanup.push(() => successor.close())
   let active = false; const starting = successor.start().then(() => { active = true }); void starting.catch(() => {})
   await vi.waitFor(async () => expect((await authority.claimant.call<OwnershipView>({ op: 'lease.inspect' })).phase).toBe('preparing'))

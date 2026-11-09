@@ -1,7 +1,8 @@
 import { fingerprint, timestamp } from '../remote/journal.ts'
 import { OwnershipGate, sameOwner, type OwnershipFloor, type ResourceOwnershipConfig } from '../ownership/gate.ts'
 import { PublicationJournal } from './journal.ts'
-import { ConversationPage, Destination, DestinationConfig, ExternalReceipt, Publication, PublicationError, PublicationRpc, type PublicationIdentity, PublicationReceipt } from './protocol.ts'
+import { ConversationPage, Destination, DestinationConfig, ExternalReceipt, Publication, PublicationError, PublicationRpc, type PublicationIdentity, PublicationReceipt,
+  PublicationConfigurationObservation } from './protocol.ts'
 import { contentHash, DeliveryRefused, type PublicationAdapter } from './github.ts'
 import { PublicationProviders } from './providers.ts'
 import { ResourceInventory } from '../ownership/inventory.ts'
@@ -69,6 +70,23 @@ export class PublicationService {
   private async dispatch(principal: 'admin' | 'client', request: PublicationRpc, proof?: string): Promise<unknown> {
     switch (request.op) {
       case 'identity': return this.identity()
+      case 'recovery.destination': {
+        if (principal !== 'client') throw new PublicationError(403, 'client_required', 'The coordinator publication credential is required')
+        const destination = this.destination(request.destination), { credentialFile: _, ...metadata } = destination
+        if (fingerprint(metadata) !== request.destinationHash) throw new PublicationError(409, 'destination_changed', 'Publication destination changed')
+        const validate = () => {
+          this.lifetime.signal.throwIfAborted(); this.inventory.assertRevision(request.revision)
+          if (this.calls || this.working.size || this.journal.unsettled().length) throw new PublicationError(409, 'recovery_busy', 'Publication service must be quiescent for recovery')
+        }
+        validate()
+        if (!this.adapter.check) throw new PublicationError(409, 'configuration_unavailable', 'Publication provider cannot verify its configuration')
+        try { await this.adapter.check(destination, AbortSignal.any([this.lifetime.signal, AbortSignal.timeout(30_000)])) }
+        catch { throw new PublicationError(409, 'configuration_unavailable', 'Publication account or destination configuration is unavailable') }
+        validate()
+        const { id, ownership } = this.identity()
+        return PublicationConfigurationObservation.parse({ revision: request.revision, identity: { id, kind: 'publication', ...ownership },
+          destination: request.destination, destinationHash: request.destinationHash, account: true, target: true, quiescent: true })
+      }
       case 'recovery.inventory':
       case 'recovery.receipt': {
         if (principal !== 'admin') throw new PublicationError(403, 'admin_required', 'Independent publication administrator required')

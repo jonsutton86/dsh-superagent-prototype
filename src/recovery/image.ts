@@ -21,6 +21,7 @@ export const ReceiptImage = z.object({ version: z.literal(1), requestId: z.strin
   revocations: z.object({ verified: z.number().int().nonnegative(), recovered: z.number().int().nonnegative() }).strict().optional(),
   executionConfiguration: z.object({ worlds: z.number().int().nonnegative(), bindings: z.number().int().nonnegative() }).strict().optional(),
   sessionBackend: z.object({ sessions: z.number().int().positive(), events: z.number().int().nonnegative() }).strict().optional(),
+  controlConfiguration: z.object({ claimant: z.literal(true), publication: z.boolean(), destinations: z.number().int().nonnegative().max(100) }).strict().optional(),
 }).strict()
 export type ReceiptImage = z.infer<typeof ReceiptImage>
 const envelope = z.object({ manifest: ReceiptImage, mac: digest }).strict()

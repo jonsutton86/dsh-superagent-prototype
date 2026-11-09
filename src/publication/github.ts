@@ -6,6 +6,7 @@ import { PublicationError, type ConversationRead, type ConversationPage, type De
 export const contentHash = (text: string) => createHash('sha256').update(text).digest('hex')
 export interface PreparedPublication { send(signal: AbortSignal): Promise<ExternalReceipt> }
 export interface PublicationAdapter {
+  check?(destination: DestinationConfig, signal: AbortSignal): Promise<void>
   prepare(destination: DestinationConfig, publication: Publication, signal: AbortSignal): Promise<PreparedPublication>
   observe(destination: DestinationConfig, publication: Publication, signal: AbortSignal, externalId?: string): Promise<ExternalReceipt | undefined>
   read?(destination: DestinationConfig, request: ConversationRead, signal: AbortSignal): Promise<ConversationPage>
@@ -56,8 +57,7 @@ export class GithubPublication implements PublicationAdapter {
     if (requireTarget && value.issue_url?.toLowerCase() !== `https://api.github.com/repos/${destination.repository}/issues/${destination.issue}`.toLowerCase()) return
     return { id: String(value.id), url: `https://github.com/${destination.repository}/issues/${destination.issue}#issuecomment-${value.id}`, bodyHash: contentHash(value.body) }
   }
-  async prepare(destination: DestinationConfig, publication: Publication, signal: AbortSignal): Promise<PreparedPublication> {
-    if (destination.kind === 'feishu-reply') throw new Error('GitHub destination required')
+  private async preflight(destination: GithubDestination, signal: AbortSignal): Promise<string> {
     const credential = this.credential(destination)
     const account = z.looseObject({ login: z.string() }).parse(await this.request('user', credential, signal))
     if (account.login.toLowerCase() !== destination.login.toLowerCase()) throw new PublicationError(409, 'account_changed', 'Publication account differs from the pinned destination account')
@@ -67,6 +67,16 @@ export class GithubPublication implements PublicationAdapter {
       if (root.id !== destination.comment || root.in_reply_to_id || root.pull_request_url.toLowerCase() !== `https://api.github.com/repos/${destination.repository}/pulls/${destination.issue}`.toLowerCase())
         throw new Error('The configured review root is not in the pinned pull request')
     }
+    this.credential(destination)
+    return credential
+  }
+  async check(destination: DestinationConfig, signal: AbortSignal): Promise<void> {
+    if (destination.kind === 'feishu-reply') throw new Error('GitHub destination required')
+    await this.preflight(destination, signal)
+  }
+  async prepare(destination: DestinationConfig, publication: Publication, signal: AbortSignal): Promise<PreparedPublication> {
+    if (destination.kind === 'feishu-reply') throw new Error('GitHub destination required')
+    const credential = await this.preflight(destination, signal)
     // All credential loading, account verification and target discovery finish before the service's final owner verification.
     return { send: async signal => {
       const path = destination.kind === 'github-review' ? `pulls/${destination.issue}/comments/${destination.comment}/replies` : `issues/${destination.issue}/comments`

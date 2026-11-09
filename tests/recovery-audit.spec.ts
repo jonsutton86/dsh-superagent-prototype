@@ -31,7 +31,7 @@ import { CoordinatorOwnership } from '../src/ownership/lease.ts'
 import { WorldJournal, worldBinding, type WorldRecord } from '../src/remote/world-journal.ts'
 import { RemoteClient } from '../src/remote/client.ts'
 import type { RemoteJob, RemoteOperation, RevocationReceipt, RpcInput } from '../src/remote/protocol.ts'
-import { PublicationClient } from '../src/publication/client.ts'
+import { PublicationClient, type PublicationConnection } from '../src/publication/client.ts'
 import { contentHash } from '../src/publication/github.ts'
 import type { DestinationView, Publication, PublicationReceipt, PublicationRpc } from '../src/publication/protocol.ts'
 import { ownershipAuthority } from './fixtures/ownership-authority.ts'
@@ -42,7 +42,7 @@ const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { vi.restoreAllMocks(); for (const close of cleanup.splice(0).reverse()) await close() })
 
 async function fixture(options: { administration?: boolean; credential?: boolean; rotateCredential?: boolean; revokeCredential?: boolean; pending?: boolean; channel?: boolean; extra?: boolean; revoked?: boolean;
-  managed?: boolean; changedPin?: boolean; revocation?: 'lost' | 'unsettled' | 'unsent'; kind?: DestinationView['kind'] } = {}) {
+  managed?: boolean; changedPin?: boolean; omitPublicationCredential?: boolean; revocation?: 'lost' | 'unsettled' | 'unsent'; kind?: DestinationView['kind'] } = {}) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'dsh-receipt-audit-')))
   cleanup.push(() => rm(directory, { recursive: true, force: true }))
   const authority = await ownershipAuthority(cleanup, ['endpoint', 'publication']), owner = new CoordinatorOwnership(authority.config)
@@ -72,7 +72,8 @@ async function fixture(options: { administration?: boolean; credential?: boolean
   world.bind(remote.endpoint.journal.id, remote.enrolled.grant)
   store.set(KV.runtime.masterId, 'audit-master')
   store.set(KV.runtime.ownership, { authorityId: authority.config.authorityId, coordinatorId: authority.config.coordinatorId })
-  store.set(KV.runtime.publication, { serviceId: publisher.connection.serviceId })
+  store.set(KV.runtime.publication, { serviceId: publisher.connection.serviceId,
+    ...options.omitPublicationCredential ? {} : { credentialFile: publisher.connection.credentialFile } })
   const scope = { world: worldBinding(remote.endpoint.journal.id, remote.enrolled.grant), grantId: remote.enrolled.grant.id,
     epoch: remote.enrolled.grant.epoch, ownershipCoordinatorId: 'coordinator' }
   const command = world.effects.prepare(remote.spawn('printf private-command-payload > artifact'), scope)
@@ -528,6 +529,7 @@ it.each(['github-comment', 'github-review', 'feishu-reply'] as const)('prepares 
   const options = { ...f.audit, requestId: randomUUID(), auditId: audit.id }, prepared = await prepareCheckpointReceipts(options)
   expect(prepared.manifest.applied).toEqual({ commands: 1, mutations: 1, publications: 2 })
   expect(prepared.manifest.sessionBackend).toEqual({ sessions: 1, events: 1 })
+  expect(prepared.manifest.controlConfiguration).toEqual({ claimant: true, publication: true, destinations: 1 })
   expect(await verifyReceiptImage(prepared.path, f.audit.keyFile)).toEqual(prepared.manifest)
   expect(await prepareCheckpointReceipts(options)).toEqual(prepared)
   const db = new DatabaseSync(join(prepared.path, 'orchestrator.sqlite'), { readOnly: true })
@@ -549,6 +551,82 @@ it.each(['github-comment', 'github-review', 'feishu-reply'] as const)('prepares 
   const context = new Context(); cleanup.push(() => context.fiber.dispose())
   expect(() => new Runtime(context, testMachine({ stateDir: prepared.path }), () => {})).toThrow('staged checkpoint restore')
   expect(await verifyReceiptImage(prepared.path, f.audit.keyFile)).toEqual(prepared.manifest)
+})
+
+it.each(['missing', 'public', 'old', 'administrator', 'resource'] as const)('blocks recovery when the replacement claimant credential is %s', async kind => {
+  const f = await fixture(), file = f.reserved.credentialFile
+  if (kind === 'missing') await rm(file)
+  else if (kind === 'public') await chmod(file, 0o644)
+  else await copyFile(kind === 'old' ? f.authority.config.credentialFile : kind === 'administrator'
+    ? f.authority.admin.connection.credentialFile : f.authority.resource.credentialFile, file)
+  const audit = await auditCheckpointReceipts(f.audit)
+  expect(audit).toMatchObject({ phase: 'complete', status: 'blocked', complete: true })
+  expect(audit.issues).toContainEqual({ code: 'configuration_unavailable', resource: f.authority.config.authorityId, kind: 'configuration', id: 'claimant' })
+  await expect(prepareCheckpointReceipts({ ...f.audit, auditId: audit.id, requestId: randomUUID() })).rejects.toThrow('complete matched audit')
+  expect(await f.authority.admin.call({ op: 'coordinator.inspect', id: 'coordinator' })).toMatchObject({ phase: 'vacant', epoch: 1 })
+  expect(f.publisher.posts).toBe(1)
+})
+
+it.each(['missing', 'administrator', 'account', 'provider-file', 'linked', 'workspace'] as const)('blocks recovery with %s publication configuration', async kind => {
+  const f = await fixture()
+  let options: typeof f.audit & { publicationClient?: PublicationConnection } = f.audit
+  if (kind === 'missing') await rm(f.publisher.connection.credentialFile)
+  else if (kind === 'administrator') options = { ...f.audit, publicationClient: f.publisher.admin.config }
+  else if (kind === 'account') f.publisher.login('different-account')
+  else if (kind === 'provider-file') await rm(f.publisher.destination.credentialFile)
+  else {
+    const file = join(kind === 'workspace' ? f.remote.enrolled.grant.root : f.directory, 'selected-publisher.token')
+    if (kind === 'linked') await symlink(f.publisher.connection.credentialFile, file)
+    else await copyFile(f.publisher.connection.credentialFile, file)
+    options = { ...f.audit, publicationClient: { ...f.publisher.connection, credentialFile: file } }
+  }
+  const audit = await auditCheckpointReceipts(options)
+  expect(audit.status).toBe('blocked')
+  expect(audit.issues).toContainEqual({ code: 'configuration_unavailable', resource: f.publisher.connection.serviceId, kind: 'configuration', id: 'publication' })
+  expect(f.publisher.posts).toBe(1); expect(f.read().hold?.state).toBe('staged')
+})
+
+it('requires an explicit client selection when an older checkpoint lacks its publication credential path', async () => {
+  const f = await fixture({ omitPublicationCredential: true }), missing = await auditCheckpointReceipts(f.audit)
+  expect(missing.issues).toContainEqual({ code: 'configuration_missing', resource: f.publisher.connection.serviceId, kind: 'configuration', id: 'publication' })
+  const options = { ...f.audit, publicationClient: f.publisher.connection }, audit = await auditCheckpointReceipts(options)
+  expect(audit.status).toBe('matched')
+  const preparation = { ...options, auditId: audit.id, requestId: randomUUID() }, image = await prepareCheckpointReceipts(preparation)
+  expect(image.manifest.controlConfiguration).toEqual({ claimant: true, publication: true, destinations: 1 })
+  await expect(prepareCheckpointReceipts({ ...preparation, publicationClient: { ...f.publisher.connection, timeoutMs: 5000 } })).rejects.toThrow('request differs')
+  await rm(f.reserved.credentialFile); await rm(f.publisher.connection.credentialFile)
+  expect(await prepareCheckpointReceipts(preparation)).toEqual(image)
+})
+
+it('refuses a substituted publisher identity in the selected recovery client', async () => {
+  const f = await fixture(), audit = await auditCheckpointReceipts({ ...f.audit, publicationClient: { ...f.publisher.connection, serviceId: randomUUID() } })
+  expect(audit.issues).toContainEqual({ code: 'configuration_mismatch', resource: f.publisher.connection.serviceId, kind: 'configuration', id: 'publication' })
+})
+
+it.each(['claimant', 'publisher', 'provider'] as const)('rechecks %s configuration after audit and again before publishing the held image', async kind => {
+  const f = await fixture(), audit = await auditCheckpointReceipts(f.audit), call = PublicationClient.prototype.call
+  let changed = false
+  vi.spyOn(PublicationClient.prototype, 'call').mockImplementation(async function<T>(this: PublicationClient, request: PublicationRpc, signal?: AbortSignal): Promise<T> {
+    const result = await call.call(this, request, signal)
+    if (request.op === 'recovery.receipt' && !changed) {
+      changed = true
+      if (kind === 'claimant') await rm(f.reserved.credentialFile)
+      else if (kind === 'publisher') await chmod(f.publisher.connection.credentialFile, 0o644)
+      else f.publisher.login('different-account')
+    }
+    return result as T
+  })
+  await expect(prepareCheckpointReceipts({ ...f.audit, auditId: audit.id, requestId: randomUUID() })).rejects.toThrow('configuration_unavailable')
+  expect(changed).toBe(true)
+  expect((await readdir(f.audit.destination)).filter(name => name.startsWith('prepared-') || name.startsWith('.prepare-'))).toEqual([])
+  expect(f.read().hold?.state).toBe('staged'); expect(f.publisher.posts).toBe(1)
+})
+
+it('does not reuse an audit after the configured provider account changes', async () => {
+  const f = await fixture(), audit = await auditCheckpointReceipts(f.audit)
+  f.publisher.login('different-account')
+  await expect(prepareCheckpointReceipts({ ...f.audit, auditId: audit.id, requestId: randomUUID() })).rejects.toThrow('configuration_unavailable')
+  expect((await readdir(f.audit.destination)).some(name => name.startsWith('prepared-'))).toBe(false)
 })
 
 it('requires actual destination Sessions, then verifies an imported backend without appending or granting execution', async () => {
@@ -689,16 +767,16 @@ it.each(['manifest', 'member', 'extra'] as const)('refuses a tampered prepared %
   expect(f.read().hold?.state).toBe('staged')
 })
 
-it('authenticates older held image manifests without treating absent Session evidence as a new verification', async () => {
+it('authenticates older held image manifests without treating absent configuration or Session evidence as a new verification', async () => {
   const f = await fixture(), audit = await auditCheckpointReceipts(f.audit)
   const prepared = await prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })
-  const { sessionBackend: _, ...manifest } = prepared.manifest, key = recoveryKey(f.audit.keyFile)
+  const { sessionBackend: _, controlConfiguration: __, ...manifest } = prepared.manifest, key = recoveryKey(f.audit.keyFile)
   try {
     const mac = createHmac('sha256', key).update('dsh-receipt-image:1\n').update(JSON.stringify(manifest)).digest('hex')
     await writeFile(join(prepared.path, 'prepared.json'), JSON.stringify({ manifest, mac }))
   } finally { key.fill(0) }
   const verified = await verifyReceiptImage(prepared.path, f.audit.keyFile)
-  expect(verified).toEqual(manifest); expect(verified.sessionBackend).toBeUndefined(); expect(verified.executionOwnership).toBe(false)
+  expect(verified).toEqual(manifest); expect(verified.sessionBackend).toBeUndefined(); expect(verified.controlConfiguration).toBeUndefined(); expect(verified.executionOwnership).toBe(false)
 })
 
 it('reconciles all seven original administrative actions without resending or adopting newer grants and credentials', async () => {

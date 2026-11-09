@@ -30,6 +30,8 @@ export const Config: s<Partial<RecoveryConfig>, RecoveryConfig> = s.object({ mod
     worlds: s.array(s.object({ binding: s.string().pattern(/^[a-f0-9]{64}$/).required(), url: s.string().required(), endpointId: s.string().required(),
       credentialFile: s.string().pattern(/^\//).required(), timeoutMs: s.number().min(100).max(60_000).default(5000) })).default([]),
     publication: s.union([s.object({ url: s.string().required(), serviceId: s.string().required(), credentialFile: s.string().pattern(/^\//).required(),
+      timeoutMs: s.number().min(100).max(60_000).default(5000) })]),
+    publicationClient: s.union([s.object({ url: s.string().required(), serviceId: s.string().required(), credentialFile: s.string().pattern(/^\//).required(),
       timeoutMs: s.number().min(100).max(60_000).default(5000) })]) })]),
   preparation: s.union([s.object({ requestId: s.string().required(), auditId: s.string().required() })]),
   worldDirectories: s.array(s.string()).default([]) })
@@ -37,7 +39,7 @@ interface RecoveryConfig { mode: 'checkpoint' | 'verify' | 'stage' | 'import-ses
   checkpoint?: string; destination?: string; receiptFile?: string; worldDirectories?: string[];
   reservation?: Pick<ReserveCheckpointOwnership, 'requestId' | 'epoch' | 'generation' | 'authority'>;
   preparation?: Pick<PrepareCheckpointReceipts, 'requestId' | 'auditId'>;
-  audit?: Pick<AuditCheckpointReceipts, 'authority' | 'endpoints' | 'worlds' | 'publication'> }
+  audit?: Pick<AuditCheckpointReceipts, 'authority' | 'endpoints' | 'worlds' | 'publication' | 'publicationClient'> }
 const required = (value: string | undefined, field: string) => { if (!value) throw new Error(`Recovery requires ${field}`); return value }
 
 /** Keep the backend pluggable: the maintenance profile chooses the same Session service as the stopped coordinator. */

@@ -191,6 +191,13 @@ export class OwnershipAuthority {
       const coordinator = this.current({ role: 'lease', ...stamp })
       return { lease: this.view(coordinator), credential: this.credential(stamp) }
     }
+    if (request.op === 'recovery.claimant') {
+      if (principal.role !== 'claimant') throw new OwnershipError(403, 'claimant_required', 'Coordinator acquisition credential required')
+      const coordinator = this.get(principal.coordinatorId)
+      if (!coordinator.claim || principal.generation !== coordinator.claim.recovery.generation)
+        throw new OwnershipError(401, 'claimant_replaced', 'The original recovery acquisition credential is required')
+      return this.view(coordinator)
+    }
     if (request.op === 'lease.inspect') {
       if (principal.role === 'admin') throw new OwnershipError(403, 'scope_required', 'Use the coordinator or resource credential for scoped inspection')
       return this.view(this.get(principal.coordinatorId))

@@ -90,6 +90,22 @@ it('recovers original reservation credentials after response loss or authority r
   await expect(h.participants[0]!.client.call({ op: 'coordinator.inspect', id: 'coordinator' })).rejects.toThrow('administration')
 })
 
+it('proves the original recovery claimant through a read-only operation that refuses other credential roles', async () => {
+  const h = await fixture()
+  await expect(h.claimant.call({ op: 'recovery.claimant' })).rejects.toThrow('original recovery')
+  const request = { op: 'coordinator.recover' as const, requestId: rid(), id: 'coordinator', epoch: 0, generation: 0,
+    selection: { checkpoint: rid(), digest: 'd'.repeat(64) } }
+  const reserved = await h.admin.call<RecoveryClaim>(request), claimant = h.admin.withCredential(reserved.credential)
+  const before = await h.admin.call({ op: 'coordinator.inspect', id: 'coordinator' })
+  expect(await claimant.call({ op: 'recovery.claimant' })).toEqual(before)
+  for (const client of [h.admin, h.participants[0]!.client]) await expect(client.call({ op: 'recovery.claimant' })).rejects.toThrow('acquisition credential')
+  await expect(h.claimant.call({ op: 'recovery.claimant' })).rejects.toThrow('replaced')
+  expect(await h.admin.call({ op: 'coordinator.inspect', id: 'coordinator' })).toEqual(before)
+  const newer = await h.admin.call<RecoveryClaim>({ ...request, requestId: rid(), generation: 1, selection: { checkpoint: rid(), digest: 'e'.repeat(64) } })
+  await expect(claimant.call({ op: 'recovery.claimant' })).rejects.toThrow('replaced')
+  expect(await h.admin.withCredential(newer.credential).call({ op: 'recovery.claimant' })).toMatchObject({ phase: 'vacant', epoch: 0, recovery: newer.recovery })
+})
+
 it('keeps acquisition and renewal retries idempotent and rejects stale proofs without widening workspace authority', async () => {
   const h = await fixture(), requestId = rid(), instanceId = rid(), claim = await h.acquire(requestId, instanceId), owner = h.admin.withCredential(claim.credential)
   expect((await h.acquire(requestId, instanceId)).credential).toBe(claim.credential)

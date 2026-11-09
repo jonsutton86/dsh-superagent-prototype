@@ -25,6 +25,17 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: control credentials and publisher configuration
+
+[036 Control configuration](036-control-configuration-recovery.md) verifies the reserved ownership claimant and the
+coordinator's publication credential during audit and held preparation. Publisher checks use the exact inventory revision
+and read-only provider preflight for every configured account/destination. Wrong roles, missing private files, changed
+accounts and mismatched targets block recovery. Checks repeat before final publication; no lease or message is created.
+Signed images contain only successful control-check counts. Historical retries do not reauthorize execution.
+
+Inference/source configuration, authoritative input/state reconciliation, explicit remapping, coordinated restored activation
+and clean-host failure qualification remain open alongside the full architecture and product ledger.
+
 ## Implemented increment: destination Session verification
 
 [035 Destination Sessions](035-session-backend-recovery.md) verifies the actual imported Harness backend during held
