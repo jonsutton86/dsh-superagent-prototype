@@ -27,6 +27,7 @@ export interface ManagedWorld {
 }
 interface Entry extends ManagedWorld { context: Context; prepared: boolean }
 interface PoolHost { store: Store; endpoints: Pick<Endpoints, 'world'>; lifetime: AbortSignal; ownership?: OwnershipAccess;
+  authorizeRoot?(root: string): void;
   restoreWorld?(binding: string, config: EndpointWorld['config']): EndpointWorld['config'];
   ownershipConfig?: CoordinatorOwnershipConfig; controlFiles?: string[]; report(error: unknown): void; revoked?(id: string): void }
 declare module '@deepseek-ai/cordis' { interface Context { superagentWorlds: WorldPool } }
@@ -168,6 +169,7 @@ export class WorldPool extends Service {
     if (this.opened.has(record.id)) return
     let world: RemoteWorld | undefined, context: Context | undefined, presets: RemotePresets | undefined
     try {
+      this.host.authorizeRoot?.(record.grant.root)
       assertOwnershipCredential(this.host.ownershipConfig, [record.grant.root])
       if (this.host.ownershipConfig) for (const credentialFile of this.host.controlFiles ?? [])
         assertOwnershipCredential({ ...this.host.ownershipConfig, credentialFile }, [record.grant.root])

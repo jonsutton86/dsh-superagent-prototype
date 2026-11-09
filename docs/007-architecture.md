@@ -485,6 +485,10 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/recovery/activation.ts` | Verified Session startup, independent resource checks and exclusive lock/ownership handoff to the real Runtime |
 | `src/recovery/bindings.ts` | Operational path resolution retained across subsequent checkpoint and restore cycles |
 | `src/recovery/profile.ts` | Complete installed Harness launch patches for dedicated and managed execution, with optional JSONL backend selection |
+| `src/voice/model.ts`, `config.ts` | Bounded speech API contracts and optional Harness adapter configuration |
+| `src/voice/adapters.ts` | Fixed local speech commands and explicit local/cloud HTTP contracts, private files, limits and cancellation |
+| `src/voice/service.ts` | Durable speech request identity, transient content, interruption/restart semantics and expiry |
+| `src/client/voice.tsx`, `voice-media.ts` | Editable dictation drafts, explicit playback, microphone lifecycle and interruption |
 | `src/recovery/audit.ts` | Complete resource coverage, original receipt comparison, divergence/quiescence findings and durable held audit reports |
 | `src/recovery/state.ts` | Incremental logical SQLite comparison of held and authenticated state, excluding only hold/reservation/audit metadata |
 | `src/recovery/sessions.ts` | Public Harness logical export/import and exact destination-backend verification under held Session writers |
@@ -555,6 +559,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/plans-ui.spec.tsx` | Rendered plan editing/review, ambiguous proposal replay, historical drafts and stale planner proposals |
 | `tests/inbox.spec.ts` | Inbox persistence, dispatch/reply replay, read races, authority, history projection and follow-up review/cancellation gates |
 | `tests/inbox-ui.spec.tsx` | Rendered task/question/reply flow, lost reply response, safe text and artifact/mission links |
+| `tests/voice.spec.ts`, `tests/voice-ui.spec.tsx` | Speech lifecycle contracts, real local qualification, and microphone/draft/playback/cancellation DOM flows |
 | `tests/local-execution.spec.ts` | General local missions without accounts, filesystem/process probes, mode mismatch, local prompts and GitHub exclusion |
 | `tests/remote.spec.ts` | Real Harness/HTTP execution, acknowledgement loss, lease fencing, sibling command concurrency, delayed catalog observations, uncertain recovery, confined-helper semantics, output backpressure and opt-in native Linux qualification |
 | `tests/remote-harness.spec.ts` | Opt-in installed Harness qualification with a configured model, remote artifacts, restart, maintenance-plugin checkpoint/import/reservation and ownership-authority process handoff |

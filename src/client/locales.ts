@@ -6,6 +6,21 @@ import { SETUP_PROBLEMS } from '../setup.ts'
 import { HEALTH_TEXT } from '../sources/host.ts'
 
 const TEXT = {
+  'voice.record': ['录音', 'Record'],
+  'voice.finish': ['完成录音', 'Finish recording'],
+  'voice.cancel': ['取消语音', 'Cancel voice'],
+  'voice.speak': ['朗读回复', 'Read aloud'],
+  'voice.stop': ['停止朗读', 'Stop speaking'],
+  'voice.local': ['本地语音', 'Local speech'],
+  'voice.cloud': ['云端语音', 'Cloud speech'],
+  'voice.cloudHint': ['音频或文本会发送至配置的提供商。', 'Audio or text is sent to the configured speech provider.'],
+  'voice.tooLong': ['此回复超过朗读上限（{limit} 个字符）。请阅读文本。', 'This reply exceeds the {limit}-character speech limit. Read the text instead.'],
+  'voice.draftFull': ['草稿已满。请从下方转录中复制所需内容；原有草稿未更改。', 'The draft is full. Copy the needed text from this transcript; your existing draft is preserved.'],
+  'voice.permission': ['等待麦克风权限', 'Waiting for microphone permission'],
+  'voice.recording': ['正在录音（最多 30 秒）', 'Recording (up to 30 seconds)'],
+  'voice.transcribing': ['正在转录', 'Transcribing'],
+  'voice.draftHint': ['语音会添加为可编辑的草稿。请审阅后发送。', 'Speech adds an editable draft. Review it before sending.'],
+  'voice.error': ['语音不可用或已中断。文本仍可使用。提供商可能已处理请求。', 'Speech is unavailable or was interrupted. Text remains available. The provider may have processed the request.'],
   'verification.selectEvidence': ['选择已通过的检查证据', 'Select passed check evidence'],
   'verification.approvalHint': ['选择你审阅过的检查。批准前将重新采集原始源目录；文件或 Git 状态变化会阻止批准。', 'Select the checks you reviewed. Before approval, the host captures the original source again; changed files or Git state block approval.'],
   'verification.noPassed': ['暂无可用的成功检查。请先在产物页面创建或请求检查。', 'No successful checks are available. Define or request a check on the artifact page first.'],

@@ -1,5 +1,9 @@
 # Article implementation tracker
 
+[062 Voice](062-voice.md) adds optional local/cloud speech adapters, editable inbox dictation, reply playback,
+interruption and durable request/restart handling while preserving DeepSeek Harness execution. Local/DOM contract checks
+and generated-audio qualification are implemented; complete build, native Linux and installed-Harness results are pending.
+
 The active product objective also includes the full [Agentic OS workspace](010-agentic-os.md). Its implementation ledger
 preserves these article requirements and adds missions, shared memory, artifacts, personas, schedules, usage and voice.
 

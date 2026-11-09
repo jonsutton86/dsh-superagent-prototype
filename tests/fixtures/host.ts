@@ -26,6 +26,7 @@ import { testMachine } from './deployment.ts'
 import { filesystem } from './filesystem.ts'
 import type { CoordinatorOwnershipConfig } from '../../src/ownership/lease.ts'
 import type { PublicationConnection } from '../../src/publication/client.ts'
+import type { VoiceConfig } from '../../src/voice/model.ts'
 
 export const MEMBER = 'ou_alice'
 export const CHAT = 'oc_team'
@@ -141,7 +142,7 @@ export function subagentRuntime(agents: Map<string, FakeAgent>) {
 }
 
 /** @param seed - writes to the database before the Runtime opens it, such as records an earlier version stored. */
-export async function startRuntime(seed?: (store: Store) => void, options: { executionMode?: 'local' | 'repository'; noAccounts?: boolean; managed?: boolean; ownership?: CoordinatorOwnershipConfig; publication?: PublicationConnection;
+export async function startRuntime(seed?: (store: Store) => void, options: { executionMode?: 'local' | 'repository'; noAccounts?: boolean; managed?: boolean; ownership?: CoordinatorOwnershipConfig; publication?: PublicationConnection; voice?: VoiceConfig;
   remote?: { world: RemoteWorld; filesystem: FileSystem; subprocess: SubprocessRuntime } } = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'orchestrator-host-'))
   const AGENT = join(directory, 'agent-gh'), BOT = join(directory, 'lark-bot')
@@ -284,7 +285,7 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
   seeded.saveSettings(SettingsSchema.parse({ ...seeded.settings(), sources }))
   seed?.(seeded)
   seeded.close()
-  const runtime = new Runtime(ctx, testMachine({ stateDir: directory, executionMode: options.executionMode, ownership: options.ownership, publication: options.publication }), vi.fn())
+  const runtime = new Runtime(ctx, testMachine({ stateDir: directory, executionMode: options.executionMode, ownership: options.ownership, publication: options.publication, voice: options.voice }), vi.fn())
   try { await runtime.ready }
   catch (error) { await runtime.stop(); await ctx.fiber.dispose(); rmSync(directory, { recursive: true, force: true }); throw error }
   runtime.sources.register(feishuKind); runtime.sources.register(githubKind)

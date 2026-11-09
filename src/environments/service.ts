@@ -19,6 +19,7 @@ export interface EnvironmentHost {
   remote?: RemoteWorkspace
   ownership?: OwnershipAccess
   worlds?(): WorldPool
+  authorizeRoot?(root: string): void
 }
 const stamp = () => new Date().toISOString()
 const marker = (record: Pick<EnvironmentRecord, 'root' | 'id'>) => join(record.root, `.dsh-environment-${record.id}`)
@@ -125,6 +126,7 @@ export class Environments {
       if (remote && configuredRoot !== remote.world.grant.root) throw new EnvironmentError(409, 'The execution root must equal the configured remote grant root')
       if (!remote) await mkdir(configuredRoot, { recursive: true, mode: 0o700 })
       const root = remote ? await remote.canonical(configuredRoot) : await realpath(configuredRoot)
+      this.host.authorizeRoot?.(root)
       if (remote) await remote.verify(root)
       else await verifyLocalWorkspace(root, this.host.subprocess, this.host.lifetime, this.host.filesystem)
       const status = remote?.world.status()
@@ -156,6 +158,7 @@ export class Environments {
   }
   private async probe(record: EnvironmentRecord): Promise<void> {
     try {
+      this.host.authorizeRoot?.(record.root)
       if (!this.matchesWorld(record)) throw new Error('This enrollment belongs to another execution world')
       if (record.kind === 'remote') {
         if (record.identity !== this.host.remote!.world.status().binding || record.root !== this.host.remote!.world.grant.root)
@@ -175,6 +178,7 @@ export class Environments {
   }
   allows(grant: ExecutionGrant | undefined): boolean {
     if (this.host.lifetime.aborted || !ownershipReady(this.host.ownership)) return false
+    try { this.host.authorizeRoot?.(this.host.root()) } catch { return false }
     if (grant?.world && grant.environmentId === grant.world) {
       try { const record = this.host.worlds?.().get(grant.world)
         return !!record?.ready && record.revision === grant.revision && record.epoch === grant.epoch && this.host.mode() === 'local'
@@ -183,6 +187,7 @@ export class Environments {
     if (this.host.ownership && !this.host.remote) return false
     if (!grant) return !this.host.remote // Legacy local work must never be adopted by a remote profile.
     const record = this.records().find(record => record.id === grant.environmentId)
+    try { if (record) this.host.authorizeRoot?.(record.root) } catch { return false }
     return !!record?.enabled && !record.retired && record.revision === grant.revision && record.epoch === grant.epoch && record.mode === this.host.mode()
       && !this.checked.get(record.id)?.problem
       && this.matchesWorld(record) && (record.kind !== 'remote' || grant.world === record.remote?.binding && !!this.host.remote?.world.status().ready)

@@ -291,6 +291,11 @@ const ticketOf = (id: string) =>
 const SourceSave = z.object({ enabled: z.boolean(), config: z.unknown() })
 
 const ROUTES: { [K in keyof Api]: Route<K> } = {
+  'GET voice': { answer: () => ({ input: null, output: null, recordingMs: 30000, inputBytes: 2097152, textChars: 2000 }) },
+  'POST voice/transcribe': { body: true, answer: () => refuse(409, 'Speech fixture not configured') },
+  'POST voice/speak': { body: true, answer: () => refuse(409, 'Speech fixture not configured') },
+  'GET voice/:id': { answer: () => refuse(404, 'Speech request not found') },
+  'POST voice/:id/cancel': { answer: () => refuse(404, 'Speech request not found') },
   'GET checks': { query: ['offset', 'limit'], answer: () => ({ items: [], nextOffset: null }) },
   'POST checks': { body: true, answer: () => refuse(409, 'Check registry fixture not configured') },
   'GET checks/:id': { answer: () => refuse(404, 'Check not found') },

@@ -11,6 +11,8 @@ import { SetupError } from './setup.ts'
 import { OwnershipConfig } from './ownership/runtime.ts'
 import type { CoordinatorOwnershipConfig } from './ownership/lease.ts'
 import { PublicationConfig, type PublicationConnection } from './publication/client.ts'
+import { VoiceSettings } from './voice/config.ts'
+import type { VoiceConfig } from './voice/model.ts'
 
 const reason = (error: unknown): string => error instanceof Error ? error.message : String(error)
 const absolute = (description: string) => s.string().pattern(/^\//).description(`${description} Absolute path.`)
@@ -24,6 +26,7 @@ export const Config = s.object({
   ownership: s.union([OwnershipConfig]).description('Independent coordinator ownership. Execution must use endpoints enrolled with this authority.'),
   publication: s.union([PublicationConfig]).description('Independent ownership-fenced publication service for approved artifacts.'),
   restore: s.union([RestoreConfig]).description('Start an installed checkpoint through verified Session and ownership handoff.'),
+  voice: s.union([VoiceSettings]).description('Optional local or cloud speech adapters. Disabled unless configured. Transcripts remain editable before sending.'),
   promptMaxChars: s.number().min(LIMITS.promptMaxChars.min).max(LIMITS.promptMaxChars.max).step(1).default(100000)
     .description('Largest saved prompt configuration, in characters.').volatile(),
   admissionContextMaxPages: s.number().min(LIMITS.admissionContextMaxPages.min).max(LIMITS.admissionContextMaxPages.max).step(1).default(10)
@@ -38,6 +41,7 @@ export interface Machine {
   ownership?: CoordinatorOwnershipConfig
   publication?: PublicationConnection
   restore?: { directory: string; keyFile: string }
+  voice?: VoiceConfig
   promptMaxChars: Volatile<number>
   admissionContextMaxPages: Volatile<number>
   admissionContextTimeoutMs: Volatile<number>
@@ -52,8 +56,8 @@ const MOVED: Record<string, string> = {
 export function machineOf(config: DeploymentConfig): Machine {
   const unknown = Object.keys(config).filter(key => !(key in (Config.dict ?? {})))
   if (unknown.length) throw new Error(`dsh-superagent configuration has keys it does not use: ${unknown.map(key => MOVED[key] ? `${key} (now ${MOVED[key]})` : key).join(', ')}; docs/006-deployment.md lists the keys`)
-  const { stateDir, promptMaxChars, admissionContextMaxPages, admissionContextTimeoutMs, executionMode, ownership, publication, restore } = config
-  return { stateDir, promptMaxChars, admissionContextMaxPages, admissionContextTimeoutMs, executionMode, ...(ownership ? { ownership } : {}), ...(publication ? { publication } : {}), ...(restore ? { restore } : {}) }
+  const { stateDir, promptMaxChars, admissionContextMaxPages, admissionContextTimeoutMs, executionMode, ownership, publication, restore, voice } = config
+  return { stateDir, promptMaxChars, admissionContextMaxPages, admissionContextTimeoutMs, executionMode, ...(ownership ? { ownership } : {}), ...(publication ? { publication } : {}), ...(restore ? { restore } : {}), ...(voice ? { voice } : {}) }
 }
 
 export const GithubAccountsSchema = z.object({

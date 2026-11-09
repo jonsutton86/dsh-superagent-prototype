@@ -85,6 +85,14 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
         ...(publisher ? { publication: publisher.connection } : {}) } },
       { id: 'session-title-llm', disabled: true }]))
   }
+  const voiceModel = process.env.DSH_VOICE_MODEL
+  if (voiceModel) {
+    const patch = JSON.parse(await readFile(overlay, 'utf8')) as unknown[]
+    patch.push({ id: 'dsh-superagent', config: { voice: {
+      input: { kind: 'whisper', binary: '/opt/homebrew/bin/whisper-cli', ffmpeg: '/opt/homebrew/bin/ffmpeg', modelFile: voiceModel },
+      output: { kind: 'say', binary: '/usr/bin/say', ffmpeg: '/opt/homebrew/bin/ffmpeg', voice: 'Samantha' },
+    } } }); await writeFile(overlay, JSON.stringify(patch))
+  }
   let log = '', child: ChildProcess | undefined
   const stop = async () => {
     if (!child || child.exitCode !== null || child.signalCode !== null) return
@@ -142,13 +150,31 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
       await stop(); start(); await ready()
       for (const value of (await api('worlds')).items) expect(value.ready, value.problem ?? 'World did not prepare after restart').toBe(true)
     }
+    let voiceObjective = ''
+    if (voiceModel) {
+      expect(await api('voice')).toMatchObject({ input: 'local', output: 'local' })
+      const speech = { requestId: randomUUID(), text: 'Prepare a short briefing about the project.' }
+      await api('voice/speak', speech)
+      await vi.waitFor(async () => expect((await api(`voice/${speech.requestId}`)).phase).toBe('completed'), { timeout: 30000 })
+      const audioUrl = `http://127.0.0.1:${port}/orchestrator/api/voice/${speech.requestId}/audio`
+      expect((await fetch(audioUrl)).status).toBe(403)
+      const audio = await fetch(audioUrl, { headers: { 'x-orchestrator-request': '1' } })
+      expect(audio.headers.get('content-type')).toBe('audio/wav'); expect(audio.headers.get('cache-control')).toBe('no-store')
+      const requestId = randomUUID()
+      await api('voice/transcribe', { requestId, mime: 'audio/wav', audio: Buffer.from(await audio.arrayBuffer()).toString('base64') })
+      await vi.waitFor(async () => expect((await api(`voice/${requestId}`)).phase).toBe('completed'), { timeout: 60000 })
+      voiceObjective = (await api(`voice/${requestId}`)).text
+      expect(voiceObjective.toLowerCase()).toContain('briefing')
+      await stop(); start(); await ready()
+      expect((await api('voice/speak', speech)).phase).toBe('completed')
+    }
     const proof = `persona-proof-${randomUUID()}`, otherProof = `independent-${randomUUID()}`
     const definition = { name: 'Qualification researcher', description: 'Proves pinned persona instructions and embedded skills',
       instructions: 'Before performing the mission, load your persona evidence skill using the skill tool. Follow its output instructions. Do not guess the proof value.',
       model: { provider: 'deepseek-official', model: 'deepseek-flash' }, capabilities: ['read', 'write', 'commands', 'skills'],
       skills: [{ name: 'evidence', description: 'Required proof instructions for this qualification mission', content: `After verifying the service credential, result.txt and the published artifact must contain exactly ${proof} with no newline. Do not put the credential in any output.` }] }
     const persona = await api('personas', { requestId: 'persona-proof-create', definition })
-    let mission = await api('missions', { requestId: 'remote-live-mission', title: 'Remote Harness proof', objective: 'Prove persona-bound execution', acceptance: 'The artifact follows the persona skill and the service credential check passes' })
+    let mission = await api('missions', { requestId: 'remote-live-mission', title: 'Remote Harness proof', objective: voiceObjective || 'Prove persona-bound execution', acceptance: 'The artifact follows the persona skill and the service credential check passes' })
     mission = await api(`missions/${mission.id}/actions`, { requestId: 'remote-live-action', revision: mission.revision, title: 'Produce proof', owner: 'agent',
       persona: { id: persona.id, version: 1 }, ...(managed ? { environment: managed.id } : {}), instructions: `${publisher ? 'First use orchestrator_ack with the original trigger_id from your assignment and the exact text "Mission delivery qualification started." The host supplied publication Channel is explicitly authorized. ' : ''}In your assigned directory, use bash to verify that the SHA256 of the endpoint-provided SERVICE_API_KEY equals ${secretDigest}, without printing the credential itself. Only after that check succeeds, create result.txt following your persona instructions. Read it back, publish that exact content as an artifact with workspace_publish, then report ready. Do not use external services or background work. If any tool fails, immediately report failed with the exact error and end the turn; do not attempt to repair the execution environment.` })
     if (alternate) mission = await api(`missions/${mission.id}/actions`, { requestId: 'other-action', revision: mission.revision, title: 'Independent proof', owner: 'agent', environment: alternate.id,

@@ -34,6 +34,8 @@ import { TextCache } from './cache.ts'
 import { Effects } from './effects.ts'
 import { Prompts } from './prompts.ts'
 import { registerHttp, type HttpHost } from './http.ts'
+import { Voice } from '../voice/service.ts'
+import { outsideRoots } from '../voice/adapters.ts'
 import type { LinkTarget } from './views/records.ts'
 import { candidateCard, repliedTo, sourceLink, type LinkHost } from './links.ts'
 import { eventNotice, followupNotice } from './notices.ts'
@@ -104,6 +106,7 @@ export class Runtime extends Service implements SourceHost {
   readonly speculation: Speculation
   readonly usage: Usage
   readonly inbox: Inbox
+  readonly voice: Voice
   readonly library: Library
   readonly verification: Verification
   readonly verificationReviews: VerificationReviews
@@ -149,6 +152,7 @@ export class Runtime extends Service implements SourceHost {
     }
     this.releaseLock = async () => { release() }
     let opened: Store | undefined
+    let openedVoice: Voice | undefined
     try {
       // A held, authenticated image must be refused before Store changes journal mode or migrates any bytes.
       const path = join(machine.stateDir, 'orchestrator.sqlite')
@@ -171,7 +175,11 @@ export class Runtime extends Service implements SourceHost {
       if (world) assertOwnership(machine.ownership, world.ownershipBinding)
       this.ownership = openRuntimeOwnership(store, machine.ownership, [executionRoot(store.settings(), machine.stateDir, world?.grant.root)], bootstrap?.ownership)
       const remote = this.remoteWorkspace = world ? new RemoteWorkspace(world, ctx.fs, ctx.subprocess, this.lifetime) : undefined
+      const speechFiles = [machine.voice?.input, machine.voice?.output].flatMap(adapter => !adapter ? [] : adapter.kind === 'http'
+        ? adapter.credentialFile ? [adapter.credentialFile] : [] : [adapter.binary, adapter.ffmpeg, ...(adapter.kind === 'whisper' ? [adapter.modelFile] : [])])
+      const speechRoot = (root: string) => { for (const file of [...speechFiles, ...(machine.voice ? [join(machine.stateDir, 'speech-temporary')] : [])]) outsideRoots(file, [root]) }
       const environments = this.environments = new Environments({ store, filesystem: ctx.fs, subprocess: ctx.subprocess, lifetime: this.lifetime,
+        authorizeRoot: speechRoot,
         remote, ownership: this.ownership, worlds: () => runtime.worlds, root: () => executionRoot(store.settings(), machine.stateDir, world?.grant.root), mode: () => machine.executionMode ?? 'repository', engine: () => runtime.engine })
       this.endpoints = new Endpoints({ store, stateDir: machine.stateDir, lifetime: this.lifetime, ownership: this.ownership, ownershipConfig: machine.ownership,
         restoreRegistration: bootstrap?.bindings.registration,
@@ -179,10 +187,15 @@ export class Runtime extends Service implements SourceHost {
         workerRoots: () => [...environments.list().items.filter(item => item.kind === 'local').flatMap(item => [item.root, item.configuredRoot]),
           ...(!world ? [executionRoot(store.settings(), machine.stateDir)] : [])] })
       this.worlds = new WorldPool(ctx, { store, endpoints: this.endpoints, lifetime: this.lifetime, ownership: this.ownership, ownershipConfig: machine.ownership, report,
+        authorizeRoot: speechRoot,
         restoreWorld: bootstrap?.bindings.world,
         controlFiles: machine.publication ? [machine.publication.credentialFile] : [],
         revoked: binding => { for (const ticket of store.tickets.open()) if (ticket.execution?.environment?.environmentId === binding && canStop(ticket)) runtime.engine.stopTicket(ticket.id, 'Managed execution world revoked by the operator') } })
       const library = this.library = new Library(store)
+      openedVoice = this.voice = new Voice({ store, stateDir: machine.stateDir, config: machine.voice, lifetime: this.lifetime,
+        roots: () => [executionRoot(store.settings(), machine.stateDir, world?.grant.root),
+          ...environments.list().items.filter(item => item.kind === 'local').flatMap(item => [item.root, item.configuredRoot]),
+          ...this.worlds.list().items.map(item => item.root)] })
       const verification = this.verification = new Verification({ store, library, stateDir: machine.stateDir, subprocess: ctx.subprocess, lifetime: this.lifetime,
         authorize: () => { this.ownership?.proof(); this.lifetime.throwIfAborted() }, paused: () => this.paused(),
         allowed: location => environments.allows(location.environment), localAllowed: () => !remote && !this.ownership,
@@ -335,7 +348,7 @@ export class Runtime extends Service implements SourceHost {
       })
     } catch (error) {
       // Release the database and state lock if initialization fails so an in-process restart can reacquire them.
-      try { opened?.close(); void bootstrap?.ownership.close() } finally { release() }
+      try { void openedVoice?.stop(); opened?.close(); void bootstrap?.ownership.close() } finally { release() }
       throw error
     }
   }
@@ -407,7 +420,7 @@ export class Runtime extends Service implements SourceHost {
     const { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, sourceLinks, setup, passes } = this
     return { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, get ready() { return runtime.ready }, sourceLinks, remoteRoot: this.remoteWorkspace?.world.grant.root,
       ownership: this.ownership, authorizeMutation: () => { this.ownership?.proof(); this.lifetime.throwIfAborted() },
-      publications: this.publications,
+      publications: this.publications, voice: this.voice,
       verification: this.verification,
       verificationReviews: this.verificationReviews,
       channelPublications: this.channelPublications,
@@ -427,6 +440,7 @@ export class Runtime extends Service implements SourceHost {
     const ownership = this.ownership?.close()
     try {
       await reviews; await verification
+      await this.voice.stop()
       await this.endpoints.stop()
       await this.publications.stop()
       await this.workspace.pulls?.stop()

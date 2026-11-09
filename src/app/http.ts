@@ -54,8 +54,11 @@ import type { ConversationInbox } from '../publication/inbound.ts'
 import type { Verification } from '../verification/service.ts'
 import type { VerificationReviews } from '../verification/reviews.ts'
 import { CheckCommandId } from '../verification/contracts.ts'
+import type { Voice } from '../voice/service.ts'
+import { VoiceError } from '../voice/model.ts'
 
 export interface HttpHost {
+  readonly voice?: Voice
   readonly ownership?: Pick<CoordinatorOwnership, 'status'>
   readonly publications?: Publications
   readonly channelPublications?: ChannelPublications
@@ -134,6 +137,7 @@ function failure(error: unknown): [number, Record<string, unknown>] {
   if (error instanceof SetupError) return [400, { error: error.message, setup: error.problem }]
   if (error instanceof RouteError) return [error.status, { error: error.message }]
   if (error instanceof WorkspaceError) return [error.status, { error: error.message }]
+  if (error instanceof VoiceError) return [error.status, { error: error.message }]
   if (error instanceof UsageError) return [error.status, { error: error.message }]
   if (error instanceof EnvironmentError) return [error.status, { error: error.message }]
   if (error instanceof RemoteError || error instanceof OwnershipError || error instanceof PublicationError) return [error.status, { error: error.message, code: error.code }]
@@ -291,6 +295,11 @@ function routes(runtime: HttpHost): Routes {
     'POST endpoints/:id/commands/:command/profile': async ({ params, body }) => runtime.endpoints.profile(params.id, params.command, await body()),
     'POST environments': async ({ body }) => runtime.environments.enroll(await body()),
     'PUT environments/:id': async ({ params, body }) => runtime.environments.update(params.id, await body()),
+    'GET voice': () => runtime.voice?.capabilities() ?? { input: null, output: null, recordingMs: 30000, inputBytes: 2097152, textChars: 2000 },
+    'POST voice/transcribe': async ({ body }) => { if (!runtime.voice) throw new VoiceError(503, 'Speech is unavailable'); return runtime.voice.transcribe(await body(3 * 1024 * 1024)) },
+    'POST voice/speak': async ({ body }) => { if (!runtime.voice) throw new VoiceError(503, 'Speech is unavailable'); return runtime.voice.speak(await body()) },
+    'GET voice/:id': ({ params }) => { if (!runtime.voice) throw new VoiceError(503, 'Speech is unavailable'); return runtime.voice.get(params.id) },
+    'POST voice/:id/cancel': ({ params }) => { if (!runtime.voice) throw new VoiceError(503, 'Speech is unavailable'); return runtime.voice.cancel(params.id) },
     'GET inbox': ({ query }) => runtime.inbox.list(query),
     'POST inbox': async ({ body }) => runtime.inbox.start(await body()),
     'GET inbox/:id': ({ params, query }) => runtime.inbox.conversation(params.id, query),
@@ -463,6 +472,13 @@ export function registerHttp(ctx: Context, runtime: HttpHost): () => void {
         }
         await runtime.ready
         if (mutation) runtime.authorizeMutation?.()
+        const speechAudio = /^\/orchestrator\/api\/voice\/([0-9a-f-]{36})\/audio$/.exec(url.pathname)
+        if (req.method === 'GET' && speechAudio) {
+          if (!runtime.voice) throw new VoiceError(503, 'Speech is unavailable')
+          const audio = runtime.voice.audio(speechAudio[1]!)
+          res.writeHead(200, { 'content-type': 'audio/wav', 'content-length': audio.length, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' })
+          res.end(audio); return
+        }
         const route = match(table, req.method ?? 'GET', url.pathname.slice('/orchestrator/api/'.length).split('/'))
         if (!route) throw new RouteError(404, 'Unknown operation')
         const query = Object.fromEntries(url.searchParams)

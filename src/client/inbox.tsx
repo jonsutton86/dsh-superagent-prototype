@@ -7,17 +7,20 @@ import { errorText } from './text.ts'
 import { MarkdownLite, When } from './widgets.tsx'
 import { INBOX_FILTERS } from '../app/api.ts'
 import type { ConversationMessage, InboxFilter, InboxItem } from '../workspace/inbox-model.ts'
+import { Dictation, SpeakReply, VoiceProvider } from './voice.tsx'
 
 function Composer({ send, done, fresh = false }: {
   send: (text: string, requestId: string) => Promise<InboxItem>; done: (item: InboxItem) => void; fresh?: boolean
 }) {
   const { t } = usePanel(), [text, setText] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('')
   const running = useRef(false)
+  const [dictating, setDictating] = useState(false)
+  const [unapplied, setUnapplied] = useState('')
   // Keep the original body/revision for ambiguous failures; a later poll must not turn a retry into a second message.
   const pending = useRef<{ text: string; send: () => Promise<InboxItem> }>()
   const submit = async (event: FormEvent) => {
     event.preventDefault()
-    if (running.current || !text.trim()) return
+    if (running.current || dictating || !text.trim()) return
     if (!pending.current || pending.current.text !== text) {
       const requestId = crypto.randomUUID(), submitted = text
       pending.current = { text, send: () => send(submitted, requestId) }
@@ -33,12 +36,18 @@ function Composer({ send, done, fresh = false }: {
     <label>{t(fresh ? 'inbox.task' : 'inbox.reply')}<textarea value={text} onChange={event => setText(event.target.value)}
       required maxLength={12000} rows={3} disabled={busy} /></label>
     {error && <p className="dt-error" role="alert">{error}</p>}
-    <Button variant="primary" type="submit" disabled={busy || !text.trim()}>{t(fresh ? 'inbox.start' : 'inbox.send')}</Button>
+    <Dictation disabled={busy} onBusy={setDictating} onText={spoken => {
+      const combined = [text, spoken].filter(Boolean).join('\n')
+      if (combined.length > 12000) setUnapplied(spoken)
+      else { setText(combined); setUnapplied('') }
+    }} />
+    {unapplied && <label>{t('voice.draftFull')}<textarea readOnly value={unapplied} rows={3} /></label>}
+    <Button variant="primary" type="submit" disabled={busy || dictating || !text.trim()}>{t(fresh ? 'inbox.start' : 'inbox.send')}</Button>
   </form>
 }
 
 export function InboxPage({ id, filter = 'all' }: { id?: string; filter?: InboxFilter }) {
-  return id ? <ConversationPage key={id} id={id} /> : <ConversationList filter={filter} />
+  return <VoiceProvider key={id ?? 'list'}>{id ? <ConversationPage id={id} /> : <ConversationList filter={filter} />}</VoiceProvider>
 }
 function ConversationList({ filter }: { filter: InboxFilter }) {
   const { t, call, navigate } = usePanel(), { state } = usePanelData()
@@ -108,6 +117,7 @@ function ConversationPage({ id }: { id: string }) {
         <div className="dt-inbox-item-meta"><strong>{t(`inbox.role.${message.role}`)}</strong><When at={message.at} />
           {message.pending && <span>{t('inbox.pending')}</span>}</div>
         <MarkdownLite text={message.text} />{message.truncated && <p className="dt-hint">{t('inbox.truncated')}</p>}
+        {message.role === 'agent' && <SpeakReply id={message.id} text={message.text} />}
       </li>)}</ol>
       {!!data.artifacts.length && <section><h3>{t('library.missionRecords')}</h3><ul>{data.artifacts.map(artifact => <li key={artifact.id}>
         <button type="button" className="dt-textlink" onClick={() => navigate({ page: 'library', id: artifact.id })}>{artifact.title}</button>

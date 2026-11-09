@@ -42,7 +42,13 @@ interface Paged { offset?: number; limit?: number }
 /** Whether a context update was already injected into the main Session or is still pending delivery. */
 type Delivery = 'injected' | 'pending'
 
+import type { VoiceCapabilities, VoiceReceipt, TranscribeInput, SpeakInput } from '../voice/model.ts'
 export interface Api {
+  'GET voice': { response: VoiceCapabilities }
+  'POST voice/transcribe': { body: TranscribeInput; response: VoiceReceipt }
+  'POST voice/speak': { body: SpeakInput; response: VoiceReceipt }
+  'GET voice/:id': { response: VoiceReceipt }
+  'POST voice/:id/cancel': { response: VoiceReceipt }
   'GET recall': { query?: Paged; response: RecallState }
   'PUT recall': { body: SaveRecallInput; response: RecallConfiguration }
   'GET recall/versions/:version': { response: RecallConfiguration }
