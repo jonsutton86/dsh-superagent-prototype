@@ -12,7 +12,9 @@ import { OwnershipStamp, OwnershipView } from '../ownership/protocol.ts'
 import { sameOwner } from '../ownership/gate.ts'
 import { InventoryPage, InventoryReceipt, type InventoryRequest, type ReceiptRequest } from '../ownership/inventory.ts'
 import { RemoteClient } from '../remote/client.ts'
-import { EffectOwner } from '../remote/protocol.ts'
+import { AdministrationObservation } from '../remote/recovery.ts'
+import { administrationRequest, observeAdministration, type SavedAdministration } from './administration.ts'
+import { EffectOwner, type AdministrationRead } from '../remote/protocol.ts'
 import { ExecutionEffects, type ExecutionReceipt } from '../remote/effects.ts'
 import { fingerprint, inside } from '../remote/journal.ts'
 import type { WorldRecord } from '../remote/world-journal.ts'
@@ -88,10 +90,11 @@ export async function prepareCheckpointReceipts(options: PrepareCheckpointReceip
       const digest = credentialDigest(privateCredential(file)); return () => privateCredential(file, digest)
     }
     const authority = new OwnershipClient(options.authority, pin(options.authority.credentialFile))
+    const administrators = new Map<string, (request: z.infer<typeof AdministrationRead>) => Promise<unknown>>()
     const clients = new Map<string, (request: InventoryRequest | ReceiptRequest) => Promise<unknown>>()
     for (const config of options.endpoints) {
       if (clients.has(config.endpointId) || clients.size >= 256) throw new Error('Supply unique bounded recovery resources')
-      const client = new RemoteClient(config, undefined, undefined, pin(config.credentialFile)); clients.set(config.endpointId, request => client.call(request, signal))
+      const client = new RemoteClient(config, undefined, undefined, pin(config.credentialFile)); clients.set(config.endpointId, request => client.call(request, signal)); administrators.set(config.endpointId, request => client.call(request, signal))
     }
     if (options.publication) {
       if (clients.has(options.publication.serviceId)) throw new Error('Duplicate recovery resource')
@@ -129,6 +132,7 @@ export async function prepareCheckpointReceipts(options: PrepareCheckpointReceip
       return value
     }
     await validate()
+    const administration = { verified: 0, recovered: 0, superseded: 0 }
     const staging = await mkdtemp(join(root, '.prepare-')), applied = { commands: 0, mutations: 0, publications: 0 }
     try {
       const storePath = join(staging, 'orchestrator.sqlite'); await backup(db, storePath); await chmod(storePath, 0o600)
@@ -160,6 +164,18 @@ export async function prepareCheckpointReceipts(options: PrepareCheckpointReceip
       }
       const store = new Store(storePath)
       try {
+        for (const original of rows<SavedAdministration>(store.db, 'operator_endpoint_command')) {
+          const resource = audit.resources.find(resource => resource.identity.id === original.endpointId), call = administrators.get(original.endpointId)
+          if (!resource || !call) throw new Error('Original administrative intent lacks its audited resource')
+          const observed = AdministrationObservation.parse(await call({ op: 'recovery.administration', revision: resource.revision, ...administrationRequest(original) }))
+          if (observed.revision !== resource.revision || fingerprint(observed.identity) !== fingerprint(resource.identity)) throw new Error('Prepared administrative resource identity differs')
+          const result = observeAdministration(original, observed)
+          if (result) {
+            const updated = store.db.prepare('UPDATE operator_endpoint_command SET value=? WHERE id=?').run(JSON.stringify(result), `${original.endpointId}:${original.id}`)
+            if (Number(updated.changes) !== 1) throw new Error('Original administrative row identity differs from its receipt')
+            administration.verified++; if (result.phase === 'recovered') administration.recovered++; if (result.phase === 'superseded') administration.superseded++
+          }
+        }
         type Saved = { id: string; intent?: Publication; publication?: Publication; attempts: OwnershipStamp[]; receipt?: PublicationReceipt;
           phase: string; problem?: string; updatedAt?: string; original?: OutboundMessage; messageId?: string }
         for (const table of ['workspace_publication', 'channel_publication']) for (const original of rows<Saved>(store.db, table)) {
@@ -192,7 +208,7 @@ export async function prepareCheckpointReceipts(options: PrepareCheckpointReceip
         await syncRecoveryPath(join(staging, member))
       }
       const image = ReceiptImage.parse({ version: 1, requestId: intent.requestId, requestHash, checkpoint: manifest.id, digest: fingerprint(manifest),
-        auditId: audit.id, at: new Date().toISOString(), recovery: audit.recovery, epoch: audit.epoch, resources: audit.resources, applied, files, executionOwnership: false })
+        auditId: audit.id, at: new Date().toISOString(), recovery: audit.recovery, epoch: audit.epoch, resources: audit.resources, applied, files, executionOwnership: false, administration })
       const key = recoveryKey(options.keyFile)
       try { await writeFile(join(staging, 'prepared.json'), sealReceiptImage(image, key), { flag: 'wx', mode: 0o600 }) } finally { key.fill(0) }
       await syncRecoveryPath(join(staging, 'prepared.json')); await syncRecoveryPath(staging)

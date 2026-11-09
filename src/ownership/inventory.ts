@@ -9,7 +9,7 @@ export type InventoryRequest = z.infer<typeof InventoryRequest>
 export const ReceiptRequest = z.object({ op: z.literal('recovery.receipt'), revision,
   kind: z.enum(['command', 'mutation', 'publication']), id: z.string().min(1).max(300) }).strict()
 export type ReceiptRequest = z.infer<typeof ReceiptRequest>
-export const InventoryItem = z.object({ kind: z.enum(['command', 'mutation', 'grant', 'publication', 'destination']), id: z.string().min(1).max(300),
+export const InventoryItem = z.object({ kind: z.enum(['command', 'mutation', 'grant', 'credential', 'publication', 'destination']), id: z.string().min(1).max(300),
   requestHash: digest, phase: z.string().min(1).max(40), settled: z.boolean(), resultHash: digest.optional(),
   grantId: z.string().max(100).optional(), epoch: z.number().int().positive().optional(), ownership: OwnershipStamp.optional() }).strict()
 export type InventoryItem = z.infer<typeof InventoryItem>
@@ -24,14 +24,18 @@ interface Source { kind: InventoryItem['kind']; table: string; project(value: an
 
 /** Revision-bound, payload-free resource inventories. Every relevant SQLite mutation invalidates prior pages, including across restart. */
 export class ResourceInventory {
-  constructor(private readonly db: DatabaseSync, private readonly sources: Source[]) {
+  constructor(private readonly db: DatabaseSync, private readonly sources: Source[], watchedTables: string[] = []) {
     db.exec('CREATE TABLE IF NOT EXISTS resource_inventory_revision (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL)')
     db.prepare('INSERT INTO resource_inventory_revision VALUES (1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value').run(randomBytes(16).toString('hex'))
-    for (const source of sources) {
-      if (!/^[a-z_]+$/.test(source.table)) throw new Error('Invalid inventory table')
-      for (const action of ['INSERT', 'UPDATE', 'DELETE']) db.exec(`CREATE TRIGGER IF NOT EXISTS inventory_${source.table}_${action}
-        AFTER ${action} ON ${source.table} BEGIN UPDATE resource_inventory_revision SET value=lower(hex(randomblob(16))) WHERE id=1; END`)
+    for (const table of new Set([...sources.map(source => source.table), ...watchedTables])) {
+      if (!/^[a-z_]+$/.test(table)) throw new Error('Invalid inventory table')
+      for (const action of ['INSERT', 'UPDATE', 'DELETE']) db.exec(`CREATE TRIGGER IF NOT EXISTS inventory_${table}_${action}
+        AFTER ${action} ON ${table} BEGIN UPDATE resource_inventory_revision SET value=lower(hex(randomblob(16))) WHERE id=1; END`)
     }
+  }
+  assertRevision(expected: string): void {
+    if (this.db.prepare('SELECT value FROM resource_inventory_revision WHERE id=1').get()!.value !== expected)
+      throw new OwnershipError(409, 'inventory_changed', 'Resource inventory changed; restart the recovery audit')
   }
   /** Return only the source's explicit safe projection, from the same synchronous revision as its inventory item. */
   receipt(request: ReceiptRequest, identity: InventoryPage['identity'], quiescent: boolean): z.infer<typeof InventoryReceipt> {

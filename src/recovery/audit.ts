@@ -14,6 +14,10 @@ import { worldBinding, type WorldRecord } from '../remote/world-journal.ts'
 import type { ExecutionReceipt } from '../remote/effects.ts'
 import { PublicationClient, type PublicationConnection } from '../publication/client.ts'
 import { ExternalReceipt, Publication, type PublicationReceipt } from '../publication/protocol.ts'
+import { AdministrationMismatch, administrationRequest, observeAdministration, type SavedAdministration } from './administration.ts'
+import { AdministrationObservation } from '../remote/recovery.ts'
+import { RemoteError, type AdministrationRead } from '../remote/protocol.ts'
+import type { z } from 'zod'
 import { withVerifiedStagedCheckpoint } from './checkpoint.ts'
 
 export interface AuditCheckpointReceipts {
@@ -89,6 +93,8 @@ export async function auditCheckpointReceipts(options: AuditCheckpointReceipts):
             worldEndpoints.add(record.endpointId)
             add(record.endpointId, { kind: 'grant', id: record.grant.id, requestHash: worldBinding(record.endpointId, record.grant), epoch: record.grant.epoch,
               revoked: record.phase === 'revoked' && record.revocation?.receipt?.quiescent === true })
+            if (record.phase !== 'revoked') for (const credential of record.grant.credentials ?? []) add(record.endpointId, {
+              kind: 'credential', id: credential.id, requestHash: fingerprint({ id: credential.id, version: credential.version, variable: credential.variable, mode: credential.mode }), phase: 'enabled' })
             for (const item of rows<ExecutionReceipt>(world, 'execution_effect')) add(record.endpointId, { kind: item.kind, id: item.id,
               requestHash: item.fingerprint, grantId: item.grantId, epoch: item.epoch, ownership: item.ownership,
               ...(item.quiescent && item.phase !== 'unknown' ? { phase: item.phase } : {}), absent: item.phase === 'refused' && item.quiescent === true,
@@ -107,9 +113,9 @@ export async function auditCheckpointReceipts(options: AuditCheckpointReceipts):
             ...(item.receipt?.external ? { resultHash: fingerprint(ExternalReceipt.parse(item.receipt.external)) } : {}) })
           add(publication.serviceId, { kind: 'destination', id: intent.destination, requestHash: intent.destinationHash })
         }
-        const clients: { id: string; kind: 'endpoint' | 'publication'; call(request: InventoryRequest): Promise<unknown> }[] = options.endpoints.map(config => {
+        const clients: { id: string; kind: 'endpoint' | 'publication'; call(request: InventoryRequest): Promise<unknown>; administration?(request: z.infer<typeof AdministrationRead>): Promise<unknown> }[] = options.endpoints.map(config => {
           const client = new RemoteClient(config, undefined, undefined, pin(config.credentialFile))
-          return { id: config.endpointId, kind: 'endpoint', call: request => client.call(request, signal) }
+          return { id: config.endpointId, kind: 'endpoint', call: request => client.call(request, signal), administration: request => client.call(request, signal) }
         })
         if (options.publication) {
           pin(options.publication.credentialFile)()
@@ -137,14 +143,14 @@ export async function auditCheckpointReceipts(options: AuditCheckpointReceipts):
             for (const item of page.items) {
               if (++count > 100_000 || seen.has(key(item))) throw new Error('Recovery inventory exceeds its bound or repeats an item')
               seen.add(key(item)); const saved = wanted.get(key(item))
-              if (!saved) { if (item.kind !== 'grant' && item.kind !== 'destination') issue('unrecorded_effect', client.id, item); continue }
+              if (!saved) { if (['command', 'mutation', 'publication'].includes(item.kind)) issue('unrecorded_effect', client.id, item); continue }
               const revoked = saved.revoked && item.kind === 'grant' && item.phase === 'disabled' && item.epoch === saved.epoch! + 1
               const different = !revoked && (item.requestHash !== saved.requestHash || saved.epoch !== undefined && item.epoch !== saved.epoch)
                 || saved.grantId !== undefined && item.grantId !== saved.grantId || saved.phase !== undefined && item.phase !== saved.phase
                 || saved.resultHash !== undefined && item.resultHash !== saved.resultHash
                 || saved.ownership && (!item.ownership || !sameOwner(item.ownership, saved.ownership))
                 || saved.attempts && (!item.ownership || !saved.attempts.some(owner => sameOwner(owner, item.ownership!)))
-              const effect = item.kind !== 'grant' && item.kind !== 'destination'
+              const effect = ['command', 'mutation', 'publication'].includes(item.kind)
               if (different || effect && (!item.ownership || item.ownership.coordinatorId !== options.authority.coordinatorId || item.ownership.epoch > report.epoch))
                 issue('receipt_mismatch', client.id, item)
               else if (!item.settled) issue('effect_unsettled', client.id, item)
@@ -157,6 +163,23 @@ export async function auditCheckpointReceipts(options: AuditCheckpointReceipts):
         }
         for (const resource of initial.resources) if (!seenResources.has(resource)) issue('resource_missing', resource)
         for (const endpoint of worldEndpoints) if (!seenServices.has(endpoint)) issue('endpoint_missing', endpoint)
+        for (const command of rows<SavedAdministration>(db, 'operator_endpoint_command')) {
+          if (++expectedCount > 100_000) throw new Error('Checkpoint receipt inventory exceeds the audit bound')
+          const resource = report.resources.find(resource => resource.identity.id === command.endpointId)
+          const client = clients.find(client => client.id === command.endpointId)
+          if (!resource || !client?.administration) { issue('endpoint_missing', command.endpointId); continue }
+          try {
+            const observed = AdministrationObservation.parse(await client.administration({ op: 'recovery.administration', revision: resource.revision, ...administrationRequest(command) }))
+            if (observed.revision !== resource.revision || fingerprint(observed.identity) !== fingerprint(resource.identity)) throw new Error('Administrative recovery resource identity or revision differs')
+            const result = observeAdministration(command, observed)
+            if (result) { report.matched++; if (command.phase === 'pending' || command.phase === 'unknown') report.observed++ }
+          } catch (error) {
+            if (error instanceof AdministrationMismatch) issue(error.code, command.endpointId, { kind: 'administration', id: command.id })
+            else if (error instanceof RemoteError && ['request_conflict', 'not_found', 'receipt_mismatch'].includes(error.code))
+              issue('administration_mismatch', command.endpointId, { kind: 'administration', id: command.id })
+            else throw error
+          }
+        }
         // Revalidate every revision after all resources were collected, then recheck the independent ownership cut.
         for (const resource of report.resources) {
           const page = InventoryPage.parse(await clients.find(client => client.id === resource.identity.id)!.call({

@@ -165,6 +165,7 @@ const TEXT = {
   'endpoint.phase.unknown': ['结果未确认', 'Outcome unconfirmed'],
   'endpoint.phase.done': ['已确认', 'Confirmed'],
   'endpoint.phase.refused': ['端点已拒绝', 'Refused by endpoint'],
+  'endpoint.phase.recovered': ['已恢复记录；须验证凭据', 'Recovered; credential validation required'],
   'endpoint.phase.superseded': ['授权代次已被替换', 'Grant generation superseded'],
   'endpoint.port': ['专用界面的本机端口', 'Local port for the dedicated interface'],
   'endpoint.profile': ['生成远程 Harness 配置', 'Generate remote Harness profile'],

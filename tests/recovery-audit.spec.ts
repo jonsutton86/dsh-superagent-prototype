@@ -13,6 +13,11 @@ import { recoveryStateDigest } from '../src/recovery/state.ts'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
+import { Endpoints } from '../src/environments/endpoints.ts'
+import { administrationRequest } from '../src/recovery/administration.ts'
+import { fingerprint } from '../src/remote/journal.ts'
+import type { EndpointCredential } from '../src/remote/protocol.ts'
+import { AdministrationObservation } from '../src/remote/recovery.ts'
 import { Store } from '../src/app/store.ts'
 import { KV } from '../src/kv.ts'
 import { createRecoveryKey } from '../src/recovery/crypto.ts'
@@ -34,14 +39,24 @@ import { publicationFixture } from './fixtures/publication.ts'
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { vi.restoreAllMocks(); for (const close of cleanup.splice(0).reverse()) await close() })
 
-async function fixture(options: { pending?: boolean; channel?: boolean; extra?: boolean; revoked?: boolean; kind?: DestinationView['kind'] } = {}) {
+async function fixture(options: { administration?: boolean; credential?: boolean; rotateCredential?: boolean; revokeCredential?: boolean; pending?: boolean; channel?: boolean; extra?: boolean; revoked?: boolean; kind?: DestinationView['kind'] } = {}) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'dsh-receipt-audit-')))
   cleanup.push(() => rm(directory, { recursive: true, force: true }))
   const authority = await ownershipAuthority(cleanup, ['endpoint', 'publication']), owner = new CoordinatorOwnership(authority.config)
   cleanup.push(() => owner.close())
   const publisher = await publicationFixture(cleanup, authority.resourceFor('publication'), owner, options.kind)
-  const remote = await remoteFixture(cleanup, { native: process.env.DSH_REMOTE_ISOLATION === '1', ownership: authority.resource,
-    access: owner, beforeEnroll: async () => { await owner.start() } })
+  const bindings: { id: string; version: string }[] = []
+  let importedCredential: EndpointCredential | undefined
+  const remote = await remoteFixture(cleanup, { native: process.env.DSH_REMOTE_ISOLATION === '1', ownership: authority.resource, credentials: bindings,
+    access: owner, beforeEnroll: async endpoint => {
+      await owner.start()
+      if (options.credential) {
+        await writeFile(join(endpoint.credentials.imports, 'recovery-fixture'), 'synthetic-recovery-secret', { mode: 0o600 })
+        importedCredential = await endpoint.rpc({ role: 'admin' }, { op: 'credential.import', requestId: randomUUID(), id: 'recovery-fixture', revision: 0,
+          file: 'recovery-fixture', variable: 'RECOVERY_FIXTURE', mode: 'env', reason: 'Recovery credential qualification' }, owner.proof()) as EndpointCredential
+        bindings.push({ id: importedCredential.id, version: importedCredential.version })
+      }
+    } })
   const stateDir = join(directory, 'state'), worldDir = join(directory, 'world'), keyFile = join(directory, 'key')
   await mkdir(stateDir, { mode: 0o700 }); createRecoveryKey(keyFile)
   const context = new Context(); cleanup.push(() => context.fiber.dispose())
@@ -58,9 +73,9 @@ async function fixture(options: { pending?: boolean; channel?: boolean; extra?: 
     epoch: remote.enrolled.grant.epoch, ownershipCoordinatorId: 'coordinator' }
   const command = world.effects.prepare(remote.spawn('printf private-command-payload > artifact'), scope)
   const job = await remote.client.call<RemoteJob>(command); const settled = await remote.settled(job.id)
-  if (!options.pending) world.effects.observed({ op: 'job.get', id: job.id }, settled)
+  if (!options.pending && !options.administration) world.effects.observed({ op: 'job.get', id: job.id }, settled)
   const mutation = world.effects.prepare({ op: 'fs.write' as const, requestId: randomUUID(), path: 'second', content: 'private-file-payload', expected: { kind: 'createIfAbsent' as const } }, scope)
-  const written = await remote.client.call<RemoteOperation>(mutation); if (!options.pending) world.effects.observed(mutation, written)
+  const written = await remote.client.call<RemoteOperation>(mutation); if (!options.pending && !options.administration) world.effects.observed(mutation, written)
   const destination = (await publisher.client.call<DestinationView[]>({ op: 'destinations' }))[0]!, text = 'private-publication-payload'
   const publication: Publication = { id: randomUUID(), destination: destination.id, destinationHash: destination.hash, text, hash: contentHash(text),
     artifact: { id: randomUUID(), revision: 1, hash: contentHash(text) } }
@@ -79,12 +94,45 @@ async function fixture(options: { pending?: boolean; channel?: boolean; extra?: 
     store.db.prepare('INSERT INTO channel_publication VALUES (?,?,?,?)').run(channel.id, message.id, channel.message!.missionId,
       JSON.stringify({ id: channel.id, messageId: message.id, publication: channel, original: message, attempts: [owner.status().owner], phase: 'unknown', withdrawn: true }))
   }
+  if (options.administration) {
+    const registry = new Endpoints({ store, stateDir, lifetime: new AbortController().signal, ownership: owner, workerRoots: () => [remote.enrolled.grant.root] })
+    const registration = await registry.register({ requestId: randomUUID(), endpointId: remote.connection.endpointId, name: 'Recovery administrator', url: remote.url,
+      credentialFile: await realpath(remote.connection.credentialFile), revision: 0 })
+    const rpc = remote.endpoint.rpc.bind(remote.endpoint), lose = new Set<string>()
+    const response = vi.spyOn(remote.endpoint, 'rpc').mockImplementation(async (...args) => {
+      const result = await rpc(...args), request = args[1] as { requestId?: string }
+      if (request.requestId && lose.delete(request.requestId)) throw new Error('Lost administrative acknowledgement after commit')
+      return result
+    })
+    const submit = async (request: import('../src/environments/endpoint-model.ts').EndpointAction) => {
+      lose.add(request.requestId)
+      expect((await registry.submit(registration.id, { revision: registration.revision, request })).phase).toBe('unknown')
+    }
+    await submit({ op: 'grant.create', requestId: randomUUID(), owner: 'coordinator', workspace: 'administrative-world', operations: ['fs.read', 'process.spawn'], leaseMs: 300_000 })
+    const grant = remote.endpoint.journal.grants().find(grant => grant.workspace === 'administrative-world')!
+    await submit({ op: 'grant.change', requestId: randomUUID(), id: grant.id, revision: grant.revision, enabled: true, leaseMs: 300_000, reason: 'Qualification generation change' })
+    await writeFile(join(remote.endpoint.credentials.imports, 'administration-fixture'), 'synthetic-administrator-secret', { mode: 0o600 })
+    await submit({ op: 'credential.import', requestId: randomUUID(), id: 'administration-fixture', revision: 0, file: 'administration-fixture', variable: 'ADMINISTRATION_FIXTURE', mode: 'env', reason: 'Qualification import' })
+    const credential = remote.endpoint.credentials.list().items.find(item => item.id === 'administration-fixture')!
+    await submit({ op: 'credential.revoke', requestId: randomUUID(), id: credential.id, revision: credential.revision, reason: 'Qualification revoke' })
+    await submit({ op: 'job.cancel', requestId: randomUUID(), id: job.id })
+    remote.endpoint.journal.saveJob({ ...remote.endpoint.journal.job(job.id), phase: 'unknown', quiescent: null })
+    await submit({ op: 'job.reconcile', requestId: randomUUID(), id: job.id, note: 'Observed the original process and confirmed its stopped range', quiescent: true })
+    remote.endpoint.journal.saveOperation({ ...written, phase: 'unknown' })
+    await submit({ op: 'operation.reconcile', requestId: randomUUID(), id: written.id, note: 'Observed original committed file and confirmed no helper remains' })
+    expect((await registry.submit(registration.id, { revision: registration.revision, request: { op: 'grant.create', requestId: randomUUID(),
+      owner: 'coordinator', workspace: 'refused-administrative-world', operations: ['fs.write'], leaseMs: 300_000 } })).phase).toBe('refused')
+    await registry.stop(); response.mockRestore()
+  }
   if (options.revoked) {
     world.revoke('revoke-world', 'Qualification revocation')
     world.acknowledge(await remote.client.call<RevocationReceipt>({ op: 'grant.revoke', requestId: 'revoke-world', reason: 'Qualification revocation' }))
   }
   world.close(); store.close()
   const checkpoint = await createCheckpoint({ stateDir, keyFile, outputDir: join(directory, 'backups'), worldDirectories: [worldDir], persistence: context.sessionPersistence })
+  if (options.rotateCredential) await remote.admin.call({ op: 'credential.import', requestId: randomUUID(), id: importedCredential!.id, revision: importedCredential!.revision,
+    file: 'recovery-fixture', variable: 'RECOVERY_FIXTURE', mode: 'env', reason: 'Qualification rotation after checkpoint' })
+  if (options.revokeCredential) await remote.admin.call({ op: 'credential.revoke', requestId: randomUUID(), id: importedCredential!.id, revision: importedCredential!.revision, reason: 'Qualification revocation after checkpoint' })
   if (options.extra) {
     const extra = await remote.client.call<RemoteJob>(remote.spawn('printf later > later-artifact')); await remote.settled(extra.id)
     await publisher.client.call({ op: 'publish', publication: { ...publication, id: randomUUID() } })
@@ -97,7 +145,7 @@ async function fixture(options: { pending?: boolean; channel?: boolean; extra?: 
   const audit = { checkpoint: checkpoint.path, keyFile, destination: held, authority: connection,
     endpoints: [{ ...remote.connection, ownership: undefined, credentialFile: await realpath(remote.connection.credentialFile) }], publication: publisher.admin.config }
   const read = () => { const store = new Store(join(held, 'orchestrator.sqlite')); try { return { report: store.get(KV.recovery.audit), hold: store.get(KV.recovery.hold) } } finally { store.close() } }
-  return { directory, checkpoint, reserved, audit, authority, remote, publisher, publication, job: settled, written, channel, read }
+  return { directory, checkpoint, reserved, audit, authority, remote, publisher, publication, job: settled, written, channel, importedCredential, read }
 }
 
 it.each(['github-comment', 'github-review', 'feishu-reply'] as const)('matches authentic execution and %s receipts without payloads, replay or removing the hold', async kind => {
@@ -356,4 +404,100 @@ it.each(['manifest', 'member', 'extra'] as const)('refuses a tampered prepared %
   await expect(verifyReceiptImage(prepared.path, f.audit.keyFile)).rejects.toThrow()
   await expect(prepareCheckpointReceipts(options)).rejects.toThrow()
   expect(f.read().hold?.state).toBe('staged')
+})
+
+it('reconciles all seven original administrative actions without resending or adopting newer grants and credentials', async () => {
+  const f = await fixture({ administration: true }), audit = await auditCheckpointReceipts(f.audit)
+  expect(audit).toMatchObject({ status: 'matched', issueCount: 0, matched: 12 })
+  const before = f.remote.endpoint.journal.db.prepare('SELECT * FROM remote_receipt ORDER BY id').all()
+  const options = { ...f.audit, requestId: randomUUID(), auditId: audit.id }, prepared = await prepareCheckpointReceipts(options)
+  expect(prepared.manifest.administration).toEqual({ verified: 7, recovered: 1, superseded: 2 })
+  expect(await verifyReceiptImage(prepared.path, f.audit.keyFile)).toEqual(prepared.manifest)
+  expect(await prepareCheckpointReceipts(options)).toEqual(prepared)
+  const db = new DatabaseSync(join(prepared.path, 'orchestrator.sqlite'), { readOnly: true })
+  try {
+    const commands = db.prepare('SELECT value FROM operator_endpoint_command').all().map(row => JSON.parse(String(row.value)))
+    const find = (action: string) => commands.find(command => command.request.op === action && command.phase !== 'refused')
+    expect(find('grant.create')).toMatchObject({ phase: 'superseded', recovery: { originalPhase: 'unknown' } })
+    expect(find('grant.create').result).toBeUndefined()
+    expect(find('grant.change')).toMatchObject({ phase: 'recovered', result: { grant: { epoch: 2 } } })
+    expect(find('grant.change').credentialPin).toBeUndefined()
+    expect(find('credential.import')).toMatchObject({ phase: 'superseded', result: { credential: { revision: 1, enabled: true } } })
+    expect(find('credential.revoke')).toMatchObject({ phase: 'done', result: { credential: { revision: 2, enabled: false } } })
+    for (const action of ['job.cancel', 'job.reconcile', 'operation.reconcile']) expect(find(action)).toMatchObject({ phase: 'done', recovery: { originalPhase: 'unknown' } })
+    expect(commands.filter(command => command.phase === 'refused')).toHaveLength(1)
+    expect(JSON.stringify(commands)).not.toContain('synthetic-administrator-secret')
+  } finally { db.close() }
+  const source = new DatabaseSync(join(f.audit.destination, 'orchestrator.sqlite'), { readOnly: true })
+  try { expect(source.prepare("SELECT count(*) AS n FROM operator_endpoint_command WHERE value ->> '$.phase'='unknown'").get()!.n).toBe(7) } finally { source.close() }
+  expect(f.remote.endpoint.journal.db.prepare('SELECT * FROM remote_receipt ORDER BY id').all()).toEqual(before)
+})
+
+it('restricts historical administration inspection to pinned administrators without exposing credentials or command payloads', async () => {
+  const f = await fixture({ administration: true }), audit = await auditCheckpointReceipts(f.audit)
+  const db = new DatabaseSync(join(f.audit.destination, 'orchestrator.sqlite'), { readOnly: true })
+  const commands = db.prepare('SELECT value FROM operator_endpoint_command').all().map(row => JSON.parse(String(row.value))); db.close()
+  const revision = audit.resources.find(resource => resource.identity.kind === 'endpoint')!.revision
+  for (const command of commands) {
+    const request = { op: 'recovery.administration' as const, revision, ...administrationRequest(command) }
+    const observed = AdministrationObservation.parse(await f.remote.admin.call(request))
+    expect(observed.found).toBe(command.phase !== 'refused')
+    expect(JSON.stringify(observed)).not.toMatch(/synthetic-administrator-secret|private-command-payload|private-file-payload|"digest"|"argv"|"credential"\s*:/)
+    await expect(f.remote.client.call(request)).rejects.toThrow('administration')
+    if (observed.found) await expect(f.remote.admin.call({ ...request, requestHash: 'f'.repeat(64) })).rejects.toThrow('another payload')
+  }
+})
+
+it.each(['missing', 'changed'] as const)('blocks an original administrative receipt that is %s', async mode => {
+  const f = await fixture({ administration: true })
+  const db = new DatabaseSync(join(f.audit.destination, 'orchestrator.sqlite'), { readOnly: true })
+  const command = JSON.parse(String(db.prepare("SELECT value FROM operator_endpoint_command WHERE value ->> '$.phase'='unknown' LIMIT 1").get()!.value)); db.close()
+  if (mode === 'missing') f.remote.endpoint.journal.db.prepare('DELETE FROM remote_receipt WHERE id=?').run(command.id)
+  else f.remote.endpoint.journal.db.prepare('UPDATE remote_receipt SET fingerprint=? WHERE id=?').run('f'.repeat(64), command.id)
+  const audit = await auditCheckpointReceipts(f.audit)
+  expect(audit.status).toBe('blocked')
+  expect(audit.issues).toContainEqual({ code: mode === 'missing' ? 'administration_missing' : 'administration_mismatch', resource: command.endpointId, kind: 'administration', id: command.id })
+  await expect(prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })).rejects.toThrow('complete matched audit')
+})
+
+it('invalidates an audit on administrative receipt changes even when effect and grant metadata are unchanged', async () => {
+  const f = await fixture(), audit = await auditCheckpointReceipts(f.audit)
+  f.remote.endpoint.journal.db.prepare('UPDATE remote_receipt SET value=value WHERE id=?').run('enroll')
+  await expect(prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })).rejects.toThrow('changed')
+})
+
+it('matches active-world credential versions without exposing credential content or private digests', async () => {
+  const f = await fixture({ credential: true }), audit = await auditCheckpointReceipts(f.audit)
+  expect(audit).toMatchObject({ status: 'matched', matched: 6 })
+  const page = InventoryPage.parse(await f.remote.admin.call({ op: 'recovery.inventory', offset: 0 }))
+  expect(page.items.find(item => item.kind === 'credential')).toMatchObject({ id: f.importedCredential!.id, phase: 'enabled', requestHash: fingerprint({
+    id: f.importedCredential!.id, version: f.importedCredential!.version, variable: 'RECOVERY_FIXTURE', mode: 'env' }) })
+  expect(JSON.stringify(page)).not.toMatch(/synthetic-recovery-secret|"digest"/)
+  expect((await prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })).manifest.administration).toEqual({ verified: 0, recovered: 0, superseded: 0 })
+})
+
+it('blocks an active world whose credential was rotated after capture and keeps revoked worlds non-executable', async () => {
+  const f = await fixture({ credential: true, rotateCredential: true }), audit = await auditCheckpointReceipts(f.audit)
+  expect(audit.status).toBe('blocked')
+  expect(audit.issues).toContainEqual({ code: 'receipt_mismatch', resource: f.remote.connection.endpointId, kind: 'credential', id: 'recovery-fixture' })
+  const revoked = await fixture({ credential: true, rotateCredential: true, revoked: true })
+  expect((await auditCheckpointReceipts(revoked.audit)).status).toBe('matched')
+  expect(revoked.read().hold?.state).toBe('staged')
+})
+
+it('blocks credential revocation even when the original credential version and grant are unchanged', async () => {
+  const f = await fixture({ credential: true, revokeCredential: true })
+  // Fault injection: a stale grant row must not hide the independently disabled credential catalog entry.
+  f.remote.endpoint.journal.saveGrant(f.remote.enrolled.grant)
+  const audit = await auditCheckpointReceipts(f.audit)
+  expect(audit.status).toBe('blocked')
+  expect(audit.issues).toContainEqual({ code: 'receipt_mismatch', resource: f.remote.connection.endpointId, kind: 'credential', id: 'recovery-fixture' })
+})
+
+it('rejects changed administrative reconciliation evidence under the original request ID', async () => {
+  const f = await fixture({ administration: true }), job = f.remote.endpoint.journal.job(f.job.id)
+  job.reconciled = { at: job.reconciled!.at, note: 'Different reconciliation evidence' }; f.remote.endpoint.journal.saveJob(job)
+  const audit = await auditCheckpointReceipts(f.audit)
+  expect(audit.status).toBe('blocked')
+  expect(audit.issues.some(issue => issue.kind === 'administration' && issue.code === 'administration_mismatch')).toBe(true)
 })

@@ -2,7 +2,7 @@
 import { z } from 'zod'
 import type { FsEditOutcome, FsWriteOutcome } from '@deepseek-ai/dsh-fs'
 import type { OwnershipStamp } from '../ownership/protocol.ts'
-import { InventoryRequest, ReceiptRequest } from '../ownership/inventory.ts'
+import { InventoryPage, InventoryRequest, ReceiptRequest } from '../ownership/inventory.ts'
 
 export const REMOTE_VERSION = 1
 export const RPC_PATH = '/execution/v1'
@@ -29,8 +29,11 @@ export const EffectOwner = z.discriminatedUnion('kind', [
 ])
 export type EffectOwner = z.infer<typeof EffectOwner>
 const ownership = { owner: EffectOwner.optional() }
+export const AdministrationAction = z.enum(['grant.create', 'grant.change', 'credential.import', 'credential.revoke', 'job.cancel', 'job.reconcile', 'operation.reconcile'])
+export const AdministrationRead = z.object({ op: z.literal('recovery.administration'), revision: InventoryPage.shape.revision,
+  id, action: AdministrationAction, requestHash: z.string().regex(/^[a-f0-9]{64}$/) }).strict()
 export const Rpc = z.discriminatedUnion('op', [
-  InventoryRequest, ReceiptRequest,
+  InventoryRequest, ReceiptRequest, AdministrationRead,
   z.object({ op: z.literal('identity') }).strict(),
   z.object({ op: z.literal('grant.list'), offset: z.number().int().nonnegative().default(0) }).strict(),
   z.object({ op: z.literal('grant.get'), id }).strict(),

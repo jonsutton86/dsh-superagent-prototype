@@ -96,10 +96,11 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
       if (input.audit) {
         await run('audit-receipts', checkpoint); await run('audit-receipts', checkpoint)
         const store = new Store(join(destination, 'orchestrator.sqlite'))
-        let auditId: string
+        let auditId: string, administrative = 0
         try {
           const audit = store.get(KV.recovery.audit)!
           auditId = audit.id
+          administrative = Number(store.db.prepare("SELECT count(*) AS n FROM operator_endpoint_command WHERE value ->> '$.phase' <> 'refused'").get()!.n)
           expect(audit).toMatchObject({ phase: 'complete', complete: true, executionOwnership: false })
           expect(audit.resources).toHaveLength(2); expect(audit.matched).toBeGreaterThan(0)
           expect(audit.resources.every(resource => resource.quiescent)).toBe(true)
@@ -124,6 +125,7 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
         if (!input.unrecordedPublications?.length) {
           const image = await verifyReceiptImage(preparedPath, keyFile)
           expect(image.executionOwnership).toBe(false); expect(image.applied.commands).toBeGreaterThan(0); expect(image.applied.publications).toBeGreaterThan(0)
+          expect(image.administration?.verified).toBe(administrative); expect(administrative).toBeGreaterThan(0)
           expect(image.files.filter(file => file.kind === 'world')).toHaveLength(input.worlds)
           expect(image.files.filter(file => file.kind === 'session')).toHaveLength(manifest.sessions.length)
           await run('prepare-receipts', checkpoint, undefined, preparation)
@@ -132,6 +134,11 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
           try {
             expect(JSON.parse(String(prepared.prepare('SELECT value FROM kv WHERE key=?').get(KV.recovery.hold)!.value))).toMatchObject({ state: 'prepared', requestId: preparation.requestId })
             for (const row of prepared.prepare('SELECT value FROM channel_publication').all()) expect(JSON.parse(String(row.value))).toMatchObject({ phase: 'observed', receipt: { phase: 'sent' } })
+            for (const row of prepared.prepare('SELECT value FROM operator_endpoint_command').all()) {
+              const command = JSON.parse(String(row.value))
+              expect(['done', 'superseded']).toContain(command.phase)
+              expect(command.recovery).toMatchObject({ originalPhase: 'done', requestHash: expect.stringMatching(/^[a-f0-9]{64}$/) })
+            }
           } finally { prepared.close() }
         } else expect((await readdir(destination)).some(name => name.startsWith('prepared-'))).toBe(false)
       }

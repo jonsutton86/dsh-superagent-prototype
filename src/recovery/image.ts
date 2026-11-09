@@ -17,6 +17,7 @@ export const ReceiptImage = z.object({ version: z.literal(1), requestId: z.strin
   files: z.array(z.object({ member: z.string().regex(/^(?:orchestrator\.sqlite|[a-z0-9-]+\.bin)$/),
     kind: z.enum(['store', 'world', 'session']), bytes: z.number().int().nonnegative().max(2 ** 40), sha256: digest,
     binding: digest.optional() }).strict()).min(1).max(20000),
+  administration: z.object({ verified: z.number().int().nonnegative(), recovered: z.number().int().nonnegative(), superseded: z.number().int().nonnegative() }).strict().optional(),
 }).strict()
 export type ReceiptImage = z.infer<typeof ReceiptImage>
 const envelope = z.object({ manifest: ReceiptImage, mac: digest }).strict()

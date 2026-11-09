@@ -36,7 +36,8 @@ export interface EndpointCatalog {
 }
 export interface OperatorCommand {
   id: string; endpointId: string; enrollmentRevision: number; request: EndpointAction
-  phase: 'pending' | 'unknown' | 'done' | 'refused' | 'superseded'; createdAt: string; updatedAt: string; problem?: string
+  phase: 'pending' | 'unknown' | 'done' | 'refused' | 'superseded' | 'recovered'; createdAt: string; updatedAt: string; problem?: string
+  recovery?: { at: string; revision: string; requestHash: string; originalPhase: string }
   result?: { grant?: RemoteGrant; credential?: EndpointCredential; job?: EndpointJob; operation?: EndpointOperation }
 }
 export interface RemoteProfileView { endpointId: string; grantId: string; epoch: number; leaseUntil: number; port: number; patchFile: string; patch: unknown[] }

@@ -12,6 +12,7 @@ import type { ExecutionIsolation } from './isolation.ts'
 import { EndpointCredentials } from './credentials.ts'
 import { OwnershipGate, sameOwner, type ResourceOwnershipConfig, type OwnershipGuard, type OwnershipFloor } from '../ownership/gate.ts'
 import { OwnershipError, requiresOwnership, type OwnershipStamp } from '../ownership/protocol.ts'
+import { readAdministration } from './recovery.ts'
 import { ResourceInventory } from '../ownership/inventory.ts'
 import { worldBinding } from './world-journal.ts'
 
@@ -66,6 +67,9 @@ export class RemoteEndpoint {
       })
       if (binding && !saved) this.journal.db.prepare('INSERT INTO endpoint_meta VALUES (?,?)').run('ownership-binding', JSON.stringify(binding))
       this.inventory = new ResourceInventory(this.journal.db, [
+        { kind: 'credential', table: 'remote_credential', project: value => ({ kind: 'credential', id: value.id,
+          requestHash: fingerprint({ id: value.id, version: value.version, variable: value.variable, mode: value.mode }),
+          phase: value.enabled ? 'enabled' : 'disabled', settled: true }) },
         { kind: 'grant', table: 'remote_grant', project: (grant: RemoteGrant) => ({ kind: 'grant', id: grant.id,
           requestHash: worldBinding(this.journal.id, grant), phase: grant.enabled ? 'enabled' : 'disabled', settled: true, epoch: grant.epoch }) },
         { kind: 'command', table: 'remote_job', project: (job: RemoteJob) => ({ kind: 'command', id: job.id, requestHash: job.fingerprint,
@@ -80,7 +84,7 @@ export class RemoteEndpoint {
           observe: (item: RemoteOperation) => ({ id: item.id, grantId: item.grantId, epoch: item.epoch, fingerprint: item.fingerprint,
             phase: item.phase, ownership: item.ownership, owner: item.owner, quiescent: item.phase === 'settled' || !!item.reconciled,
             failed: !!item.error, reconciledAt: item.reconciled?.at }) },
-      ])
+      ], ['remote_receipt'])
     }
     catch (error) { this.journal.close(); throw error }
   }
@@ -420,6 +424,13 @@ export class RemoteEndpoint {
         const identity = { id: this.journal.id, kind: 'endpoint' as const, ...ownership }
         return request.op === 'recovery.inventory' ? this.inventory.page(request, identity, this.ownershipQuiescent())
           : this.inventory.receipt(request, identity, this.ownershipQuiescent())
+      }
+      case 'recovery.administration': {
+        this.admin(principal)
+        const ownership = this.identity().ownership
+        if (!ownership) throw new OwnershipError(409, 'ownership_required', 'Recovery observations require independent ownership')
+        this.inventory.assertRevision(request.revision)
+        return readAdministration(this.journal, request, { id: this.journal.id, kind: 'endpoint', ...ownership }, this.ownershipQuiescent())
       }
       case 'grant.get': this.admin(principal); return this.journal.grant(request.id)
       case 'grant.list': case 'operation.list': case 'job.catalog': {

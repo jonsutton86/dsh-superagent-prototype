@@ -58,7 +58,7 @@ refer to the same environment. Remote access requires authentication; do not exp
 | Usage and budgets | Worker concurrency and health | Provider usage, estimated/reported costs, durable reservations/limits and spend/workload UI |
 | Models and connectors | Harness configuration, optional GitHub/Feishu, local grants, authenticated remote transport, paired Harness services, persistent remote authority/revocation and native Linux namespace/cancellation CI, whole-profile and per-action world binding, durable command/file ownership and operator receipts, endpoint-owned versioned credentials, real model artifact/restart qualification, endpoint enrollment/reconciliation and independent managed worlds | Managed endpoint/runtime launch, cross-host deployment qualification and connector scope |
 | Voice | None | Optional input/output adapters, interruption, local/cloud modes and text fallback |
-| Supervision and recovery | Watchdog foundation, encrypted checkpoints/held Session import, checkpoint-bound claimant replacement, revision-bound independent receipt audits and authenticated held receipt application, ownership authority, endpoint and artifact/mission publication fencing and owned Runtime/dedicated/managed provider lifecycle | Authoritative input/state recovery, administrative-command/configuration reconciliation, remapping, inbound connector/repository integration, clean-host activation/failover, incident UI and broader live failure tests |
+| Supervision and recovery | Watchdog foundation, encrypted checkpoints/held Session import, checkpoint-bound claimant replacement, revision-bound independent receipt audits and authenticated held execution/administrative receipt application, ownership authority, endpoint and artifact/mission publication fencing and owned Runtime/dedicated/managed provider lifecycle | Authoritative input/state recovery, private credential/runtime configuration validation, remapping, inbound connector/repository integration, clean-host activation/failover, incident UI and broader live failure tests |
 | Whole-product qualification | Deterministic unit, API/DOM flows, actual Harness restarts, live local model/tool, inbox and planner-to-execution missions | Browser/desktop layout, broader provider acceptance, backup/restore drills, accessibility and packaging |
 
 ## Missions increment
@@ -267,3 +267,9 @@ owned installed-Harness/DeepSeek Flash cases, and 1,497 tests with native confin
 [Linux run 42554537411](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42554537411). Typechecking
 and all four builds passed. Managed recovery prepared the same held image twice; the dedicated case refused unrecorded
 publication effects. The original app remained running and no restored activation was performed.
+
+Administrative recovery: `032-administrative-recovery.md` extends audit/preparation to original grant, credential,
+cancellation and reconciliation commands without resending them. Recovered grant records cannot activate before private
+credential validation; later generations/versions are not substituted for historical results. Active-world credential
+version/status comparisons detect rotation and revocation. The execution hold and the remaining full architecture ledger
+stay in place, including authoritative input/state recovery, configuration validation, Session/world remapping and activation.

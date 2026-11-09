@@ -21,7 +21,7 @@ import type { OwnershipAccess } from '../../src/ownership/protocol.ts'
 
 /** Real Harness local providers and real HTTP; test-only passthrough never enters the production endpoint plugin. */
 export async function remoteFixture(cleanup: (() => Promise<unknown>)[], options: { leaseMs?: number; outputMaxBytes?: number; native?: boolean;
-  ownership?: ResourceOwnershipConfig; access?: OwnershipAccess; beforeEnroll?(endpoint: RemoteEndpoint): Promise<void> } = {}) {
+  credentials?: { id: string; version: string }[]; ownership?: ResourceOwnershipConfig; access?: OwnershipAccess; beforeEnroll?(endpoint: RemoteEndpoint): Promise<void> } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-remote-')), ctx = new Context()
   const fs = new LocalFileSystem(ctx, { cwd: directory, diffBasisMaxBytes: 1024 * 1024 }), process = new LocalSubprocessRuntime(ctx)
   const isolation: ExecutionIsolation = options.native ? new BubblewrapIsolation(process) : { name: 'test-only-unconfined',
@@ -59,7 +59,7 @@ export async function remoteFixture(cleanup: (() => Promise<unknown>)[], options
   const admin = new RemoteClient(connection)
   await options.beforeEnroll?.(endpoint)
   const enrolled = await admin.call<GrantReceipt>({ op: 'grant.create', requestId: 'enroll', owner: 'coordinator', workspace: 'task',
-    operations: ['fs.read', 'fs.write', 'process.spawn'], leaseMs: options.leaseMs ?? 300_000 })
+    operations: ['fs.read', 'fs.write', 'process.spawn'], leaseMs: options.leaseMs ?? 300_000, ...(options.credentials?.length ? { credentials: options.credentials } : {}) })
   const credentialFile = join(directory, 'grant.token'); await writeFile(credentialFile, enrolled.credential!, { mode: 0o600 })
   const client = new RemoteClient({ ...connection, credentialFile })
   const remoteFs = new RemoteFileSystem(world, client, enrolled.grant), remoteProcess = new RemoteSubprocess(world, client, enrolled.grant)
