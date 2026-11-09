@@ -447,7 +447,11 @@ it.each(['missing-connection', 'missing-file', 'permissions', 'hardlink', 'symli
   if (mode === 'symlink') { const source = connection.credentialFile; connection.credentialFile = join(f.directory, 'token-link'); await symlink(source, connection.credentialFile) }
   if (mode === 'wrong-token') await writeFile(connection.credentialFile, 'grant.' + f.remote.enrolled.grant.id + '.1.' + 'x'.repeat(43))
   if (mode === 'workspace') { const source = connection.credentialFile; connection.credentialFile = join(f.remote.enrolled.grant.root, 'private-token'); await copyFile(source, connection.credentialFile) }
-  if (mode === 'expired') f.remote.endpoint.journal.saveGrant({ ...f.remote.endpoint.journal.grant(f.remote.enrolled.grant.id), leaseUntil: Date.now() - 1 })
+  if (mode === 'expired') {
+    f.remote.endpoint.journal.saveGrant({ ...f.remote.endpoint.journal.grant(f.remote.enrolled.grant.id), leaseUntil: Date.now() - 1 })
+    // Audit a stable expired generation. A sweep halfway through the inventory cut correctly rejects that changing audit.
+    await vi.waitFor(() => expect(f.remote.endpoint.journal.grant(f.remote.enrolled.grant.id).enabled).toBe(false), { timeout: 3000, interval: 25 })
+  }
   if (mode === 'root-link') { const root = f.remote.enrolled.grant.root; await rename(root, root + '-original'); await symlink(root + '-original', root) }
   const audit = await auditCheckpointReceipts({ ...f.audit, worlds })
   expect(audit.status).toBe('blocked')
