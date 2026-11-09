@@ -361,3 +361,12 @@ queued/claimed/canceled inbox events are not consumption proof. Contradictory re
 later failures or cancellation roll back earlier repairs. Signed counts preserve historical retries and older image support.
 Ended outcomes and original authority stay unchanged. Source configuration, pending-work/broader state reconciliation,
 runtime remapping, supported activation and clean-host failover remain open with the full article/product scope.
+
+Consumed-input recovery code `679a97ad8f290f060c07a332ba4de3a0bad690f7` passed 1,640 local tests, typechecking and all
+four builds. The same code passed 1,642 tests with native Linux confinement, typechecking and all builds in
+[run 42570416549](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42570416549).
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 197.68 seconds. Managed recovery verified the signed
+consumption summary against actual worker inputs and returned the same held image on retry; the dedicated case retained
+its expected refusal for unrecorded publication probes. The focused recovery/delivery run passed 133 tests. Provider-message
+traffic stayed local and the original app remained running. Source configuration, broader authoritative-state reconciliation,
+supported activation and the remaining full architecture/product requirements remain open.

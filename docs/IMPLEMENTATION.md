@@ -37,6 +37,15 @@ This does not complete authoritative-state recovery or activation. Source config
 relationships, runtime remapping, coordinated ownership handoff and clean-host failover remain open alongside every other
 article/product requirement below.
 
+Consumed-input recovery code `679a97ad8f290f060c07a332ba4de3a0bad690f7` passed 1,640 local tests, typechecking and all
+four builds. The same code passed 1,642 tests with native Linux confinement, typechecking and all builds in
+[run 42570416549](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42570416549).
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 197.68 seconds. Managed recovery verified the signed
+consumption summary against actual worker inputs and returned the same held image on retry; the dedicated case retained
+its expected refusal for unrecorded publication probes. The focused recovery/delivery run passed 133 tests. Provider-message
+traffic stayed local and the original app remained running. Source configuration, broader authoritative-state reconciliation,
+supported activation and the remaining full architecture/product requirements remain open.
+
 ## Implemented increment: recovery inference verification
 
 `037-inference-configuration-recovery.md` adds required Harness inference checks to new held receipt preparation.
