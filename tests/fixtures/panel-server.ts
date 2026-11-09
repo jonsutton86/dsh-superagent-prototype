@@ -292,6 +292,10 @@ const SourceSave = z.object({ enabled: z.boolean(), config: z.unknown() })
 
 const ROUTES: { [K in keyof Api]: Route<K> } = {
   'GET publication/destinations': { answer: () => ({ configured: false, items: [] }) },
+  'GET missions/:id/delivery': { answer: () => ({ configured: false, current: false, items: [] }) },
+  'PUT missions/:id/delivery': { body: true, answer: () => refuse(409, 'Publication fixture not configured') },
+  'POST deliveries/:id/refresh': { answer: () => refuse(404, 'Delivery not found') },
+  'POST deliveries/:id/retry': { answer: () => refuse(404, 'Delivery not found') },
   'GET library/:id/publications': { answer: () => ({ items: [] }) },
   'POST library/:id/publications': { body: true, answer: () => refuse(409, 'Publication service is not configured') },
   'POST publications/:id/refresh': { answer: () => refuse(409, 'Publication service is not configured') },

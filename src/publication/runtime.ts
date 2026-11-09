@@ -113,7 +113,7 @@ export class Publications {
   private observeReceipt(item: Stored, input: unknown): PublicationRecord {
     const receipt = PublicationReceipt.parse(input)
     if (receipt.id !== item.id || receipt.destination !== item.destination || receipt.destinationHash !== item.destinationHash || receipt.hash !== item.hash
-      || fingerprint(receipt.artifact) !== fingerprint(item.intent.artifact) || !item.attempts.some(owner => sameOwner(owner, receipt.ownership)))
+      || !receipt.artifact || receipt.message || fingerprint(receipt.artifact) !== fingerprint(item.intent.artifact) || !item.attempts.some(owner => sameOwner(owner, receipt.ownership)))
       throw new PublicationError(409, 'receipt_changed', 'Publication receipt does not belong to this approved content, destination and ownership attempt')
     item.receipt = receipt; item.phase = 'observed'; delete item.problem; this.save(item); return view(item)
   }

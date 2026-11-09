@@ -44,10 +44,12 @@ import type { CoordinatorOwnership } from '../ownership/lease.ts'
 import { OwnershipError } from '../ownership/protocol.ts'
 import type { Publications } from '../publication/runtime.ts'
 import { PublicationError } from '../publication/protocol.ts'
+import type { ChannelPublications } from '../publication/channels.ts'
 
 export interface HttpHost {
   readonly ownership?: Pick<CoordinatorOwnership, 'status'>
   readonly publications?: Publications
+  readonly channelPublications?: ChannelPublications
   authorizeMutation?(): void
   readonly remoteRoot?: string
   readonly remoteEffects?: Pick<RemoteWorld, 'effects' | 'refreshEffects' | 'cancelEffect' | 'status'>
@@ -208,7 +210,15 @@ function routes(runtime: HttpHost): Routes {
     if (!runtime.publications) throw new PublicationError(409, 'not_configured', 'Publication service is unavailable')
     return runtime.publications
   }
+  const channelPublications = () => {
+    if (!runtime.channelPublications) throw new PublicationError(409, 'not_configured', 'Channel publication is unavailable')
+    return runtime.channelPublications
+  }
   return {
+    'GET missions/:id/delivery': ({ params }) => channelPublications().state(params.id),
+    'PUT missions/:id/delivery': async ({ params, body }) => channelPublications().configure(params.id, await body()),
+    'POST deliveries/:id/refresh': ({ params }) => channelPublications().refresh(params.id),
+    'POST deliveries/:id/retry': ({ params }) => channelPublications().retry(params.id),
     'GET publication/destinations': () => runtime.publications?.destinations() ?? { configured: false, items: [] },
     'GET library/:id/publications': ({ params }) => publications().list(params.id),
     'POST library/:id/publications': async ({ params, body }) => publications().publish(params.id, await body()),
@@ -349,7 +359,7 @@ export function registerHttp(ctx: Context, runtime: HttpHost): () => void {
       if (!sameOrigin(req, ctx.webServer.port)) { json(res, 403, { error: 'Same-origin management request required' }); return }
       try {
         // Receipt refresh writes observations locally but never sends an execution or cancellation intent.
-        const observation = req.method === 'POST' && /^\/orchestrator\/api\/(?:execution|tickets\/[^/]+\/execution|worlds\/[^/]+\/execution|publications\/[^/]+)\/refresh$/.test(url.pathname)
+        const observation = req.method === 'POST' && /^\/orchestrator\/api\/(?:execution|tickets\/[^/]+\/execution|worlds\/[^/]+\/execution|publications\/[^/]+|deliveries\/[^/]+)\/refresh$/.test(url.pathname)
         const mutation = req.method !== 'GET' && req.method !== 'HEAD' && !observation
         if (mutation) runtime.authorizeMutation?.()
         if (runtime.ownership && req.method === 'GET' && url.pathname === '/orchestrator/api/state') {

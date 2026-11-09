@@ -56,7 +56,9 @@ barriers, cancelling prior work and preserving its receipts before a successor c
 [Runtime ownership](docs/025-runtime-ownership.md) connects dedicated and managed worlds to that lease and stops work on
 loss. The [publication service](docs/026-artifact-publication.md) sends operator-reviewed text artifacts to pinned GitHub
 issue or PR comment destinations, with independent credentials, ownership fencing and persistent delivery receipts.
-Channel-wide publication integration and restored-state reconciliation remain required before staged restore activation.
+[Mission reply delivery](docs/027-mission-delivery.md) connects worker acknowledgements and router replies to that service
+under exact plan/destination grants, including pinned GitHub review threads and Feishu/Lark root-message replies.
+Inbound connector/repository integration and restored-state reconciliation remain required before staged restore activation.
 Approved plans preserve execution history and invalidate affected results before they can be accepted again.
 
 The [Inbox](docs/013-inbox.md) brings conversations, unread updates, questions and review into one view. Start a task,

@@ -10,9 +10,9 @@ import type { OwnershipView } from '../src/ownership/protocol.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { for (const dispose of cleanup.splice(0).reverse()) await dispose(); vi.restoreAllMocks() })
-async function fixture() {
+async function fixture(kind: 'github-comment' | 'github-review' | 'feishu-reply' = 'github-comment') {
   const authority = await ownershipAuthority(cleanup), owner = new CoordinatorOwnership(authority.config)
-  const host = await publicationFixture(cleanup, authority.resource, owner)
+  const host = await publicationFixture(cleanup, authority.resource, owner, kind)
   cleanup.push(() => owner.close()); await owner.start()
   const destinations = await host.client.call<DestinationView[]>({ op: 'destinations' })
   const text = 'Reviewed artifact content', hash = contentHash(text)
@@ -29,7 +29,7 @@ it('publishes once, preserves exact original receipts through lost acknowledgeme
   expect(original).toMatchObject({ phase: 'sent', hash: publication.hash, ownership: owner.status().owner, external: { id: '1' } })
   expect(host.posts).toBe(1)
   expect(await host.client.call({ op: 'publish', publication })).toEqual(original)
-  await expect(host.client.call({ op: 'publish', publication: { ...publication, text: 'Different', hash: contentHash('Different'), artifact: { ...publication.artifact, hash: contentHash('Different') } } })).rejects.toThrow('different content')
+  await expect(host.client.call({ op: 'publish', publication: { ...publication, text: 'Different', hash: contentHash('Different'), artifact: { ...publication.artifact!, hash: contentHash('Different') } } })).rejects.toThrow('different content')
   await host.restart()
   expect(await host.client.call({ op: 'receipt.get', id: publication.id })).toEqual(original)
   await vi.waitFor(async () => expect(await host.client.call({ op: 'publish', publication })).toEqual(original))
@@ -84,7 +84,52 @@ it('retains destination identity and rejects browser or unpinned host requests',
   const response = await fetch(host.connection.url + '/publication/v1', { method: 'POST', headers: { origin: 'https://example.com', 'content-type': 'application/json' }, body: JSON.stringify({ op: 'publish', publication }) })
   expect(response.status).toBe(403); expect(host.posts).toBe(0)
   await host.service.close()
-  expect(() => new PublicationService({ ...host.config, destinations: [{ ...host.destination, issue: 8 }] })).toThrow('cannot be removed or replaced')
+  expect(() => new PublicationService({ ...host.config, destinations: [{ ...host.destination, name: 'Replaced destination' }] })).toThrow('cannot be removed or replaced')
+})
+
+it.each(['github-review', 'feishu-reply'] as const)('recovers an exact %s reply after an ambiguous commit and restart without another POST', async kind => {
+  const { host, publication } = await fixture(kind)
+  host.loseProviderReply()
+  expect((await host.client.call<PublicationReceipt>({ op: 'publish', publication })).phase).toBe('unknown')
+  await host.restart()
+  const receipt = await host.client.call<PublicationReceipt>({ op: 'receipt.observe', id: publication.id })
+  expect(receipt.phase).toBe('sent')
+  expect(receipt.external?.url).toBe(kind === 'github-review'
+    ? 'https://github.com/acme/project/pull/7#discussion_r1'
+    : 'https://applink.feishu.cn/client/chat/open?openChatId=oc_chat')
+  await vi.waitFor(async () => expect(await host.client.call({ op: 'publish', publication })).toEqual(receipt))
+  expect(host.posts).toBe(1)
+})
+
+it.each(['parent', 'sender', 'body'] as const)('does not accept a Feishu receipt with a substituted %s', async field => {
+  const { host, publication } = await fixture('feishu-reply')
+  host.loseProviderReply()
+  await host.client.call({ op: 'publish', publication })
+  const message = host.messages[0]!, original = structuredClone(message)
+  if (field === 'parent') message.parent_id = 'om_other'
+  if (field === 'sender') message.sender = { id: 'cli_other', id_type: 'app_id', sender_type: 'app' }
+  if (field === 'body') message.body = { content: JSON.stringify({ text: 'Substituted text' }) }
+  expect(await host.client.call({ op: 'receipt.observe', id: publication.id, externalId: 'om_reply1' })).toMatchObject({ phase: 'unknown' })
+  Object.assign(message, original)
+  expect(await host.client.call({ op: 'receipt.observe', id: publication.id, externalId: 'om_reply1' })).toMatchObject({ phase: 'sent' })
+  expect(host.posts).toBe(1)
+})
+
+it.each(['bot', 'chat'] as const)('refuses Feishu %s substitution before sending', async field => {
+  const { host, publication } = await fixture('feishu-reply')
+  if (field === 'bot') host.bot('ou_other'); else host.parentChat('oc_other')
+  expect(await host.client.call({ op: 'publish', publication })).toMatchObject({ phase: 'failed' })
+  expect(host.posts).toBe(0)
+})
+
+it('does not confirm a review reply under a different parent comment', async () => {
+  const { host, publication } = await fixture('github-review')
+  host.loseProviderReply(); await host.client.call({ op: 'publish', publication })
+  host.comments[0]!.in_reply_to_id = 12
+  expect(await host.client.call({ op: 'receipt.observe', id: publication.id, externalId: '1' })).toMatchObject({ phase: 'unknown' })
+  host.comments[0]!.in_reply_to_id = 11
+  expect(await host.client.call({ op: 'receipt.observe', id: publication.id, externalId: '1' })).toMatchObject({ phase: 'sent' })
+  expect(host.posts).toBe(1)
 })
 
 it('rechecks ownership after asynchronous preparation and never dispatches the former owner’s accepted intent', async () => {

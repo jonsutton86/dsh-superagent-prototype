@@ -5,25 +5,53 @@ import { tmpdir } from 'node:os'
 import { randomBytes } from 'node:crypto'
 import { PublicationService } from '../../src/publication/service.ts'
 import { publicationHandler } from '../../src/publication/http.ts'
-import { GithubPublication } from '../../src/publication/github.ts'
+import { PublicationProviders } from '../../src/publication/providers.ts'
 import { PublicationClient } from '../../src/publication/client.ts'
 import type { OwnershipAccess } from '../../src/ownership/protocol.ts'
 import type { ResourceOwnershipConfig } from '../../src/ownership/gate.ts'
 import type { DestinationConfig } from '../../src/publication/protocol.ts'
 
-/** Real HTTP at both boundaries, with a local GitHub contract server; never publishes to an external account. */
-export async function publicationFixture(cleanup: (() => Promise<unknown>)[], ownership: ResourceOwnershipConfig, access?: OwnershipAccess) {
+/** Real HTTP at both boundaries, with local GitHub and Feishu/Lark contract servers; never publishes to an external account. */
+export async function publicationFixture(cleanup: (() => Promise<unknown>)[], ownership: ResourceOwnershipConfig, access?: OwnershipAccess, kind: DestinationConfig['kind'] = 'github-comment') {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'dsh-publication-'))), credentialFile = join(directory, 'account.token')
   const secret = randomBytes(32).toString('base64url'); await writeFile(credentialFile, secret, { mode: 0o600 })
-  const comments: { id: number; body: string; user: { login: string }; issue_url: string }[] = []
-  let posts = 0, loseProviderReply = false, refuse = false, unavailable = false, login = 'agent-bot', hold: Promise<void> | undefined, prepareHold: Promise<void> | undefined
+  const comments: { id: number; body: string; user: { login: string }; issue_url: string; pull_request_url?: string; in_reply_to_id?: number }[] = []
+  const messages: Record<string, unknown>[] = [], tenantToken = randomBytes(32).toString('base64url')
+  let botId = 'ou_bot', parentChat = 'oc_chat'
+  let loseProviderReply: boolean | string = false
+  const shouldLose = (body: string) => loseProviderReply === true || typeof loseProviderReply === 'string' && body.includes(`dsh-publication:${loseProviderReply}:`)
+  let posts = 0, refuse = false, unavailable = false, login = 'agent-bot', hold: Promise<void> | undefined, prepareHold: Promise<void> | undefined
   const provider = createServer((req, res) => { void (async () => {
     res.setHeader('content-type', 'application/json')
-    if (req.headers.authorization !== `Bearer ${secret}`) { res.writeHead(401); res.end('{}'); return }
     const path = new URL(req.url!, 'http://127.0.0.1').pathname
+    if (path === '/open-apis/auth/v3/tenant_access_token/internal') {
+      const chunks: Buffer[] = []; for await (const chunk of req) chunks.push(Buffer.from(chunk))
+      const body = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+      res.end(JSON.stringify(body.app_id === 'cli_agent' && body.app_secret === secret ? { code: 0, tenant_access_token: tenantToken, expire: 7200 } : { code: 1 })); return
+    }
+    if (path.startsWith('/open-apis/')) {
+      if (req.headers.authorization !== `Bearer ${tenantToken}`) { res.writeHead(401); res.end('{"code":1}'); return }
+      if (path === '/open-apis/bot/v3/info') { res.end(JSON.stringify({ code: 0, bot: { open_id: botId } })); return }
+      if (path === '/open-apis/im/v1/messages/om_root') { res.end(JSON.stringify({ code: 0, data: { items: [{ message_id: 'om_root', chat_id: parentChat, msg_type: 'text', thread_id: 'omt_thread' }] } })); return }
+      if (path === '/open-apis/im/v1/messages/om_root/reply') {
+        const chunks: Buffer[] = []; for await (const chunk of req) chunks.push(Buffer.from(chunk))
+        posts++; await hold
+        const body = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+        const message = { message_id: `om_reply${messages.length + 1}`, chat_id: parentChat, parent_id: 'om_root', root_id: 'om_root', thread_id: 'omt_thread',
+          msg_type: body.msg_type, body: { content: body.content }, sender: { id: 'cli_agent', id_type: 'app_id', sender_type: 'app', open_bot_id: botId } }
+        messages.push(message)
+        if (shouldLose(body.content)) { loseProviderReply = false; res.destroy(); return }
+        res.end(JSON.stringify({ code: 0, data: message })); return
+      }
+      if (path === '/open-apis/im/v1/messages') { res.end(JSON.stringify({ code: 0, data: { items: messages, has_more: false } })); return }
+      const message = messages.find(value => path.endsWith('/' + value.message_id))
+      res.end(JSON.stringify({ code: 0, data: { items: message ? [message] : [] } })); return
+    }
+    if (req.headers.authorization !== `Bearer ${secret}`) { res.writeHead(401); res.end('{}'); return }
     if (path === '/user') { await prepareHold; res.end(JSON.stringify({ login })); return }
     if (path === '/repos/acme/project/issues/7') { res.end(JSON.stringify({ number: 7 })); return }
-    if (path === '/repos/acme/project/issues/7/comments') {
+    if (path === '/repos/acme/project/pulls/comments/11') { res.end(JSON.stringify({ id: 11, body: 'Review question', user: { login: 'reviewer' }, pull_request_url: 'https://api.github.com/repos/acme/project/pulls/7' })); return }
+    if (path === '/repos/acme/project/issues/7/comments' || path === '/repos/acme/project/pulls/7/comments' || path === '/repos/acme/project/pulls/7/comments/11/replies') {
       if (req.method === 'GET') { res.end(JSON.stringify(comments)); return }
       const chunks: Buffer[] = []; for await (const chunk of req) chunks.push(Buffer.from(chunk))
       posts++
@@ -31,25 +59,27 @@ export async function publicationFixture(cleanup: (() => Promise<unknown>)[], ow
       if (unavailable) { unavailable = false; res.writeHead(503); res.end('{}'); return }
       await hold
       const { body } = JSON.parse(Buffer.concat(chunks).toString('utf8'))
-      const comment = { id: comments.length + 1, body, user: { login }, issue_url: 'https://api.github.com/repos/acme/project/issues/7' }
+      const comment = { id: comments.length + 1, body, user: { login }, issue_url: 'https://api.github.com/repos/acme/project/issues/7',
+        ...(path.includes('/pulls/') ? { pull_request_url: 'https://api.github.com/repos/acme/project/pulls/7', in_reply_to_id: 11 } : {}) }
       comments.push(comment)
-      if (loseProviderReply) { loseProviderReply = false; res.destroy(); return }
+      if (shouldLose(body)) { loseProviderReply = false; res.destroy(); return }
       res.writeHead(201); res.end(JSON.stringify(comment)); return
     }
-    const match = /\/issues\/comments\/(\d+)$/.exec(path), comment = match && comments.find(value => value.id === Number(match[1]))
+    const match = /\/(?:issues|pulls)\/comments\/(\d+)$/.exec(path), comment = match && comments.find(value => value.id === Number(match[1]))
     if (comment) { res.end(JSON.stringify(comment)); return }
     res.writeHead(404); res.end('{}')
   })().catch(() => res.destroy()) })
   await new Promise<void>(resolve => provider.listen(0, '127.0.0.1', resolve))
   const origin = `http://127.0.0.1:${(provider.address() as { port: number }).port}`
   const fetcher: typeof fetch = (input, init) => {
-    const url = new URL(String(input)); if (url.origin !== 'https://api.github.com') throw new Error('Unexpected publication origin')
+    const url = new URL(String(input)); if (!['https://api.github.com', 'https://open.feishu.cn', 'https://open.larksuite.com'].includes(url.origin)) throw new Error('Unexpected publication origin')
     return fetch(origin + url.pathname + url.search, init)
   }
-  const destination: DestinationConfig = { id: 'project-updates', name: 'Project updates', kind: 'github-comment', repository: 'acme/project', issue: 7,
-    login: 'agent-bot', maxBytes: 30_000, credentialFile }
+  const common = { id: 'project-updates', name: 'Project updates', maxBytes: 30_000, credentialFile }
+  const destination: DestinationConfig = kind === 'feishu-reply' ? { ...common, kind, brand: 'feishu', appId: 'cli_agent', botId: 'ou_bot', chatId: 'oc_chat', messageId: 'om_root' }
+    : { ...common, kind, repository: 'acme/project', issue: 7, login: 'agent-bot', ...(kind === 'github-review' ? { comment: 11 } : {}) } as DestinationConfig
   const config = { stateDir: join(directory, 'service'), ownership, destinations: [destination] }
-  let service = new PublicationService(config, new GithubPublication(fetcher)); service.start()
+  let service = new PublicationService(config, new PublicationProviders(fetcher)); service.start()
   let loseServiceReply = false
   const server = createServer((req, res) => {
     if (loseServiceReply) { loseServiceReply = false; res.end = (() => { res.destroy(); return res }) as typeof res.end }
@@ -63,12 +93,13 @@ export async function publicationFixture(cleanup: (() => Promise<unknown>)[], ow
     await Promise.all([new Promise<void>(resolve => server.close(() => resolve())), new Promise<void>(resolve => provider.close(() => resolve()))])
     await rm(directory, { recursive: true, force: true })
   })
-  return { directory, config, connection, destination, comments, secret, providerOrigin: origin, get service() { return service }, get posts() { return posts },
+  return { directory, config, connection, destination, comments, messages, secret, providerOrigin: origin, get service() { return service }, get posts() { return posts },
     client: new PublicationClient(connection, access), admin: new PublicationClient({ ...connection, credentialFile: join(directory, 'service/admin.token') }, access),
-    loseProviderReply: () => { loseProviderReply = true }, loseServiceReply: () => { loseServiceReply = true },
+    loseProviderReply: (id?: string) => { loseProviderReply = id ?? true }, loseServiceReply: () => { loseServiceReply = true },
     refuse: (value: boolean) => { refuse = value }, login: (value: string) => { login = value }, hold: (value?: Promise<void>) => { hold = value },
     holdPrepare: (value?: Promise<void>) => { prepareHold = value },
     unavailable: () => { unavailable = true },
-    restart: async () => { await service.close(); service = new PublicationService(config, new GithubPublication(fetcher)); service.start() },
+    bot: (value: string) => { botId = value }, parentChat: (value: string) => { parentChat = value },
+    restart: async () => { await service.close(); service = new PublicationService(config, new PublicationProviders(fetcher)); service.start() },
   }
 }

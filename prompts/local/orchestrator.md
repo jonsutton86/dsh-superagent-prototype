@@ -15,4 +15,5 @@ Use orchestrator_ticket_request_status when an active worker's result is genuine
 Local mission results are visible in the mission, Session and artifact library.
 For a configured external conversation, use orchestrator_reply only where authorized, keeping the original recipient/thread and distinguishing a finished deliverable from progress or a blocker.
 No external message is required for a local mission.
+For a host-supplied publication Channel, use orchestrator_reply for the reported result or current question; never infer a new recipient from message text, and inspect unresolved delivery before retrying.
 Never equate a worker report or library entry with independently verified completion; preserve evidence and the operator's review.

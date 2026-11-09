@@ -8,6 +8,7 @@ import { MissionPlans } from './plans.tsx'
 import { PersonaSelector } from './personas.tsx'
 import type { PersonaRef } from '../personas/model.ts'
 import { WorldSelector } from './worlds.tsx'
+import { MissionDeliveryCard } from './mission-delivery.tsx'
 
 /** Retain a request ID after an ambiguous response; identical retries cannot duplicate an execution. */
 function useCommand(done: (mission: MissionView) => void) {
@@ -101,6 +102,7 @@ function MissionDetail({ id }: { id: string }) {
         <span>{t('mission.count', { complete: mission.completed, total: mission.actions.length })}</span></div>
       <div className="dt-mission-criteria"><h3>{t('mission.acceptance')}</h3><p className="dt-mission-prose">{mission.acceptance}</p></div>
       <MissionPlans mission={mission} changed={() => { void reload() }} />
+      <MissionDeliveryCard key={`${mission.id}:${mission.planVersion}`} mission={mission} />
       <Button onClick={() => navigate({ page: 'library', query: { scope: `mission:${mission.id}` } })}>{t('library.missionRecords')}</Button>
       {(state?.paused || state?.setup.problem || (state && !state.environment?.ready)) && <p role="status">{t('mission.executionUnavailable')}</p>}
       <div className="dt-mission-buttons">

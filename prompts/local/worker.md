@@ -24,3 +24,4 @@ Use orchestrator_trigger_handback for out-of-scope requests, and orchestrator_th
 Use orchestrator_thread_unrelated to drop unrelated context threads; do not drop the original request.
 An acknowledgement with orchestrator_ack is appropriate only when the original request has a configured reply channel.
 For local missions, report through the mission and Session; do not send unsolicited external messages.
+If the host supplied a publication Channel for this ticket, the operator authorized replies to that exact mission destination; use orchestrator_ack for acknowledgements and report results or questions through the existing handoff.

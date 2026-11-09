@@ -58,7 +58,7 @@ refer to the same environment. Remote access requires authentication; do not exp
 | Usage and budgets | Worker concurrency and health | Provider usage, estimated/reported costs, durable reservations/limits and spend/workload UI |
 | Models and connectors | Harness configuration, optional GitHub/Feishu, local grants, authenticated remote transport, paired Harness services, persistent remote authority/revocation and native Linux namespace/cancellation CI, whole-profile and per-action world binding, durable command/file ownership and operator receipts, endpoint-owned versioned credentials, real model artifact/restart qualification, endpoint enrollment/reconciliation and independent managed worlds | Managed endpoint/runtime launch, cross-host deployment qualification and connector scope |
 | Voice | None | Optional input/output adapters, interruption, local/cloud modes and text fallback |
-| Supervision and recovery | Watchdog foundation, encrypted checkpoints/held Session import, independent ownership authority, endpoint and artifact-publication fencing and owned Runtime/dedicated/managed provider lifecycle | Channel-wide publication integration, clean-host activation/failover, incident UI and broader live failure tests |
+| Supervision and recovery | Watchdog foundation, encrypted checkpoints/held Session import, independent ownership authority, endpoint and artifact/mission publication fencing and owned Runtime/dedicated/managed provider lifecycle | Inbound connector/repository integration, clean-host activation/failover, incident UI and broader live failure tests |
 | Whole-product qualification | Deterministic unit, API/DOM flows, actual Harness restarts, live local model/tool, inbox and planner-to-execution missions | Browser/desktop layout, broader provider acceptance, backup/restore drills, accessibility and packaging |
 
 ## Missions increment
@@ -208,3 +208,8 @@ Artifact delivery qualification: code `fd058c95ad6046751fd0429a6046c1bb1e151316`
 installed-Harness model scenarios including the separate publication plugin, and 1,420 native Linux tests in
 [run 42540908750](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42540908750).
 Typechecking and all four builds passed. No real external messages were sent during qualification.
+
+Mission delivery increment: `027-mission-delivery.md` adds plan-bound standing consent, worker/router replies through the
+existing Outbox, immutable original intents and unknown receipt recovery after revocation, withdrawal or ownership loss.
+GitHub review and Feishu/Lark root replies extend the independent service. Owned inbound connectors, repository mutations,
+live tenant/account qualification, host verification and restored activation/failover remain open.

@@ -59,6 +59,7 @@ import { WorldPool } from '../environments/pool.ts'
 import { openRuntimeOwnership, assertOwnership, ownershipReady } from '../ownership/runtime.ts'
 import type { CoordinatorOwnership } from '../ownership/lease.ts'
 import { Publications } from '../publication/runtime.ts'
+import { ChannelPublications } from '../publication/channels.ts'
 
 // Source plugins interact with dsh-superagent exclusively through the `SourceHost` service interface.
 declare module '@deepseek-ai/cordis' { interface Context { orchestrator: SourceHost } }
@@ -94,6 +95,7 @@ export class Runtime extends Service implements SourceHost {
   readonly remoteWorkspace?: RemoteWorkspace
   readonly ownership?: CoordinatorOwnership
   readonly publications: Publications
+  readonly channelPublications: ChannelPublications
   readonly ready: Promise<void>
   private quiescing?: Promise<void>
   private readonly board = new HealthBoard()
@@ -143,7 +145,8 @@ export class Runtime extends Service implements SourceHost {
         roots: () => [executionRoot(store.settings(), machine.stateDir, world?.grant.root), ...this.worlds.list().items.map(item => item.root)] })
       const personas = this.personas = new Personas(store, async model => { await resolveRoleModel(ctx, model) })
       const workspace = this.workspace = new Workspace(store, () => runtime.engine, () => !this.paused() && !this.closing(),
-        id => library.evidenceRevision(id), ticket => environments.allows(ticket.execution?.environment), reference => personas.snapshot(reference), reference => environments.select(reference))
+        id => library.evidenceRevision(id), ticket => environments.allows(ticket.execution?.environment), reference => personas.snapshot(reference), reference => environments.select(reference),
+        (mission, action) => runtime.channelPublications?.channel(mission, action))
       const inbox = this.inbox = new Inbox(store, workspace, library,
         async id => (await ctx.sessionController.inspect(id as SessionId, AbortSignal.any([this.lifetime, AbortSignal.timeout(15_000)]))).events)
       this.disposers.push(ctx.on('session/event', (session, event) => {
@@ -168,9 +171,13 @@ export class Runtime extends Service implements SourceHost {
         if (kind.policy?.sync) void this.ready?.then(() => this.settings.syncable().includes(kind.kind) ? this.settings.sync(kind.kind) : undefined)
           .catch(() => { /* sync() records its failure in health. */ })
         return () => {}
-      }, id => this.ownership ? id === 'workspace' : id !== 'github' || machine.executionMode !== 'local')
+      }, id => this.ownership ? id === 'workspace' || id === 'publication' && !!machine.publication : id !== 'github' || machine.executionMode !== 'local')
+      this.channelPublications = new ChannelPublications({ store, ownership: this.ownership, connection: machine.publication, lifetime: this.lifetime,
+        mission: id => workspace.get(id, false), destinations: () => this.publications.destinations(),
+        authorized: ticket => workspace.policy(settingsPolicy(store.settings(), sources)).revalidate(ticket.mandate) && workspace.executionAllowed(ticket) })
       const links: LinkHost = { store, links: this.sourceLinks, commands, sources, lifetime: this.lifetime }
       this.disposers.push(sources.register(workspace.source))
+      if (machine.publication) this.disposers.push(sources.register(this.channelPublications.source))
       const link = (trigger: Trigger, signal?: AbortSignal) => sourceLink(links, trigger, signal)
       const environment = (ticket: Ticket) => this.ticketEnvironment(ticket)
       const resources: ResourceHost = { store, pages: new TextCache(4_000_000), prompts, commands, masterId, context: ctx,
@@ -189,7 +196,7 @@ export class Runtime extends Service implements SourceHost {
       this.assessor = new MasterAssessor({ get engine() { return runtime.engine }, commands, get deployment() { return setup.deployment }, effects,
         settings: () => store.settings(), paused: () => this.paused(), threadContext: trigger => sources.threadContext(trigger),
         deliver: (id, text) => sessions.prompt(masterId, id, text, 'steer'), candidateCard: candidate => candidateCard(links, candidate) })
-      const outbox = this.outbox = new Outbox({ store, effects, sources, commands, paused: () => this.paused() })
+      const outbox = this.outbox = new Outbox({ store, effects, sources, commands, publication: this.channelPublications, paused: () => this.paused() })
       const { assessor, executor } = this
       const policy = () => environments.policy(workspace.policy(settingsPolicy(store.settings(), sources)))
       const engine = this.engine = new Engine({ repo: store, scope: sources, policy, assessor, executor,
@@ -314,6 +321,7 @@ export class Runtime extends Service implements SourceHost {
     return { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, get ready() { return runtime.ready }, sourceLinks, remoteRoot: this.remoteWorkspace?.world.grant.root,
       ownership: this.ownership, authorizeMutation: () => { this.ownership?.proof(); this.lifetime.throwIfAborted() },
       publications: this.publications,
+      channelPublications: this.channelPublications,
       get health() { return runtime.health }, remoteEffects: this.remoteWorkspace?.world,
       supervision: this.supervision, workspace: this.workspace, library: this.library, inbox: this.inbox, environments: this.environments, endpoints: this.endpoints, personas: this.personas, worlds: this.worlds,
       get deployment() { return setup.deployment },
@@ -330,6 +338,7 @@ export class Runtime extends Service implements SourceHost {
     try {
       await this.endpoints.stop()
       await this.publications.stop()
+      await this.channelPublications.stop()
       this.assessor.stop()
       const ids = [this.masterId, ...this.store.tickets.list().map(ticket => workerSessionId(ticket.id))]
       const agents = ids.map(id => this.ctx.agents.get(id as SessionId)).filter((agent): agent is Agent => agent !== undefined)

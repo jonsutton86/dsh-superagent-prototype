@@ -84,7 +84,7 @@ export class PublicationJournal {
     if (Number(this.db.prepare('SELECT count(*) AS n FROM publication_receipt').get()!.n) >= 50_000)
       throw new PublicationError(409, 'capacity', 'Publication journal capacity reached')
     const at = timestamp(), item: Stored = { request, receipt: { id: request.id, destination: request.destination, destinationHash: request.destinationHash,
-      artifact: request.artifact, hash: request.hash, bytes: Buffer.byteLength(request.text), ownership, phase: 'accepted', createdAt: at, updatedAt: at } }
+      ...(request.artifact ? { artifact: request.artifact } : { message: request.message }), hash: request.hash, bytes: Buffer.byteLength(request.text), ownership, phase: 'accepted', createdAt: at, updatedAt: at } }
     this.db.prepare('INSERT INTO publication_receipt VALUES (?,?,?)').run(request.id, fingerprint(request), JSON.stringify(item))
     return item
   }

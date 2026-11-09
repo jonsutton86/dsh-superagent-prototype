@@ -123,7 +123,7 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
       await stop(); start(); await ready()
       for (const value of (await api('worlds')).items) expect(value.ready, value.problem ?? 'World did not prepare after restart').toBe(true)
     }
-    const proof = `persona-proof-${randomUUID()}`
+    const proof = `persona-proof-${randomUUID()}`, otherProof = `independent-${randomUUID()}`
     const definition = { name: 'Qualification researcher', description: 'Proves pinned persona instructions and embedded skills',
       instructions: 'Before performing the mission, load your persona evidence skill using the skill tool. Follow its output instructions. Do not guess the proof value.',
       model: { provider: 'deepseek-official', model: 'deepseek-flash' }, capabilities: ['read', 'write', 'commands', 'skills'],
@@ -131,16 +131,20 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     const persona = await api('personas', { requestId: 'persona-proof-create', definition })
     let mission = await api('missions', { requestId: 'remote-live-mission', title: 'Remote Harness proof', objective: 'Prove persona-bound execution', acceptance: 'The artifact follows the persona skill and the service credential check passes' })
     mission = await api(`missions/${mission.id}/actions`, { requestId: 'remote-live-action', revision: mission.revision, title: 'Produce proof', owner: 'agent',
-      persona: { id: persona.id, version: 1 }, ...(managed ? { environment: managed.id } : {}), instructions: `In your assigned directory, use bash to verify that the SHA256 of the endpoint-provided SERVICE_API_KEY equals ${secretDigest}, without printing the credential itself. Only after that check succeeds, create result.txt following your persona instructions. Read it back, publish that exact content as an artifact with workspace_publish, then report ready. Do not use external services or background work. If any tool fails, immediately report failed with the exact error and end the turn; do not attempt to repair the execution environment.` })
+      persona: { id: persona.id, version: 1 }, ...(managed ? { environment: managed.id } : {}), instructions: `${publisher ? 'First use orchestrator_ack with the original trigger_id from your assignment and the exact text "Mission delivery qualification started." The host supplied publication Channel is explicitly authorized. ' : ''}In your assigned directory, use bash to verify that the SHA256 of the endpoint-provided SERVICE_API_KEY equals ${secretDigest}, without printing the credential itself. Only after that check succeeds, create result.txt following your persona instructions. Read it back, publish that exact content as an artifact with workspace_publish, then report ready. Do not use external services or background work. If any tool fails, immediately report failed with the exact error and end the turn; do not attempt to repair the execution environment.` })
+    if (alternate) mission = await api(`missions/${mission.id}/actions`, { requestId: 'other-action', revision: mission.revision, title: 'Independent proof', owner: 'agent', environment: alternate.id,
+      instructions: `Delegate this check to exactly one subagent using the subagent tool: in your assigned working directory, use one bash call to confirm SERVICE_API_KEY is unset or empty without printing it, then write exactly ${otherProof} to result.txt with no newline and return a brief completion message. Wait for the child to finish, read result.txt yourself, publish that exact content with workspace_publish and report ready. This is a small qualification: do not add todo lists, extra checks or other work. No external services; report failed immediately if a tool fails.` })
+    if (publisher) {
+      const destination = (await api('publication/destinations')).items[0]
+      await api(`missions/${mission.id}/delivery`, { requestId: randomUUID(), revision: 0, missionRevision: mission.revision,
+        enabled: true, destination: destination.id, destinationHash: destination.hash }, 'PUT')
+    }
     const request = { requestId: 'remote-live-proof', revision: mission.revision, command: 'run' }
     const runPath = `missions/${mission.id}/actions/${mission.actions[0].id}`
     const running = await api(runPath, request), task = { id: running.actions[0].runs[0] }
     let otherTask: string | undefined
-    const otherProof = `independent-${randomUUID()}`
     if (alternate) {
       let next = await api(`missions/${mission.id}`)
-      next = await api(`missions/${mission.id}/actions`, { requestId: 'other-action', revision: next.revision, title: 'Independent proof', owner: 'agent', environment: alternate.id,
-        instructions: `Delegate this check to exactly one subagent using the subagent tool: in your assigned working directory, use one bash call to confirm SERVICE_API_KEY is unset or empty without printing it, then write exactly ${otherProof} to result.txt with no newline and return a brief completion message. Wait for the child to finish, read result.txt yourself, publish that exact content with workspace_publish and report ready. This is a small qualification: do not add todo lists, extra checks or other work. No external services; report failed immediately if a tool fails.` })
       const other = next.actions.at(-1)
       next = await api(`missions/${mission.id}/actions/${other.id}`, { requestId: 'other-run', revision: next.revision, command: 'run' })
       otherTask = next.actions.at(-1).runs[0]
@@ -162,16 +166,20 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     expect(ticket.executionPersona).toMatchObject({ id: persona.id, version: 1, digest: persona.digest, definition })
     expect(await readFile(join(ticket.directory, 'result.txt'), 'utf8')).toBe(proof)
     expect(artifact?.content).toBe(proof)
-    let publicationId: string | undefined
+    let publicationId: string | undefined, channelDelivery: any
     if (publisher) {
+      const deliveries = await api(`missions/${mission.id}/delivery`)
+      channelDelivery = deliveries.items.find((item: any) => item.ticketId === task.id && publisher.comments.some(comment =>
+        comment.body.startsWith('Mission delivery qualification started.\n') && comment.body.includes(`dsh-publication:${item.id}:`)))
+      expect(channelDelivery?.receipt).toMatchObject({ phase: 'sent', message: { missionId: mission.id, ticketId: task.id } })
       const destination = (await api('publication/destinations')).items[0]
-      publisher.loseProviderReply()
       publicationId = randomUUID()
+      publisher.loseProviderReply(publicationId)
       const delivery = await api(`library/${artifact.id}/publications`, { requestId: publicationId, revision: artifact.revision, hash: artifact.hash,
         destination: destination.id, destinationHash: destination.hash })
       expect(delivery.receipt.phase).toBe('unknown')
       expect((await api(`publications/${publicationId}/refresh`, {})).receipt).toMatchObject({ phase: 'sent', hash: artifact.hash })
-      expect(publisher.posts).toBe(1)
+      expect(publisher.comments.filter(comment => comment.body.includes(`dsh-publication:${publicationId}:`))).toHaveLength(1)
     }
     const command = h.endpoint.journal.jobs().find(job => job.request.cwd === ticket.directory && job.request.argv[0] === 'bash'
       && job.request.argv.some(arg => arg.includes('result.txt')) && job.outcome?.exitCode === 0)
@@ -213,7 +221,10 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     if (publisher && publicationId) {
       expect((await api(`library/${artifact.id}/publications`)).items[0].receipt).toMatchObject({ phase: 'sent', hash: artifact.hash })
       expect((await api(`publications/${publicationId}/retry`, {})).receipt.phase).toBe('sent')
-      expect(publisher.posts).toBe(1)
+      expect(publisher.comments.filter(comment => comment.body.includes(`dsh-publication:${publicationId}:`))).toHaveLength(1)
+      expect((await api(`missions/${mission.id}/delivery`)).items.find((item: any) => item.id === channelDelivery.id).receipt).toEqual(channelDelivery.receipt)
+      expect((await api(`deliveries/${channelDelivery.id}/refresh`, {})).receipt).toEqual(channelDelivery.receipt)
+      expect(publisher.comments.filter(comment => comment.body.includes(`dsh-publication:${channelDelivery.id}:`))).toHaveLength(1)
     }
     expect((await api(`tickets/${task.id}`)).executionEnvironment).toEqual(ticket.executionEnvironment)
     expect((await api(`tickets/${task.id}`)).executionPersona).toEqual(ticket.executionPersona)

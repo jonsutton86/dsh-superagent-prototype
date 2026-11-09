@@ -6,6 +6,17 @@ import { SETUP_PROBLEMS } from '../setup.ts'
 import { HEALTH_TEXT } from '../sources/host.ts'
 
 const TEXT = {
+  'delivery.title': ['任务回复交付', 'Mission reply delivery'],
+  'delivery.configure': ['配置任务回复目标', 'Configure task reply destination'],
+  'delivery.consentHint': ['授权本计划中后续启动的任务向所选目标发送确认、问题、回答和结果。内容由智能体生成，不会逐条等待审阅。计划变更后需重新授权。停止交付后，已在发送的回复仍可能到达。', 'Authorize future tasks in this plan to send acknowledgements, questions, answers and results to the selected destination. Messages are agent-written and are not individually reviewed. Plan changes require renewed authorization. An in-flight reply may still arrive after delivery is stopped.'],
+  'delivery.consent': ['我授权当前计划的任务向此目标发送回复。', 'I authorize task replies from this plan to this destination.'],
+  'delivery.enable': ['授权回复交付', 'Authorize reply delivery'],
+  'delivery.disable': ['停止新的交付', 'Stop new deliveries'],
+  'delivery.active': ['当前计划已获授权', 'Delivery authorized for this plan'],
+  'delivery.stale': ['交付未启用；请检查任务、计划及来源设置', 'Delivery is inactive; review the mission, plan and source settings'],
+  'delivery.off': ['新的交付已关闭', 'New deliveries are off'],
+  'delivery.activeWork': ['开始任务前配置目标。更改目标前请停止正在执行的任务。', 'Configure the destination before starting tasks. Stop active tasks before changing it.'],
+  'delivery.withdrawn': ['回复已撤回；原交付结果仍须核实', 'Reply withdrawn; its original delivery outcome still needs confirmation'],
   'publication.title': ['对外交付', 'External delivery'],
   'publication.review': ['审阅并发送此成果', 'Review and send this artifact'],
   'publication.intro': ['确认完整内容与目标后发送。对外交付不代表任务结果已经验证。', 'Review the complete content and destination before sending. Delivery does not certify the task result.'],

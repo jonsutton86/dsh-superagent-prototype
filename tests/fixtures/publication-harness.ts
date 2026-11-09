@@ -8,22 +8,27 @@ import { expect, vi } from 'vitest'
 import { CoordinatorOwnership, type CoordinatorOwnershipConfig } from '../../src/ownership/lease.ts'
 import { PublicationClient } from '../../src/publication/client.ts'
 import { contentHash } from '../../src/publication/github.ts'
-import type { DestinationView, Publication, PublicationIdentity, PublicationReceipt } from '../../src/publication/protocol.ts'
+import type { DestinationConfig, DestinationView, Publication, PublicationIdentity, PublicationReceipt } from '../../src/publication/protocol.ts'
 import type { publicationFixture } from './publication.ts'
 
 export async function qualifyPublication(input: { cli: string; home: string; profile: string; directory: string; port: number;
   publisher: Awaited<ReturnType<typeof publicationFixture>>; ownership: CoordinatorOwnershipConfig }) {
   const { publisher } = input, patch = join(input.directory, 'publication.json'), shim = join(input.directory, 'publication-provider.mjs')
   await publisher.service.close()
-  // Test-only transport substitution. Production keeps the fixed api.github.com origin and never accepts this setting.
+  // Test-only transport substitution. Production keeps fixed provider origins and never accepts this setting.
   await writeFile(shim, `const original = globalThis.fetch; globalThis.fetch = (input, init) => {
     const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
-    return original(url.origin === 'https://api.github.com' ? ${JSON.stringify(publisher.providerOrigin)} + url.pathname + url.search : input, init);
+    return original(['https://api.github.com', 'https://open.feishu.cn', 'https://open.larksuite.com'].includes(url.origin) ? ${JSON.stringify(publisher.providerOrigin)} + url.pathname + url.search : input, init);
   };\n`, { mode: 0o600 })
+  const common = { maxBytes: 30_000, credentialFile: publisher.destination.credentialFile }
+  const destinations: DestinationConfig[] = [publisher.destination,
+    { ...common, id: 'review-replies', name: 'Review replies', kind: 'github-review', repository: 'acme/project', issue: 7, comment: 11, login: 'agent-bot' },
+    ...(['feishu', 'lark'] as const).map(brand => ({ ...common, id: `${brand}-replies`, name: `${brand} replies`, kind: 'feishu-reply' as const,
+      brand, appId: 'cli_agent', botId: 'ou_bot', chatId: 'oc_chat', messageId: 'om_root' }))]
   await writeFile(patch, JSON.stringify([
     { id: 'webserver', config: { host: '127.0.0.1', port: input.port } },
     { id: 'dsh-superagent', disabled: true }, { id: 'session-title-llm', disabled: true },
-    { insert: [{ id: 'publication-qualification', name: 'dsh-superagent/publication', config: publisher.config }] },
+    { insert: [{ id: 'publication-qualification', name: 'dsh-superagent/publication', config: { ...publisher.config, destinations } }] },
   ]), { mode: 0o600 })
   let child: ChildProcess | undefined, owner: CoordinatorOwnership | undefined
   const stop = async () => {
@@ -46,18 +51,25 @@ export async function qualifyPublication(input: { cli: string; home: string; pro
     return new PublicationClient(client.config, owner)
   }
   try {
-    const client = await start(), destinations = await client.call<DestinationView[]>({ op: 'destinations' })
+    const client = await start(), catalog = await client.call<DestinationView[]>({ op: 'destinations' })
+    expect(catalog).toHaveLength(4)
     const text = 'Installed Harness publication proof', hash = contentHash(text), before = publisher.posts
-    const publication: Publication = { id: randomUUID(), text, hash, destination: destinations[0]!.id, destinationHash: destinations[0]!.hash,
-      artifact: { id: randomUUID(), revision: 1, hash } }
-    publisher.loseProviderReply()
-    expect((await client.call<PublicationReceipt>({ op: 'publish', publication })).phase).toBe('unknown')
-    const receipt = await client.call<PublicationReceipt>({ op: 'receipt.observe', id: publication.id })
-    expect(receipt.phase).toBe('sent'); expect(publisher.posts).toBe(before + 1)
+    const proofs: { publication: Publication; receipt: PublicationReceipt }[] = []
+    for (const destination of catalog) {
+      const publication: Publication = { id: randomUUID(), text, hash, destination: destination.id, destinationHash: destination.hash,
+        message: { id: randomUUID(), ticketId: randomUUID(), missionId: randomUUID(), grantId: randomUUID(), planVersion: 1 } }
+      publisher.loseProviderReply()
+      expect((await client.call<PublicationReceipt>({ op: 'publish', publication })).phase).toBe('unknown')
+      const receipt = await client.call<PublicationReceipt>({ op: 'receipt.observe', id: publication.id })
+      expect(receipt.phase, destination.id).toBe('sent'); proofs.push({ publication, receipt })
+    }
+    expect(publisher.posts).toBe(before + 4)
     await owner!.close(); await stop()
     const restarted = await start()
-    expect(await restarted.call({ op: 'receipt.get', id: publication.id })).toEqual(receipt)
-    expect(await restarted.call({ op: 'publish', publication })).toEqual(receipt)
-    expect(publisher.posts).toBe(before + 1)
+    for (const { publication, receipt } of proofs) {
+      expect(await restarted.call({ op: 'receipt.get', id: publication.id })).toEqual(receipt)
+      expect(await restarted.call({ op: 'publish', publication })).toEqual(receipt)
+    }
+    expect(publisher.posts).toBe(before + 4)
   } finally { try { await owner?.close() } finally { await stop() } }
 }

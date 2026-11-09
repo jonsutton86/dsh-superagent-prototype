@@ -10,11 +10,17 @@ export { PublicationClient } from './client.ts'
 export * from './protocol.ts'
 export const name = 'dsh-superagent-publication'
 export const inject = ['webServer']
+const common = { id: s.string().required(), name: s.string().required(), maxBytes: s.number().default(30_000), credentialFile: s.string().pattern(/^\//).required() }
+const github = { repository: s.string().required(), issue: s.number().required(), login: s.string().required() }
 export const Config: s<Partial<PublicationServiceConfig>, PublicationServiceConfig> = s.object({ stateDir: s.string().pattern(/^\//).required(),
   ownership: s.object({ url: s.string().required(), authorityId: s.string().required(), coordinatorId: s.string().required(), resourceId: s.string().required(),
     credentialFile: s.string().pattern(/^\//).required(), timeoutMs: s.number().min(100).max(60_000).default(5000) }).required(),
-  destinations: s.array(s.object({ id: s.string().required(), name: s.string().required(), kind: s.const('github-comment').required(),
-    repository: s.string().required(), issue: s.number().required(), login: s.string().required(), maxBytes: s.number().default(30_000), credentialFile: s.string().pattern(/^\//).required() })).required(),
+  destinations: s.array(s.union([
+    s.object({ ...common, ...github, kind: s.const('github-comment').required() }),
+    s.object({ ...common, ...github, kind: s.const('github-review').required(), comment: s.number().required() }),
+    s.object({ ...common, kind: s.const('feishu-reply').required(), brand: s.union(['feishu', 'lark']).required(), appId: s.string().required(),
+      botId: s.string().required(), chatId: s.string().required(), messageId: s.string().required() }),
+  ])).required(),
 })
 /** Separate publication host: account credentials and its delivery journal stay off the coordinator and worker hosts. */
 export function apply(ctx: Context, config: PublicationServiceConfig): void {

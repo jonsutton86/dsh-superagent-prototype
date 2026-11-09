@@ -5,6 +5,7 @@ import { usePoll } from './api.ts'
 import { Button } from './controls.tsx'
 import { usePanel } from './provider.tsx'
 import { errorText } from './text.ts'
+import { destinationLabel } from './destinations.ts'
 
 /** Exact artifact/destination review, durable publication receipts and same-intent recovery. */
 export function PublicationCard({ record }: { record: LibraryRead }) {
@@ -49,9 +50,9 @@ export function PublicationCard({ record }: { record: LibraryRead }) {
       <p>{t('publication.intro')}</p>
       <label>{t('publication.destination')}<select value={destinationId} disabled={busy} onChange={event => { setDestination(event.target.value); setApproved(false) }}>
         <option value="">{t('publication.select')}</option>
-        {catalog.data.items.map(item => <option key={item.id} value={item.id}>{item.name} — {item.repository} #{item.issue}</option>)}
+        {catalog.data.items.map(item => <option key={item.id} value={item.id}>{item.name} — {destinationLabel(item)}</option>)}
       </select></label>
-      {destination && <p>{destination.repository} #{destination.issue} · {destination.login}</p>}
+      {destination && <p>{destinationLabel(destination)}</p>}
       {!current && <p>{t('publication.changed')}</p>}
       {duplicate && <p>{t('publication.existing')}</p>}
       {record.bytes > (destination?.maxBytes ?? Infinity) && <p>{t('publication.tooLarge')}</p>}

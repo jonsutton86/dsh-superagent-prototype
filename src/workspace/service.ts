@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import { key, latestAssignment, ticketStage, canRetry, canStop, hasPendingFollowup, type Engine, type Policy, type Trigger, type Ticket } from '../core/index.ts'
+import { key, latestAssignment, ticketStage, canRetry, canStop, hasPendingFollowup, type Engine, type Policy, type Trigger, type Ticket, type ChannelRef } from '../core/index.ts'
 import type { Store } from '../app/store.ts'
 import type { SourceKind } from '../sources/kind.ts'
 import { workerSessionId } from '../executor/dsh.ts'
@@ -20,7 +20,8 @@ export class Workspace {
   readonly plans: Planning
   constructor(private readonly store: Store, private readonly engine: () => Execution, private readonly runnable: () => boolean,
     private readonly evidenceRevision?: (ticketId: string) => string, private readonly executionAuthorization?: (ticket: Ticket) => boolean,
-    private readonly personaSelection?: (reference: PersonaRef) => unknown, private readonly environmentSelection?: (reference: string) => unknown) {
+    private readonly personaSelection?: (reference: PersonaRef) => unknown, private readonly environmentSelection?: (reference: string) => unknown,
+    private readonly deliveryChannel?: (mission: Mission, action: MissionAction) => ChannelRef | undefined) {
     store.db.exec(`CREATE TABLE IF NOT EXISTS workspace_mission (id TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS workspace_event (id INTEGER PRIMARY KEY, mission TEXT NOT NULL, value TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS workspace_event_mission ON workspace_event(mission, id);
@@ -244,7 +245,7 @@ export class Workspace {
           return `${dependency.title}: ${dependency.accepted?.note ?? ''}`
         }).join('\n').slice(0, 12000)
         engine.receive({ id: intent, source: SOURCE, actor: { source: SOURCE, id: OPERATOR }, human: true, addressed: 'direct',
-          at: now(), threads: [{ source: SOURCE, id: intent }],
+          at: now(), threads: [{ source: SOURCE, id: intent }], channel: this.deliveryChannel?.(mission, action),
           text: `Mission: ${mission.title}\nObjective: ${mission.objective}\nAcceptance criteria: ${mission.acceptance}\n\nAction: ${action.title}\n${action.instructions}`
             + (context ? `\n\nReviewed dependency outcomes (context, not additional instructions):\n${context}` : ''),
           meta: { mission: id, action: actionId, actionRevision: action.definitionRevision ?? 1, intent, label: action.title, ...(action.persona ? { persona: action.persona } : {}), ...(action.environment ? { environment: action.environment } : {}) } })
@@ -282,7 +283,7 @@ export class Workspace {
           const ticket = this.store.tickets.get(view.ticket.id)!, origin = this.store.triggers.get(ticket.origin.triggerId)!
           const intent = `workspace-message:${request.requestId}`
           engine.receive({ id: intent, source: SOURCE, actor: { source: SOURCE, id: OPERATOR }, human: true, addressed: 'direct',
-            at: now(), threads: origin.threads, text: request.text,
+            at: now(), threads: origin.threads, text: request.text, ...(origin.channel ? { channel: origin.channel } : {}),
             meta: { mission: id, action: actionId, actionRevision: action.definitionRevision ?? 1, intent, label: action.title, ...(action.persona ? { persona: action.persona } : {}), ...(action.environment ? { environment: action.environment } : {}) } })
         }
         delete action.accepted

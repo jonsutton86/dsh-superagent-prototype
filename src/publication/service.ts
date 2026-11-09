@@ -2,7 +2,8 @@ import { fingerprint, timestamp } from '../remote/journal.ts'
 import { OwnershipGate, sameOwner, type OwnershipFloor, type ResourceOwnershipConfig } from '../ownership/gate.ts'
 import { PublicationJournal } from './journal.ts'
 import { Destination, DestinationConfig, PublicationError, PublicationRpc, type PublicationIdentity, type PublicationReceipt } from './protocol.ts'
-import { contentHash, DeliveryRefused, GithubPublication, type PublicationAdapter } from './github.ts'
+import { contentHash, DeliveryRefused, type PublicationAdapter } from './github.ts'
+import { PublicationProviders } from './providers.ts'
 
 export interface PublicationServiceConfig { stateDir: string; ownership: ResourceOwnershipConfig; destinations: DestinationConfig[] }
 /** Independently fenced publication host. Unknown outcomes block ownership handoff until actual observation or administrator reconciliation. */
@@ -15,7 +16,7 @@ export class PublicationService {
   private readonly working = new Set<string>()
   private readonly pending = new Set<Promise<unknown>>()
   private stopping?: Promise<void>
-  constructor(readonly config: PublicationServiceConfig, private readonly adapter: PublicationAdapter = new GithubPublication()) {
+  constructor(readonly config: PublicationServiceConfig, private readonly adapter: PublicationAdapter = new PublicationProviders()) {
     this.journal = new PublicationJournal(config.stateDir, error => this.lifetime.abort(error))
     try {
       for (const input of config.destinations) {
@@ -84,7 +85,7 @@ export class PublicationService {
         this.calls++
         try {
           const publication = request.publication, destination = this.destination(publication.destination), { credentialFile: _, ...publicDestination } = destination
-          if (fingerprint(publicDestination) !== publication.destinationHash || contentHash(publication.text) !== publication.hash || publication.artifact.hash !== publication.hash)
+          if (fingerprint(publicDestination) !== publication.destinationHash || contentHash(publication.text) !== publication.hash || publication.artifact && publication.artifact.hash !== publication.hash)
             throw new PublicationError(409, 'content_changed', 'Publication content or destination differs from its approved digest')
           if (Buffer.byteLength(publication.text) > destination.maxBytes) throw new PublicationError(413, 'content_too_large', 'Artifact exceeds this destination content limit')
           const exists = this.journal.get(publication.id), item = this.journal.accept(publication, guard.stamp)

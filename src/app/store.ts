@@ -250,7 +250,7 @@ export class Store implements Repositories {
 
   /** Delivery status of a queued message; receipts are retained permanently so message IDs are idempotent. */
   replyStatus(id: string): ReplyStatus | undefined { return this.receipts.get(id)?.status }
-  /** Outbox message receipts for channel delivery; only `Outbox` writes to `receipts`. */
+  /** Outbox message receipts; independent channel publication observation can also settle the original intent. */
   readonly receipts = {
     get: (id: string): Receipt | undefined => this.values<Receipt>('SELECT value FROM outbox WHERE id = ?', id)[0],
     /** Pending message receipts, oldest first. */
