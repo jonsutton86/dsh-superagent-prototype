@@ -259,7 +259,7 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     }
     if (publisher) {
       const git = (...args: string[]) => execFileSync('git', args, { cwd: ticket.directory, encoding: 'utf8' }).trim()
-      git('init', '-q'); git('add', '--', 'result.txt')
+      git('init', '-q'); git('add', '--', attachmentQualification ? '.' : 'result.txt')
       git('-c', 'user.name=Qualification', '-c', 'user.email=qualification@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Live verified artifact')
       publisher.pull.head.sha = git('rev-parse', 'HEAD'); publisher.tree(git('rev-parse', 'HEAD^{tree}'))
     }
