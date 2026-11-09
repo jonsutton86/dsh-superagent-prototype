@@ -75,6 +75,8 @@ export abstract class EnginePart {
   }
   protected source(ticket: Ticket): Trigger | undefined { return this.repo.triggers.get(ticket.origin.triggerId) }
   protected reaches(ticket: Ticket, trigger: Trigger, context = true): boolean {
+    const recipient = this.repo.triggers.disposition(trigger.id)?.recipient
+    if (recipient && recipient !== ticket.id) return false
     return reached(ticket, trigger, k => this.repo.threads.get(k), context)
   }
 }

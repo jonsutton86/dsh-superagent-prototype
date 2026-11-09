@@ -16,15 +16,22 @@ export type ReceiveResult = 'stored' | 'duplicate' | 'filtered'
 export class Intake extends EnginePart {
   constructor(options: EngineOptions, private readonly tickets: Tickets) { super(options) }
 
-  receive(received: Trigger): ReceiveResult {
+  receive(received: Trigger, recipient?: string): ReceiveResult {
     // Normalize source timestamps (such as GitHub whole seconds) to canonical ISO form.
     const trigger = { ...received, at: isoTime(received.at) }
     if (!trigger.threads.length) throw new Error('A trigger must belong to at least one thread')
     if (this.repo.triggers.get(trigger.id)) return 'duplicate'
+    if (recipient) {
+      const ticket = this.repo.tickets.get(recipient)
+      if (!trigger.human || !ticket || ticket.ended?.by === 'human' || !trigger.threads.some(ref => {
+        const thread = this.repo.threads.get(threadKey(ref))
+        return thread?.subscriptions.includes(recipient) && !thread.context?.includes(recipient)
+      })) throw new Error('Directed input requires an existing, subscribed ticket that was not stopped by a person')
+    }
     const at = this.now()
     const filter = this.options.scope.scope(trigger)
     if (!filter.listened) {
-      this.repo.triggers.save(trigger); this.repo.triggers.saveDisposition(trigger.id, { filtered: { code: filter.reason }, fanout: [], at })
+      this.repo.triggers.save(trigger); this.repo.triggers.saveDisposition(trigger.id, { filtered: { code: filter.reason }, fanout: [], at, ...(recipient ? { recipient } : {}) })
       return 'filtered'
     }
     this.repo.triggers.save(trigger)
@@ -36,6 +43,7 @@ export class Intake extends EnginePart {
       if (!thread.lastAt || trigger.at > thread.lastAt) thread.lastAt = trigger.at
       thread.correlated = [...new Set([...thread.correlated, ...keys.filter(other => other !== thread.key)])]
       for (const ticketId of thread.subscriptions) {
+        if (recipient && ticketId !== recipient) continue
         const ticket = this.repo.tickets.get(ticketId)
         // Only a person's message on a non-context thread resumes an ended ticket; bots and CI do not (the Executor re-reads
         // threads when it resumes), and a human-stopped ticket receives nothing because its Mandate was withdrawn.
@@ -51,7 +59,7 @@ export class Intake extends EnginePart {
         ...trigger.human ? { human: true } : {}, ...followed ? { context: true } : {} })
     }
     const fanout = [...reached.keys()], context = fanout.filter(id => reached.get(id)!.context)
-    const disposition = { fanout, ...context.length ? { context } : {}, at }
+    const disposition = { fanout, ...context.length ? { context } : {}, at, ...(recipient ? { recipient } : {}) }
     this.repo.triggers.saveDisposition(trigger.id, disposition)
     // A person's message that no ticket decides, such as one that reached only tickets a person stopped or that follow the
     // Thread for context, and every bot's, goes to Eval.

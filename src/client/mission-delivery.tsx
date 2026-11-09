@@ -6,6 +6,7 @@ import { Button } from './controls.tsx'
 import { usePanel } from './provider.tsx'
 import { destinationLabel } from './destinations.ts'
 import { errorText } from './text.ts'
+import { MissionInboundCard } from './mission-inbound.tsx'
 
 /** Operator consent for future task replies under the current mission plan, with original-intent recovery after ambiguity. */
 export function MissionDeliveryCard({ mission }: { mission: MissionView }) {
@@ -64,5 +65,6 @@ export function MissionDeliveryCard({ mission }: { mission: MissionView }) {
           onClick={() => { void run(async () => { await call('POST deliveries/:id/retry', { id: item.id }); await delivery.reload() }) }}>{t('publication.retry')}</Button>
       </div>}
     </article>)}
+    <MissionInboundCard key={`${mission.id}:${grant?.id ?? ''}`} mission={mission} delivery={delivery.data} />
   </section>
 }

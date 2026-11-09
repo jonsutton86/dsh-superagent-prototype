@@ -40,6 +40,8 @@ export interface Trigger {
 
 /** Where a trigger went after intake; it grants nothing, but decides who decides a person's follow-up (see `followupOwners`). */
 export interface TriggerDisposition {
+  /** Host-directed input can steer only this existing ticket; it cannot originate or move to other work. */
+  recipient?: string
   /** Rejected by the source scope filter before entering the domain, for the Source's reason. */
   filtered?: Reason
   evalId?: string

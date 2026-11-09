@@ -46,6 +46,8 @@ export class Engine {
    * Triggers that arrive while an Eval of that Thread runs wait together for the next one.
    */
   receive(trigger: Trigger): ReceiveResult { return this.repo.atomic(() => this.intake.receive(trigger)) }
+  /** Host-only directed input: preserve normal delivery/restart behavior while restricting authority and fanout to one existing ticket. */
+  receiveForTicket(trigger: Trigger, ticketId: string): ReceiveResult { return this.repo.atomic(() => this.intake.receive(trigger, ticketId)) }
   /**
    * A Source's request to make an open ticket follow one of its Threads, such as a pull request's, `own` when the ticket
    * opened it: the ticket subscribes to it, and a ready report ends it only once `followsDone` holds (see `Tickets.followsDone`).
@@ -108,6 +110,8 @@ export class Engine {
    */
   attach(ticketId: string, triggerId: string, note?: string): Ticket {
     return this.repo.atomic(() => {
+      const recipient = this.repo.triggers.disposition(triggerId)?.recipient
+      if (recipient && recipient !== ticketId) throw new UserError('notReached')
       // A message this ticket's worker handed back is not its work: attached here, no worker would decide it, and it could not be handed back again.
       const handedBack = this.repo.triggers.disposition(triggerId)?.handbacks?.some(item => item.ticketId === ticketId)
       if (handedBack) throw new UserError('handedBackHere')

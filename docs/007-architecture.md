@@ -66,6 +66,7 @@ Callers receive only their role's `Pick` of the Engine: `EngineForSources`, `Eng
 | Role | Method | Effect |
 | --- | --- | --- |
 | Sources | `receive(trigger)` | Stores a Trigger once and answers `stored`, `duplicate`, or `filtered` when no Source receives it; fans it out to the Tickets subscribed to its Threads, where a person's message resumes an ended Ticket at once unless processing is paused, and queues it for Eval on its primary Thread, unless it is a person's message that reached a Ticket, which stays that Ticket's |
+| Host adapters | `receiveForTicket(trigger, ticketId)` | Receives an authorized human reply only for an existing subscribed ticket; persists its recipient restriction through routing, evaluation, worker reads and acknowledgements |
 | Sources | `bindThread(ticketId, thread, own)` | Makes an open Ticket follow one of the Source's Threads, such as a pull request's, `own` when the Ticket opened it; a closed Thread bound again is open again. The Threads' closes, not a `ready` Report, end the Ticket |
 | Sources | `threadClosed(thread, outcome, at)` | A Thread closed: each open Ticket that follows it records the close, and ends once it is done with the Threads it follows (`followsDone`): no Thread it opened is open, or, when it opened none, every Thread it follows closed. It ends `merged` or `closed` as the latest of those closes did, unless work resumed after the close has not reported `ready`, or its Executor took up, by acknowledging or answering it, a person's follow-up it decides after its latest Report other than `progress`, or the end of its last turn; a `dropped` Report then ends it as the close did |
 | Main Session | `candidate(triggerId)` | The Eval that holds a Trigger, as its assessor sees it |
@@ -374,11 +375,13 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/publication/github.ts` | Fixed-origin account/target checks, single-attempt issue comments and exact provider receipt observation |
 | `src/publication/feishu.ts`, `providers.ts` | Fixed-origin Feishu/Lark bot authentication, pinned root replies, exact receipt recovery and provider routing |
 | `src/publication/channels.ts` | Plan-bound mission delivery grants, Outbox intent persistence, revocation and receipt recovery |
+| `src/publication/inbound.ts` | Exact participant/task listeners, independently fenced provider reads, durable cursors and atomic directed admission with native-message deduplication |
 | `src/publication/http.ts`, `client.ts` | Private pinned HTTP transport, bounded payloads and original-ID dispatch without automatic retries |
 | `src/publication/runtime.ts` | Operator artifact approval, persistent intents, duplicate guard and receipt recovery after ownership loss |
 | `src/publication/plugin.ts` | Dedicated loopback Harness publication service with independent account credentials |
 | `src/client/publications.tsx` | Complete artifact and destination review, delivery status and original-intent recovery controls |
 | `src/client/mission-delivery.tsx`, `destinations.ts` | Mission reply consent, immutable destination display and original delivery recovery controls |
+| `src/client/mission-inbound.tsx` | Participant/task authorization, original-intent retry, incoming receipt display, polling/rescan and listener pause |
 | `src/app/setup.ts` | Setup, and `setupChanged`, whether a save changes a field setup reads |
 | `src/app/passes.ts` | Passes, the pass scheduler |
 | `src/app/outbox.ts` | The Outbox: the Engine's `Outbox` port, the receipts and the `reply` effects that send them |
@@ -502,6 +505,8 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/publication-ui.spec.tsx` | Rendered content/destination review, unchanged approval IDs after lost responses and unknown receipt recovery |
 | `tests/channel-publication.spec.ts` | Owned managed execution through acknowledgements/results, exact grants, revoked/withdrawn unknown sends and ordered Outbox recovery |
 | `tests/mission-delivery-ui.spec.tsx` | Rendered standing consent, lost configuration acknowledgement, active-work restrictions and observation after revocation |
+| `tests/inbound.spec.ts` | Directed provider replies, sender/root checks, duplicate and cursor recovery, shared-thread isolation and revocation during reads |
+| `tests/mission-inbound-ui.spec.tsx` | Rendered participant consent, ambiguous saves, inbound and unsupported receipts, rescan and pause against the Runtime |
 | `tests/remote-credentials.spec.ts` | Private import validation, environment/file bindings, secret-free provider argv and receipts, rotation/rebind, restart, tamper refusal and native Linux mounts/cancellation |
 | `tests/execution-receipts-ui.spec.tsx` | Rendered receipt pagination, separate outcome/quiescence and same-ID cancellation retry after an ambiguous response |
 | `tests/watchdog.spec.ts` | Independent journal recovery, assessment budgets, service outages, bounded interventions and concurrent polling |
@@ -571,6 +576,7 @@ One SQLite file, `<stateDir>/orchestrator.sqlite`, which only the Store opens.
 | `effect` | The effect queue: per kind and key, the payload, its order, failed attempts with the last error, and when it is due | Effects; the schema 11 migration queues what earlier versions kept for the main Session |
 | `outbox` | The receipt of each message for a Channel, by id, with the Ticket it is for and its `status`, `pending`, `sent` or `dropped`, kept so an id is never queued twice; for a dropped message, when and why, as the generated column `dropped`, its time, and a reason code. A message that waits has a `reply` effect, which holds its attempts | The Outbox |
 | `delivery_grant`, `channel_publication` | Historical exact-plan destination consent and original mission message intents/receipts; attempted withdrawals retain unresolved delivery evidence | ChannelPublications |
+| `conversation_binding`, `conversation_message` | Historical participant/task authority, durable provider cursors, native deduplication and received/unsupported message receipts | ConversationInbox |
 | `kv` | Every other record, by key | The part that names it |
 
 A generated column is computed from its row's JSON and is empty outside its set, and each has an index over its set, so a pass reads only active work. A database that predates a column gets it when the Store opens it.

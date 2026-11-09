@@ -20,6 +20,7 @@ import type { EndpointCatalog, EndpointCommandInput, EndpointList, EndpointRegis
 import type { ApprovePublication, PublicationRecord } from '../publication/runtime.ts'
 import type { DestinationView } from '../publication/protocol.ts'
 import type { ChannelDelivery, ConfigureDelivery, MissionDelivery } from '../publication/channels.ts'
+import type { ConfigureInbound, InboundState } from '../publication/inbound.ts'
 
 export const TICKET_FILTERS = ['open', 'person', 'working', 'idle', 'ended'] as const
 export const THREAD_FILTERS = ['subscribed', 'evaluating', 'recent', 'all'] as const
@@ -31,6 +32,9 @@ interface Paged { offset?: number; limit?: number }
 type Delivery = 'injected' | 'pending'
 
 export interface Api {
+  'GET missions/:id/inbound': { response: InboundState }
+  'PUT missions/:id/inbound': { body: ConfigureInbound; response: InboundState }
+  'POST missions/:id/inbound/poll': { body: { rescan?: boolean }; response: InboundState }
   'GET missions/:id/delivery': { response: MissionDelivery }
   'PUT missions/:id/delivery': { body: ConfigureDelivery; response: MissionDelivery }
   'POST deliveries/:id/refresh': { response: ChannelDelivery }

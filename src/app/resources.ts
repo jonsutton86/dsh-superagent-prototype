@@ -91,8 +91,11 @@ function list<T>({ offset, limit }: Read, fetch: (offset: number, count: number)
   return { items: items.slice(0, size), next_offset: items.length > size ? offset + size : null }
 }
 /** Check whether a worker session's ticket is authorized to read a trigger (via delivery, ticket origin, or followed thread). */
-const readable = (host: ResourceHost, ticket: Ticket, trigger: Trigger): boolean => reached(ticket, trigger, key => host.store.threads.get(key))
-  || ticket.origin.triggerIds.includes(trigger.id) || trigger.threads.some(ref => ticket.follows?.some(follow => follow.thread === threadKey(ref)))
+const readable = (host: ResourceHost, ticket: Ticket, trigger: Trigger): boolean => {
+  const recipient = host.store.triggers.disposition(trigger.id)?.recipient
+  return (!recipient || recipient === ticket.id) && (reached(ticket, trigger, key => host.store.threads.get(key))
+    || ticket.origin.triggerIds.includes(trigger.id) || trigger.threads.some(ref => ticket.follows?.some(follow => follow.thread === threadKey(ref))))
+}
 const trigger = (host: ResourceHost, id: string, ticketId?: string): Trigger => {
   const found = host.store.triggers.get(id)
   if (!found) throw new UserError('unknownTrigger')
@@ -140,7 +143,7 @@ const ROUTES: readonly Route[] = [
     }
     const { store } = host
     const { read: _read, tickets: ids, ...card } = threadCard(thread, threadTitle(store, thread))
-    const page = list(read, (offset, count) => store.read.threadPage(thread.key, offset, count).map(triggerLine))
+    const page = list(read, (offset, count) => store.read.threadPage(thread.key, offset, count, ticketId).map(triggerLine))
     // Worker sessions cannot inspect other tickets or decisions on a shared thread.
     if (ticketId) return { ...card, ...page }
     const tickets = ids.flatMap(id => { const found = store.tickets.get(id); return found ? [ticketCard(found)] : [] })

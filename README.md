@@ -58,7 +58,9 @@ loss. The [publication service](docs/026-artifact-publication.md) sends operator
 issue or PR comment destinations, with independent credentials, ownership fencing and persistent delivery receipts.
 [Mission reply delivery](docs/027-mission-delivery.md) connects worker acknowledgements and router replies to that service
 under exact plan/destination grants, including pinned GitHub review threads and Feishu/Lark root-message replies.
-Inbound connector/repository integration and restored-state reconciliation remain required before staged restore activation.
+[Inbound task conversations](docs/028-inbound-conversations.md) let explicitly allowed participants steer one selected task
+through those destinations, with durable deduplication, revocation and visible unsupported-message records.
+Broader inbound discovery/task admission, repository integration and restored-state reconciliation remain required before staged restore activation.
 Approved plans preserve execution history and invalidate affected results before they can be accepted again.
 
 The [Inbox](docs/013-inbox.md) brings conversations, unread updates, questions and review into one view. Start a task,

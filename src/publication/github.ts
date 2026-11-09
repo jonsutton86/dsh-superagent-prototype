@@ -1,13 +1,14 @@
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { credentialDigest, privateCredential } from '../environments/endpoint-files.ts'
-import { PublicationError, type DestinationConfig, type ExternalReceipt, type Publication } from './protocol.ts'
+import { PublicationError, type ConversationRead, type ConversationPage, type DestinationConfig, type ExternalReceipt, type Publication } from './protocol.ts'
 
 export const contentHash = (text: string) => createHash('sha256').update(text).digest('hex')
 export interface PreparedPublication { send(signal: AbortSignal): Promise<ExternalReceipt> }
 export interface PublicationAdapter {
   prepare(destination: DestinationConfig, publication: Publication, signal: AbortSignal): Promise<PreparedPublication>
   observe(destination: DestinationConfig, publication: Publication, signal: AbortSignal, externalId?: string): Promise<ExternalReceipt | undefined>
+  read?(destination: DestinationConfig, request: ConversationRead, signal: AbortSignal): Promise<ConversationPage>
 }
 /** A complete provider rejection whose documented status establishes that no comment was created. */
 export class DeliveryRefused extends Error {}
@@ -91,5 +92,27 @@ export class GithubPublication implements PublicationAdapter {
       if (comments.length < 100) return
     }
     throw new Error('Publication observation reached its page limit; supply the external comment ID')
+  }
+
+  /** Read a bounded page; provider metadata, never message text, determines sender and thread identity. */
+  async read(destination: DestinationConfig, request: ConversationRead, signal: AbortSignal): Promise<ConversationPage> {
+    if (destination.kind === 'feishu-reply') throw new Error('GitHub destination required')
+    const page = request.cursor ? z.coerce.number().int().min(1).max(100_000).parse(request.cursor) : 1
+    const resource = destination.kind === 'github-review' ? 'pulls' : 'issues'
+    const query = new URLSearchParams({ per_page: '10', page: String(page), since: request.since, sort: 'created', direction: 'asc' })
+    const rows = z.array(z.looseObject({ id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), body: z.string().nullable(), created_at: z.string().datetime(),
+      issue_url: z.string().optional(), pull_request_url: z.string().optional(), in_reply_to_id: z.number().optional(),
+      performed_via_github_app: z.unknown().optional(), user: z.looseObject({ login: z.string().min(1).max(200), type: z.string().optional() }) })).max(10)
+      .parse(await this.request(`repos/${destination.repository}/${resource}/${destination.issue}/comments?${query}`, this.credential(destination), signal))
+    const target = `https://api.github.com/repos/${destination.repository}/${resource}/${destination.issue}`.toLowerCase()
+    const items = rows.filter(row => (destination.kind === 'github-review' ? row.pull_request_url?.toLowerCase() === target && row.in_reply_to_id === destination.comment
+      : row.issue_url?.toLowerCase() === target) && Date.parse(row.created_at) >= Date.parse(request.since)).map(row => {
+      const text = row.body ?? '', large = text.length > 16_000
+      return { id: String(row.id), sender: row.user.login.toLowerCase(), human: row.user.type === 'User' && !row.performed_via_github_app
+        && row.user.login.toLowerCase() !== destination.login.toLowerCase(), at: new Date(row.created_at).toISOString(), text: large ? '' : text,
+        url: `https://github.com/${destination.repository}/${destination.kind === 'github-review' ? 'pull' : 'issues'}/${destination.issue}#${destination.kind === 'github-review' ? 'discussion_r' : 'issuecomment-'}${row.id}`,
+        ...(large ? { problem: 'content_too_large' as const } : {}) }
+    })
+    return { destination: request.destination, destinationHash: request.destinationHash, items, ...(rows.length === 10 ? { next: String(page + 1) } : {}) }
   }
 }

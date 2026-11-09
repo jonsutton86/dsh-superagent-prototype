@@ -218,3 +218,9 @@ Mission delivery qualification: code `3bf6a280f992c2e8621f6ec388879785f7827598` 
 installed-Harness/DeepSeek Flash scenarios. It also passed 1,439 native Linux tests, typechecking and all four builds in
 [run 42543761724](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42543761724).
 Provider traffic stayed on synthetic local servers; this is implementation evidence, not a live-account deployment claim.
+
+Inbound conversation increment: `028-inbound-conversations.md` adds explicit participant/task bindings, independently fenced
+provider reads, atomic Engine admission, durable cursors and native deduplication. The mission panel controls consent,
+rescan and pause, and shows unsupported messages. Replies remain restricted to the original task through routing and worker
+context access. Repository-wide discovery and admission, rich content, Git/PR mutations, retention, live-account acceptance
+and restored-state activation remain required; this increment does not complete the full architecture.

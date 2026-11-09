@@ -72,6 +72,28 @@ function accepted(h: ReturnType<typeof harness>, id = '1', thread = 't1') {
 }
 
 describe('intake', () => {
+  it('restricts directed fanout and mixed evaluation authority even under an otherwise permissive policy', () => {
+    const h = harness(), first = accepted(h).ticketId!, other = accepted(h, '2', 't2').ticketId!
+    const thread = h.repo.threads.get('chat:t1')!; thread.subscriptions.push(other); h.repo.threads.save(thread)
+    h.engine.receiveForTicket(trigger('3'), first); h.settle()
+    expect(h.repo.triggers.disposition('3')).toMatchObject({ recipient: first, fanout: [first] })
+    expect(h.repo.tickets.get(other)?.inputs.some(input => input.kind === 'trigger' && input.triggerId === '3')).toBe(false)
+    expect(() => h.engine.attach(other, '3')).toThrow(UserError)
+    expect(() => h.engine.decide('3', { kind: 'stop', ticketId: other, reason: 'Wrong recipient' })).toThrow(UserError)
+    h.engine.handback(first, '3', 'Outside this task'); h.engine.unsubscribe('chat:t1')
+    h.engine.receive(trigger('4')); h.pump()
+    expect(h.requests.at(-1)?.triggers.map(item => item.id)).toEqual(['3', '4'])
+    expect(() => h.decide(h.requests.at(-1)!, { kind: 'accept', title: 'New task', scope: 'Other work', reason: 'Mixed batch' })).toThrow(UserError)
+    expect(h.repo.tickets.list()).toHaveLength(2)
+    expect(h.repo.triggers.disposition('3')?.recipient).toBe(first)
+  })
+  it('lets directed participants stop their own task but cannot resume a human stop', () => {
+    const h = harness(), id = accepted(h).ticketId!
+    h.engine.receiveForTicket(trigger('2'), id)
+    expect(h.engine.decide('2', { kind: 'stop', ticketId: id, reason: 'Please stop' }).kind).toBe('stop')
+    expect(() => h.engine.receiveForTicket(trigger('3'), id)).toThrow('stopped by a person')
+    expect(h.repo.triggers.get('3')).toBeUndefined()
+  })
   it('stores a trigger once and records source filtering', () => {
     const h = harness()
     expect(h.engine.receive(trigger('1'))).toBe('stored')

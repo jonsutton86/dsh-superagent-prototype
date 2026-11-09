@@ -1,7 +1,7 @@
 import { fingerprint, timestamp } from '../remote/journal.ts'
 import { OwnershipGate, sameOwner, type OwnershipFloor, type ResourceOwnershipConfig } from '../ownership/gate.ts'
 import { PublicationJournal } from './journal.ts'
-import { Destination, DestinationConfig, PublicationError, PublicationRpc, type PublicationIdentity, type PublicationReceipt } from './protocol.ts'
+import { ConversationPage, Destination, DestinationConfig, PublicationError, PublicationRpc, type PublicationIdentity, type PublicationReceipt } from './protocol.ts'
 import { contentHash, DeliveryRefused, type PublicationAdapter } from './github.ts'
 import { PublicationProviders } from './providers.ts'
 
@@ -60,6 +60,17 @@ export class PublicationService {
     switch (request.op) {
       case 'identity': return this.identity()
       case 'destinations': return [...this.destinations.values()].map(({ credentialFile: _, ...value }) => ({ ...value, hash: fingerprint(value) }))
+      case 'conversation.read': {
+        const guard = await this.gate.authorize(proof), destination = this.destination(request.destination), { credentialFile: _, ...metadata } = destination
+        if (fingerprint(metadata) !== request.destinationHash) throw new PublicationError(409, 'destination_changed', 'Conversation destination changed')
+        if (!this.adapter.read) throw new PublicationError(409, 'reader_unavailable', 'This provider cannot read conversations')
+        this.calls++
+        try {
+          const page = ConversationPage.parse(await this.adapter.read(destination, request, AbortSignal.any([guard.signal, this.lifetime.signal])))
+          await this.gate.verify(guard)
+          return page
+        } finally { this.calls-- }
+      }
       case 'receipt.get': return this.item(request.id).receipt
       case 'receipt.list': return this.journal.list(request.offset)
       case 'receipt.resolve': {

@@ -36,9 +36,20 @@ export const PublicationReceipt = z.object({ id: PublicationId, destination: Bas
   reconciliation: z.object({ at: z.string().datetime(), note: z.string().min(1).max(1000), evidence: z.string().min(1).max(2000) }).strict().optional(),
 }).strict().refine(oneSubject, 'Exactly one publication subject is required')
 export type PublicationReceipt = z.infer<typeof PublicationReceipt>
+export const ConversationRead = z.object({ destination: BaseDestination.shape.id, destinationHash: Digest,
+  since: z.string().datetime(), cursor: z.string().min(1).max(4096).optional() }).strict()
+export type ConversationRead = z.infer<typeof ConversationRead>
+export const ConversationMessage = z.object({ id: ExternalReceipt.shape.id, sender: z.string().min(1).max(200), human: z.boolean(),
+  at: z.string().datetime(), text: z.string().max(16_000), url: ExternalReceipt.shape.url,
+  problem: z.enum(['unsupported_content', 'content_too_large']).optional() }).strict()
+export type ConversationMessage = z.infer<typeof ConversationMessage>
+export const ConversationPage = z.object({ destination: BaseDestination.shape.id, destinationHash: Digest,
+  items: z.array(ConversationMessage).max(10), next: z.string().min(1).max(4096).optional() }).strict()
+export type ConversationPage = z.infer<typeof ConversationPage>
 export const PublicationRpc = z.discriminatedUnion('op', [
   z.object({ op: z.literal('identity') }).strict(), z.object({ op: z.literal('destinations') }).strict(),
   z.object({ op: z.literal('publish'), publication: Publication }).strict(),
+  ConversationRead.extend({ op: z.literal('conversation.read') }),
   z.object({ op: z.literal('receipt.get'), id: PublicationId }).strict(),
   z.object({ op: z.literal('receipt.list'), offset: z.number().int().min(0).max(1_000_000).default(0) }).strict(),
   z.object({ op: z.literal('receipt.observe'), id: PublicationId, externalId: ExternalReceipt.shape.id.optional() }).strict(),

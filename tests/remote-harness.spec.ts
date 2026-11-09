@@ -166,7 +166,7 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     expect(ticket.executionPersona).toMatchObject({ id: persona.id, version: 1, digest: persona.digest, definition })
     expect(await readFile(join(ticket.directory, 'result.txt'), 'utf8')).toBe(proof)
     expect(artifact?.content).toBe(proof)
-    let publicationId: string | undefined, channelDelivery: any
+    let publicationId: string | undefined, channelDelivery: any, inboundRecord: any, inboundDelivery: any
     if (publisher) {
       const deliveries = await api(`missions/${mission.id}/delivery`)
       channelDelivery = deliveries.items.find((item: any) => item.ticketId === task.id && publisher.comments.some(comment =>
@@ -192,6 +192,24 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     expect(JSON.stringify(h.endpoint.journal.jobs())).not.toContain(secret)
     const receipts = await api(`tickets/${task.id}/execution`)
     expect(receipts.items.find((item: { id: string }) => item.id === command!.id)).toMatchObject({ owner: command!.request.owner, quiescent: true })
+    if (publisher) {
+      const delivery = await api(`missions/${mission.id}/delivery`)
+      const listener = await api(`missions/${mission.id}/inbound`, { requestId: randomUUID(), revision: 0, enabled: true,
+        grantId: delivery.grant.id, ticketId: task.id, senders: ['alice'] }, 'PUT')
+      await vi.waitFor(() => expect(Date.now()).toBeGreaterThanOrEqual(Date.parse(listener.binding.startsAt)), { timeout: 1500, interval: 25 })
+      publisher.receive('alice', 'First acknowledge this incoming conversation trigger with orchestrator_ack and exactly "Inbound reply qualification received." Then use bash to read result.txt and confirm it still matches the original artifact. Leave the file unchanged and report ready. Do not create other work or call external services.')
+      const incoming = await api(`missions/${mission.id}/inbound/poll`, {})
+      expect(incoming.binding.problem).toBeUndefined(); expect(incoming.items).toHaveLength(1); inboundRecord = incoming.items[0]
+      await vi.waitFor(async () => {
+        expect((await api(`tickets/${task.id}`)).assignments).toHaveLength(2)
+        expect((await api(`inbox/${task.id}`)).item.status).toBe('review')
+        inboundDelivery = (await api(`missions/${mission.id}/delivery`)).items.find((item: any) => publisher.comments.some(comment =>
+          comment.body.startsWith('Inbound reply qualification received.\n') && comment.body.includes(`dsh-publication:${item.id}:`)))
+        expect(inboundDelivery?.receipt.phase).toBe('sent')
+      }, { timeout: 120_000, interval: 1000 })
+      expect(await readFile(join(ticket.directory, 'result.txt'), 'utf8')).toBe(proof)
+      expect((await api(`missions/${mission.id}/inbound/poll`, { rescan: true })).items).toEqual([inboundRecord])
+    }
     if (otherTask) {
       await vi.waitFor(async () => expect((await api(`inbox/${otherTask}`)).item.status).toBe('review'), { timeout: 120_000, interval: 1000 })
       const other = await api(`tickets/${otherTask}`)
@@ -225,11 +243,14 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
       expect((await api(`missions/${mission.id}/delivery`)).items.find((item: any) => item.id === channelDelivery.id).receipt).toEqual(channelDelivery.receipt)
       expect((await api(`deliveries/${channelDelivery.id}/refresh`, {})).receipt).toEqual(channelDelivery.receipt)
       expect(publisher.comments.filter(comment => comment.body.includes(`dsh-publication:${channelDelivery.id}:`))).toHaveLength(1)
+      expect((await api(`missions/${mission.id}/inbound`)).items).toEqual([inboundRecord])
+      expect((await api(`missions/${mission.id}/inbound/poll`, { rescan: true })).items).toEqual([inboundRecord])
+      expect((await api(`deliveries/${inboundDelivery.id}/refresh`, {})).receipt).toEqual(inboundDelivery.receipt)
     }
     expect((await api(`tickets/${task.id}`)).executionEnvironment).toEqual(ticket.executionEnvironment)
     expect((await api(`tickets/${task.id}`)).executionPersona).toEqual(ticket.executionPersona)
     expect((await api(runPath, request)).actions[0].runs).toEqual([task.id])
-    expect((await api(`tickets/${task.id}`)).assignments).toHaveLength(1)
+    expect((await api(`tickets/${task.id}`)).assignments).toHaveLength(publisher ? 2 : 1)
     expect((await api(`tickets/${task.id}/execution`)).items.find((item: { id: string }) => item.id === command!.id)).toMatchObject({
       owner: command!.request.owner, quiescent: true, ...(owned ? { ownership: command!.ownership } : {}) })
     if (otherTask) {

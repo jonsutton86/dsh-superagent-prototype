@@ -45,11 +45,13 @@ import { OwnershipError } from '../ownership/protocol.ts'
 import type { Publications } from '../publication/runtime.ts'
 import { PublicationError } from '../publication/protocol.ts'
 import type { ChannelPublications } from '../publication/channels.ts'
+import type { ConversationInbox } from '../publication/inbound.ts'
 
 export interface HttpHost {
   readonly ownership?: Pick<CoordinatorOwnership, 'status'>
   readonly publications?: Publications
   readonly channelPublications?: ChannelPublications
+  readonly conversations?: ConversationInbox
   authorizeMutation?(): void
   readonly remoteRoot?: string
   readonly remoteEffects?: Pick<RemoteWorld, 'effects' | 'refreshEffects' | 'cancelEffect' | 'status'>
@@ -214,7 +216,14 @@ function routes(runtime: HttpHost): Routes {
     if (!runtime.channelPublications) throw new PublicationError(409, 'not_configured', 'Channel publication is unavailable')
     return runtime.channelPublications
   }
+  const conversations = () => {
+    if (!runtime.conversations) throw new PublicationError(409, 'not_configured', 'Conversation listeners are unavailable')
+    return runtime.conversations
+  }
   return {
+    'GET missions/:id/inbound': ({ params }) => conversations().state(params.id),
+    'PUT missions/:id/inbound': async ({ params, body }) => conversations().configure(params.id, await body()),
+    'POST missions/:id/inbound/poll': async ({ params, body }) => conversations().poll(params.id, z.object({ rescan: z.boolean().default(false) }).strict().parse(await body()).rescan),
     'GET missions/:id/delivery': ({ params }) => channelPublications().state(params.id),
     'PUT missions/:id/delivery': async ({ params, body }) => channelPublications().configure(params.id, await body()),
     'POST deliveries/:id/refresh': ({ params }) => channelPublications().refresh(params.id),

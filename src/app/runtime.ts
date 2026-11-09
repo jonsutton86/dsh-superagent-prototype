@@ -60,6 +60,7 @@ import { openRuntimeOwnership, assertOwnership, ownershipReady } from '../owners
 import type { CoordinatorOwnership } from '../ownership/lease.ts'
 import { Publications } from '../publication/runtime.ts'
 import { ChannelPublications } from '../publication/channels.ts'
+import { ConversationInbox } from '../publication/inbound.ts'
 
 // Source plugins interact with dsh-superagent exclusively through the `SourceHost` service interface.
 declare module '@deepseek-ai/cordis' { interface Context { orchestrator: SourceHost } }
@@ -96,6 +97,7 @@ export class Runtime extends Service implements SourceHost {
   readonly ownership?: CoordinatorOwnership
   readonly publications: Publications
   readonly channelPublications: ChannelPublications
+  readonly conversations: ConversationInbox
   readonly ready: Promise<void>
   private quiescing?: Promise<void>
   private readonly board = new HealthBoard()
@@ -171,13 +173,16 @@ export class Runtime extends Service implements SourceHost {
         if (kind.policy?.sync) void this.ready?.then(() => this.settings.syncable().includes(kind.kind) ? this.settings.sync(kind.kind) : undefined)
           .catch(() => { /* sync() records its failure in health. */ })
         return () => {}
-      }, id => this.ownership ? id === 'workspace' || id === 'publication' && !!machine.publication : id !== 'github' || machine.executionMode !== 'local')
+      }, id => this.ownership ? id === 'workspace' || (id === 'publication' || id === 'conversation') && !!machine.publication : id !== 'github' || machine.executionMode !== 'local')
       this.channelPublications = new ChannelPublications({ store, ownership: this.ownership, connection: machine.publication, lifetime: this.lifetime,
         mission: id => workspace.get(id, false), destinations: () => this.publications.destinations(),
         authorized: ticket => workspace.policy(settingsPolicy(store.settings(), sources)).revalidate(ticket.mandate) && workspace.executionAllowed(ticket) })
+      this.conversations = new ConversationInbox({ store, ownership: this.ownership, connection: machine.publication, lifetime: this.lifetime, channels: this.channelPublications,
+        engine: () => runtime.engine, requestPass: () => runtime.passes.request(),
+        authorized: ticket => workspace.policy(settingsPolicy(store.settings(), sources)).revalidate(ticket.mandate) && workspace.executionAllowed(ticket) })
       const links: LinkHost = { store, links: this.sourceLinks, commands, sources, lifetime: this.lifetime }
       this.disposers.push(sources.register(workspace.source))
-      if (machine.publication) this.disposers.push(sources.register(this.channelPublications.source))
+      if (machine.publication) this.disposers.push(sources.register(this.channelPublications.source), sources.register(this.conversations.source))
       const link = (trigger: Trigger, signal?: AbortSignal) => sourceLink(links, trigger, signal)
       const environment = (ticket: Ticket) => this.ticketEnvironment(ticket)
       const resources: ResourceHost = { store, pages: new TextCache(4_000_000), prompts, commands, masterId, context: ctx,
@@ -198,7 +203,7 @@ export class Runtime extends Service implements SourceHost {
         deliver: (id, text) => sessions.prompt(masterId, id, text, 'steer'), candidateCard: candidate => candidateCard(links, candidate) })
       const outbox = this.outbox = new Outbox({ store, effects, sources, commands, publication: this.channelPublications, paused: () => this.paused() })
       const { assessor, executor } = this
-      const policy = () => environments.policy(workspace.policy(settingsPolicy(store.settings(), sources)))
+      const policy = () => environments.policy(this.conversations.policy(workspace.policy(settingsPolicy(store.settings(), sources))))
       const engine = this.engine = new Engine({ repo: store, scope: sources, policy, assessor, executor,
         outbox, prepareTicket: (ticket, outcome) => executor.prepare(ticket, outcome), emit: event => {
           // Notify the main Session only about domain events it did not initiate itself.
@@ -313,6 +318,7 @@ export class Runtime extends Service implements SourceHost {
     this.executor.resume()
     this.passes.start()
     this.effects.start()
+    this.conversations.start()
     this.runtimeHealth.set({ state: 'ready', detail: 'Orchestrator is ready', at: now() })
   }
   private httpHost(): HttpHost {
@@ -322,6 +328,7 @@ export class Runtime extends Service implements SourceHost {
       ownership: this.ownership, authorizeMutation: () => { this.ownership?.proof(); this.lifetime.throwIfAborted() },
       publications: this.publications,
       channelPublications: this.channelPublications,
+      conversations: this.conversations,
       get health() { return runtime.health }, remoteEffects: this.remoteWorkspace?.world,
       supervision: this.supervision, workspace: this.workspace, library: this.library, inbox: this.inbox, environments: this.environments, endpoints: this.endpoints, personas: this.personas, worlds: this.worlds,
       get deployment() { return setup.deployment },
@@ -339,6 +346,7 @@ export class Runtime extends Service implements SourceHost {
       await this.endpoints.stop()
       await this.publications.stop()
       await this.channelPublications.stop()
+      await this.conversations.stop()
       this.assessor.stop()
       const ids = [this.masterId, ...this.store.tickets.list().map(ticket => workerSessionId(ticket.id))]
       const agents = ids.map(id => this.ctx.agents.get(id as SessionId)).filter((agent): agent is Agent => agent !== undefined)

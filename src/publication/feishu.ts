@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { credentialDigest, privateCredential } from '../environments/endpoint-files.ts'
 import { contentHash, publicationMarker, type PublicationAdapter, type PreparedPublication } from './github.ts'
-import type { DestinationConfig, ExternalReceipt, Publication } from './protocol.ts'
+import type { ConversationPage, ConversationRead, DestinationConfig, ExternalReceipt, Publication } from './protocol.ts'
 
 type FeishuDestination = Extract<DestinationConfig, { kind: 'feishu-reply' }>
 const Message = z.looseObject({ message_id: z.string(), chat_id: z.string(), parent_id: z.string().optional(), root_id: z.string().optional(),
@@ -92,5 +92,33 @@ export class FeishuPublication implements PublicationAdapter {
       cursor = list.page_token; seen.add(cursor)
     }
     throw new Error('Feishu observation reached its page limit; supply the external message ID')
+  }
+
+  /** Read only messages in the pinned root conversation, preserving unsupported content as an explicit non-executable record. */
+  async read(destination: DestinationConfig, request: ConversationRead, signal: AbortSignal): Promise<ConversationPage> {
+    if (destination.kind !== 'feishu-reply') throw new Error('Feishu destination required')
+    const token = await this.token(destination, signal), parent = await this.parent(destination, token, signal)
+    const query = new URLSearchParams({ container_id_type: parent.thread_id ? 'thread' : 'chat', container_id: parent.thread_id || destination.chatId,
+      page_size: '10', sort_type: 'ByCreateTimeAsc', start_time: String(Math.floor(Date.parse(request.since) / 1000)),
+      ...(request.cursor ? { page_token: request.cursor } : {}) })
+    const response = await this.request(destination, `im/v1/messages?${query}`, signal, token)
+    const page = z.object({ items: z.array(Message.extend({ create_time: z.string().regex(/^[0-9]{10,16}$/) })).max(10),
+      has_more: z.boolean(), page_token: z.string().min(1).max(4096).optional() }).parse(response.data)
+    if (page.has_more && (!page.page_token || page.page_token === request.cursor)) throw new Error('Feishu cursor did not advance')
+    const items = page.items.filter(row => !row.deleted && row.chat_id === destination.chatId && row.message_id !== destination.messageId
+      && (row.root_id === destination.messageId || row.parent_id === destination.messageId) && Number(row.create_time) >= Date.parse(request.since)).map(row => {
+      let text = '', problem: 'unsupported_content' | 'content_too_large' | undefined
+      try {
+        if (row.msg_type !== 'text') throw new Error('Unsupported content')
+        text = z.object({ text: z.string() }).parse(JSON.parse(row.body?.content ?? '')).text
+        if (text.length > 16_000) { text = ''; problem = 'content_too_large' }
+      } catch { problem = 'unsupported_content' }
+      const sender = row.sender
+      return { id: row.message_id, sender: sender?.id ?? 'unknown', human: sender?.sender_type === 'user' && sender.id_type === 'open_id'
+        && /^ou_[A-Za-z0-9]+$/.test(sender.id), at: new Date(Number(row.create_time)).toISOString(), text,
+        url: `https://applink.${destination.brand === 'lark' ? 'larksuite.com' : 'feishu.cn'}/client/chat/open?openChatId=${destination.chatId}`,
+        ...(problem ? { problem } : {}) }
+    })
+    return { destination: request.destination, destinationHash: request.destinationHash, items, ...(page.has_more ? { next: page.page_token! } : {}) }
   }
 }
