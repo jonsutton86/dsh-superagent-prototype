@@ -12,7 +12,7 @@ not a claim that the prototype already ships every feature or that the article s
 
 | Capability | Existing evidence | Remaining implementation |
 | --- | --- | --- |
-| Two-level coordination | `src/core/engine.ts`, `src/app/sessions.ts`, `src/executor/dsh.ts` | Separate router execution authority from routing; retain worker-local subagents |
+| Two-level coordination | Engine admission/routing; identity-based coordinator tool guards, typed context readers and legacy execution retirement; authorized worker execution and worker-local subagents | Broader worker/provider credential separation, untracked-process isolation and clean-host role-boundary qualification |
 | Event admission and routing | `src/policy.ts`, `src/core/intake.ts`, `src/core/evals.ts`, `src/sources/*` | Extend source scope only where required; retain subscription ownership and handback invariants |
 | Context and recall | Immutable scoped records, provenance/FTS search, host-enforced cumulative retrieval allowances, bounded chain context/transitive freshness and complete review dependency closure | Measured retrieval and long-horizon validation, external-source freshness/imports, model-token-aware context selection and retention/scaling |
 | Speculative work | Inferred mandates, observe/auto and rules; durable owner/provider/environment/workspace allocations, measured model usage, preemption, expiry, quiescence/recovery holds and separate promotion/publication approval | Long-horizon quality/waste measurements, multi-workspace/retention/scaling and stronger confinement |
@@ -24,6 +24,15 @@ not a claim that the prototype already ships every feature or that the article s
 | Operator control | Existing web panel, settings, pause/retry/stop, scoped usage/limits/prices and reconciliation, local/remote environment status and revocation, endpoint enrollment/reconciliation and private profile generation | Supervision, broader workload budgets and evidence surfaces |
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
+
+## Current increment: coordinator routing authority
+
+[051 Coordinator routing authority](051-router-authority.md) removes the remaining local coordinator shell/file/job surface
+and applies an identity-based Harness guard to inherited and late scoped tools. Bounded typed repository reads preserve
+routing context. Legacy coordinator turns, jobs and descendants must quiesce before routing resumes; persistent lineage
+anchors deny their resumed descendants. Worker execution and worker-local teams retain their existing task authorization.
+Focused tests pass; full local, Linux and installed-Harness qualification is in progress. This is a model-tool boundary,
+not an OS sandbox or a claim that every worker/provider credential boundary is complete.
 
 ## Implemented increment: PR-bound results and fresh mission completion
 
@@ -742,8 +751,8 @@ artifact and relevant evidence. Keep existing GitHub follow-up/PR ownership and 
 
 ### 7. Router authority and operator experience
 
-Replace the router's remaining broad shell reads with typed, bounded Source/resource operations before removing those
-tools. Keep semantic batching, subscriptions, selective pass-through, many-to-many ownership and worker-local teams. Add
+Implemented in 051: the router uses typed, bounded Source/resource operations with identity-based tool guards and no
+generic execution tools. Keep semantic batching, subscriptions, selective pass-through, many-to-many ownership and worker-local teams. Add
 task-centered views for timeline, artifacts, evidence, environments, budgets and incidents while retaining the working panel.
 User steering remains asynchronous and reaches workers at safe inference boundaries. Channel adapters tailor the length and
 form of replies while decisions and authority remain centralized in the Engine.

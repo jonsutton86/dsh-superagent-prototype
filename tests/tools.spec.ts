@@ -16,6 +16,30 @@ const words = (count: number) => Array.from({ length: count }, () => 'word').joi
 const read = (resource: string, page: { offset?: number; limit?: number } = {}) =>
   h.runTool(h.runtime.masterId, 'orchestrator_read', { resource, ...page })
 
+it('reads bounded repository context through fixed API calls and retains one observation across pages', async () => {
+  const contents = 'untrusted source context\n'.repeat(400)
+  const calls = vi.mocked(Commands.prototype.run).mockResolvedValue(contents)
+  const page = await read('repository/file/src/example.ts') as { text: string; next_offset: number }
+  expect(calls.mock.calls.at(-1)?.[1]).toEqual(['api', 'repos/acme/widgets/contents/src/example.ts', '-H', 'Accept: application/vnd.github.raw'])
+  calls.mockResolvedValue('changed after the first read')
+  let body = page.text, offset: number | null = page.next_offset
+  while (offset !== null) {
+    const next = await read('repository/file/src/example.ts', { offset }) as { text: string; next_offset: number | null }
+    body += next.text; offset = next.next_offset
+  }
+  expect(JSON.parse(body)).toMatchObject({ repository: 'acme/widgets', path: 'src/example.ts', kind: 'file', content: contents })
+  for (const resource of ['repository/file/../private', 'repository/file/.env', 'repository/file/node_modules/config'])
+    await expect(read(resource)).rejects.toThrow('Only non-hidden')
+  await expect(read('repository/file/new.ts', { offset: 1 })).rejects.toThrow('offset 0 first')
+  calls.mockResolvedValue('x'.repeat(65537))
+  await expect(read('repository/file/large.ts')).rejects.toThrow('exceeds 64 KiB')
+  vi.mocked(Commands.prototype.gh).mockResolvedValue([{ name: 'src' }, { name: '.private' }, { name: 'node_modules' }, { name: 'README.md' }])
+  const listing = await read('repository/directory/') as { text: string }
+  expect(JSON.parse(listing.text).content).toBe('README.md\nsrc')
+  const { sessionId } = await h.acceptedTicket(feishu('repo-context', '@bot Review the source'))
+  await expect(h.runTool(sessionId, 'orchestrator_read', { resource: 'repository/file/src/example.ts' })).rejects.toThrow('belongs to the main Session')
+})
+
 it('reads the lists, a ticket, a decision, the settings, the prompts and the models as resources', async () => {
   const { ticket, trigger } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
   await h.acceptedTicket(feishu('2', '@bot 再修一个'))

@@ -420,6 +420,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/app/context.ts` | The built-in prompt text, read from `prompts/`, and the transcript entries Sessions read |
 | `src/app/skill-files.ts` | Packaged text: `promptFile`, which joins a file's one-sentence lines into paragraphs, and the bundled skills |
 | `src/app/sessions.ts` | Sessions |
+| `src/app/router-authority.ts` | Coordinator identity-based tool guards, legacy execution retirement and fail-closed quiescence checks |
 | `src/app/delivery.ts` | `AgentDelivery`: delivers a message to a DeepSeek Harness agent once per request id, also across a restored Session |
 | `src/app/retry-health.ts` | `RetryHealth`: which Sessions wait on a model budget retry, for the `models` health entry |
 | `src/app/role-models.ts` | Resolves the Eval and Executor models, and seeds a new Session with its role's model |
@@ -581,6 +582,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/delivery.spec.ts` | `AgentDelivery` |
 | `tests/retry-health.spec.ts`, `tests/role-models.spec.ts` | Model budget retries, and the models of the two roles |
 | `tests/runtime.spec.ts` | The whole application on a simulated DeepSeek Harness host, through tools and HTTP |
+| `tests/router-authority.spec.ts`, `tests/fixtures/router-harness.mjs` | Real Harness tool guards, late local tools, permissive pre-policy, tracked legacy jobs/children and installed-runtime canary denial |
 | `tests/tools.spec.ts` | The Sessions' tools: what `orchestrator_read` reads for each role, and the shapes and checks of the other main Session tools |
 | `tests/runtime-concurrency.spec.ts` | Work that overlaps: Triggers during a pass, Tickets that change during deliveries and launches |
 | `tests/http.spec.ts` | The same-origin and loopback checks, the status of each kind of failure, the body limit, path parameters and queries |
@@ -674,15 +676,15 @@ The main Session has 14 application tools:
 
 Settings saves select `policy`, `eval`, `executor`, `pause`, or `source`; the last also names its Source id. A prompt save with `preview: true` composes text without saving.
 
-The main Session also has DeepSeek Harness's `skill`, `bash`, `read`, `read_image`, `job_output`, `job_list` and `job_kill`. Avoiding code reads is a prompt rule, not a tool restriction.
+The main Session has DeepSeek Harness's `skill` and its registered typed host tools. `orchestrator_read` includes bounded default-branch repository file/directory observations; candidate text/images use `orchestrator_eval_read`, and shared records use scoped workspace recall. Generic shell, filesystem, job, web, delegation and unrelated plugin tools are denied by the Session's routing authority. Harness's sandboxed `run_code` transport may compose allowed tools; nested calls still pass the same guards.
 
-### Presets and wait limits
+### Presets and role authority
 
-New main Sessions use `dsh-superagent-router` (`ROUTER_PRESET`). Shell commands and job waits return after 5 seconds. If the Web UI selects another preset before the first turn, `Sessions` restores this preset, or `WORKER_PRESET` for a worker.
+New main Sessions use `dsh-superagent-router` (`ROUTER_PRESET`), which loads time context, scoped skills and compaction without shell, file, job, delegation or local instruction-discovery plugins. If the Web UI selects another preset before the first turn, `Sessions` restores this preset, or `WORKER_PRESET` for a worker.
 
-The `noWait` guard in `src/app/sessions.ts` refuses main-Session shell commands that invoke `sleep` at a command position, shell `timeoutMs` above 30 seconds, and `job_output` waits above 5 seconds. Reports and job results arrive automatically, so waiting only delays incoming candidates.
+`RouterAuthority` uses a monotonic guard after Harness pre-execution policy, so a permissive policy cannot grant the coordinator another tool. The inherited tool restriction handles visibility; the guard also refuses later registrations in the agent's own scope. Prompt overrides and legacy preset selection do not change this boundary.
 
-Existing main Sessions on `standard` also need explicit timeouts for foreground commands and job waits; otherwise that preset's defaults hold the step for 60 and 30 seconds respectively. The host determines the current preset through `presetForSession`, falls back to the Session projection or header, and assumes `standard` if it cannot read the value.
+Before routing becomes ready, the host cancels the coordinator's prior turn while preserving inbox input, inventories at most 1,024 known coordinator/descendant Sessions, denies descendant execution, and retires their tracked jobs. It checks actual registry/agent quiescence under one 15-second preparation deadline. Unknown inventory or incomplete termination holds initialization. Durable `session-router-owner:` anchors deny resumed known descendants even when parents are unloaded. Independent worker jobs and worker-local teams retain their existing authorization. This is a model-tool boundary inside trusted Harness processes, not an OS sandbox or proof about untracked processes.
 
 ### Executor tools
 

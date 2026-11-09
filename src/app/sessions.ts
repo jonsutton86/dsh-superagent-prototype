@@ -28,6 +28,7 @@ import { bindPersona, personaDenial } from '../personas/runtime.ts'
 import type { WorldPool } from '../environments/pool.ts'
 import type { OwnershipAccess } from '../ownership/protocol.ts'
 import { ownershipReady } from '../ownership/runtime.ts'
+import { RouterAuthority, ROUTER_CHILD } from './router-authority.ts'
 
 /** Host dependencies used by `Sessions`. */
 export interface SessionsHost {
@@ -57,7 +58,7 @@ export interface SessionsHost {
  * What Sessions registered for an agent it decorated: the releases of its prompt section, tools and skill scope, the scope
  * its skills are registered in, and the skills of one prompt revision; for a worker's subagent, only its tool limits.
  */
-interface SessionBinding { disposers: (() => void)[]; scope?: Context; skills?: { revision: number; dispose: () => void }; subagent?: true; remote?: boolean }
+interface SessionBinding { disposers: (() => void)[]; scope?: Context; skills?: { revision: number; dispose: () => void }; subagent?: true; remote?: boolean; router?: RouterAuthority }
 
 /** The agent presets Executor Sessions and the main Session are created with, which the bundle's patch defines. */
 export const WORKER_PRESET = 'dsh-superagent-worker', ROUTER_PRESET = 'dsh-superagent-router'
@@ -75,31 +76,6 @@ declare module '@deepseek-ai/cordis' {
  */
 const WORK_TOOLS = ['read', 'write', 'edit', 'read_image', 'glob', 'grep', 'bash', 'pwsh', 'job_output', 'job_list', 'job_kill', 'web_search',
   'web_fetch', 'skill', 'todo_write', 'subagent', 'list_subagent_models', 'send_message', 'list_agents', 'interrupt_agent']
-/** What the main Session is told when it would wait: what it waits for comes to it, and a waiting step holds back the next. */
-const NO_WAIT = 'Reports, follow_up notices, new candidates and a background job\'s end with its output arrive by themselves as messages; '
-  + 'end the turn instead of waiting for them.'
-/** What a main Session under `standard` is told when its command would wait the shell's default. */
-const DEFAULT_WAIT = 'This shell waits up to 60 seconds by default: pass timeoutMs of at most 30000, or run_in_background, '
-  + 'as a waiting step holds back new candidates.'
-/** `sleep` at a command position: the start, after ; & | ( { ! ` or a newline, or after a keyword or a command that runs it. */
-const SLEEP = /(?:^|[;&|({!`\n]|\b(?:do|then|else|elif|if|while|until|time|exec|nohup|command|env)\s)\s*(?:\S*\/)?sleep\b/
-/**
- * The main Session's guard: it refuses a bash command that runs sleep or asks to hold the step longer than 30 seconds, and a
- * job wait longer than 5 seconds. Under `standard`, as a main Session created before the router preset runs, the shell holds
- * a command 60 seconds and a job wait lasts 30 seconds by default, so a command needs a timeout or the background, and a
- * job wait its timeout; the router preset ends both after 5 seconds.
- */
-function noWait({ name, arguments: input }: { name: string; arguments: unknown }, routed: () => boolean): string | undefined {
-  const args = (input ?? {}) as { command?: unknown; timeoutMs?: unknown; run_in_background?: unknown; wait?: unknown; timeout_ms?: unknown }
-  if (name === 'bash') {
-    const sleeps = typeof args.command === 'string' && SLEEP.test(args.command)
-    if (sleeps || typeof args.timeoutMs === 'number' && args.timeoutMs > 30_000) return NO_WAIT
-    if (args.timeoutMs === undefined && args.run_in_background !== true && !routed()) return DEFAULT_WAIT
-  }
-  if (name === 'job_output' && args.wait === true && (typeof args.timeout_ms === 'number' ? args.timeout_ms > 5_000 : !routed())) return NO_WAIT
-  return undefined
-}
-
 /**
  * Creates and decorates orchestrator and worker DSH `Agent` sessions with role models, system prompt sections from `Prompts`, runtime skills, and restricted tool sets.
  * `Runtime`, `DshExecutor`, `MasterAssessor`, `Settings`, and management routes/tools use it to ensure sessions, deliver deduplicated messages via `AgentDelivery`, and process ordered `relay` and `notice` effects.
@@ -109,6 +85,7 @@ export class Sessions {
   private readonly agentDelivery: AgentDelivery
   /** Decorated agents mapped to their registered disposers and skill scope until the agent is disposed or `Sessions.dispose()` runs. */
   private readonly bindings = new Map<Agent, SessionBinding>()
+  private readonly decorating = new Map<Agent, Promise<void>>()
   private readonly retryHealth = new RetryHealth()
   private readonly ctx: Context
   private readonly remotePresets?: RemotePresets
@@ -300,15 +277,27 @@ export class Sessions {
     const ticketId = ticketOfSession(agent.id)
     return ticketId === undefined ? undefined : this.host.store.tickets.get(ticketId)
   }
-  private async decorate(agent: Agent): Promise<void> {
+  private decorate(agent: Agent): Promise<void> {
+    const pending = this.decorating.get(agent); if (pending) return pending
+    const operation = this.decorateAgent(agent).finally(() => this.decorating.delete(agent))
+    this.decorating.set(agent, operation); return operation
+  }
+  private async decorateAgent(agent: Agent): Promise<void> {
     this.installWorldGuard(agent)
-    if (this.bindings.has(agent)) return
+    const existing = this.bindings.get(agent)
+    if (existing) { existing.router?.assertReady(); return }
     const host = this.host
     const master = agent.id === host.masterId
     const ticket = master ? undefined : this.ticketOf(agent)
     if (!master && !ticket) { await this.limitSubagent(agent); return }
     const binding: SessionBinding = { disposers: [], remote: !!this.remoteFor(agent.id, agent) }
     this.bindings.set(agent, binding)
+    const definitions = host.tools(agent, ticket)
+    if (master) {
+      binding.router = new RouterAuthority(this.ctx, agent, definitions.map(tool => tool.name), host.store, host.lifetime)
+      binding.disposers.push(binding.router.dispose)
+      await binding.router.prepare()
+    }
     this.retryHealth.restore(agent.id, agent.session.snapshotEvents())
     if (agent.status === 'idle') this.retryHealth.clear(agent.id)
     this.updateModelHealth()
@@ -330,12 +319,9 @@ export class Sessions {
     // Bail out if the agent was disposed while awaiting the skill scope.
     if (this.bindings.get(agent) !== binding) return
     const register = this.registerTool(agent, binding)
-    for (const tool of host.tools(agent, ticket)) register(tool.name, tool.description, tool.schema, tool.execute)
+    for (const tool of definitions) register(tool.name, tool.description, tool.schema, tool.execute)
     if (!master) this.bindRemoteSearch(agent, binding)
-    if (master) {
-      binding.disposers.push(agent.ctx.tools.restrict({ allow: this.host.remote || this.host.ownership ? ['skill'] : ['skill', 'bash', 'read', 'read_image', 'job_output', 'job_list', 'job_kill'] }),
-        agent.ctx.tools.guard(execution => noWait(execution, () => this.routed(agent))))
-    } else {
+    if (!master) {
       // An Executor Session keeps the profile's work tools it has, which DSH requires to be known; its own tools are not masked.
       binding.disposers.push(...this.workOnly(agent, ticket!.id))
       await this.decoratePersona(agent, ticket!, binding)
@@ -366,19 +352,6 @@ export class Sessions {
     agent.ctx.effect(() => agent.ctx.tools.guard(() => reason))
     agent.ctx.effect(() => agent.ctx.systemPrompt.section({ name: 'dsh-superagent-persona-unavailable', order: -10001, interpolate: false,
       text: () => { throw new Error(reason) } }))
-  }
-  /**
-   * Whether a Session runs the router preset: as DSH's preset registry last selected it, read through the session projection
-   * on a DSH whose registry has no `presetForSession`, else as it was created; `standard`, the safer caps, when unreadable.
-   */
-  private routed(agent: Agent): boolean {
-    try {
-      const presets = this.ctx.get('agentPresets') as { presetForSession?: (session: Agent['session']) => string | null } | undefined
-      const projections = this.ctx.get('sessionProjections') as { stateOf?: (session: Agent['session'], key: string) => unknown } | undefined
-      const selected = typeof presets?.presetForSession === 'function' ? presets.presetForSession(agent.session)
-        : projections?.stateOf?.(agent.session, 'agentPreset')
-      return (selected ?? agent.session.header.agentPreset) === this.preset('orchestrator')
-    } catch { return false }
   }
   /**
    * An Executor Session's tools: only the profile's work tools, which DSH requires to be known, and none once its ticket
@@ -465,9 +438,15 @@ export class Sessions {
    */
   private async limitSubagent(agent: Agent): Promise<void> {
     let parent = agent.session.header.parentSession
+    const denyRouterChild = () => {
+      this.host.store.set(KV.sessions.routerOwner(agent.id), this.host.masterId)
+      this.bindings.set(agent, { subagent: true, disposers: [agent.ctx.tools.guard(() => ROUTER_CHILD)] })
+    }
+    if (this.host.store.get(KV.sessions.routerOwner(agent.id))) { denyRouterChild(); return }
     const remote = this.remoteFor(agent.id, agent)
     if (remote) {
       for (let depth = 0; parent !== undefined && depth < 8; depth++) {
+        if (parent === this.host.masterId || this.host.store.get(KV.sessions.routerOwner(parent))) { denyRouterChild(); return }
         let header = this.ctx.agents.get(parent)?.session.header
         try { header ??= (await this.ctx.sessionController.inspect(parent, this.host.lifetime)).meta }
         catch { return }
@@ -485,6 +464,7 @@ export class Sessions {
     // Recover immutable parent headers too: a resumed descendant must not escape persona restrictions when its parent is unloaded.
     let recordedOwner: string | undefined
     for (let depth = 0; parent !== undefined && ticketOfSession(parent) === undefined && depth < 8; depth++) {
+      if (parent === this.host.masterId || this.host.store.get(KV.sessions.routerOwner(parent))) { denyRouterChild(); return }
       // Each previously verified child is a durable lineage anchor; deeper teams do not lose their persona at the traversal bound.
       recordedOwner = this.host.store.get(KV.sessions.personaOwner(parent))
       if (recordedOwner) break

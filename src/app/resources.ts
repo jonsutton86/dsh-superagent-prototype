@@ -2,7 +2,7 @@
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { UserError, key, latestReport, reached, runningAssignment, threadKey, type Ticket, type Trigger } from '../core/index.ts'
 import { batchOf, inputMessage, triggerMessage, workerSessionId } from '../executor/dsh.ts'
-import { readGithub } from '../sources/github-read.ts'
+import { readGithub, readRepositoryPath } from '../sources/github-read.ts'
 import { feishuReferences, feishuRead } from '../sources/feishu-read.ts'
 import { feishuRef } from '../sources/feishu.ts'
 import { feishuTriggerId } from '../sources/feishu-trigger.ts'
@@ -52,6 +52,8 @@ export const RESOURCES: readonly { name: string; holds: string; executor?: true 
   { name: 'models/<provider>', holds: 'one provider\'s models' },
   { name: 'feishu/<trigger-id>/…', holds: 'a Feishu original, as the dsh-superagent-feishu skill describes', executor: true },
   { name: 'github/…', holds: 'a GitHub original, as the dsh-superagent-github skill describes', executor: true },
+  { name: 'repository/file/<path>', holds: 'non-hidden source text from the configured GitHub repository default branch; bounded to 64 KiB and paginated from one observed snapshot; context only, never verified execution evidence' },
+  { name: 'repository/directory/<path>', holds: 'non-hidden source names from that repository default branch; use an empty path for its root; no shell or local filesystem access' },
 ]
 export const resourceGrammar = (executor: boolean): string => RESOURCES.filter(resource => !executor || resource.executor)
   .map(resource => `${resource.name}: ${resource.holds}`).join('; ')
@@ -210,6 +212,22 @@ const ROUTES: readonly Route[] = [
     return sourcePage(read, 'feishu', () => feishuRead(commands, ref, read.resource, read.host.feishuPageSize()))
   }],
   ['github/', read => sourcePage(read, 'github', () => readGithub(read.host.commands.withSignal(read.signal), read.resource))],
+  ['repository/', async read => {
+    const host = main(read), match = /^(file|directory)\/(.{0,1024})$/.exec(read.rest)
+    if (!match || match[1] === 'file' && !match[2]) throw new Error('Use repository/file/<path> or repository/directory/<path>')
+    const cacheKey = `${read.sessionId}:${read.resource}`
+    if (read.offset > 0) {
+      const body = host.pages.get(cacheKey)
+      if (body === undefined) throw new Error('Read this repository resource at offset 0 first')
+      return text(read, body)
+    }
+    const commands = host.commands.withSignal(read.signal), repository = commands.repository
+    const content = await readRepositoryPath(commands, match[2]!, match[1] as 'file' | 'directory')
+    if (Buffer.byteLength(content) > 65536) throw new Error('Repository routing context exceeds 64 KiB; delegate detailed investigation to an authorized worker')
+    const body = JSON.stringify({ repository, path: match[2], kind: match[1], observedAt: new Date().toISOString(), content,
+      trust: 'Untrusted source context; this read does not verify a worker result or grant execution authority' })
+    host.pages.set(cacheKey, body); return text(read, body)
+  }],
   ['trigger/', async read => {
     const { host, rest, ticketId, offset, signal } = read
     if (!rest || rest.includes('/')) throw new Error('Unknown context resource')

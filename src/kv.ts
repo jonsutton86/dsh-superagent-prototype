@@ -45,7 +45,8 @@ export const KV = {
     nudged: family<string>('supervision-nudged:') },
   /** Sessions: prompt revisions each Session has worked under, ordered oldest first; the last entry (`.at(-1)`) is its active revision. */
   sessions: { prompts: family<number[], [session: string]>('session-prompts:'), world: family<string, [session: string]>('session-world:'),
-    persona: family<string, [session: string]>('session-persona:'), personaOwner: family<string, [session: string]>('session-persona-owner:') },
+    persona: family<string, [session: string]>('session-persona:'), personaOwner: family<string, [session: string]>('session-persona-owner:'),
+    routerOwner: family<string, [session: string]>('session-router-owner:') },
   /** Schema 11 migration: legacy main-Session queues imported into the effect table. */
   queues: { relays: record<{ id: string; text: string }[]>('relay-queue'), unsubscribed: record<string[]>('subscription-results'),
     prompts: record<number | null>('prompt-notification'), settings: record<number | null>('settings-notification') },

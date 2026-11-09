@@ -530,3 +530,9 @@ Dedicated, owned dedicated and owned managed installed-Harness / DeepSeek Flash 
 050 records the native-helper and accepted-state fixture corrections. The original app remains running. These are
 point-in-time checks, not continuous monitoring, CI/branch-policy enforcement or merge receipts. Remote Git provisioning
 and all other remaining product/architecture requirements stay open.
+
+Coordinator role enforcement is implemented in `051-router-authority.md`: typed context/routing tools, denial of generic
+execution including late scoped tools, a router preset without execution plugins, and retirement of tracked legacy
+coordinator jobs/descendants before routing resumes. Worker-local teams retain their task authorization. Qualification is
+in progress. OS-level isolation, broader credential separation and all other unfinished architecture/product acceptance
+remain open; this increment does not complete the full Agentic OS objective.

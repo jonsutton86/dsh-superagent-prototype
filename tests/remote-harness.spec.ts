@@ -2,6 +2,7 @@ import { spawn, execFileSync, type ChildProcess } from 'node:child_process'
 import { createServer } from 'node:net'
 import { appendFile, copyFile, mkdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { createHash, randomUUID } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
 import { remoteFixture } from './fixtures/remote.ts'
@@ -65,6 +66,10 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
   for (const file of ['package.json', 'cordis.yml', 'cordis.patch.yml']) await copyFile(join(source, file), join(directory, file))
   // Select the qualification model in this temporary base profile. The operator-generated overlay stays byte-for-byte unchanged.
   await appendFile(join(directory, 'cordis.patch.yml'), '\n- id: agent-default-model\n  config:\n    provider: deepseek-official\n    model: deepseek-flash\n')
+  const routerProbeToken = randomUUID()
+  await appendFile(join(directory, 'cordis.patch.yml'), '\n- insert: ' + JSON.stringify([{ id: 'qualification-router',
+    name: pathToFileURL(resolve('tests/fixtures/router-harness.mjs')).href,
+    config: { token: routerProbeToken, canary: join(h.directory, 'router-execution-canary') } }]) + '\n')
   const sessionRoot = join(h.directory, 'sessions')
   await appendFile(join(directory, 'cordis.patch.yml'), '\n- id: session-persistence-jsonl\n  config:\n    root: ' + JSON.stringify(sessionRoot) + '\n    compression: none\n')
   await symlink(join(source, 'node_modules'), join(directory, 'node_modules'))
@@ -109,9 +114,16 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     expect(state.health.runtime.state, state.health.runtime.detail).toBe('ready')
     if (owned) expect(state.ownership.phase).toBe('active')
   }, { timeout: 40_000, interval: 250 })
+  const qualifyRouter = async () => {
+    const response = await fetch(`http://127.0.0.1:${port}/qualification-router`, { method: 'POST',
+      headers: { 'x-qualification-token': routerProbeToken }, signal: AbortSignal.timeout(10000) })
+    expect(response.ok).toBe(true)
+    expect(await response.json()).toEqual({ denied: true, contextRead: true, canary: false })
+  }
   try {
     await bootstrap?.close()
     start(); await ready(!(owned && mode === 'managed'))
+    await qualifyRouter()
     if (stale) await expect(stale.call({ op: 'grant.create', requestId: 'stale-bootstrap', owner: 'coordinator', workspace: 'must-not-exist',
       operations: ['fs.read', 'process.spawn'], leaseMs: 300_000 })).rejects.toThrow()
     let managed: any, alternate: any
@@ -315,6 +327,7 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     await api(`personas/${persona.id}/archive`, { requestId: 'persona-proof-archive', revision: updated.revision, archived: true, reason: 'Qualification finished; preserve original execution' })
     const oldOwner = owned && (await api('state')).ownership.owner
     await stop(); start(); await ready()
+    await qualifyRouter()
     if (owned) {
       const nextOwner = (await api('state')).ownership.owner
       expect(nextOwner.epoch).toBeGreaterThan(oldOwner.epoch)
