@@ -268,16 +268,33 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
         expect(resumed.executionEnvironment.world).toBe(alternate.id)
       }, { timeout: 120_000, interval: 1000 })
     }
+    let lostRevocation: ReturnType<typeof vi.spyOn> | undefined, revocationCalls = 0
+    if (owned && otherTask) {
+      const rpc = h.endpoint.rpc.bind(h.endpoint)
+      lostRevocation = vi.spyOn(h.endpoint, 'rpc').mockImplementation(async (...args) => {
+        const result = await rpc(...args), request = args[1] as { op: string; requestId?: string }
+        if (request.op === 'grant.revoke' && request.requestId === 'revoke-managed-b-lost') {
+          revocationCalls++
+          throw new Error('Qualification lost original revocation acknowledgement')
+        }
+        return result
+      })
+      const revoked = await api(`worlds/${alternate.id}/revoke`, { requestId: 'revoke-managed-b-lost', revision: alternate.revision, reason: 'Qualification interrupted revocation acknowledgement' })
+      expect(revoked).toMatchObject({ enabled: false, ready: false, status: { phase: 'revoking', revocation: { acknowledged: false } } })
+      expect(revocationCalls).toBeGreaterThanOrEqual(2) // Live retry/maintenance retain the identical original request.
+    }
     await stop()
+    const liveRevocationCalls = revocationCalls
     const executionProfile = JSON.parse(await readFile(overlay, 'utf8')) as any[]
     const stateDir = executionProfile.find(entry => entry.id === 'dsh-superagent').config.stateDir
     const worldDirectories = executionProfile.flatMap(entry => entry.insert ?? []).filter(entry => entry.id === 'operator-remote-world').map(entry => entry.config.stateDir)
     const unrecordedPublications = mode === 'dedicated' && publisher && ownershipConfig
       ? await qualifyPublication({ cli, home, profile, directory, port, publisher, ownership: ownershipConfig }) : []
     await qualifyRecovery({ cli, home, profile, directory, temporary: h.directory, port, stateDir, sessionRoot,
-      worldDirectories, worker: ticket.sessionId, worlds: mode === 'managed' ? 2 : 1, unrecordedPublications,
+      worldDirectories, worker: ticket.sessionId, worlds: mode === 'managed' ? 2 : 1, unrecordedPublications, expectedRecoveredRevocations: lostRevocation ? 1 : 0,
       ...(authority ? { authority: { ...authority.admin.connection, coordinatorId: authority.config.coordinatorId }, originalClaimantFile: authority.config.credentialFile,
         audit: { endpoints: [{ url: h.url, endpointId: h.endpoint.journal.id, credentialFile: await realpath(h.connection.credentialFile) }], publication: publisher!.admin.config } } : {}) })
+    if (lostRevocation) { expect(revocationCalls).toBe(liveRevocationCalls); lostRevocation.mockRestore() }
     if (mode === 'dedicated' && !owned) await qualifyOwnership({ cli, home, profile, directory, temporary: h.directory, port, native })
   } catch (error) {
     const diagnostics: unknown[] = []

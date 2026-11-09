@@ -349,7 +349,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/client/endpoints.tsx` | Endpoint registration, grant/credential administration, reconciliation, command recovery and inspectable profile UI |
 | `src/client/operator-command.ts` | Shared operator submission hook retaining payloads and IDs across ambiguous management responses |
 | `src/environments/remote-workspace.ts` | Bound remote provider verification and workspace preparation without host path interpretation |
-| `src/remote/recovery.ts` | Safe revision-bound historical administrative receipt and current-resource observations |
+| `src/remote/recovery.ts` | Safe revision-bound historical administration/revocation receipts, current resources and original-generation quiescence observations |
 | `src/remote/protocol.ts`, `limits.ts` | Versioned endpoint RPC, grant generations, process/file receipts and bounded transport windows |
 | `src/remote/journal.ts` | Independent single-writer SQLite state, HMAC credentials, intent deduplication, output offsets and restart uncertainty |
 | `src/remote/endpoint.ts`, `http.ts` | Authenticated execution admission, lease expiry, process supervision, mutation serialization and browser-request refusal |
@@ -452,6 +452,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/recovery/checkpoint.ts` | Offline writer ownership, consistent manifests, database/world validation and execution-fenced staging |
 | `src/recovery/ownership.ts` | Verified checkpoint reservation, durable original intent, independent claimant replacement and private credential publication without activation |
 | `src/recovery/administration.ts` | Historical endpoint-administration reconciliation without replay or replacement authority |
+| `src/recovery/revocation.ts` | Exact original grant-principal revocation proof, generation/quiescence comparison and held world-state reconciliation |
 | `src/recovery/prepare.ts` | Original-ID held receipt preparation, revision-bound observation application and atomic recovery image publication |
 | `src/recovery/image.ts` | Authenticated prepared-state manifests, private member hashing and complete image verification |
 | `src/recovery/audit.ts` | Complete resource coverage, original receipt comparison, divergence/quiescence findings and durable held audit reports |
@@ -505,7 +506,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/remote.spec.ts` | Real Harness/HTTP execution, acknowledgement loss, lease fencing, sibling command concurrency, delayed catalog observations, uncertain recovery, confined-helper semantics, output backpressure and opt-in native Linux qualification |
 | `tests/remote-harness.spec.ts` | Opt-in installed Harness qualification with a configured model, remote artifacts, restart, maintenance-plugin checkpoint/import/reservation and ownership-authority process handoff |
 | `tests/recovery.spec.ts` | Official JSONL round trips, exclusive ownership, corruption/cancellation refusal, fork imports, held restore, original reservation retries, competing restores and preserved remote receipts |
-| `tests/recovery-audit.spec.ts` | Real HTTP receipt inventories, late effects, original observations, revoked worlds, missing/mismatched resources, revision races, restart, cancellation, authenticated receipt preparation, interruption/retry, tamper refusal, historical administrative recovery, credential binding comparison and retained restore holds |
+| `tests/recovery-audit.spec.ts` | Real HTTP receipt inventories, late effects, original observations, revoked worlds, missing/mismatched resources, revision races, restart, cancellation, authenticated receipt preparation, interruption/retry, tamper refusal, historical administrative and lost-revocation recovery, credential binding comparison and retained restore holds |
 | `tests/remote-ownership.spec.ts` | Pre-dispatch persistence, concurrent attribution, lost responses, assignment fences, restart/cancel recovery and receipt mismatch refusal |
 | `tests/ownership.spec.ts` | Competing coordinators, all-resource barriers, claimant replacement/supersession, monotonic expiry/restart, endpoint handoff/outage and immutable receipt generations |
 | `tests/ownership-runtime.spec.ts` | Profile compatibility, owned Runtime startup/loss, managed command attribution, competing writers, startup cleanup and held-restore refusal |

@@ -25,6 +25,14 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: original world-revocation recovery
+
+[033 Revocation recovery](033-revocation-recovery.md) confirms the original grant-principal receipt when its acknowledgement
+was lost or its process range quiesced later. It validates the exact disabled successor generation and original authority
+binding, applies only the held world copy, and preserves the original request and source bytes. No revocation, cancellation,
+lease or credential operation is sent during recovery. Missing/conflicting proof keeps preparation blocked. Private
+configuration, authoritative input/state recovery, Session/backend validation, remapping and activation remain required.
+
 ## Implemented increment: administrative recovery
 
 [032 Administrative recovery](032-administrative-recovery.md) reconciles the coordinator's original endpoint commands
@@ -32,7 +40,8 @@ against historical independent receipts, without resending administration or iss
 remain unusable until private credential validation; replaced generations are superseded without becoming old-request results.
 Active-world credential versions/status are included in the resource audit. Prepared images authenticate administrative
 counts and preserve source state. Private credential/runtime configuration validation, authoritative input/state recovery,
-pending world-revocation acknowledgement recovery, actual Session validation, remapping and activation remain required, alongside the complete article and Agentic OS ledgers.
+actual Session validation, remapping and activation remain required, alongside the complete article and Agentic OS ledgers.
+Original world-revocation acknowledgement recovery is implemented in the subsequent increment above.
 
 Qualified code `3f2d4ba2ee7058fc8f037fb4c666e074b8ac3ca3` also corrects false abandoned-command refusals across sibling
 providers and delayed catalog observations, with shared uncertainty fencing and preserved restart reconciliation. The final

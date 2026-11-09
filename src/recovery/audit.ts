@@ -15,8 +15,9 @@ import type { ExecutionReceipt } from '../remote/effects.ts'
 import { PublicationClient, type PublicationConnection } from '../publication/client.ts'
 import { ExternalReceipt, Publication, type PublicationReceipt } from '../publication/protocol.ts'
 import { AdministrationMismatch, administrationRequest, observeAdministration, type SavedAdministration } from './administration.ts'
-import { AdministrationObservation } from '../remote/recovery.ts'
-import { RemoteError, type AdministrationRead } from '../remote/protocol.ts'
+import { AdministrationObservation, RevocationObservation } from '../remote/recovery.ts'
+import { RemoteError, type AdministrationRead, type RevocationRead } from '../remote/protocol.ts'
+import { observeRevocation, revocationRequest, RevocationMismatch } from './revocation.ts'
 import type { z } from 'zod'
 import { withVerifiedStagedCheckpoint } from './checkpoint.ts'
 
@@ -77,7 +78,7 @@ export async function auditCheckpointReceipts(options: AuditCheckpointReceipts):
             throw new Error('Ownership changed after checkpoint reservation; the restore remains held')
           return view
         }
-        const initial = await inspect(), expected = new Map<string, Map<string, Expected>>(), worldEndpoints = new Set<string>(); let expectedCount = 0
+        const initial = await inspect(), expected = new Map<string, Map<string, Expected>>(), worldEndpoints = new Set<string>(), revocations: WorldRecord[] = []; let expectedCount = 0
         const add = (resource: string, item: Expected) => {
           let items = expected.get(resource); if (!items) expected.set(resource, items = new Map())
           const previous = items.get(key(item))
@@ -90,10 +91,13 @@ export async function auditCheckpointReceipts(options: AuditCheckpointReceipts):
           const world = new DatabaseSync(join(archive, file.member), { readOnly: true })
           try {
             const record = JSON.parse(String(world.prepare('SELECT value FROM execution_world WHERE id=1').get()!.value)) as WorldRecord
+            if (record.revocation) { revocationRequest(record); revocations.push(record) }
+            else if (record.phase !== 'active') throw new Error('Checkpoint revoked world lacks its original revocation intent')
             worldEndpoints.add(record.endpointId)
             add(record.endpointId, { kind: 'grant', id: record.grant.id, requestHash: worldBinding(record.endpointId, record.grant), epoch: record.grant.epoch,
-              revoked: record.phase === 'revoked' && record.revocation?.receipt?.quiescent === true })
-            if (record.phase !== 'revoked') for (const credential of record.grant.credentials ?? []) add(record.endpointId, {
+              revoked: !!record.revocation })
+            // An original revocation intent is exempt only if its independent proof below succeeds; otherwise the audit is blocked.
+            if (!record.revocation) for (const credential of record.grant.credentials ?? []) add(record.endpointId, {
               kind: 'credential', id: credential.id, requestHash: fingerprint({ id: credential.id, version: credential.version, variable: credential.variable, mode: credential.mode }), phase: 'enabled' })
             for (const item of rows<ExecutionReceipt>(world, 'execution_effect')) add(record.endpointId, { kind: item.kind, id: item.id,
               requestHash: item.fingerprint, grantId: item.grantId, epoch: item.epoch, ownership: item.ownership,
@@ -113,7 +117,8 @@ export async function auditCheckpointReceipts(options: AuditCheckpointReceipts):
             ...(item.receipt?.external ? { resultHash: fingerprint(ExternalReceipt.parse(item.receipt.external)) } : {}) })
           add(publication.serviceId, { kind: 'destination', id: intent.destination, requestHash: intent.destinationHash })
         }
-        const clients: { id: string; kind: 'endpoint' | 'publication'; call(request: InventoryRequest): Promise<unknown>; administration?(request: z.infer<typeof AdministrationRead>): Promise<unknown> }[] = options.endpoints.map(config => {
+        const clients: { id: string; kind: 'endpoint' | 'publication'; call(request: InventoryRequest): Promise<unknown>;
+          administration?(request: z.infer<typeof AdministrationRead> | z.infer<typeof RevocationRead>): Promise<unknown> }[] = options.endpoints.map(config => {
           const client = new RemoteClient(config, undefined, undefined, pin(config.credentialFile))
           return { id: config.endpointId, kind: 'endpoint', call: request => client.call(request, signal), administration: request => client.call(request, signal) }
         })
@@ -163,6 +168,22 @@ export async function auditCheckpointReceipts(options: AuditCheckpointReceipts):
         }
         for (const resource of initial.resources) if (!seenResources.has(resource)) issue('resource_missing', resource)
         for (const endpoint of worldEndpoints) if (!seenServices.has(endpoint)) issue('endpoint_missing', endpoint)
+        for (const original of revocations) {
+          if (++expectedCount > 100_000) throw new Error('Checkpoint receipt inventory exceeds the audit bound')
+          const resource = report.resources.find(resource => resource.identity.id === original.endpointId)
+          const client = clients.find(client => client.id === original.endpointId), item = { kind: 'revocation', id: original.revocation!.requestId }
+          if (!resource || !client?.administration) { issue('endpoint_missing', original.endpointId); continue }
+          try {
+            const observed = RevocationObservation.parse(await client.administration({ op: 'recovery.revocation', revision: resource.revision, ...revocationRequest(original) }))
+            if (observed.revision !== resource.revision || fingerprint(observed.identity) !== fingerprint(resource.identity)) throw new Error('Revocation recovery resource identity or revision differs')
+            observeRevocation(original, observed); report.matched++
+            if (original.phase !== 'revoked' || !original.revocation!.receipt?.quiescent) report.observed++
+          } catch (error) {
+            if (error instanceof RevocationMismatch) issue(error.code, original.endpointId, item)
+            else if (error instanceof RemoteError && ['request_conflict', 'not_found', 'receipt_mismatch'].includes(error.code)) issue('revocation_mismatch', original.endpointId, item)
+            else throw error
+          }
+        }
         for (const command of rows<SavedAdministration>(db, 'operator_endpoint_command')) {
           if (++expectedCount > 100_000) throw new Error('Checkpoint receipt inventory exceeds the audit bound')
           const resource = report.resources.find(resource => resource.identity.id === command.endpointId)

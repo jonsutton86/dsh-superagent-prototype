@@ -15,11 +15,12 @@ import type { AuditCheckpointReceipts } from '../../src/recovery/audit.ts'
 import { privateCredential } from '../../src/environments/endpoint-files.ts'
 import { randomUUID } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
+import type { WorldRecord } from '../../src/remote/world-journal.ts'
 
 export async function qualifyRecovery(input: { cli: string; home: string; profile: string; directory: string; temporary: string;
   stateDir: string; sessionRoot: string; port: number; worldDirectories: string[]; worker: string; worlds: number;
   authority?: OwnershipConnection & { coordinatorId: string }; originalClaimantFile?: string;
-  audit?: Pick<AuditCheckpointReceipts, 'endpoints' | 'publication'>; unrecordedPublications?: string[] }) {
+  audit?: Pick<AuditCheckpointReceipts, 'endpoints' | 'publication'>; unrecordedPublications?: string[]; expectedRecoveredRevocations?: number }) {
   const root = await realpath(input.temporary), keyFile = join(root, 'recovery-key'), outputDir = join(root, 'checkpoints')
   createRecoveryKey(keyFile)
   const destination = join(root, 'restored'), importedRoot = join(root, 'imported-sessions'), patch = join(input.directory, 'recovery.json')
@@ -97,6 +98,7 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
         await run('audit-receipts', checkpoint); await run('audit-receipts', checkpoint)
         const store = new Store(join(destination, 'orchestrator.sqlite'))
         let auditId: string, administrative = 0
+        const revokedWorlds = new Map<string, WorldRecord>()
         try {
           const audit = store.get(KV.recovery.audit)!
           auditId = audit.id
@@ -110,7 +112,11 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
           const originals = new Set(publications); let commands = 0
           for (const file of manifest.files.filter(file => file.kind === 'world')) {
             const world = new DatabaseSync(join(destination, file.member), { readOnly: true })
-            try { for (const row of world.prepare('SELECT id FROM execution_effect').all()) { originals.add(String(row.id)); commands++ } }
+            try {
+              const original = JSON.parse(String(world.prepare('SELECT value FROM execution_world WHERE id=1').get()!.value)) as WorldRecord
+              if (original.revocation) revokedWorlds.set(file.member, original)
+              for (const row of world.prepare('SELECT id FROM execution_effect').all()) { originals.add(String(row.id)); commands++ }
+            }
             finally { world.close() }
           }
           expect(commands).toBeGreaterThan(0)
@@ -126,6 +132,14 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
           const image = await verifyReceiptImage(preparedPath, keyFile)
           expect(image.executionOwnership).toBe(false); expect(image.applied.commands).toBeGreaterThan(0); expect(image.applied.publications).toBeGreaterThan(0)
           expect(image.administration?.verified).toBe(administrative); expect(administrative).toBeGreaterThan(0)
+          expect(image.revocations).toEqual({ verified: revokedWorlds.size, recovered: input.expectedRecoveredRevocations ?? 0 })
+          for (const [member, original] of revokedWorlds) {
+            const world = new DatabaseSync(join(preparedPath, member), { readOnly: true })
+            try {
+              expect(JSON.parse(String(world.prepare('SELECT value FROM execution_world WHERE id=1').get()!.value))).toEqual({ ...original,
+                phase: 'revoked', revocation: { ...original.revocation, receipt: { grantId: original.grant.id, epoch: original.grant.epoch, at: expect.any(String), quiescent: true } } })
+            } finally { world.close() }
+          }
           expect(image.files.filter(file => file.kind === 'world')).toHaveLength(input.worlds)
           expect(image.files.filter(file => file.kind === 'session')).toHaveLength(manifest.sessions.length)
           await run('prepare-receipts', checkpoint, undefined, preparation)

@@ -12,9 +12,10 @@ import { OwnershipStamp, OwnershipView } from '../ownership/protocol.ts'
 import { sameOwner } from '../ownership/gate.ts'
 import { InventoryPage, InventoryReceipt, type InventoryRequest, type ReceiptRequest } from '../ownership/inventory.ts'
 import { RemoteClient } from '../remote/client.ts'
-import { AdministrationObservation } from '../remote/recovery.ts'
+import { AdministrationObservation, RevocationObservation } from '../remote/recovery.ts'
 import { administrationRequest, observeAdministration, type SavedAdministration } from './administration.ts'
-import { EffectOwner, type AdministrationRead } from '../remote/protocol.ts'
+import { observeRevocation, revocationRequest } from './revocation.ts'
+import { EffectOwner, type AdministrationRead, type RevocationRead } from '../remote/protocol.ts'
 import { ExecutionEffects, type ExecutionReceipt } from '../remote/effects.ts'
 import { fingerprint, inside } from '../remote/journal.ts'
 import type { WorldRecord } from '../remote/world-journal.ts'
@@ -90,7 +91,7 @@ export async function prepareCheckpointReceipts(options: PrepareCheckpointReceip
       const digest = credentialDigest(privateCredential(file)); return () => privateCredential(file, digest)
     }
     const authority = new OwnershipClient(options.authority, pin(options.authority.credentialFile))
-    const administrators = new Map<string, (request: z.infer<typeof AdministrationRead>) => Promise<unknown>>()
+    const administrators = new Map<string, (request: z.infer<typeof AdministrationRead> | z.infer<typeof RevocationRead>) => Promise<unknown>>()
     const clients = new Map<string, (request: InventoryRequest | ReceiptRequest) => Promise<unknown>>()
     for (const config of options.endpoints) {
       if (clients.has(config.endpointId) || clients.size >= 256) throw new Error('Supply unique bounded recovery resources')
@@ -133,6 +134,7 @@ export async function prepareCheckpointReceipts(options: PrepareCheckpointReceip
     }
     await validate()
     const administration = { verified: 0, recovered: 0, superseded: 0 }
+    const revocations = { verified: 0, recovered: 0 }
     const staging = await mkdtemp(join(root, '.prepare-')), applied = { commands: 0, mutations: 0, publications: 0 }
     try {
       const storePath = join(staging, 'orchestrator.sqlite'); await backup(db, storePath); await chmod(storePath, 0o600)
@@ -141,6 +143,16 @@ export async function prepareCheckpointReceipts(options: PrepareCheckpointReceip
         const world = new DatabaseSync(join(staging, file.member)); world.exec('PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL')
         try {
           const record = JSON.parse(String(world.prepare('SELECT value FROM execution_world WHERE id=1').get()!.value)) as WorldRecord
+          if (record.revocation) {
+            const resource = audit.resources.find(resource => resource.identity.id === record.endpointId), call = administrators.get(record.endpointId)
+            if (!resource || !call) throw new Error('Original revocation lacks its audited resource')
+            const observed = RevocationObservation.parse(await call({ op: 'recovery.revocation', revision: resource.revision, ...revocationRequest(record) }))
+            if (observed.revision !== resource.revision || fingerprint(observed.identity) !== fingerprint(resource.identity)) throw new Error('Prepared revocation resource identity differs')
+            const result = observeRevocation(record, observed)
+            const updated = world.prepare('UPDATE execution_world SET value=? WHERE id=1').run(JSON.stringify(result))
+            if (Number(updated.changes) !== 1) throw new Error('Prepared world revocation row is missing')
+            revocations.verified++; if (record.phase !== 'revoked' || !record.revocation.receipt?.quiescent) revocations.recovered++
+          } else if (record.phase !== 'active') throw new Error('Prepared revoked world lacks its original intent')
           const originals = [...rows<ExecutionReceipt>(world, 'execution_effect')], effects = new ExecutionEffects(world)
           for (const original of originals) {
             signal.throwIfAborted(); if (original.phase === 'refused' && original.quiescent === true) continue
@@ -208,7 +220,7 @@ export async function prepareCheckpointReceipts(options: PrepareCheckpointReceip
         await syncRecoveryPath(join(staging, member))
       }
       const image = ReceiptImage.parse({ version: 1, requestId: intent.requestId, requestHash, checkpoint: manifest.id, digest: fingerprint(manifest),
-        auditId: audit.id, at: new Date().toISOString(), recovery: audit.recovery, epoch: audit.epoch, resources: audit.resources, applied, files, executionOwnership: false, administration })
+        auditId: audit.id, at: new Date().toISOString(), recovery: audit.recovery, epoch: audit.epoch, resources: audit.resources, applied, files, executionOwnership: false, administration, revocations })
       const key = recoveryKey(options.keyFile)
       try { await writeFile(join(staging, 'prepared.json'), sealReceiptImage(image, key), { flag: 'wx', mode: 0o600 }) } finally { key.fill(0) }
       await syncRecoveryPath(join(staging, 'prepared.json')); await syncRecoveryPath(staging)

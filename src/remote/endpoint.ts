@@ -12,7 +12,7 @@ import type { ExecutionIsolation } from './isolation.ts'
 import { EndpointCredentials } from './credentials.ts'
 import { OwnershipGate, sameOwner, type ResourceOwnershipConfig, type OwnershipGuard, type OwnershipFloor } from '../ownership/gate.ts'
 import { OwnershipError, requiresOwnership, type OwnershipStamp } from '../ownership/protocol.ts'
-import { readAdministration } from './recovery.ts'
+import { readAdministration, readRevocation } from './recovery.ts'
 import { ResourceInventory } from '../ownership/inventory.ts'
 import { worldBinding } from './world-journal.ts'
 
@@ -425,12 +425,14 @@ export class RemoteEndpoint {
         return request.op === 'recovery.inventory' ? this.inventory.page(request, identity, this.ownershipQuiescent())
           : this.inventory.receipt(request, identity, this.ownershipQuiescent())
       }
-      case 'recovery.administration': {
+      case 'recovery.administration': case 'recovery.revocation': {
         this.admin(principal)
         const ownership = this.identity().ownership
         if (!ownership) throw new OwnershipError(409, 'ownership_required', 'Recovery observations require independent ownership')
         this.inventory.assertRevision(request.revision)
-        return readAdministration(this.journal, request, { id: this.journal.id, kind: 'endpoint', ...ownership }, this.ownershipQuiescent())
+        const identity = { id: this.journal.id, kind: 'endpoint' as const, ...ownership }
+        return request.op === 'recovery.administration' ? readAdministration(this.journal, request, identity, this.ownershipQuiescent())
+          : readRevocation(this.journal, request, identity, this.ownershipQuiescent())
       }
       case 'grant.get': this.admin(principal); return this.journal.grant(request.id)
       case 'grant.list': case 'operation.list': case 'job.catalog': {

@@ -282,3 +282,9 @@ ownership through delayed catalog observations. Unknown dispatch still fences si
 The same code passed 1,510 tests with native confinement, typechecking and all builds in
 [Linux run 42558234881](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42558234881).
 The original app remained running. Provider-message traffic stayed local; restored activation and the full product remain open.
+
+Original world revocation recovery: `033-revocation-recovery.md` adds read-only historical grant-principal receipt checks,
+exact disabled-successor binding validation and separate original-generation quiescence observation. Missing or conflicting
+proof blocks recovery; confirmed acknowledgements are applied only to held world copies without replay. Original source
+state, old grant identity and all execution holds remain intact. Private configuration, input/state recovery, Session/backend
+validation, remapping, activation and the broader article/product ledger remain open.

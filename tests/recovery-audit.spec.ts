@@ -15,9 +15,10 @@ import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { Endpoints } from '../src/environments/endpoints.ts'
 import { administrationRequest } from '../src/recovery/administration.ts'
+import { revocationRequest } from '../src/recovery/revocation.ts'
 import { fingerprint } from '../src/remote/journal.ts'
 import type { EndpointCredential } from '../src/remote/protocol.ts'
-import { AdministrationObservation } from '../src/remote/recovery.ts'
+import { AdministrationObservation, RevocationObservation } from '../src/remote/recovery.ts'
 import { Store } from '../src/app/store.ts'
 import { KV } from '../src/kv.ts'
 import { createRecoveryKey } from '../src/recovery/crypto.ts'
@@ -26,7 +27,7 @@ import { reserveCheckpointOwnership } from '../src/recovery/ownership.ts'
 import { auditCheckpointReceipts } from '../src/recovery/audit.ts'
 import { InventoryPage, InventoryReceipt } from '../src/ownership/inventory.ts'
 import { CoordinatorOwnership } from '../src/ownership/lease.ts'
-import { WorldJournal, worldBinding } from '../src/remote/world-journal.ts'
+import { WorldJournal, worldBinding, type WorldRecord } from '../src/remote/world-journal.ts'
 import { RemoteClient } from '../src/remote/client.ts'
 import type { RemoteJob, RemoteOperation, RevocationReceipt, RpcInput } from '../src/remote/protocol.ts'
 import { PublicationClient } from '../src/publication/client.ts'
@@ -39,7 +40,8 @@ import { publicationFixture } from './fixtures/publication.ts'
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { vi.restoreAllMocks(); for (const close of cleanup.splice(0).reverse()) await close() })
 
-async function fixture(options: { administration?: boolean; credential?: boolean; rotateCredential?: boolean; revokeCredential?: boolean; pending?: boolean; channel?: boolean; extra?: boolean; revoked?: boolean; kind?: DestinationView['kind'] } = {}) {
+async function fixture(options: { administration?: boolean; credential?: boolean; rotateCredential?: boolean; revokeCredential?: boolean; pending?: boolean; channel?: boolean; extra?: boolean; revoked?: boolean;
+  revocation?: 'lost' | 'unsettled' | 'unsent'; kind?: DestinationView['kind'] } = {}) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'dsh-receipt-audit-')))
   cleanup.push(() => rm(directory, { recursive: true, force: true }))
   const authority = await ownershipAuthority(cleanup, ['endpoint', 'publication']), owner = new CoordinatorOwnership(authority.config)
@@ -124,12 +126,23 @@ async function fixture(options: { administration?: boolean; credential?: boolean
       owner: 'coordinator', workspace: 'refused-administrative-world', operations: ['fs.write'], leaseMs: 300_000 } })).phase).toBe('refused')
     await registry.stop(); response.mockRestore()
   }
-  if (options.revoked) {
+  if (options.revoked || options.revocation) {
     world.revoke('revoke-world', 'Qualification revocation')
-    world.acknowledge(await remote.client.call<RevocationReceipt>({ op: 'grant.revoke', requestId: 'revoke-world', reason: 'Qualification revocation' }))
+    const request = { op: 'grant.revoke' as const, requestId: 'revoke-world', reason: 'Qualification revocation' }
+    if (options.revocation === 'lost') {
+      remote.lose()
+      await expect(remote.client.call(request)).rejects.toThrow()
+      expect(remote.endpoint.journal.grant(remote.enrolled.grant.id)).toMatchObject({ enabled: false, epoch: 2 })
+    } else if (options.revocation !== 'unsent') {
+      if (options.revocation === 'unsettled') remote.endpoint.journal.saveJob({ ...settled, quiescent: false })
+      const receipt = await remote.client.call<RevocationReceipt>(request)
+      if (options.revocation === 'unsettled') expect(receipt.quiescent).toBe(false)
+      world.acknowledge(receipt)
+    }
   }
   world.close(); store.close()
   const checkpoint = await createCheckpoint({ stateDir, keyFile, outputDir: join(directory, 'backups'), worldDirectories: [worldDir], persistence: context.sessionPersistence })
+  if (options.revocation === 'unsettled') remote.endpoint.journal.saveJob({ ...remote.endpoint.journal.job(job.id), quiescent: true })
   if (options.rotateCredential) await remote.admin.call({ op: 'credential.import', requestId: randomUUID(), id: importedCredential!.id, revision: importedCredential!.revision,
     file: 'recovery-fixture', variable: 'RECOVERY_FIXTURE', mode: 'env', reason: 'Qualification rotation after checkpoint' })
   if (options.revokeCredential) await remote.admin.call({ op: 'credential.revoke', requestId: randomUUID(), id: importedCredential!.id, revision: importedCredential!.revision, reason: 'Qualification revocation after checkpoint' })
@@ -171,6 +184,98 @@ it('recognizes an exactly acknowledged world revocation without granting replace
   const f = await fixture({ revoked: true })
   expect((await auditCheckpointReceipts(f.audit)).status).toBe('matched')
   expect(f.remote.endpoint.journal.grant(f.remote.enrolled.grant.id)).toMatchObject({ enabled: false, epoch: 2 })
+  expect(f.read().hold?.state).toBe('staged')
+})
+
+function savedWorld(f: Awaited<ReturnType<typeof fixture>>, directory = f.audit.destination): WorldRecord {
+  const member = f.checkpoint.manifest.files.find(file => file.kind === 'world')!
+  const db = new DatabaseSync(join(directory, member.member), { readOnly: true })
+  try { return JSON.parse(String(db.prepare('SELECT value FROM execution_world WHERE id=1').get()!.value)) as WorldRecord }
+  finally { db.close() }
+}
+
+it.each(['lost', 'unsettled'] as const)('recovers a %s world revocation acknowledgement without resending or changing the source', async revocation => {
+  const f = await fixture({ revocation, credential: true, rotateCredential: true }), original = savedWorld(f)
+  const sourcePath = join(f.audit.destination, f.checkpoint.manifest.files.find(file => file.kind === 'world')!.member), sourceBytes = await readFile(sourcePath)
+  const before = f.remote.endpoint.journal.db.prepare('SELECT * FROM remote_receipt ORDER BY id').all()
+  const rpc = vi.spyOn(f.remote.endpoint, 'rpc'), audit = await auditCheckpointReceipts(f.audit)
+  expect(audit).toMatchObject({ status: 'matched', issueCount: 0, matched: 6, observed: 1 })
+  const options = { ...f.audit, requestId: randomUUID(), auditId: audit.id }, prepared = await prepareCheckpointReceipts(options)
+  expect(prepared.manifest.revocations).toEqual({ verified: 1, recovered: 1 })
+  expect(await verifyReceiptImage(prepared.path, f.audit.keyFile)).toEqual(prepared.manifest)
+  expect(await prepareCheckpointReceipts(options)).toEqual(prepared)
+  expect(savedWorld(f, prepared.path)).toEqual({ ...original, phase: 'revoked', revocation: { ...original.revocation,
+    receipt: { grantId: original.grant.id, epoch: original.grant.epoch, at: expect.any(String), quiescent: true } } })
+  expect(savedWorld(f)).toEqual(original)
+  expect(await readFile(sourcePath)).toEqual(sourceBytes)
+  expect(f.read().hold?.state).toBe('staged')
+  const db = new DatabaseSync(join(prepared.path, 'orchestrator.sqlite'), { readOnly: true })
+  try { expect(JSON.parse(String(db.prepare('SELECT value FROM kv WHERE key=?').get(KV.recovery.hold)!.value))).toMatchObject({ state: 'prepared' }) }
+  finally { db.close() }
+  expect(rpc.mock.calls.every(([, request]) => ['recovery.inventory', 'recovery.receipt', 'recovery.revocation'].includes((request as RpcInput).op))).toBe(true)
+  expect(f.remote.endpoint.journal.db.prepare('SELECT * FROM remote_receipt ORDER BY id').all()).toEqual(before)
+})
+
+it('restricts original revocation observation to administrators and excludes private payloads', async () => {
+  const f = await fixture({ revocation: 'lost', credential: true }), audit = await auditCheckpointReceipts(f.audit)
+  const revision = audit.resources.find(resource => resource.identity.kind === 'endpoint')!.revision
+  const request = { op: 'recovery.revocation' as const, revision, ...revocationRequest(savedWorld(f)) }
+  const observed = RevocationObservation.parse(await f.remote.admin.call(request))
+  expect(observed).toMatchObject({ found: true, quiescent: true, generationQuiescent: true, current: { enabled: false, epoch: 2 }, result: { epoch: 1 } })
+  await expect(f.remote.client.call(request)).rejects.toThrow('administration')
+  for (const privateValue of ['private-command-payload', 'private-file-payload', 'synthetic-recovery-secret', 'credentialDigest'])
+    expect(JSON.stringify(observed)).not.toContain(privateValue)
+  await expect(f.remote.admin.call({ ...request, requestHash: '0'.repeat(64) })).rejects.toThrow()
+})
+
+it.each(['unsent', 'missing', 'fingerprint', 'epoch', 'history', 'generation', 'binding', 'unsettled'] as const)('blocks %s revocation evidence and keeps recovery held', async mode => {
+  const f = await fixture(mode === 'history' ? { revoked: true } : { revocation: mode === 'unsent' ? 'unsent' : 'lost' })
+  const db = f.remote.endpoint.journal.db
+  if (mode === 'missing') db.prepare('DELETE FROM remote_receipt WHERE id=?').run('revoke-world')
+  if (mode === 'fingerprint') db.prepare('UPDATE remote_receipt SET fingerprint=? WHERE id=?').run('0'.repeat(64), 'revoke-world')
+  if (mode === 'epoch' || mode === 'history') {
+    const value = JSON.parse(String(db.prepare('SELECT value FROM remote_receipt WHERE id=?').get('revoke-world')!.value))
+    if (mode === 'epoch') value.epoch++
+    else value.at = new Date(Date.parse(value.at) + 1000).toISOString()
+    db.prepare('UPDATE remote_receipt SET value=? WHERE id=?').run(JSON.stringify(value), 'revoke-world')
+  }
+  if (mode === 'generation' || mode === 'binding') {
+    const grant = f.remote.endpoint.journal.grant(f.remote.enrolled.grant.id)
+    f.remote.endpoint.journal.saveGrant({ ...grant, ...(mode === 'generation' ? { epoch: grant.epoch + 1 } : { owner: 'changed-owner' }) })
+  }
+  if (mode === 'unsettled') f.remote.endpoint.journal.saveJob({ ...f.remote.endpoint.journal.job(f.job.id), quiescent: null })
+  const audit = await auditCheckpointReceipts(f.audit)
+  expect(audit.status).toBe('blocked')
+  expect(audit.issues).toContainEqual({ code: ['unsent', 'missing'].includes(mode) ? 'revocation_missing' : 'revocation_mismatch',
+    resource: f.remote.connection.endpointId, kind: 'revocation', id: 'revoke-world' })
+  await expect(prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })).rejects.toThrow('complete matched audit')
+  expect(f.read().hold?.state).toBe('staged')
+})
+
+it('invalidates revocation audit when the independent receipt changes during observation', async () => {
+  const f = await fixture({ revocation: 'lost' }), call = RemoteClient.prototype.call
+  vi.spyOn(RemoteClient.prototype, 'call').mockImplementation(async function<T>(this: RemoteClient, request: RpcInput, signal?: AbortSignal): Promise<T> {
+    const result = await call.call(this, request, signal)
+    if (request.op === 'recovery.revocation') f.remote.endpoint.journal.db.prepare('DELETE FROM remote_receipt WHERE id=?').run(request.id)
+    return result as T
+  })
+  await expect(auditCheckpointReceipts(f.audit)).rejects.toThrow()
+  expect(f.read().report).toMatchObject({ phase: 'failed', status: 'blocked', complete: false })
+  expect(f.read().hold?.state).toBe('staged')
+})
+
+it('independently validates the original revocation again before preparing its held image', async () => {
+  const f = await fixture({ revocation: 'lost' }), audit = await auditCheckpointReceipts(f.audit), call = RemoteClient.prototype.call
+  vi.spyOn(RemoteClient.prototype, 'call').mockImplementation(async function<T>(this: RemoteClient, request: RpcInput, signal?: AbortSignal): Promise<T> {
+    const result = await call.call(this, request, signal)
+    if (request.op === 'recovery.revocation') {
+      const observed = RevocationObservation.parse(result)
+      return { ...observed, current: { ...observed.current!, enabled: true } } as T
+    }
+    return result as T
+  })
+  await expect(prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })).rejects.toThrow('revocation_mismatch')
+  expect(savedWorld(f)).toMatchObject({ phase: 'revoking' })
   expect(f.read().hold?.state).toBe('staged')
 })
 
