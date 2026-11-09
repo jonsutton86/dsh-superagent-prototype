@@ -367,6 +367,7 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
       ? await qualifyPublication({ cli, home, profile, directory, port, publisher, ownership: ownershipConfig }) : []
     await qualifyRecovery({ cli, home, profile, directory, temporary: h.directory, port, stateDir, sessionRoot,
       worldDirectories, worker: ticket.sessionId, worlds: mode === 'managed' ? owned ? 3 : 2 : 1, unrecordedPublications, expectedRecoveredRevocations: lostRevocation ? 1 : 0,
+      expectedPublicationDestinations: publisher?.config.destinations.length,
       ...(authority ? { authority: { ...authority.admin.connection, coordinatorId: authority.config.coordinatorId }, originalClaimantFile: authority.config.credentialFile,
         audit: { endpoints: [{ url: h.url, endpointId: h.endpoint.journal.id, credentialFile: await realpath(h.connection.credentialFile) }], worlds: worldConnections, publication: publisher!.admin.config } } : {}) })
     if (lostRevocation) { expect(revocationCalls).toBe(liveRevocationCalls); lostRevocation.mockRestore() }

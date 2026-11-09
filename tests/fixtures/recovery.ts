@@ -20,7 +20,7 @@ import type { WorldRecord } from '../../src/remote/world-journal.ts'
 export async function qualifyRecovery(input: { cli: string; home: string; profile: string; directory: string; temporary: string;
   stateDir: string; sessionRoot: string; port: number; worldDirectories: string[]; worker: string; worlds: number;
   authority?: OwnershipConnection & { coordinatorId: string }; originalClaimantFile?: string;
-  audit?: Pick<AuditCheckpointReceipts, 'endpoints' | 'worlds' | 'publication'>; unrecordedPublications?: string[]; expectedRecoveredRevocations?: number }) {
+  audit?: Pick<AuditCheckpointReceipts, 'endpoints' | 'worlds' | 'publication'>; unrecordedPublications?: string[]; expectedRecoveredRevocations?: number; expectedPublicationDestinations?: number }) {
   const root = await realpath(input.temporary), keyFile = join(root, 'recovery-key'), outputDir = join(root, 'checkpoints')
   createRecoveryKey(keyFile)
   const destination = join(root, 'restored'), importedRoot = join(root, 'imported-sessions'), patch = join(input.directory, 'recovery.json')
@@ -152,7 +152,7 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
           } finally { originalInputs.close() }
           expect(image.sourceConfiguration).toMatchObject({ enabled: 3, configuration: expect.stringMatching(/^[a-f0-9]{64}$/) })
           expect(image.sourceConfiguration!.kinds).toBeGreaterThanOrEqual(3)
-          expect(image.controlConfiguration).toEqual({ claimant: true, publication: true, destinations: 1 })
+          expect(image.controlConfiguration).toEqual({ claimant: true, publication: true, destinations: input.expectedPublicationDestinations ?? 1 })
           expect(activeWorlds).toBeGreaterThan(0); expect(activeBindings).toBeGreaterThan(0)
           for (const [member, original] of revokedWorlds) {
             const world = new DatabaseSync(join(preparedPath, member), { readOnly: true })
