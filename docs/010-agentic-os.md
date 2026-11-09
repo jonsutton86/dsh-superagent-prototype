@@ -475,4 +475,10 @@ private copied inputs through the existing endpoint and Harness process provider
 command outcomes, full output digests and durable unknown/reconciliation state. Linux checks receive read-only source,
 isolated networking and no endpoint credentials. Operator check definitions, coordinator observation and evidence UI,
 local support, library/publication freshness gates and exact PR-head binding remain in scope, along with every remaining
-full architecture/product requirement. Qualification of this execution layer is in progress.
+full architecture/product requirement. Runtime code `7b1ff77ea24d7f26bcff85b20c88e031fc883f39` and final test revision
+`59a5183c167e95e68cb090952574461d3ae05651` passed 1,753 local tests and 1,757 Linux / Node 24 tests with native
+confinement, typechecking and all five builds. The Linux result is
+[run 42606804140](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42606804140).
+The installed-Harness / DeepSeek Flash dedicated scenario passed in 55.54 seconds, with actual worker-created file/artifact
+bytes checked by the built helper and the original receipt preserved after restart. The original app process remains
+running. These results qualify the execution layer while the full product goal stays active.

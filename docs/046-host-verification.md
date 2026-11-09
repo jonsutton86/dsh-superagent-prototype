@@ -77,4 +77,37 @@ Dependency provisioning and check commands that need build outputs must use expl
 preparation; immutable source mounts do not promise arbitrary repository test commands will work unchanged.
 All remaining article and full Agentic OS requirements stay active.
 
-Final local, native Linux and installed-Harness results are recorded in the implementation ledger after execution.
+Runtime implementation `7b1ff77ea24d7f26bcff85b20c88e031fc883f39` is unchanged in the final test revision
+`59a5183c167e95e68cb090952574461d3ae05651`. The final local `pnpm check` passed 1,753 tests with ten skipped,
+111 test files passed and two skipped, in 108.06 seconds; typechecking and all five builds passed. The dedicated
+installed-Harness / DeepSeek Flash scenario passed in 55.54 seconds, including the actual generated file/artifact,
+host-captured matching bytes, absence of service credentials and unchanged receipt after coordinator restart.
+The added ownership-loss case passed locally and the recovery configuration fixture now waits for expiration to settle
+before auditing its inventory. A changing inventory still fails the production audit; that fence was not relaxed.
+The final test revision passed Ubuntu / Node 24 with native confinement in
+[run 42606804140](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42606804140): 1,757 tests passed,
+six skipped, 111 test files passed and two skipped, in 171.87 seconds, with typechecking and all five builds successful.
+This includes the ownership-loss case, read-only copied inputs, hidden originals, isolated host-loopback networking and
+the stable expired-grant recovery audit. The original app process remains running. These results qualify this execution
+layer; the remaining integration contract below is still required for the full product.
+
+## Next integration contract
+
+1. Persist operator-authored check definitions as immutable versions, including argv, non-secret environment, bounds,
+   snapshot exclusions, artifact-path mapping and required confinement. Worker requests may select an authorized version;
+   model-supplied commands or reports cannot define approval evidence.
+2. Capture original assignment execution/environment identity when work and artifacts are created. The current Ticket
+   execution may change on retry, so it cannot be used to reconstruct a historical artifact's environment implicitly.
+   Bind each check request to the exact artifact ID/revision/hash, definition version, assignment and execution world.
+3. Add coordinator-side request and observation records before endpoint dispatch. Attribution must use the existing
+   trusted execution-effect scope. Ambiguous responses and restarts observe the original ID; they never launch replacement
+   checks or treat missing local state as stopped execution. Preserve complete receipts for evidence and recovery.
+4. Expose request, cancel, refresh, logs and manifests in authenticated operator APIs and artifact/task review surfaces.
+   Distinguish passed checks of captured input, failed checks, capture-only observations, uncertain execution and current
+   source freshness. Keep immutable historical evidence when current source becomes stale.
+5. Before a new publication, recheck the exact current artifact and workspace/Git fingerprint against reviewed passing
+   evidence. Observe already-accepted publication effects first. Real PR approval additionally needs an independently
+   queried current remote PR head; the existing review-comment reply destination is not a PR-head approval API.
+6. Implement an explicitly labeled local execution path and environment/dependency preparation. Qualify complete operator
+   review/publication flows, historical-assignment recovery and stale-head races with real Harness workers. These check
+   gates do not replace the separately required removal of broad worker/router shell publication authority.

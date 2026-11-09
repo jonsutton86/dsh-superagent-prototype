@@ -20,7 +20,7 @@ not a claim that the prototype already ships every feature or that the article s
 | Compute/state separation | SQLite Store; Harness Session checkpoints, held import, checkpoint-bound claimant replacement, revision-bound receipt audits and authenticated held receipt application including original administration; ownership authority, endpoint handoff fencing, shared Runtime/pool/provider lifecycle and independently fenced artifact/mission delivery with directed inbound replies | Private credential/runtime configuration validation, authoritative input/state recovery, remapping, broader inbound discovery/admission and repository integration, clean-host activation and failover qualification |
 | Remote environments | Paired local/remote providers, authenticated leased grants, durable revocation, mission/Session binding, endpoint-owned versioned credentials, remote profile and artifact/restart qualification, operator enrollment/reconciliation, generated profiles, managed world pool and exact per-action selection | Managed endpoint/machine launch, remote repository workflows, quotas and cross-host acceptance |
 | Watchdog | Existing health and bounded transient executor retry; now `src/supervision/*` | Live-provider and process-level acceptance, incident UI/alerts, retention, richer progress evidence and separately authorized recovery policies |
-| Delivery | Reports and PR binding/closure; content-addressed artifacts, stale mission-review invalidation, reviewed artifacts and plan-authorized mission replies to GitHub issue/review and Feishu/Lark destinations with independent receipts; exact participant/task inbound listeners | Host-collected check evidence, Git/environment revision binding, broader inbound discovery/admission, repository integration and broader speculative quality evaluation |
+| Delivery | Reports and PR binding/closure; content-addressed artifacts, stale mission-review invalidation, reviewed artifacts and plan-authorized mission replies with independent receipts; exact participant/task inbound listeners; host-captured file/Git snapshots and confined checks with durable original-job evidence | Versioned check definitions, coordinator/library evidence integration, Git/environment-bound publication and current PR-head gates, broader inbound discovery/admission, repository integration and broader speculative quality evaluation |
 | Operator control | Existing web panel, settings, pause/retry/stop, scoped usage/limits/prices and reconciliation, local/remote environment status and revocation, endpoint enrollment/reconciliation and private profile generation | Supervision, broader workload budgets and evidence surfaces |
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
@@ -33,7 +33,16 @@ original-job recovery. It uses the existing endpoint and Harness process provide
 receipts cannot become successful check results. Admission and cleanup retain snapshot reservations until quiescence.
 Operator definitions, coordinator APIs/evidence UI, local support, library/publication freshness gates and exact PR-head
 binding remain required; this execution layer does not itself mark artifacts verified or authorize publication.
-Qualification is in progress. The full architecture/product objective remains active.
+Runtime code `7b1ff77ea24d7f26bcff85b20c88e031fc883f39`, with final test revision
+`59a5183c167e95e68cb090952574461d3ae05651`, passed 1,753 local tests, typechecking and all five builds in the final
+`pnpm check` (108.06 seconds). The installed-Harness / DeepSeek Flash dedicated scenario passed in 55.54 seconds,
+checking an actual worker-created file and library artifact with the built helper, excluding service credentials and
+retaining the original receipt after restart. The exact final test revision passed 1,757 Linux / Node 24 tests with native
+confinement, typechecking and all five builds in
+[run 42606804140](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42606804140), in 171.87 seconds.
+The added ownership-loss case and stabilized expired-grant recovery fixture passed. The original app remains running,
+and the full architecture/product objective remains active. The implementation and qualification receipts are pushed
+on the feature branch; this does not close the remaining verification integration or other full-scope requirements.
 
 ## Implemented increment: speculative preparation and review
 
