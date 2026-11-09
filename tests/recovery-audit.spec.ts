@@ -42,12 +42,13 @@ import { ownershipAuthority } from './fixtures/ownership-authority.ts'
 import { remoteFixture } from './fixtures/remote.ts'
 import { publicationFixture } from './fixtures/publication.ts'
 import { scheduleDefinition, workspaceStateFixture } from './fixtures/workspace-state.ts'
+import { Library } from '../src/workspace/library.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { vi.restoreAllMocks(); for (const close of cleanup.splice(0).reverse()) await close() })
 
 async function fixture(options: { administration?: boolean; credential?: boolean; rotateCredential?: boolean; revokeCredential?: boolean; pending?: boolean; channel?: boolean; extra?: boolean; revoked?: boolean;
-  managed?: boolean; changedPin?: boolean; omitPublicationCredential?: boolean; input?: 'consumed' | 'missing'; graph?: 'indexes' | 'conflict'; connector?: 'valid' | 'invalid'; workspace?: 'valid' | 'conflict'; revocation?: 'lost' | 'unsettled' | 'unsent'; kind?: DestinationView['kind'] } = {}) {
+  managed?: boolean; changedPin?: boolean; omitPublicationCredential?: boolean; input?: 'consumed' | 'missing'; graph?: 'indexes' | 'conflict'; connector?: 'valid' | 'invalid'; workspace?: 'valid' | 'conflict'; results?: 'valid' | 'conflict'; revocation?: 'lost' | 'unsettled' | 'unsent'; kind?: DestinationView['kind'] } = {}) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'dsh-receipt-audit-')))
   cleanup.push(() => rm(directory, { recursive: true, force: true }))
   const authority = await ownershipAuthority(cleanup, ['endpoint', 'publication']), owner = new CoordinatorOwnership(authority.config)
@@ -177,6 +178,10 @@ async function fixture(options: { administration?: boolean; credential?: boolean
     const ticket = store.tickets.get('ticket')!; ticket.mandate.scope = 'Changed authority'; store.tickets.save(ticket)
   }
   if (options.connector) store.set(KV.github.since, options.connector === 'valid' ? inputTime : 'private-invalid-cursor')
+  if (options.results) {
+    const library = new Library(store), record = library.publish({ requestId: randomUUID(), kind: 'artifact', title: 'Captured artifact', summary: 'Original bytes', content: 'Original artifact bytes' })
+    if (options.results === 'conflict') store.db.prepare('UPDATE workspace_blob SET data=? WHERE hash=?').run(Buffer.from('Changed artifact bytes'), record.hash)
+  }
   if (options.workspace) {
     const product = workspaceStateFixture(store)
     const schedule = product.schedules.create({ requestId: randomUUID(), enabled: true, definition: scheduleDefinition() })
@@ -820,7 +825,7 @@ it.each(['manifest', 'member', 'extra'] as const)('refuses a tampered prepared %
 it('authenticates older held image manifests without treating absent configuration or Session evidence as a new verification', async () => {
   const f = await fixture(), audit = await auditCheckpointReceipts(f.audit)
   const prepared = await prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })
-  const { sessionBackend: _, controlConfiguration: __, inferenceConfiguration: ___, consumedInputs: ____, sourceConfiguration: _____, stateGraph: ______, connectorState: _______, workspaceState: ________, ...manifest } = prepared.manifest, key = recoveryKey(f.audit.keyFile)
+  const { sessionBackend: _, controlConfiguration: __, inferenceConfiguration: ___, consumedInputs: ____, sourceConfiguration: _____, stateGraph: ______, connectorState: _______, workspaceState: ________, resultState: _________, ...manifest } = prepared.manifest, key = recoveryKey(f.audit.keyFile)
   try {
     const mac = createHmac('sha256', key).update('dsh-receipt-image:1\n').update(JSON.stringify(manifest)).digest('hex')
     await writeFile(join(prepared.path, 'prepared.json'), JSON.stringify({ manifest, mac }))
@@ -831,6 +836,7 @@ it('authenticates older held image manifests without treating absent configurati
   expect(verified.stateGraph).toBeUndefined()
   expect(verified.connectorState).toBeUndefined()
   expect(verified.workspaceState).toBeUndefined()
+  expect(verified.resultState).toBeUndefined()
 })
 
 it('repairs consumed input acknowledgements only in the signed held image and preserves historical retries', async () => {
@@ -884,6 +890,20 @@ it('signs original mission and schedule authority without dispatching pending wo
 it('refuses an authentic checkpoint with contradictory product authority and removes the unpublished image', async () => {
   const f = await fixture({ workspace: 'conflict' }), audit = await auditCheckpointReceipts(f.audit)
   await expect(prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })).rejects.toMatchObject({ code: 'conflict' })
+  expect(f.read().hold?.state).toBe('staged'); expect(f.publisher.posts).toBe(1)
+  expect((await readdir(f.audit.destination)).filter(name => name.startsWith('prepared-') || name.startsWith('.prepare-'))).toEqual([])
+})
+it('signs original artifact bytes and retains the same image on original-ID retry', async () => {
+  const f = await fixture({ results: 'valid' }), audit = await auditCheckpointReceipts(f.audit)
+  const options = { ...f.audit, requestId: randomUUID(), auditId: audit.id }, prepared = await prepareCheckpointReceipts(options)
+  expect(prepared.manifest.resultState).toMatchObject({ version: 1, artifacts: 1, blobs: 1, blobBytes: 23, digest: expect.stringMatching(/^[a-f0-9]{64}$/) })
+  expect(await verifyReceiptImage(prepared.path, f.audit.keyFile)).toEqual(prepared.manifest)
+  expect(await prepareCheckpointReceipts(options)).toEqual(prepared)
+  expect(f.read().hold?.state).toBe('staged'); expect(f.publisher.posts).toBe(1)
+})
+it('refuses mismatched artifact bytes inside an authentic checkpoint and discards the unpublished image', async () => {
+  const f = await fixture({ results: 'conflict' }), audit = await auditCheckpointReceipts(f.audit)
+  await expect(prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })).rejects.toMatchObject({ code: 'content', record: 'blob' })
   expect(f.read().hold?.state).toBe('staged'); expect(f.publisher.posts).toBe(1)
   expect((await readdir(f.audit.destination)).filter(name => name.startsWith('prepared-') || name.startsWith('.prepare-'))).toEqual([])
 })

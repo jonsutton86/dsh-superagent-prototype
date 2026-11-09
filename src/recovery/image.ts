@@ -41,6 +41,11 @@ export const ReceiptImage = z.object({ version: z.literal(1), requestId: z.strin
     schedules: z.number().int().nonnegative(), scheduleVersions: z.number().int().nonnegative(), occurrences: z.number().int().nonnegative(),
     executions: z.number().int().nonnegative(), scheduledExecutions: z.number().int().nonnegative(), routedExecutions: z.number().int().nonnegative(),
     legacyPlanVersions: z.number().int().nonnegative(), legacyTriggers: z.number().int().nonnegative(), digest }).strict().optional(),
+  resultState: z.object({ version: z.literal(1), records: z.number().int().nonnegative(), blobs: z.number().int().nonnegative(), blobBytes: z.number().int().nonnegative(),
+    artifacts: z.number().int().nonnegative(), memories: z.number().int().nonnegative(), edges: z.number().int().nonnegative(), legacyBindings: z.number().int().nonnegative(),
+    checks: z.number().int().nonnegative(), checkVersions: z.number().int().nonnegative(), runs: z.number().int().nonnegative(), successfulRuns: z.number().int().nonnegative(),
+    unsettledRuns: z.number().int().nonnegative(), reviews: z.number().int().nonnegative(), seals: z.number().int().nonnegative(), legacyReviewSeals: z.number().int().nonnegative(),
+    completions: z.number().int().nonnegative(), reflectionPromotions: z.number().int().nonnegative(), partialOutputs: z.number().int().nonnegative(), digest }).strict().optional(),
 }).strict()
 export type ReceiptImage = z.infer<typeof ReceiptImage>
 const envelope = z.object({ manifest: ReceiptImage, mac: digest }).strict()

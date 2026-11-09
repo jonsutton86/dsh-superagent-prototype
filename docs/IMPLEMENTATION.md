@@ -25,6 +25,16 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: held artifact and result evidence
+
+[056 Result evidence recovery](056-result-evidence-recovery.md) verifies library bytes/provenance, original host check
+requests/receipts, immutable check versions, review captures/seals and mission-completion evidence before signing a held
+image. Successful review attempts now retain their original seals across later explicit captures. Reflection-approved plans
+use their correct proposal journal. Old, revoked and expired evidence remains historical without renewing authority.
+Local verification passed 1,893 tests, typechecking and all six builds, plus 18 focused result/reflection tests after the
+final normalization guard. Native Linux and installed-Harness qualification are pending. Other product graphs, deployment binding/remapping,
+restored activation and clean-host failover remain open with the full architecture/product scope.
+
 ## Implemented increment: held mission and schedule authority
 
 [055 Workspace authority recovery](055-workspace-authority-recovery.md) checks original mission plans, proposal approvals,

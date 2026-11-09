@@ -10,6 +10,7 @@ import { definitionOf, PlanDefinition, type PlanVersion, type PlanProposal } fro
 import type { Mission } from '../workspace/model.ts'
 import { ScheduleDefinition, type Schedule, type ScheduleOccurrence } from '../workspace/schedule-model.ts'
 import { occurrenceAt, validateCadence } from '../workspace/cadence.ts'
+import { ReflectionCandidate } from '../workspace/reflection-model.ts'
 
 const id = z.string().min(1).max(4096), at = z.iso.datetime({ offset: true }), count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
 const positive = count.min(1), text = z.string().max(128000), ids = z.array(id).max(100000).refine(value => new Set(value).size === value.length)
@@ -93,9 +94,21 @@ export async function verifyWorkspaceState(db: DatabaseSync, signal: AbortSignal
       mappedPlan(value.plan, applied.plan, required(versions, planKey(value.missionId, value.baseVersion), 'proposal_base').plan, `approved_plan:${value.id}`)
     } else if (value.review?.version !== undefined) fail('proposal_review', value.id)
   }
+  const reflectionProposals = new Map<string, unknown>()
+  for await (const { row, value } of rows('workspace_reflection_proposal', z.record(z.string(), z.unknown()))) reflectionProposals.set(String(row.id), value)
   for (const [missionId, list] of history) for (const version of list) if (version.proposalId) {
-    await checkpoint(); const proposal = required(proposals, version.proposalId, 'plan_proposal')
-    if (proposal.status !== 'approved' || proposal.missionId !== missionId || proposal.review?.version !== version.version) fail('proposal_review', version.proposalId)
+    await checkpoint(); const proposal = proposals.get(version.proposalId)
+    if (proposal) {
+      if (proposal.status !== 'approved' || proposal.missionId !== missionId || proposal.review?.version !== version.version) fail('proposal_review', version.proposalId)
+    } else {
+      const value = required(reflectionProposals, version.proposalId, 'plan_proposal')
+      const reflection = parse(z.looseObject({ id, runId: id, status: z.literal('approved'), revision: z.literal(2), candidate: ReflectionCandidate,
+        review: z.looseObject({ result: z.object({ kind: z.literal('mission'), id, version: positive }).strict() }) }), value, 'reflection_plan')
+      if (reflection.id !== version.proposalId || reflection.review.result.id !== missionId || reflection.review.result.version !== version.version
+        || reflection.candidate.kind === 'memory' || reflection.candidate.kind === 'plan' && reflection.candidate.missionId !== missionId) fail('proposal_review', version.proposalId)
+      mappedPlan(reflection.candidate.plan, version.plan,
+        required(versions, planKey(missionId, version.version - 1), 'reflection_base').plan, `reflection_plan:${version.proposalId}`)
+    }
   }
   // New action IDs are chosen by the host, while definition order and dependency identity remain those the operator approved.
   function mappedPlan(original: PlanDefinition, applied: PlanDefinition, previous: PlanDefinition | undefined, label: string) {

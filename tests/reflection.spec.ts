@@ -13,6 +13,8 @@ import { Reflections } from '../src/workspace/reflection.ts'
 import { defaultReflection, reflectionPlan, type ReflectionSpec } from '../src/workspace/reflection-model.ts'
 import { startRuntime } from './fixtures/host.ts'
 import { workerSessionId } from '../src/executor/dsh.ts'
+import { verifyWorkspaceState } from '../src/recovery/workspace.ts'
+import { verifyResultState } from '../src/recovery/results.ts'
 
 const cleanup: (() => void | Promise<void>)[] = []
 afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close(); vi.restoreAllMocks() })
@@ -70,7 +72,7 @@ it('captures bounded selected context before dispatch, excludes unrelated privat
   expect(g.reflections.get(captured.id)).toEqual(captured)
 })
 
-it('publishes a memory only on idempotent review and retains agent authorship and source provenance', () => {
+it('publishes a memory only on idempotent review and retains agent authorship and source provenance', async () => {
   const f = fixture(), source = f.record(), { run, ticketId } = f.run()
   const input = memory({ records: [source.id] }), proposal = f.reflections.propose(ticketId, input)
   expect(f.library.list().items).toHaveLength(1)
@@ -85,9 +87,10 @@ it('publishes a memory only on idempotent review and retains agent authorship an
   f.close(); const g = fixture(f.directory)
   expect(g.reflections.review(run.id, proposal.id, review())).toEqual(approved)
   expect(g.library.list().items).toHaveLength(2)
+  expect(await verifyResultState(g.store.db, new AbortController().signal)).toMatchObject({ memories: 2, reflectionPromotions: 1 })
 })
 
-it('applies existing-plan changes and new drafts through Workspace without dispatching, with atomic approval receipts', () => {
+it('applies existing-plan changes and new drafts through Workspace without dispatching, with atomic approval receipts', async () => {
   const f = fixture(), source = f.mission(), { run, ticketId } = f.run(), before = f.started.mock.calls.length
   const plan = { title: 'Improved plan', objective: 'Improve the project', acceptance: 'Review evidence', actions: [
     { id: 'new', title: 'Do work', instructions: 'Authorized only after dispatch', owner: 'agent', dependsOn: [] }] }
@@ -102,6 +105,8 @@ it('applies existing-plan changes and new drafts through Workspace without dispa
   const approved = f.reflections.review(second.run.id, draft.id, review('approve', 'new-review'))
   expect(f.workspace.get(approved.review!.result!.id).actions[0]!.runs).toEqual([])
   expect(f.started).toHaveBeenCalledTimes(before + 1)
+  await verifyWorkspaceState(f.store.db, new AbortController().signal)
+  expect(await verifyResultState(f.store.db, new AbortController().signal)).toMatchObject({ reflectionPromotions: 2 })
 })
 
 it('refuses changed mission evidence and transitive stale library evidence while allowing rejection', () => {

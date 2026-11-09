@@ -18,7 +18,7 @@ import { BubblewrapIsolation, type ExecutionIsolation } from '../remote/isolatio
 import { CheckDefinitions } from './definitions.ts'
 import { CheckCommandId, RequestCheck, CancelCheck, ReconcileCheck, type CheckRun, type CheckRunSummary, type CheckVersion, type StoredCheckRun } from './contracts.ts'
 import { CheckEvidenceSchema, snapshotReservation, type CheckEvidence } from './model.ts'
-import { validateSnapshot } from './snapshot.ts'
+import { checkEvidence as evidenceOf, completedCheck, recordedCheckBinding } from './evidence.ts'
 import { HostProcessIsolation, snapshotHelperPath } from './local.ts'
 import { discardSnapshot, runCapturedCheck } from './runner.ts'
 import { EvidenceBinding, CheckSelection, EvidenceSeal, FRESHNESS_WINDOW_MS } from './review-model.ts'
@@ -32,7 +32,7 @@ interface Host {
 }
 type Actor = Exclude<LibraryActor, { role: 'router' }>
 type Driver = { world?: RemoteWorld; isolation?: ExecutionIsolation; binding: CheckRun['backend'] }
-const operator: Actor = { role: 'operator' }, evidenceOf = (run: StoredCheckRun) => run.receipt?.verification ?? run.evidence
+const operator: Actor = { role: 'operator' }
 const grantStatus = z.object({ authorized: z.boolean(), grant: z.object({ id: z.string(), owner: z.string(), workspace: z.string(), root: z.string(),
   rootIdentity: z.string(), operations: z.array(Operations), epoch: z.number().int().positive(), revision: z.number().int().positive(), enabled: z.boolean(),
   leaseUntil: z.number().finite(), createdAt: z.string().datetime(), updatedAt: z.string().datetime(),
@@ -104,15 +104,9 @@ export class Verification {
         || !this.definitions.get(run.check.id).enabled || this.definitions.version(run.check.id, run.check.version).hash !== run.check.hash || !this.host.allowed(run.execution))
         throw new WorkspaceError(409, 'Approved check authority, artifact or execution binding changed')
     }
-    const evidenceHash = fingerprint({ artifact: run.artifact, check: run.check, execution: run.execution, backend: run.backend,
-      snapshot: evidence!.snapshot, outcome: run.outcome, output: evidence!.output, checkedAt: evidence!.checkedAt, finishedAt: evidence!.finishedAt })
-    if (expected && (expected.runId !== id || expected.evidenceHash !== evidenceHash)) throw new WorkspaceError(409, 'Selected check evidence changed')
-    const repository = evidence!.snapshot!.repository
-    return EvidenceBinding.parse({ selection: { runId: id, evidenceHash }, artifact: { id: run.artifact.id, revision: run.artifact.revision, hash: run.artifact.hash },
-      check: { id: run.check.id, version: run.check.version, hash: run.check.hash }, snapshotHash: evidence!.snapshot!.hash,
-      execution: { binding: run.backend.binding, assignmentId: run.artifact.assignmentId, sessionId: run.artifact.sessionId },
-      ...(repository ? { repository: { commit: repository.commit, tree: repository.tree,
-        ...(repository.contentTree ? { contentTree: repository.contentTree, statusHash: repository.statusHash } : {}) } } : {}), confinement: evidence!.confinement, checkedAt: evidence!.checkedAt })
+    const binding = recordedCheckBinding(run)
+    if (expected && (expected.runId !== id || expected.evidenceHash !== binding.selection.evidenceHash)) throw new WorkspaceError(409, 'Selected check evidence changed')
+    return binding
   }
   reviewChoices(artifactId: string, offset = 0) {
     const page = this.list(artifactId, offset)
@@ -281,17 +275,7 @@ export class Verification {
     this.pending.set(run.id, operation); void operation.catch(() => {})
   }
   private completed(run: StoredCheckRun, evidence: CheckEvidence | undefined): boolean {
-    if (!evidence?.snapshot || evidence.stage !== 'finished' || !evidence.snapshotUnchanged || !evidence.finishedAt || evidence.problem || run.problem || run.cancel) return false
-    const manifest = validateSnapshot(evidence.snapshot)
-    if (manifest.source !== run.backend.source || evidence.artifactHash !== run.artifact.hash
-      || !manifest.entries.some(item => item.kind === 'file' && item.path === run.check.definition.artifactPath && item.hash === run.artifact.hash)) return false
-    const expected = run.request.verification!
-    if (expected.expectedSnapshot && manifest.hash !== expected.expectedSnapshot || expected.expectedRepository && (manifest.repository?.commit !== expected.expectedRepository.commit
-      || expected.expectedRepository.tree && manifest.repository?.tree !== expected.expectedRepository.tree)) return false
-    if (run.check.definition.confinement === 'linux-bubblewrap' ? evidence.confinement !== 'linux-bubblewrap'
-      : !['linux-bubblewrap', 'host-process'].includes(evidence.confinement)) return false
-    return run.purpose === 'freshness' ? evidence.kind === 'capture' && run.outcome === undefined
-      : evidence.kind === 'check' && !!evidence.checkedAt && !!evidence.output && run.outcome?.exitCode === 0 && run.outcome.signal === null
+    return completedCheck(run, evidence)
   }
   private observe(id: string, input: unknown): CheckRun {
     const run = this.require(id), job = receiptSchema.parse(input) as RemoteJob

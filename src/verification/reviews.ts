@@ -78,7 +78,7 @@ export class VerificationReviews {
     })
     if (!attempt || !unsettled) {
       if (review.attempts.length >= 20) throw new WorkspaceError(409, 'Evidence review attempt limit reached; inspect its original receipts')
-      attempt = { id: randomUUID(), at: timestamp(), captures: [...groups].map(([source, group]) => ({ source, checkId: group.checkId, id: randomUUID() })) }
+      attempt = { id: randomUUID(), at: timestamp(), evidenceVersion: 1, captures: [...groups].map(([source, group]) => ({ source, checkId: group.checkId, id: randomUUID() })) }
       review.attempts.push(attempt)
     }
     if (attempt.captures.length !== groups.size || attempt.captures.some(capture => groups.get(capture.source)?.checkId !== capture.checkId))
@@ -100,6 +100,7 @@ export class VerificationReviews {
         for (const selection of groups.get(capture.source)!.selections) evidence.push(this.host.verification.seal(selection, capture.id, this.now()))
       }
       evidence.sort((a, b) => a.selection.runId.localeCompare(b.selection.runId)); this.authorize(); this.assert(evidence, request.checks)
+      attempt.evidenceVersion = 1; attempt.evidence = structuredClone(evidence)
       review.status = 'ready'; review.evidence = evidence; this.save(review, hash); return evidence
     } catch (error) {
       review.status = 'held'; review.problem = String(error).slice(0, 4000); this.save(review, hash); throw error

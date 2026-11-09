@@ -22,5 +22,7 @@ export type ReviewRequest = z.infer<typeof ReviewRequest>
 export interface EvidenceReview {
   id: string; purpose: ReviewRequest['purpose']; target: string; checks: CheckSelection[]; createdAt: string; updatedAt: string
   status: 'capturing' | 'ready' | 'held'; problem?: string; evidence?: EvidenceSeal[]
-  attempts: { id: string; at: string; captures: { id: string; source: string; checkId: string }[] }[]
+  attempts: { id: string; at: string; captures: { id: string; source: string; checkId: string }[];
+    /** Immutable successful result of this attempt, retained when a later explicit review captures again. */
+    evidenceVersion?: 1; evidence?: EvidenceSeal[] }[]
 }
