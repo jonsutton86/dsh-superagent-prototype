@@ -23,6 +23,8 @@ export const ReceiptImage = z.object({ version: z.literal(1), requestId: z.strin
   sessionBackend: z.object({ sessions: z.number().int().positive(), events: z.number().int().nonnegative() }).strict().optional(),
   controlConfiguration: z.object({ claimant: z.literal(true), publication: z.boolean(), destinations: z.number().int().nonnegative().max(100) }).strict().optional(),
   inferenceConfiguration: z.object({ routes: z.number().int().positive().max(256), sessions: z.number().int().positive(), selections: digest, resolved: digest }).strict().optional(),
+  consumedInputs: z.object({ tickets: z.number().int().nonnegative(), inputs: z.number().int().nonnegative(),
+    consumed: z.number().int().nonnegative(), readMarkers: z.number().int().nonnegative(), undelivered: z.number().int().nonnegative() }).strict().optional(),
 }).strict()
 export type ReceiptImage = z.infer<typeof ReceiptImage>
 const envelope = z.object({ manifest: ReceiptImage, mac: digest }).strict()

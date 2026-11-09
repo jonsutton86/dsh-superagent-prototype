@@ -31,6 +31,7 @@ import { ReceiptImage, recoveryFileDigest, sealReceiptImage, syncRecoveryPath, v
 import { withVerifiedSessionBackend, type SessionArchive } from './sessions.ts'
 import { controlConfigurationChecks, verifyControlConfigurations, type ControlConfigurationCheck, type ControlConfigurationVerification } from './control.ts'
 import { inferenceConfigurationCheck, type RecoveryInferenceHost } from './inference.ts'
+import { reconcileConsumedInputs, type InputStateReconciliation } from './inputs.ts'
 
 export interface PrepareCheckpointReceipts extends AuditCheckpointReceipts { requestId: string; auditId: string; persistence: SessionPersistence; inference: RecoveryInferenceHost }
 export interface ReceiptPreparation {
@@ -141,7 +142,7 @@ export async function prepareCheckpointReceipts(options: PrepareCheckpointReceip
     await validate()
     return withVerifiedSessionBackend(options.persistence, archive, manifest.sessions as unknown as SessionArchive[], signal, async (sessionBackend, recheckSessions) => {
       const inferenceCheck = await inferenceConfigurationCheck(options.inference, db, archive, manifest.sessions as unknown as SessionArchive[], manifest.masterId, signal)
-      const inferenceConfiguration = await inferenceCheck.verify()
+      let inferenceConfiguration: Awaited<ReturnType<typeof inferenceCheck.verify>>, consumedInputs: InputStateReconciliation
       const administration = { verified: 0, recovered: 0, superseded: 0 }
       const revocations = { verified: 0, recovered: 0 }
       const worlds: WorldRecord[] = []
@@ -189,6 +190,8 @@ export async function prepareCheckpointReceipts(options: PrepareCheckpointReceip
         }
         const store = new Store(storePath)
         try {
+          consumedInputs = await reconcileConsumedInputs(store.db, archive, manifest.sessions as unknown as SessionArchive[], signal)
+          inferenceConfiguration = await inferenceCheck.verify()
           configurationChecks = worldConfigurations(options.worlds ?? [], store.db, worlds)
           controlChecks = controlConfigurationChecks(options, store.db, reservation, audit, [...manifest.executionWorkspaces, ...worlds.map(world => world.grant.root)], signal)
           controlConfiguration = await verifyControlConfigurations(controlChecks)
@@ -239,7 +242,7 @@ export async function prepareCheckpointReceipts(options: PrepareCheckpointReceip
         }
         const image = ReceiptImage.parse({ version: 1, requestId: intent.requestId, requestHash, checkpoint: manifest.id, digest: fingerprint(manifest),
           auditId: audit.id, at: new Date().toISOString(), recovery: audit.recovery, epoch: audit.epoch, resources: audit.resources, applied, files, executionOwnership: false, administration, revocations,
-          executionConfiguration: { worlds: configurationChecks.length, bindings: configurationChecks.reduce((total, check) => total + (check.original.grant.credentials?.length ?? 0), 0) }, sessionBackend, controlConfiguration, inferenceConfiguration })
+          executionConfiguration: { worlds: configurationChecks.length, bindings: configurationChecks.reduce((total, check) => total + (check.original.grant.credentials?.length ?? 0), 0) }, sessionBackend, controlConfiguration, inferenceConfiguration, consumedInputs })
         const key = recoveryKey(options.keyFile)
         try { await writeFile(join(staging, 'prepared.json'), sealReceiptImage(image, key), { flag: 'wx', mode: 0o600 }) } finally { key.fill(0) }
         await syncRecoveryPath(join(staging, 'prepared.json')); await syncRecoveryPath(staging)

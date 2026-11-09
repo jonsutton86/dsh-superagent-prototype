@@ -15,7 +15,7 @@ type Seen = { ids: Set<string>; loaded?: Promise<void> }
 /** The id of the message delivered under `requestId`, the same on every retry. */
 export const messageId = (requestId: string) => MessageId(`dsh-superagent:${requestId}`)
 /** Extracts the idempotency key from current or legacy plugin message sources. */
-function deliveryId(message: UserMessage): string | undefined {
+export function deliveryId(message: UserMessage): string | undefined {
   // Persisted sources may predate the current producer-specific source map.
   const source: { kind: string; plugin?: unknown; rpcId?: unknown } = message.source
   if (source.kind === 'dsh-superagent' || (source.kind === 'plugin' && source.plugin === 'dsh-superagent')) return message.id

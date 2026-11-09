@@ -25,6 +25,18 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: consumed input acknowledgement recovery
+
+[038 Consumed inputs](038-consumed-input-recovery.md) reconciles missing live input acknowledgements against authenticated
+worker `user/message` history. It repairs read markers and undelivered queues only in the private held image, preserving
+authority, assignments, original timestamps and ended outcomes. Queued/claimed/canceled inbox entries and inherited or
+foreign messages cannot supply consumption evidence. Contradictions or cancellation roll back the entire batch; signed
+counts record the result. Original-ID retries and older image authentication remain supported.
+
+This does not complete authoritative-state recovery or activation. Source configuration, pending-work and broader state
+relationships, runtime remapping, coordinated ownership handoff and clean-host failover remain open alongside every other
+article/product requirement below.
+
 ## Implemented increment: recovery inference verification
 
 `037-inference-configuration-recovery.md` adds required Harness inference checks to new held receipt preparation.

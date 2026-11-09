@@ -1,5 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import { inferenceFixture } from './fixtures/inference.ts'
+import { inputMessage, inputTicket, inputTime } from './fixtures/recovery-inputs.ts'
 import Jsonl from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { MessageId } from '@deepseek-ai/dsh-llm'
@@ -43,7 +44,7 @@ const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { vi.restoreAllMocks(); for (const close of cleanup.splice(0).reverse()) await close() })
 
 async function fixture(options: { administration?: boolean; credential?: boolean; rotateCredential?: boolean; revokeCredential?: boolean; pending?: boolean; channel?: boolean; extra?: boolean; revoked?: boolean;
-  managed?: boolean; changedPin?: boolean; omitPublicationCredential?: boolean; revocation?: 'lost' | 'unsettled' | 'unsent'; kind?: DestinationView['kind'] } = {}) {
+  managed?: boolean; changedPin?: boolean; omitPublicationCredential?: boolean; input?: 'consumed' | 'missing'; revocation?: 'lost' | 'unsettled' | 'unsent'; kind?: DestinationView['kind'] } = {}) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'dsh-receipt-audit-')))
   cleanup.push(() => rm(directory, { recursive: true, force: true }))
   const authority = await ownershipAuthority(cleanup, ['endpoint', 'publication']), owner = new CoordinatorOwnership(authority.config)
@@ -151,6 +152,16 @@ async function fixture(options: { administration?: boolean; credential?: boolean
       enabled: !world.read()!.revocation, credentialPin: options.changedPin ? '0'.repeat(64) : credentialDigest(remote.enrolled.credential!),
       config: { endpointId: remote.connection.endpointId, url: remote.url, credentialFile: await realpath(remote.client.connection.credentialFile), stateDir: worldDir },
       ...(world.read()!.revocation ? { revoke: { requestId: 'revoke-world', reason: 'Qualification revocation' } } : {}) }))
+  }
+  if (options.input) {
+    const ticket = inputTicket()
+    if (options.input === 'missing') Object.assign(ticket.inputs[0]!, { readAt: inputTime })
+    store.db.prepare('INSERT INTO ticket(id,value) VALUES (?,?)').run(ticket.id, JSON.stringify(ticket))
+    const worker = await context.sessionPersistence.create(Session.create(SessionId('worker-ticket')).header)
+    try {
+      if (options.input === 'consumed') await worker.append([{ type: 'user/message', seq: SessionSeq(0), time: Date.parse(inputTime), surfaceOp: 'append', data: inputMessage('input') }])
+      await worker.flush()
+    } finally { await worker.close() }
   }
   world.close(); store.close()
   const checkpoint = await createCheckpoint({ stateDir, keyFile, outputDir: join(directory, 'backups'), worldDirectories: [worldDir], persistence: context.sessionPersistence })
@@ -779,14 +790,37 @@ it.each(['manifest', 'member', 'extra'] as const)('refuses a tampered prepared %
 it('authenticates older held image manifests without treating absent configuration or Session evidence as a new verification', async () => {
   const f = await fixture(), audit = await auditCheckpointReceipts(f.audit)
   const prepared = await prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })
-  const { sessionBackend: _, controlConfiguration: __, inferenceConfiguration: ___, ...manifest } = prepared.manifest, key = recoveryKey(f.audit.keyFile)
+  const { sessionBackend: _, controlConfiguration: __, inferenceConfiguration: ___, consumedInputs: ____, ...manifest } = prepared.manifest, key = recoveryKey(f.audit.keyFile)
   try {
     const mac = createHmac('sha256', key).update('dsh-receipt-image:1\n').update(JSON.stringify(manifest)).digest('hex')
     await writeFile(join(prepared.path, 'prepared.json'), JSON.stringify({ manifest, mac }))
   } finally { key.fill(0) }
   const verified = await verifyReceiptImage(prepared.path, f.audit.keyFile)
   expect(verified).toEqual(manifest); expect(verified.sessionBackend).toBeUndefined(); expect(verified.controlConfiguration).toBeUndefined(); expect(verified.executionOwnership).toBe(false)
-  expect(verified.inferenceConfiguration).toBeUndefined()
+  expect(verified.inferenceConfiguration).toBeUndefined(); expect(verified.consumedInputs).toBeUndefined()
+})
+
+it('repairs consumed input acknowledgements only in the signed held image and preserves historical retries', async () => {
+  const f = await fixture({ input: 'consumed' }), audit = await auditCheckpointReceipts(f.audit)
+  const options = { ...f.audit, requestId: randomUUID(), auditId: audit.id }, prepared = await prepareCheckpointReceipts(options)
+  expect(prepared.manifest.consumedInputs).toEqual({ tickets: 1, inputs: 1, consumed: 1, readMarkers: 1, undelivered: 1 })
+  const read = (directory: string) => {
+    const db = new DatabaseSync(join(directory, 'orchestrator.sqlite'), { readOnly: true })
+    try { return JSON.parse(String(db.prepare('SELECT value FROM ticket WHERE id=?').get('ticket')!.value)) } finally { db.close() }
+  }
+  expect(read(join(f.directory, 'state'))).toEqual(inputTicket())
+  expect(read(f.audit.destination)).toEqual(inputTicket())
+  expect(read(prepared.path)).toEqual({ ...inputTicket(), inputs: [{ ...inputTicket().inputs[0], readAt: inputTime }], undelivered: [] })
+  expect(await verifyReceiptImage(prepared.path, f.audit.keyFile)).toEqual(prepared.manifest)
+  expect(f.read().hold?.state).toBe('staged'); expect(prepared.manifest.executionOwnership).toBe(false)
+  f.inference.unregister(); expect(await prepareCheckpointReceipts(options)).toEqual(prepared)
+})
+it('refuses contradictory read acknowledgements before inference and discards the unpublished image', async () => {
+  const f = await fixture({ input: 'missing' }), audit = await auditCheckpointReceipts(f.audit)
+  await expect(prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })).rejects.toMatchObject({ code: 'input_read_missing' })
+  expect(f.inference.adapter.calls).toEqual([])
+  expect((await readdir(f.audit.destination)).filter(name => name.startsWith('prepared-') || name.startsWith('.prepare-'))).toEqual([])
+  expect(f.read().hold?.state).toBe('staged'); expect(f.publisher.posts).toBe(1)
 })
 
 it.each(['before', 'during'] as const)('retains the restore hold when inference fails %s preparation', async when => {

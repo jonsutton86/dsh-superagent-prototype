@@ -354,3 +354,10 @@ Session Controller projection and provider path, verified the signed inference s
 image on retry. The dedicated case retained its expected refusal for unrecorded publication probes. Provider-message
 traffic stayed local; the original app remained running. Source configuration, authoritative state and restored activation
 remain open.
+
+Consumed input recovery: `038-consumed-input-recovery.md` reconciles missing live read/queue acknowledgements against
+authenticated worker history, only in the private held image. Inherited messages, foreign producer identities and
+queued/claimed/canceled inbox events are not consumption proof. Contradictory read markers and duplicate identities fail;
+later failures or cancellation roll back earlier repairs. Signed counts preserve historical retries and older image support.
+Ended outcomes and original authority stay unchanged. Source configuration, pending-work/broader state reconciliation,
+runtime remapping, supported activation and clean-host failover remain open with the full article/product scope.

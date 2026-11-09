@@ -138,6 +138,9 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
           expect(image.sessionBackend).toEqual({ sessions: manifest.sessions.length, events: manifest.sessions.reduce((total, session) => total + session.eventCount, 0) })
           expect(image.inferenceConfiguration).toMatchObject({ routes: 1, selections: expect.stringMatching(/^[a-f0-9]{64}$/), resolved: expect.stringMatching(/^[a-f0-9]{64}$/) })
           expect(image.inferenceConfiguration!.sessions).toBeGreaterThan(0)
+          expect(image.consumedInputs!.tickets).toBeGreaterThan(0)
+          expect(image.consumedInputs!.inputs).toBeGreaterThan(0)
+          expect(image.consumedInputs!.consumed).toBeGreaterThan(0)
           expect(image.controlConfiguration).toEqual({ claimant: true, publication: true, destinations: 1 })
           expect(activeWorlds).toBeGreaterThan(0); expect(activeBindings).toBeGreaterThan(0)
           for (const [member, original] of revokedWorlds) {
