@@ -48,7 +48,7 @@ refer to the same environment. Remote access requires authentication; do not exp
 | Requirement | Current evidence | Remaining implementation and acceptance |
 | --- | --- | --- |
 | Persistent missions | Durable goals, editable/versioned plans, scoped planner proposals, operator review, immutable history, and transitive result invalidation | Multi-workspace ownership, plan-history retention and broader planning-quality evaluation |
-| Action execution | Operator dispatch into Engine/Harness; local and repository modes; unit/DOM flows, actual DeepSeek Flash missions, exact per-action persona versions and managed-world selection; guided model/environment setup and first-task review (`065-guided-setup.md`, full-suite qualification pending) | Broader provider/tool acceptance, remote repository workflows and guided managed-endpoint deployment |
+| Action execution | Operator dispatch into Engine/Harness; local and repository modes; unit/DOM flows, actual DeepSeek Flash missions, exact per-action persona versions and managed-world selection; guided model/environment setup and first-task review (`065-guided-setup.md`) | Broader provider/tool acceptance, remote repository workflows and guided managed-endpoint deployment |
 | Human participation and completion | Human actions, reviewed dependencies; acceptance bound to ticket, library evidence, host-captured Git/environment checks and plan-bound PR targets; fresh whole-mission completion with durable original-attempt recovery (`050-mission-pull-completion.md`) | Continuous freshness, broader result/revision UX and long-horizon acceptance |
 | Conversations and steering | Unified inbox, durable read receipts, question/review filters, visible Harness text, atomic task creation, idempotent replies, mission/artifact links, resumable input uploads, exact message binding, native image projection and scoped local/remote copies (`063-attachments.md`); reviewed persona versions and default/managed-world selection with captured execution details (`064-inbox-execution-settings.md`, live inference qualification pending) | Cross-workspace enrollment, large-history indexing/retention, browser/vision acceptance, attachment retention/GC and richer conversation tooling |
 | Shared memory and recall | Immutable scoped capsules, typed/hash-bound provenance, FTS search, bounded transitive freshness, complete review dependency closure, durable retrieval allowances and chain reads, worker tools and library UI (`043-chain-recall.md`) | Measured retrieval quality and long-horizon workloads, external-source freshness/import connectors, model-token-aware context selection, retention/scaling and multi-workspace ownership |
@@ -687,3 +687,12 @@ After resumption the prior temporary installation and app process were absent. A
 authenticated page, management-health and default-environment HTTP checks and remains running for private provider setup.
 This does not recover the removed instance's history. Live inference/restart/recovery qualification awaits a configured
 provider; browser/provider acceptance and the full remaining architecture/product scope stay open.
+
+Guided setup is implemented in `065-guided-setup.md`: live role/default model catalog hints, default/managed environment
+guidance, optional persona/budget/context setup, empty inbox draft entry without dispatch, and current mission review status.
+Local verification passed 1,994 tests, typechecking and six builds. Exact runtime/test revision
+`bfebde2ec8fbb85e47f3a1529db142fef36cb43e` passed 2,002 native Linux / Node 24 tests (10 skipped), typechecking and six builds
+in [run 42719686052](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42719686052).
+Authenticated retrieval confirmed the running app serves the guide bundle; real catalog reads show the selected default
+without advertised models while its provider key is absent. Catalog presence is not inference success. Live provider setup,
+visual browser acceptance, managed endpoint launch, broader packaging and the full remaining architecture stay open.

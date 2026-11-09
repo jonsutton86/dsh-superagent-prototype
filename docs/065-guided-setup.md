@@ -47,7 +47,11 @@ execution, pause/offline handling, draft creation/cancellation/remount without m
 Local `pnpm check` passed typechecking, all six builds and 1,994 tests (16 skipped; 137 passing test files and three skipped;
 135.12 seconds). The focused guide/panel/inbox/documentation checks passed 36 tests. Against the running installed Harness,
 the real catalog endpoint returned the selected DeepSeek Flash default with zero advertised provider groups and no lookup
-failure, matching the guide's unlisted-model case. This is configuration evidence, not an inference test. Native Linux
-qualification remains pending. Live inference remains dependent
+failure, matching the guide's unlisted-model case. Authenticated HTTP retrieval of the running app's advertised Superagent
+client bundle returned the new guide and inbox-selection code after the build; the app process stayed running. This is
+configuration and served-bundle evidence, not an inference test or visual browser acceptance. Exact runtime/test revision
+`bfebde2ec8fbb85e47f3a1529db142fef36cb43e` passed native Linux / Node 24 typechecking, six builds and 2,002 tests
+(10 skipped; 311.70 seconds) in [run 42719686052](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42719686052).
+Live inference remains dependent
 on the operator's configured provider; real browser acceptance, managed endpoint launch, broader deployment packaging
 and every remaining architecture/product requirement stay open.

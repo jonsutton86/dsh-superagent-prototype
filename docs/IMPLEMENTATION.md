@@ -3,8 +3,11 @@
 [065 Guided setup](065-guided-setup.md) adds model and environment guidance, private Harness provider-setup instructions,
 optional persona/budget/context navigation, empty inbox draft entry and current mission review status. The guide reads
 existing authorities and does not equate catalog presence with inference success or create work while navigating.
-Local typechecking, six builds and 1,994 tests passed (16 skipped; 135.12 seconds); 36 focused checks passed. Native Linux
-qualification is in progress; live inference, browser acceptance and the remaining full architecture stay open.
+Local typechecking, six builds and 1,994 tests passed (16 skipped; 135.12 seconds); 36 focused checks passed. Exact
+runtime/test revision `bfebde2ec8fbb85e47f3a1529db142fef36cb43e` passed native Linux / Node 24 typechecking, six builds
+and 2,002 tests (10 skipped; 311.70 seconds) in [run 42719686052](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42719686052).
+The running installed Harness serves the new client bundle, and its real model catalog matches the guide's unlisted-model
+case. Live inference, visual browser acceptance and the remaining full architecture stay open.
 
 [064 Inbox execution settings](064-inbox-execution-settings.md) adds reviewed persona versions and default/managed
 environment selection to new inbox tasks, exact default-grant preconditions and captured execution details. Ambiguous Send
