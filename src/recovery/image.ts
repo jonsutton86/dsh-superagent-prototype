@@ -27,6 +27,12 @@ export const ReceiptImage = z.object({ version: z.literal(1), requestId: z.strin
     consumed: z.number().int().nonnegative(), readMarkers: z.number().int().nonnegative(), undelivered: z.number().int().nonnegative() }).strict().optional(),
   sourceConfiguration: z.object({ kinds: z.number().int().nonnegative(), enabled: z.number().int().nonnegative(), inactive: z.number().int().nonnegative(),
     retained: z.number().int().nonnegative(), configuration: digest }).strict().optional(),
+  stateGraph: z.object({ version: z.literal(1), triggers: z.number().int().nonnegative(), dispositions: z.number().int().nonnegative(),
+    threads: z.number().int().nonnegative(), evaluations: z.number().int().nonnegative(), decisions: z.number().int().nonnegative(),
+    tickets: z.number().int().nonnegative(), assignments: z.number().int().nonnegative(), inputs: z.number().int().nonnegative(),
+    outbox: z.number().int().nonnegative(), effects: z.number().int().nonnegative(), historicalEvaluations: z.number().int().nonnegative(),
+    indexes: z.object({ triggerTimes: z.number().int().nonnegative(), triggerThreads: z.number().int().nonnegative(), decisionThreads: z.number().int().nonnegative() }).strict(),
+    retiredEffects: z.number().int().nonnegative(), digest }).strict().optional(),
 }).strict()
 export type ReceiptImage = z.infer<typeof ReceiptImage>
 const envelope = z.object({ manifest: ReceiptImage, mac: digest }).strict()

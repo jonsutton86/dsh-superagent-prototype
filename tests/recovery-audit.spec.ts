@@ -2,7 +2,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { inferenceFixture } from './fixtures/inference.ts'
 import { SourceCatalog } from '../src/sources/catalog.ts'
 import { recoverySourceHost } from '../src/recovery/sources.ts'
-import { inputMessage, inputTicket, inputTime } from './fixtures/recovery-inputs.ts'
+import { inputMessage, inputTicket, inputTime, seedInputTicket } from './fixtures/recovery-inputs.ts'
 import Jsonl from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { MessageId } from '@deepseek-ai/dsh-llm'
@@ -46,7 +46,7 @@ const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { vi.restoreAllMocks(); for (const close of cleanup.splice(0).reverse()) await close() })
 
 async function fixture(options: { administration?: boolean; credential?: boolean; rotateCredential?: boolean; revokeCredential?: boolean; pending?: boolean; channel?: boolean; extra?: boolean; revoked?: boolean;
-  managed?: boolean; changedPin?: boolean; omitPublicationCredential?: boolean; input?: 'consumed' | 'missing'; revocation?: 'lost' | 'unsettled' | 'unsent'; kind?: DestinationView['kind'] } = {}) {
+  managed?: boolean; changedPin?: boolean; omitPublicationCredential?: boolean; input?: 'consumed' | 'missing'; graph?: 'indexes' | 'conflict'; revocation?: 'lost' | 'unsettled' | 'unsent'; kind?: DestinationView['kind'] } = {}) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'dsh-receipt-audit-')))
   cleanup.push(() => rm(directory, { recursive: true, force: true }))
   const authority = await ownershipAuthority(cleanup, ['endpoint', 'publication']), owner = new CoordinatorOwnership(authority.config)
@@ -159,12 +159,21 @@ async function fixture(options: { administration?: boolean; credential?: boolean
   if (options.input) {
     const ticket = inputTicket()
     if (options.input === 'missing') Object.assign(ticket.inputs[0]!, { readAt: inputTime })
-    store.db.prepare('INSERT INTO ticket(id,value) VALUES (?,?)').run(ticket.id, JSON.stringify(ticket))
+    seedInputTicket(store, ticket)
     const worker = await context.sessionPersistence.create(Session.create(SessionId('worker-ticket')).header)
     try {
       if (options.input === 'consumed') await worker.append([{ type: 'user/message', seq: SessionSeq(0), time: Date.parse(inputTime), surfaceOp: 'append', data: inputMessage('input') }])
       await worker.flush()
     } finally { await worker.close() }
+  }
+  if (options.channel && !options.input) {
+    const ticket = inputTicket('ticket', [])
+    ticket.assignments = [{ id: 'assignment', state: 'pending', createdAt: inputTime }]
+    seedInputTicket(store, ticket)
+  }
+  if (options.graph === 'indexes') store.db.exec("UPDATE trigger SET at='stale'; UPDATE decision SET thread='stale'; DELETE FROM trigger_thread")
+  if (options.graph === 'conflict') {
+    const ticket = store.tickets.get('ticket')!; ticket.mandate.scope = 'Changed authority'; store.tickets.save(ticket)
   }
   world.close(); store.close()
   const checkpoint = await createCheckpoint({ stateDir, keyFile, outputDir: join(directory, 'backups'), worldDirectories: [worldDir], persistence: context.sessionPersistence })
@@ -798,7 +807,7 @@ it.each(['manifest', 'member', 'extra'] as const)('refuses a tampered prepared %
 it('authenticates older held image manifests without treating absent configuration or Session evidence as a new verification', async () => {
   const f = await fixture(), audit = await auditCheckpointReceipts(f.audit)
   const prepared = await prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })
-  const { sessionBackend: _, controlConfiguration: __, inferenceConfiguration: ___, consumedInputs: ____, sourceConfiguration: _____, ...manifest } = prepared.manifest, key = recoveryKey(f.audit.keyFile)
+  const { sessionBackend: _, controlConfiguration: __, inferenceConfiguration: ___, consumedInputs: ____, sourceConfiguration: _____, stateGraph: ______, ...manifest } = prepared.manifest, key = recoveryKey(f.audit.keyFile)
   try {
     const mac = createHmac('sha256', key).update('dsh-receipt-image:1\n').update(JSON.stringify(manifest)).digest('hex')
     await writeFile(join(prepared.path, 'prepared.json'), JSON.stringify({ manifest, mac }))
@@ -806,12 +815,15 @@ it('authenticates older held image manifests without treating absent configurati
   const verified = await verifyReceiptImage(prepared.path, f.audit.keyFile)
   expect(verified).toEqual(manifest); expect(verified.sessionBackend).toBeUndefined(); expect(verified.controlConfiguration).toBeUndefined(); expect(verified.executionOwnership).toBe(false)
   expect(verified.inferenceConfiguration).toBeUndefined(); expect(verified.consumedInputs).toBeUndefined(); expect(verified.sourceConfiguration).toBeUndefined()
+  expect(verified.stateGraph).toBeUndefined()
 })
 
 it('repairs consumed input acknowledgements only in the signed held image and preserves historical retries', async () => {
-  const f = await fixture({ input: 'consumed' }), audit = await auditCheckpointReceipts(f.audit)
+  const f = await fixture({ input: 'consumed', graph: 'indexes' }), audit = await auditCheckpointReceipts(f.audit)
   const options = { ...f.audit, requestId: randomUUID(), auditId: audit.id }, prepared = await prepareCheckpointReceipts(options)
   expect(prepared.manifest.consumedInputs).toEqual({ tickets: 1, inputs: 1, consumed: 1, readMarkers: 1, undelivered: 1 })
+  expect(prepared.manifest.stateGraph).toMatchObject({ version: 1, triggers: 1, decisions: 1, tickets: 1, assignments: 1, inputs: 1,
+    indexes: { triggerTimes: 1, triggerThreads: 1, decisionThreads: 1 }, digest: expect.stringMatching(/^[a-f0-9]{64}$/) })
   const read = (directory: string) => {
     const db = new DatabaseSync(join(directory, 'orchestrator.sqlite'), { readOnly: true })
     try { return JSON.parse(String(db.prepare('SELECT value FROM ticket WHERE id=?').get('ticket')!.value)) } finally { db.close() }
@@ -822,6 +834,13 @@ it('repairs consumed input acknowledgements only in the signed held image and pr
   expect(await verifyReceiptImage(prepared.path, f.audit.keyFile)).toEqual(prepared.manifest)
   expect(f.read().hold?.state).toBe('staged'); expect(prepared.manifest.executionOwnership).toBe(false)
   f.inference.unregister(); f.audit.sources.current = () => undefined; expect(await prepareCheckpointReceipts(options)).toEqual(prepared)
+})
+it('refuses contradictory Engine authority and removes the unpublished prepared image', async () => {
+  const f = await fixture({ input: 'consumed', graph: 'conflict' }), audit = await auditCheckpointReceipts(f.audit)
+  const before = f.read()
+  await expect(prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })).rejects.toMatchObject({ code: 'conflict' })
+  expect(f.read().hold).toEqual(before.hold)
+  expect((await readdir(f.audit.destination)).filter(name => name.startsWith('prepared-') || name.startsWith('.prepare-'))).toEqual([])
 })
 it('refuses contradictory read acknowledgements before inference and discards the unpublished image', async () => {
   const f = await fixture({ input: 'missing' }), audit = await auditCheckpointReceipts(f.audit)

@@ -21,6 +21,7 @@ export { verifyReceiptImage, type ReceiptImage } from './image.ts'
 export { type RecoveryWorldConnection } from './configuration.ts'
 export { inferenceConfigurationCheck, type RecoveryInferenceHost, type InferenceConfigurationVerification } from './inference.ts'
 export { sourceConfigurationCheck, type RecoverySourceHost, type SourceConfigurationVerification } from './sources.ts'
+export { reconcileStateGraph, StateGraphError, type StateGraphReconciliation } from './graph.ts'
 export const name = 'dsh-superagent-recovery'
 export const inject = ['sessionPersistence']
 const authority = s.object({ url: s.string().required(), authorityId: s.string().required(), coordinatorId: s.string().required(), credentialFile: s.string().pattern(/^\//).required(),

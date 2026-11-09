@@ -141,6 +141,11 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
           expect(image.consumedInputs!.tickets).toBeGreaterThan(0)
           expect(image.consumedInputs!.inputs).toBeGreaterThan(0)
           expect(image.consumedInputs!.consumed).toBeGreaterThan(0)
+          expect(image.stateGraph).toMatchObject({ version: 1, digest: expect.stringMatching(/^[a-f0-9]{64}$/) })
+          expect(image.stateGraph!.triggers).toBeGreaterThan(0)
+          expect(image.stateGraph!.tickets).toBeGreaterThan(0)
+          expect(image.stateGraph!.assignments).toBeGreaterThanOrEqual(image.stateGraph!.tickets)
+          expect(image.stateGraph!.decisions).toBeGreaterThanOrEqual(image.stateGraph!.tickets)
           const originalInputs = new DatabaseSync(join(input.stateDir, 'orchestrator.sqlite'), { readOnly: true })
           try {
             let readNonTriggers = 0

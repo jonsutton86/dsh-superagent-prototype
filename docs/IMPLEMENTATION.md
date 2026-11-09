@@ -25,6 +25,17 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: held Engine state reconciliation
+
+[053 Engine state reconciliation](053-engine-state-reconciliation.md) verifies the recorded core authority chain from
+triggers through decisions, tickets, assignments, inputs, receipts and queued effects before publishing a prepared recovery
+image. It repairs only derived query indexes and removes effects whose existing handlers can no longer act; live queue
+metadata and aggregate authority remain unchanged. Directed input cannot move to another ticket, and conflicting mandates
+keep preparation held. Historical expired evaluation tags remain metadata, never execution authority. The signed image
+records graph counts, repairs and a deterministic digest. Source/staged state and the execution hold remain unchanged.
+Local, native Linux and installed-Harness qualification receipts are pending. Connector cursors, product-extension graphs,
+deployment remapping, activation/handoff and clean-host failover remain open, alongside the full product scope below.
+
 ## Implemented increment: independent supervision console
 
 [052 Independent supervision console](052-supervision-console.md) adds an independent operator page, incident/evidence

@@ -487,6 +487,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/recovery/control.ts` | Original recovery claimant, coordinator publication credential and pinned provider account/target verification without execution |
 | `src/recovery/inference.ts` | Public Harness cold model-selection projection and bounded, history-free recovery inference probes |
 | `src/recovery/inputs.ts` | Transactional reconciliation of live input acknowledgements against authenticated worker consumption history |
+| `src/recovery/graph.ts` | Held Engine authority graph validation, transactional derived-index repair and retirement of proven obsolete effects |
 | `src/recovery/sources.ts` | Actual passive source catalog and authenticated settings qualification with repeated registration/default checks |
 | `src/recovery/crypto.ts` | Private inputs, separate key files and streaming authenticated checkpoint encryption |
 | `src/remote/scoped-plugin.ts` | Harness preset-owned paired providers borrowing one managed execution world |
@@ -548,6 +549,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/recovery-audit.spec.ts` | Real HTTP receipt inventories, late effects, original observations, revoked worlds, missing/mismatched resources, revision races, restart, cancellation, authenticated receipt preparation, interruption/retry, tamper refusal, historical administrative and lost-revocation recovery, credential binding comparison and retained restore holds |
 | `tests/recovery-inference.spec.ts` | Effective model selection, role/persona routes, bounded streams, cancellation, sanitized failures and repeated inference preflight |
 | `tests/recovery-inputs.spec.ts` | Real Session consumption attribution, inherited boundaries, pending/ended state and rollback of contradictory input acknowledgements |
+| `tests/recovery-graph.spec.ts` | Actual Engine graph consistency, directed authority, expired history, stable live effects, derived-index repair, bounded records and cancellation rollback |
 | `tests/recovery-sources.spec.ts` | Real passive source plugin lifecycle, shared eligibility, strict settings checks, registration changes, cancellation and safe failures |
 | `tests/remote-ownership.spec.ts` | Pre-dispatch persistence, concurrent attribution, lost responses, assignment fences, restart/cancel recovery and receipt mismatch refusal |
 | `tests/ownership.spec.ts` | Competing coordinators, all-resource barriers, claimant replacement/supersession, monotonic expiry/restart, endpoint handoff/outage and immutable receipt generations |
