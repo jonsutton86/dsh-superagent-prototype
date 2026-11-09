@@ -80,7 +80,16 @@ legacy grants, corruption refusal without mutation, cancellation and oversized-s
 signed archived history, original-ID retrieval, old-manifest compatibility and refusal before inference. Installed-Harness
 recovery requires nonempty persona-version/worker/world evidence and historical grants with zero legacy task grants.
 
-Full-suite, native Linux and installed-Harness qualification results will be recorded after this increment is verified.
+Local verification passed 1,904 tests (14 conditional skips), typechecking and all six builds. After the final bounded-scan
+and directory-name checks, all nine focused registry tests, typechecking and all six builds passed again. Runtime/test revision
+`e1741bf1ef1d97d1e6c47116f3561ae473758115` passed 1,911 tests (eight conditional skips), typechecking and all six builds on
+Linux / Node 24 with native confinement in
+[run 42673277799](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42673277799).
+The exact revision passed installed-Harness / DeepSeek Flash owned-managed qualification in 194.21 seconds, including
+nonempty signed persona/version/execution/world evidence, historical revoked grants, zero legacy task-grant gaps and
+original-ID image retrieval. Provider operations stayed on local contract servers; only inference used the real API. The
+original app remained running throughout qualification.
+
 Recall and usage/speculation budgets, full reflection state, remaining publication and registry cross-references, deployment
 binding/remapping, actual restored activation/ownership handoff and clean-host failover remain open. The full standalone
 Agentic OS scope is unchanged.

@@ -30,8 +30,15 @@ No new runtime, orchestration database, or workflow framework is assumed. Work i
 [057 Registry authority recovery](057-registry-authority-recovery.md) verifies persona definitions and command history,
 environment generations, managed-world journals, original worker snapshots and immutable Session ancestry. Historical
 archive/revocation remains historical; missing legacy bindings and opaque command payloads are counted explicitly. Persona
-authority is checked before inference. Qualification is pending. Remaining product graphs, registry/publication cross-references,
-deployment binding/remapping, restored activation and clean-host failover stay open under the full architecture objective.
+authority is checked before inference. Local verification passed 1,904 tests, typechecking and all six builds; the final
+directory-name/bounded-scan regression passed all nine focused registry tests and repeated typechecking/builds. Runtime/test
+revision `e1741bf` passed 1,911 Linux / Node 24 tests with native confinement, typechecking and all builds in
+[run 42673277799](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42673277799).
+The exact revision passed installed-Harness / DeepSeek Flash owned-managed recovery in 194.21 seconds with nonempty signed
+persona/version/worker/world history, historical revoked grants, zero legacy task-grant gaps and original-ID image retrieval.
+Provider operations stayed on local contract servers and the original app remained running. Remaining product graphs,
+registry/publication cross-references, deployment binding/remapping, restored activation and clean-host failover stay open
+under the full architecture objective.
 
 ## Implemented increment: held artifact and result evidence
 

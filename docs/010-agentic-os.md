@@ -606,5 +606,11 @@ remaining architecture/product requirement stay active. The restore hold remains
 Registry authority recovery is implemented in `057-registry-authority-recovery.md`: persona versions and command history,
 environment generations, managed-world journals and original worker/Session bindings are checked without reauthorization.
 Archived persona versions and revoked worlds remain historical. Incomplete legacy bindings and opaque request payloads are
-reported, not reconstructed. Qualification is pending. Remaining product graphs and registry/publication cross-references,
-deployment binding/remapping, activation/handoff/failover and the full architecture/product scope remain open.
+reported, not reconstructed. Local verification passed 1,904 tests, typechecking and all six builds, plus the nine-test final
+registry regression and repeated typechecking/builds. Runtime/test revision `e1741bf` passed 1,911 Linux / Node 24 tests
+with native confinement, typechecking and all builds in
+[run 42673277799](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42673277799).
+The exact revision passed installed-Harness / DeepSeek Flash owned-managed recovery in 194.21 seconds with signed
+persona/version/worker/world history, historical revoked grants, zero legacy task-grant gaps and original-ID image retrieval.
+The original app remains running. Remaining product graphs and registry/publication cross-references, deployment
+binding/remapping, activation/handoff/failover and the full architecture/product scope remain open. The restore hold stays in place.
