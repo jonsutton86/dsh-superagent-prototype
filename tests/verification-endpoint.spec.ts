@@ -11,6 +11,8 @@ import { validateSnapshot } from '../src/verification/snapshot.ts'
 import { VerificationJob } from '../src/verification/model.ts'
 import { fingerprint } from '../src/remote/journal.ts'
 import { mkdir } from 'node:fs/promises'
+import { ownershipAuthority } from './fixtures/ownership-authority.ts'
+import { CoordinatorOwnership } from '../src/ownership/lease.ts'
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { for (const stop of cleanup.splice(0).reverse()) await stop(); vi.restoreAllMocks() })
 const native = process.env.DSH_REMOTE_ISOLATION === '1'
@@ -140,6 +142,19 @@ it('refuses to verify a replacement of the enrolled workspace root', async () =>
   const accepted = await h.client.intent<RemoteJob>(h.spawn('true', { verification: { kind: 'check' } }))
   const result = await h.settled(accepted.id)
   expect(result.error).toContain('identity changed'); expect(result.outcome).toBeUndefined(); expect(result.verification?.snapshot).toBeUndefined()
+})
+it('pins the coordinator owner and fences a multi-stage check when that ownership ends', async () => {
+  const authority = await ownershipAuthority(cleanup), owner = new CoordinatorOwnership(authority.config)
+  cleanup.push(() => owner.close())
+  const h = await remoteFixture(cleanup, { native, ownership: authority.resource, access: owner, beforeEnroll: async () => { await owner.start() } })
+  const stamp = owner.status().owner
+  const good = await h.client.intent<RemoteJob>(h.spawn('printf authorized', { verification: { kind: 'check' } }))
+  expect(await h.settled(good.id)).toMatchObject({ ownership: stamp, outcome: { exitCode: 0 }, verification: { stage: 'finished' } })
+  const interrupted = await h.client.intent<RemoteJob>(h.spawn('sleep 0.5; exit 0', { verification: { kind: 'check' } }))
+  await vi.waitFor(async () => expect((await h.client.call<RemoteJob>({ op: 'job.get', id: interrupted.id })).verification?.stage).toBe('checking'))
+  await owner.close()
+  const result = await h.settled(interrupted.id)
+  expect(result.ownership).toEqual(stamp); expect(result.error).toBeTruthy(); expect(result.verification?.stage).not.toBe('finished')
 })
 it('refuses artifact mismatch and reports failed checks without manufacturing a passing verification', async () => {
   const h = await remoteFixture(cleanup, { native }), root = h.enrolled.grant.root; await writeFile(join(root, 'artifact.txt'), 'actual')
