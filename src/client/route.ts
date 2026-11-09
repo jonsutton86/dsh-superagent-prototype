@@ -5,13 +5,14 @@ import type { SetupPlace } from '../setup.ts'
 import { DECISION_FILTERS, type DecisionFilter } from './api.ts'
 import type { T } from './text.ts'
 
-export const TABS = ['inbox', 'missions', 'library', 'personas', 'environments', 'overview', 'source', 'trigger', 'eval', 'execution', 'settings'] as const
+export const TABS = ['inbox', 'missions', 'schedules', 'library', 'personas', 'environments', 'overview', 'source', 'trigger', 'eval', 'execution', 'settings'] as const
 export type Tab = typeof TABS[number]
 export const SETTINGS_GROUPS = ['source', 'eval', 'execution', 'prompts', 'deployment'] as const
 export type SettingsGroup = typeof SETTINGS_GROUPS[number]
 export type Route = { page: 'overview' | 'source' | 'environments' | 'personas'; id?: undefined; query?: undefined }
   | { page: 'inbox'; id?: string; query?: { filter?: InboxFilter } }
   | { page: 'missions'; id?: string; query?: undefined }
+  | { page: 'schedules'; id?: string; query?: { mission?: string } }
   | { page: 'library'; id?: string; query?: { scope?: string } }
   | { page: 'trigger'; id?: undefined; query?: { filter?: ThreadFilter } }
   | { page: 'trigger'; id: string; query?: { trigger?: string } }
@@ -25,7 +26,7 @@ export const settingsRoute = (group: SettingsGroup, query: { source?: string; ve
 export const setupPage = (place: SetupPlace): Route =>
   place === 'deployment' ? settingsRoute('deployment') : settingsRoute('source', { source: place })
 export const routeLabel = (t: T, route: Route): string =>
-  route.id ? t(route.page === 'inbox' ? 'tab.inbox' : route.page === 'missions' ? 'tab.missions' : route.page === 'library' ? 'tab.library' : route.page === 'trigger' ? 'term.thread' : 'term.ticket') : t(`tab.${route.page}`)
+  route.id ? t(route.page === 'schedules' ? 'tab.schedules' : route.page === 'inbox' ? 'tab.inbox' : route.page === 'missions' ? 'tab.missions' : route.page === 'library' ? 'tab.library' : route.page === 'trigger' ? 'term.thread' : 'term.ticket') : t(`tab.${route.page}`)
 
 const pick = <V extends string>(values: readonly V[], value: unknown): V | undefined => values.find(item => item === value)
 function compact<Q extends object>(query: Q): Q | undefined {
@@ -41,6 +42,7 @@ export function parseRoute(value: unknown): Route | undefined {
     case 'inbox': return record ? { page, id: record } : { page, query: compact({ filter: pick(INBOX_FILTERS, query?.filter) }) }
     case 'library': return { page, ...(record ? { id: record } : {}), query: compact({ scope: text('scope') }) }
     case 'missions': return record ? { page, id: record } : { page }
+    case 'schedules': return record ? { page, id: record } : { page, query: compact({ mission: text('mission') }) }
     case 'overview': case 'source': case 'environments': case 'personas': return { page }
     case 'trigger': return record ? { page, id: record, query: compact({ trigger: text('trigger') }) }
       : { page, query: compact({ filter: pick(THREAD_FILTERS, query?.filter) }) }

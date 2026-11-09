@@ -30,6 +30,7 @@ import { sourcesStatus, type SetupState } from './views/sources.ts'
 import { decisionList, search, threadDetail, threadList } from './views/threads.ts'
 import { executorLoad, ticketDetail, ticketList } from './views/tickets.ts'
 import type { Workspace } from '../workspace/service.ts'
+import type { Schedules } from '../workspace/schedules.ts'
 import { WorkspaceError } from '../workspace/model.ts'
 import type { Library } from '../workspace/library.ts'
 import type { Inbox } from '../workspace/inbox.ts'
@@ -62,6 +63,7 @@ export interface HttpHost {
   readonly inbox: Inbox
   readonly library: Library
   readonly workspace: Workspace
+  readonly schedules?: Schedules
   readonly supervision?: Supervision
   readonly store: Store
   /** Feishu message links resolved since startup, used by search to match AppLink URLs. */
@@ -187,6 +189,7 @@ const SettingsBlockSchema = z.union([z.enum(['policy', 'eval', 'executor']), Sou
 const SaveRequest = z.object({ value: z.unknown(), revision: z.number().int().nonnegative() })
 
 function routes(runtime: HttpHost): Routes {
+  const schedules = () => { if (!runtime.schedules) throw new WorkspaceError(409, 'Schedules are unavailable'); return runtime.schedules }
   const { store } = runtime
   const ticket = (id: string) => { if (!store.tickets.get(id)) throw new RouteError(404, 'Ticket not found'); return id }
   const execution = (id?: string, binding?: string) => {
@@ -272,6 +275,13 @@ function routes(runtime: HttpHost): Routes {
     'GET library/:id': ({ params, query }) => runtime.library.read(params.id, query),
     'GET library/:id/content': ({ params }) => runtime.library.content(params.id),
     'PUT library/:id': async ({ params, body }) => runtime.library.archive(params.id, await body()),
+    'GET schedules': ({ query }) => schedules().list(offset.parse(query.offset), limit(30, 100).parse(query.limit)),
+    'GET schedules/:id': ({ params, query }) => schedules().get(params.id, offset.parse(query.offset), limit(30, 100).parse(query.limit)),
+    'GET schedules/:id/versions/:version': ({ params }) => schedules().version(params.id, z.coerce.number().int().positive().parse(params.version)),
+    'POST schedules': async ({ body }) => schedules().create(await body(512 * 1024 + 8192)),
+    'PUT schedules/:id': async ({ params, body }) => schedules().update(params.id, await body(512 * 1024 + 8192)),
+    'POST schedules/:id/enabled': async ({ params, body }) => schedules().toggle(params.id, await body()),
+    'POST schedules/:id/occurrences/:occurrence/retry': async ({ params, body }) => schedules().retry(params.id, params.occurrence, await body()),
     'GET missions': ({ query }) => runtime.workspace.list(offset.parse(query.offset), limit(30, 100).parse(query.limit)),
     'GET missions/:id': ({ params }) => runtime.workspace.get(params.id),
     'GET missions/:id/plans': ({ params, query }) => runtime.workspace.plans.list(params.id, offset.parse(query.offset), limit(20, 50).parse(query.limit)),

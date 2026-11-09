@@ -25,6 +25,15 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: persistent mission schedules
+
+[041 Schedules](041-schedules.md) adds versioned complete-plan snapshots, timezone-aware calendar/interval/one-off
+occurrences, missed-run policies, durable run and open-mission limits, transactional mission dispatch and operator controls.
+Every occurrence uses Engine authorization with recorded standing authority, retains human dependencies and result review,
+and resumes from its original reservation after restart. The Schedules page exposes timing, limits, pause/resume, history,
+blocked dispatch retry and mission links. Reflection proposals, provider spend budgets, retention, multi-workspace ownership,
+restored activation and the remaining full architecture/product requirements remain open.
+
 ## Implemented increment: pending input recovery across all current kinds
 
 [040 Pending inputs](040-pending-input-recovery.md) extends accepted/read acknowledgement tracking to policy changes,

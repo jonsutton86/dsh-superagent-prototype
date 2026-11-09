@@ -12,6 +12,7 @@ import type { ActionCommandInput, AddActionInput, CreateMissionInput, MissionCom
 import type { ArchiveRecordInput, CreateRecordInput, LibraryContent, LibraryEntry, LibraryList, LibraryQueryInput, LibraryRead } from '../workspace/library-model.ts'
 import type { Conversation, InboxFilter, InboxItem, InboxPage, InboxReplyInput, InboxStartInput } from '../workspace/inbox-model.ts'
 import type { PlanIndex, PlanProposal, PlanVersion, ProposePlanInput, ReviewPlanInput, RequestPlanInput } from '../workspace/plan-model.ts'
+import type { CreateScheduleInput, SaveScheduleInput, ToggleScheduleInput, ScheduleView, ScheduleList, Schedule } from '../workspace/schedule-model.ts'
 import type { EnvironmentList, EnvironmentView, EnrollEnvironmentInput, EnvironmentCommandInput } from '../environments/model.ts'
 import type { ExecutionReceiptPage } from '../remote/effects.ts'
 import type { ArchivePersonaInput, CreatePersonaInput, PersonaList, PersonaRecord, PersonaVersion, SavePersonaInput } from '../personas/model.ts'
@@ -32,6 +33,13 @@ interface Paged { offset?: number; limit?: number }
 type Delivery = 'injected' | 'pending'
 
 export interface Api {
+  'GET schedules': { query?: Paged; response: ScheduleList }
+  'GET schedules/:id': { query?: Paged; response: ScheduleView }
+  'GET schedules/:id/versions/:version': { response: Schedule }
+  'POST schedules': { body: CreateScheduleInput; response: ScheduleView }
+  'PUT schedules/:id': { body: SaveScheduleInput; response: ScheduleView }
+  'POST schedules/:id/enabled': { body: ToggleScheduleInput; response: ScheduleView }
+  'POST schedules/:id/occurrences/:occurrence/retry': { body: { requestId: string }; response: ScheduleView }
   'GET missions/:id/inbound': { response: InboundState }
   'PUT missions/:id/inbound': { body: ConfigureInbound; response: InboundState }
   'POST missions/:id/inbound/poll': { body: { rescan?: boolean }; response: InboundState }

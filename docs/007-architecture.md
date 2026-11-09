@@ -306,6 +306,8 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/workspace/inbox.ts` | Durable read receipts and text projections, atomic new tasks, authorized replies and bounded history pages |
 | `src/client/inbox.tsx` | Inbox filters, conversation reading, task/reply forms and mission/artifact navigation |
 | `src/workspace/service.ts` | Durable missions, dependency checks, operator dispatch, review and transactional request receipts |
+| `src/workspace/schedule-model.ts`, `cadence.ts`, `schedules.ts` | Versioned schedule authorization, timezone-aware occurrences, durable run limits and bounded transactional mission dispatch |
+| `src/client/schedules.tsx` | Plan snapshot scheduling, calendar/interval controls, limits, original-request retries and occurrence navigation |
 | `src/personas/model.ts` | Bounded immutable persona definitions, exact version references, management commands and catalog contracts |
 | `src/personas/service.ts` | Transactional persona versions, revision checks, model validation, idempotent receipts and archive semantics |
 | `src/personas/runtime.ts` | Harness scoped persona instructions, embedded skills and monotonic optional-tool guards |
@@ -504,6 +506,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/library.spec.ts` | Library restart/replay, atomic rollback, scoping, provenance, integrity, freshness, review invalidation and Runtime/API integration |
 | `tests/library-ui.spec.tsx` | Rendered library creation/revision/archive and worker artifact preview through actual management routes |
 | `tests/workspace.spec.ts` | Mission persistence, deduplication, dependencies, review freshness, rollback and Runtime/Harness wiring |
+| `tests/schedules.spec.ts`, `tests/schedules-ui.spec.tsx` | DST and missed runs, standing authorization, restart deduplication, limits, dispatch rollback, review gates and rendered API retry/pause/navigation |
 | `tests/workspace-ui.spec.tsx` | Rendered mission forms through management routes, Harness adapter, worker result review and completion |
 | `tests/plans.spec.ts` | Plan persistence, migration, approval races, dependency invalidation, active work protection, worker scope and planner integration |
 | `tests/plans-ui.spec.tsx` | Rendered plan editing/review, ambiguous proposal replay, historical drafts and stale planner proposals |
@@ -597,6 +600,7 @@ One SQLite file, `<stateDir>/orchestrator.sqlite`, which only the Store opens.
 | `outbox` | The receipt of each message for a Channel, by id, with the Ticket it is for and its `status`, `pending`, `sent` or `dropped`, kept so an id is never queued twice; for a dropped message, when and why, as the generated column `dropped`, its time, and a reason code. A message that waits has a `reply` effect, which holds its attempts | The Outbox |
 | `delivery_grant`, `channel_publication` | Historical exact-plan destination consent and original mission message intents/receipts; attempted withdrawals retain unresolved delivery evidence | ChannelPublications |
 | `conversation_binding`, `conversation_message` | Historical participant/task authority, durable provider cursors, native deduplication and received/unsupported message receipts | ConversationInbox |
+| `workspace_schedule`, `workspace_schedule_version`, `workspace_occurrence`, `workspace_schedule_command` | Versioned standing authorizations, due cursors, lifetime run reservations, immutable occurrence identities and operator command receipts | Schedules |
 | `kv` | Every other record, by key | The part that names it |
 
 A generated column is computed from its row's JSON and is empty outside its set, and each has an index over its set, so a pass reads only active work. A database that predates a column gets it when the Store opens it.

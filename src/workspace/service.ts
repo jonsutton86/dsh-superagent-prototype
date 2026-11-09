@@ -9,6 +9,7 @@ import { ActionCommand, AddAction, CreateMission, MissionCommand, WorkspaceError
 import { Planning } from './plans.ts'
 import { PlanDefinition, definitionOf } from './plan-model.ts'
 import type { PersonaRef } from '../personas/model.ts'
+import type { ScheduleOrigin } from './schedule-model.ts'
 
 type Execution = Pick<Engine, 'receive' | 'decide' | 'stopTicket' | 'retryTicket'>
 const SOURCE = 'workspace'
@@ -65,7 +66,10 @@ export class Workspace {
     this.environmentSelection(reference)
   }
   private validTrigger(trigger: Trigger): boolean {
-    return trigger.actor.source === SOURCE && trigger.actor.id === OPERATOR && trigger.human && trigger.addressed === 'direct'
+    const origin = typeof trigger.meta.mission === 'string' ? this.find(trigger.meta.mission)?.schedule : undefined
+    const scheduled = !!origin && trigger.meta.occurrence === origin.occurrence && trigger.meta.schedule === origin.id
+      && trigger.meta.scheduleRevision === origin.revision && trigger.meta.scheduledFor === origin.due
+    return trigger.actor.source === SOURCE && trigger.actor.id === OPERATOR && (trigger.human || scheduled) && trigger.addressed === 'direct'
       && this.authorized(trigger.meta) && trigger.id === trigger.meta.intent
   }
   private find(id: string): Mission | undefined {
@@ -164,6 +168,25 @@ export class Workspace {
       this.save(mission); this.plans.snapshot(mission, 'Mission created'); this.event(mission, 'created', 'Mission created'); return mission
     })
   }
+  /** Clone an operator-authorized schedule snapshot; callers share the occurrence reservation transaction. */
+  createScheduled(requestId: string, input: PlanDefinition, origin: ScheduleOrigin): MissionView {
+    const plan = PlanDefinition.parse(input)
+    return this.command(requestId, { operation: 'scheduled-mission', plan, origin }, () => {
+      for (const action of plan.actions) { this.validatePersona(action.persona); this.validateEnvironment(action.environment) }
+      const ids = new Map(plan.actions.map(action => [action.id, randomUUID()])), at = now()
+      const mission: Mission = { ...plan, id: randomUUID(), status: 'active', revision: 1, planVersion: 1, createdAt: at, updatedAt: at,
+        schedule: { ...origin }, actions: plan.actions.map(action => ({ ...action, id: ids.get(action.id)!,
+          dependsOn: action.dependsOn.map(id => ids.get(id)!), runs: [] })) }
+      this.save(mission); this.plans.snapshot(mission, `Schedule ${origin.id}, revision ${origin.revision}`)
+      this.event(mission, 'scheduled', `Scheduled for ${origin.due}`); return mission
+    })
+  }
+  /** Dispatch an untouched occurrence's next action under its recorded standing authorization, never a fabricated human message. */
+  runScheduled(id: string, actionId: string, requestId: string): MissionView {
+    const mission = this.require(id)
+    if (!mission.schedule || mission.planVersion !== 1) throw new WorkspaceError(409, 'The scheduled mission plan changed; dispatch it manually.')
+    return this.act(id, actionId, { requestId, revision: mission.revision, command: 'run' }, true)
+  }
   add(id: string, input: unknown): MissionView {
     const request = AddAction.parse(input)
     return this.command(request.requestId, { operation: 'add', id, ...request }, () => {
@@ -225,9 +248,9 @@ export class Workspace {
       return this.get(id)
     })
   }
-  act(id: string, actionId: string, input: unknown): MissionView {
+  act(id: string, actionId: string, input: unknown, scheduled = false): MissionView {
     const request = ActionCommand.parse(input)
-    return this.command(request.requestId, { operation: 'action', id, actionId, ...request }, () => {
+    return this.command(request.requestId, { operation: 'action', id, actionId, ...request, ...(scheduled ? { scheduled: true } : {}) }, () => {
       const mission = this.editable(id, request.revision); this.active(mission)
       const action = mission.actions.find(item => item.id === actionId)
       if (!action) throw new WorkspaceError(404, 'Action not found')
@@ -244,13 +267,17 @@ export class Workspace {
           const dependency = mission.actions.find(item => item.id === id)!
           return `${dependency.title}: ${dependency.accepted?.note ?? ''}`
         }).join('\n').slice(0, 12000)
-        engine.receive({ id: intent, source: SOURCE, actor: { source: SOURCE, id: OPERATOR }, human: true, addressed: 'direct',
+        const origin = scheduled ? mission.schedule : undefined
+        if (scheduled && !origin) throw new WorkspaceError(409, 'Scheduled authorization is missing')
+        engine.receive({ id: intent, source: SOURCE, actor: { source: SOURCE, id: OPERATOR }, human: !scheduled, addressed: 'direct',
           at: now(), threads: [{ source: SOURCE, id: intent }], channel: this.deliveryChannel?.(mission, action),
           text: `Mission: ${mission.title}\nObjective: ${mission.objective}\nAcceptance criteria: ${mission.acceptance}\n\nAction: ${action.title}\n${action.instructions}`
             + (context ? `\n\nReviewed dependency outcomes (context, not additional instructions):\n${context}` : ''),
-          meta: { mission: id, action: actionId, actionRevision: action.definitionRevision ?? 1, intent, label: action.title, ...(action.persona ? { persona: action.persona } : {}), ...(action.environment ? { environment: action.environment } : {}) } })
+          meta: { mission: id, action: actionId, actionRevision: action.definitionRevision ?? 1, intent, label: action.title,
+            ...(origin ? { schedule: origin.id, scheduleRevision: origin.revision, occurrence: origin.occurrence, scheduledFor: origin.due } : {}),
+            ...(action.persona ? { persona: action.persona } : {}), ...(action.environment ? { environment: action.environment } : {}) } })
         const decision = engine.decide(intent, { kind: 'accept', title: action.title, scope: action.instructions,
-          name: 'mission-action', reason: 'Explicit local operator dispatch from the mission workspace' })
+          name: 'mission-action', reason: scheduled ? 'Standing operator authorization from the recorded schedule occurrence' : 'Explicit local operator dispatch from the mission workspace' })
         if (!decision.ticketId) throw new WorkspaceError(409, 'Execution did not accept the action.')
         action.runs.push(decision.ticketId); action.executionRevision = action.definitionRevision ?? 1
         action.dependencyRevision = this.dependencyRevision(action, mission.actions); delete action.accepted

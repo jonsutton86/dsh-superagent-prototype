@@ -2,6 +2,7 @@
 import { z } from 'zod'
 import { PersonaRef } from '../personas/model.ts'
 import { WorldRef } from '../environments/pool-model.ts'
+import type { ScheduleOrigin } from './schedule-model.ts'
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/)
 const title = z.string().trim().min(1).max(160)
@@ -32,6 +33,7 @@ export interface MissionAction {
 export interface Mission {
   id: string; title: string; objective: string; acceptance: string; status: 'active' | 'completed' | 'archived'
   revision: number; planVersion: number; createdAt: string; updatedAt: string; actions: MissionAction[]
+  schedule?: ScheduleOrigin
 }
 export interface MissionEvent { id: number; at: string; kind: string; actionId?: string; text: string }
 export interface ActionView extends MissionAction {

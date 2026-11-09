@@ -15,6 +15,7 @@ import { RemoteClient } from '../src/remote/client.ts'
 import { publicationFixture } from './fixtures/publication.ts'
 import { worldBinding } from '../src/remote/world-journal.ts'
 import { qualifyPublication } from './fixtures/publication-harness.ts'
+import { qualifySchedules } from './fixtures/schedules.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { for (const dispose of cleanup.reverse()) await dispose(); cleanup.length = 0; vi.restoreAllMocks() })
@@ -269,6 +270,7 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
         expect(resumed.executionEnvironment.world).toBe(alternate.id)
       }, { timeout: 120_000, interval: 1000 })
     }
+    if (owned && alternate) await qualifySchedules(api, alternate.id, async () => { await stop(); start(); await ready() })
     let lostRevocation: ReturnType<typeof vi.spyOn> | undefined, revocationCalls = 0
     if (owned && otherTask) {
       const spare = await api(`endpoints/${h.endpoint.journal.id}/commands`, { revision: 1, request: { op: 'grant.create', requestId: 'recovery-active-world',
