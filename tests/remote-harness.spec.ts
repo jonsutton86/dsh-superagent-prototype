@@ -25,8 +25,8 @@ const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { for (const dispose of cleanup.reverse()) await dispose(); cleanup.length = 0; vi.restoreAllMocks() })
 
 /** Opt-in qualification against the operator's installed Harness and configured model; never copies or prints credential values. */
-it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'managed', 'owned-dedicated', 'owned-managed'] as const)('runs persona-bound real Harness work through %s execution worlds', async variant => {
-  const owned = variant.startsWith('owned-'), mode = variant.endsWith('dedicated') ? 'dedicated' : 'managed'
+it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'managed', 'owned-dedicated', 'owned-managed', 'owned-dedicated-restore'] as const)('runs persona-bound real Harness work through %s execution worlds', async variant => {
+  const owned = variant.startsWith('owned-'), mode = variant.includes('dedicated') ? 'dedicated' : 'managed'
   const cli = process.env.DSH_QUALIFICATION_CLI!, home = process.env.DSH_QUALIFICATION_HOME!, source = process.env.DSH_QUALIFICATION_PROFILE!
   if (!cli || !home || !source) throw new Error('Supply the qualification CLI, DSH home and source profile paths')
   const authority = owned ? await ownershipAuthority(cleanup, ['endpoint', 'publication']) : undefined
@@ -404,9 +404,9 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     const worldDirectories = dedicated.map(config => config.stateDir)
     const worldConnections = dedicated.map(config => ({ binding: worldBinding(config.endpointId, enrolled.grant), endpointId: config.endpointId,
       url: config.url, credentialFile: config.credentialFile }))
-    const unrecordedPublications = mode === 'dedicated' && publisher && ownershipConfig
+    const unrecordedPublications = variant === 'owned-dedicated' && publisher && ownershipConfig
       ? await qualifyPublication({ cli, home, profile, directory, port, publisher, ownership: ownershipConfig }) : []
-    await qualifyRecovery({ cli, home, profile, directory, temporary: h.directory, port, stateDir, sessionRoot, executionProfile,
+    await qualifyRecovery({ cli, home, profile, directory, temporary: h.directory, port, stateDir, sessionRoot,
       worldDirectories, worker: ticket.sessionId, worlds: mode === 'managed' ? owned ? 3 : 2 : 1, unrecordedPublications, expectedRecoveredRevocations: lostRevocation ? 1 : 0,
       expectedPublicationDestinations: publisher?.config.destinations.length,
       ...(authority ? { authority: { ...authority.admin.connection, coordinatorId: authority.config.coordinatorId }, originalClaimantFile: authority.config.credentialFile,

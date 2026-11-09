@@ -25,6 +25,15 @@ not a claim that the prototype already ships every feature or that the article s
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
 
+## Implemented increment: generated recovery launch profiles
+
+[061 Recovery launch profiles](061-recovery-launch-profile.md) emits the complete managed or dedicated Harness patch from
+authenticated installation bindings, with explicit imported JSONL backend and loopback port selection when requested.
+Startup checks the exact patch hash; provider credentials stay in the configured base profile. Destination locking and a
+single rename avoid an empty target reservation. Qualification now launches the generated patch unchanged after retiring
+the old coordinator Store, Session files and world journals. Final local, native and live qualification is pending.
+Cross-machine failover and all remaining complete architecture/product requirements remain open.
+
 ## Implemented increment: installed recovery and Runtime handoff
 
 [060 Installed recovery](060-installed-recovery.md) binds the prepared Store, original Session backend, relocated private

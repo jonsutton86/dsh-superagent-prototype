@@ -1,6 +1,6 @@
 /** Qualification through the installed Harness loader and persistence backend, after its coordinator has stopped. */
 import { spawn, type ChildProcess } from 'node:child_process'
-import { readFile, readdir, realpath, writeFile } from 'node:fs/promises'
+import { readFile, readdir, realpath, rename, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { expect, vi } from 'vitest'
 import { createRecoveryKey } from '../../src/recovery/crypto.ts'
@@ -16,11 +16,11 @@ import { privateCredential } from '../../src/environments/endpoint-files.ts'
 import { randomUUID } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import type { WorldRecord } from '../../src/remote/world-journal.ts'
-import { readInstallation, installationProfile } from '../../src/recovery/installation.ts'
+import { readInstallation } from '../../src/recovery/installation.ts'
+import { inside } from '../../src/remote/journal.ts'
 
 export async function qualifyRecovery(input: { cli: string; home: string; profile: string; directory: string; temporary: string;
   stateDir: string; sessionRoot: string; port: number; worldDirectories: string[]; worker: string; worlds: number;
-  executionProfile: any[];
   authority?: OwnershipConnection & { coordinatorId: string }; originalClaimantFile?: string;
   audit?: Pick<AuditCheckpointReceipts, 'endpoints' | 'worlds' | 'publication'>; unrecordedPublications?: string[]; expectedRecoveredRevocations?: number; expectedPublicationDestinations?: number }) {
   const root = await realpath(input.temporary), keyFile = join(root, 'recovery-key'), outputDir = join(root, 'checkpoints')
@@ -35,7 +35,7 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
   }
   const run = async (mode: 'checkpoint' | 'verify' | 'stage' | 'import-sessions' | 'reserve-ownership' | 'audit-receipts' | 'prepare-receipts' | 'install', checkpoint?: string,
     reservation?: Pick<ReserveCheckpointOwnership, 'requestId' | 'epoch' | 'generation' | 'authority'>, preparation?: { requestId: string; auditId: string },
-    installation?: { requestId: string; preparationId: string; target: string }) => {
+    installation?: { requestId: string; preparationId: string; target: string; launch: { port: number; sessionRoot: string } }) => {
     const receiptFile = join(root, 'maintenance-receipt-' + invocation++ + '.json')
     const config = { mode, keyFile, outputDir, stateDir: input.stateDir, worldDirectories: input.worldDirectories, checkpoint, destination, receiptFile,
       ...(reservation ? { reservation } : {}), ...(preparation ? { preparation } : {}), ...(installation ? { installation } : {}),
@@ -136,7 +136,9 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
         if (!input.unrecordedPublications?.length) {
           const image = await verifyReceiptImage(preparedPath, keyFile)
           expect(image.executionOwnership).toBe(false); expect(image.applied.commands).toBeGreaterThan(0); expect(image.applied.publications).toBeGreaterThan(0)
-          expect(image.administration?.verified).toBe(administrative); expect(administrative).toBeGreaterThan(0)
+          expect(image.administration?.verified).toBe(administrative)
+          if (input.worlds > 1) expect(administrative).toBeGreaterThan(0)
+          else expect(administrative).toBe(0) // Dedicated enrollment lives in the separate operator Store.
           expect(image.revocations).toEqual({ verified: revokedWorlds.size, recovered: input.expectedRecoveredRevocations ?? 0 })
           expect(image.executionConfiguration).toEqual({ worlds: activeWorlds, bindings: activeBindings })
           expect(image.sessionBackend).toEqual({ sessions: manifest.sessions.length, events: manifest.sessions.reduce((total, session) => total + session.eventCount, 0) })
@@ -168,8 +170,10 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
           expect(image.connectorState!.legacyMessages).toBe(0)
           expect(image.workspaceState).toMatchObject({ version: 1, legacyPlanVersions: 0, legacyTriggers: 0, digest: expect.stringMatching(/^[a-f0-9]{64}$/) })
           expect(image.workspaceState!.missions).toBeGreaterThan(0)
-          expect(image.workspaceState!.schedules).toBeGreaterThan(0)
-          expect(image.workspaceState!.scheduledExecutions).toBeGreaterThan(0)
+          if (input.worlds > 1) {
+            expect(image.workspaceState!.schedules).toBeGreaterThan(0)
+            expect(image.workspaceState!.scheduledExecutions).toBeGreaterThan(0)
+          } else expect(image.workspaceState!.scheduledExecutions).toBe(0)
           expect(image.resultState).toMatchObject({ version: 1, legacyReviewSeals: 0, digest: expect.stringMatching(/^[a-f0-9]{64}$/) })
           expect(image.resultState!.artifacts).toBeGreaterThan(0)
           expect(image.resultState!.successfulRuns).toBeGreaterThan(0)
@@ -222,17 +226,17 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
               expect(command.recovery).toMatchObject({ originalPhase: 'done', requestHash: expect.stringMatching(/^[a-f0-9]{64}$/) })
             }
           } finally { prepared.close() }
-          const installation = { requestId: randomUUID(), preparationId: preparation.requestId, target: join(root, 'installed') }
+          const installation = { requestId: randomUUID(), preparationId: preparation.requestId, target: join(root, 'installed'), launch: { port: input.port, sessionRoot: importedRoot } }
           await run('install', checkpoint, undefined, undefined, installation)
           await run('install', checkpoint, undefined, undefined, installation)
           const installed = await readInstallation(installation.target, keyFile, new AbortController().signal)
-          const overlay = structuredClone(input.executionProfile)
-          for (const entry of overlay) {
-            if (entry.id === 'dsh-superagent') { entry.config = { ...entry.config, ...installationProfile(installed, keyFile) }; delete entry.disabled }
-            for (const child of entry.insert ?? []) if (child.id === 'operator-remote-world')
-              child.config = { ...installed.worlds.find(item => !item.managed)!.config, ownership: { authorityId: installed.ownership.authorityId, coordinatorId: installed.ownership.coordinatorId } }
-          }
-          overlay.push({ id: 'session-persistence-jsonl', config: { root: importedRoot, compression: 'none' } })
+          expect(installed.launch).toMatchObject(installation.launch)
+          const launchPatch = join(installed.root, 'harness.patch.json'), originalPatch = await readFile(launchPatch, 'utf8')
+          // The replacement must run without its predecessor's Store, Session files or journals. Independent services
+          // and the explicitly selected inference provider remain separate deployments, with their existing configuration.
+          const oldRoots = [...new Set([input.stateDir, input.sessionRoot, ...input.worldDirectories])]
+          for (const directory of oldRoots.filter(path => !oldRoots.some(other => other !== path && inside(other, path))))
+            await rename(directory, directory + '-retired-' + randomUUID())
           const api = async (path: string, body?: unknown) => {
             const response = await fetch(`http://127.0.0.1:${input.port}/orchestrator/api/${path}`, { method: body ? 'POST' : 'GET',
               headers: { 'x-orchestrator-request': '1', 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(5000) })
@@ -240,8 +244,8 @@ export async function qualifyRecovery(input: { cli: string; home: string; profil
             return await response.json() as any
           }
           const start = async () => {
-            await writeFile(patch, JSON.stringify(overlay), { mode: 0o600 }); log = ''
-            child = spawn(input.cli, ['--profile', input.profile, '--patch', patch, '--no-open'], { cwd: resolve('.'), env: { ...process.env, DSH_HOME: input.home }, stdio: ['ignore', 'pipe', 'pipe'] })
+            expect(await readFile(launchPatch, 'utf8')).toBe(originalPatch); log = ''
+            child = spawn(input.cli, ['--profile', input.profile, '--patch', launchPatch, '--no-open'], { cwd: resolve('.'), env: { ...process.env, DSH_HOME: input.home }, stdio: ['ignore', 'pipe', 'pipe'] })
             child.stdout!.on('data', bytes => { log = (log + bytes.toString()).slice(-100_000) })
             child.stderr!.on('data', bytes => { log = (log + bytes.toString()).slice(-100_000) })
             try {

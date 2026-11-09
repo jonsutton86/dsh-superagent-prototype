@@ -24,6 +24,7 @@ export { inferenceConfigurationCheck, type RecoveryInferenceHost, type Inference
 export { sourceConfigurationCheck, type RecoverySourceHost, type SourceConfigurationVerification } from './sources.ts'
 export { reconcileStateGraph, StateGraphError, type StateGraphReconciliation } from './graph.ts'
 export { installCheckpoint, readInstallation, installationProfile, type InstallCheckpoint, type Installation } from './installation.ts'
+export { installationPatch, type InstallationLaunch } from './profile.ts'
 export const name = 'dsh-superagent-recovery'
 export const inject = ['sessionPersistence']
 const authority = s.object({ url: s.string().required(), authorityId: s.string().required(), coordinatorId: s.string().required(), credentialFile: s.string().pattern(/^\//).required(),
@@ -42,13 +43,14 @@ export const Config: s<Partial<RecoveryConfig>, RecoveryConfig> = s.object({ mod
       timeoutMs: s.number().min(100).max(60_000).default(5000) })]) })]),
   preparation: s.union([s.object({ requestId: s.string().required(), auditId: s.string().required() })]),
   installation: s.union([s.object({ requestId: s.string().required(), preparationId: s.string().required(), target: s.string().pattern(/^\//).required(),
+    launch: s.union([s.object({ port: s.number().min(1).max(65535).step(1), sessionRoot: s.string().pattern(/^\//) })]),
     credentials: s.array(s.object({ from: s.string().pattern(/^\//).required(), to: s.string().pattern(/^\//).required() })).default([]) })]),
   worldDirectories: s.array(s.string()).default([]) })
 interface RecoveryConfig { mode: 'checkpoint' | 'verify' | 'stage' | 'import-sessions' | 'reserve-ownership' | 'audit-receipts' | 'prepare-receipts' | 'install'; keyFile: string; stateDir?: string; outputDir?: string;
   checkpoint?: string; destination?: string; receiptFile?: string; worldDirectories?: string[];
   reservation?: Pick<ReserveCheckpointOwnership, 'requestId' | 'epoch' | 'generation' | 'authority'>;
   preparation?: Pick<PrepareCheckpointReceipts, 'requestId' | 'auditId'>;
-  installation?: Pick<InstallCheckpoint, 'requestId' | 'preparationId' | 'target' | 'credentials'>;
+  installation?: Pick<InstallCheckpoint, 'requestId' | 'preparationId' | 'target' | 'credentials' | 'launch'>;
   audit?: Pick<AuditCheckpointReceipts, 'authority' | 'endpoints' | 'worlds' | 'publication' | 'publicationClient'> }
 const required = (value: string | undefined, field: string) => { if (!value) throw new Error(`Recovery requires ${field}`); return value }
 
@@ -59,7 +61,7 @@ export async function apply(ctx: Context, config: RecoveryConfig): Promise<void>
   let checkpoint: string, path: string | undefined, reservation: Awaited<ReturnType<typeof reserveCheckpointOwnership>> | undefined, audit: ReceiptAudit | undefined, prepared: Awaited<ReturnType<typeof prepareCheckpointReceipts>> | undefined, installation: Installation | undefined
   if (config.mode === 'install') {
     if (!config.audit || !config.installation) throw new Error('Installation requires resource connections and the selected prepared image')
-    installation = await installCheckpoint({ ...config.audit, ...config.installation, checkpoint: required(config.checkpoint, 'checkpoint'), keyFile: config.keyFile,
+    installation = await installCheckpoint({ ...config.audit, ...config.installation, launch: config.installation.launch ?? {}, checkpoint: required(config.checkpoint, 'checkpoint'), keyFile: config.keyFile,
       destination: required(config.destination, 'destination'), signal: abort.signal })
     checkpoint = installation.image.checkpoint; path = installation.root
     ctx.logger.info('Checkpoint %s installed; Runtime startup must verify Sessions and acquire independent ownership', checkpoint)
@@ -101,6 +103,7 @@ export async function apply(ctx: Context, config: RecoveryConfig): Promise<void>
     const parent = privateDirectory(dirname(config.receiptFile))
     privateFile(join(parent, basename(config.receiptFile)), JSON.stringify({ version: 1, mode: config.mode, checkpoint,
       at: new Date().toISOString(), ...(path ? { path } : {}), ...(reservation ? { reservation } : {}), ...(audit ? { audit } : {}), ...(prepared ? { prepared: prepared.manifest } : {}),
-      ...(installation ? { installation: { id: installation.id, stateDir: installation.stateDir } } : {}), executionOwnership: false }))
+      ...(installation ? { installation: { id: installation.id, stateDir: installation.stateDir,
+        ...(installation.launch ? { patchFile: join(installation.root, 'harness.patch.json') } : {}) } } : {}), executionOwnership: false }))
   }
 }

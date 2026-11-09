@@ -1,26 +1,28 @@
 /** A private deployment of a prepared checkpoint. Historical requests are never rewritten to relocate a host. */
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import { chmod, copyFile, lstat, mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
+import { chmod, copyFile, lstat, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
+import { lockSync } from 'proper-lockfile'
 import { z } from 'zod'
 import { KV } from '../kv.ts'
 import { credentialDigest, privateCredential, privateDirectory, privateFile } from '../environments/endpoint-files.ts'
 import { fingerprint, inside } from '../remote/journal.ts'
 import { worldBinding, type WorldRecord } from '../remote/world-journal.ts'
 import type { RemoteWorldConfig } from '../remote/world.ts'
-import type { CoordinatorOwnershipConfig } from '../ownership/lease.ts'
-import type { PublicationConnection } from '../publication/client.ts'
 import type { AuditCheckpointReceipts } from './audit.ts'
 import type { RecoveryIntent } from './ownership.ts'
 import { withVerifiedStagedCheckpoint } from './checkpoint.ts'
 import { privateInput, recoveryKey } from './crypto.ts'
-import { ReceiptImage, syncRecoveryPath, verifyReceiptImage } from './image.ts'
+import { ReceiptImage, recoveryFileDigest, syncRecoveryPath, verifyReceiptImage } from './image.ts'
 import { recoveryStateDigest } from './state.ts'
 import { readRecoveryBindings, resolveRecoveryRegistration, resolveRecoveryWorld } from './bindings.ts'
+import { installationPatch, type InstallationLaunch } from './profile.ts'
+export { installationProfile } from './profile.ts'
 
 const digest = z.string().regex(/^[a-f0-9]{64}$/)
 const absolute = z.string().min(1).max(4096).refine(isAbsolute)
+const launchSchema = z.object({ port: z.number().int().min(1).max(65535).optional(), sessionRoot: absolute.optional() }).strict()
 const connection = z.object({ url: z.string().min(1).max(2048), credentialFile: absolute,
   timeoutMs: z.number().int().min(100).max(60_000).optional() })
 const authority = connection.extend({ authorityId: z.string().min(1).max(200), coordinatorId: z.string().min(1).max(200) }).strict()
@@ -36,12 +38,15 @@ export const Installation = z.object({ version: z.literal(1), id: z.string().uui
   worlds: z.array(z.object({ binding: digest, managed: z.boolean(), config: world, digest, original: z.unknown() }).strict()).max(20000),
   registrations: z.array(z.object({ original: digest, url: z.string().min(1).max(2048), credentialFile: absolute }).strict()).max(20000),
   credentials: z.array(z.object({ file: absolute, pin: digest }).strict()).max(20000),
+  launch: launchSchema.extend({ sha256: digest, bytes: z.number().int().positive().max(256_000) }).strict().optional(),
 }).strict()
 export type Installation = z.infer<typeof Installation>
 export interface InstallCheckpoint extends Pick<AuditCheckpointReceipts, 'checkpoint' | 'keyFile' | 'destination' | 'authority' | 'endpoints' | 'worlds' | 'publication' | 'publicationClient' | 'signal'> {
   preparationId: string; requestId: string; target: string
   /** Map a retained private path to the same credential on this host. The credential's original pin still applies. */
   credentials?: { from: string; to: string }[]
+  /** Generate a private launch patch; omitting sessionRoot retains the base profile's pluggable Session backend. */
+  launch?: InstallationLaunch
 }
 const mac = (value: unknown, key: Buffer, domain: string) => createHmac('sha256', key).update(domain + '\n').update(JSON.stringify(value)).digest()
 export function signInstallationValue(value: unknown, keyFile: string, domain: string): string {
@@ -69,6 +74,10 @@ export async function readInstallation(root: string, keyFile: string, signal: Ab
     privateCredential(item.file, item.pin)
   }
   for (const item of value.worlds) if (item.config.stateDir !== join(value.root, 'worlds', item.binding)) throw new Error('Installed world directory differs')
+  if (value.launch) {
+    const patch = await recoveryFileDigest(join(root, 'harness.patch.json'), signal, value.launch.bytes)
+    if (patch.sha256 !== value.launch.sha256 || patch.bytes !== value.launch.bytes) throw new Error('Installed Harness launch patch differs from its authenticated manifest')
+  }
   return value
 }
 const rows = <T>(db: DatabaseSync, table: string): T[] => db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table)
@@ -79,9 +88,13 @@ export const installationKV = <T>(db: DatabaseSync, key: string): T | undefined 
 /** Installation does not acquire ownership. Only startup may consume it while holding the destination Store lock. */
 export async function installCheckpoint(options: InstallCheckpoint): Promise<Installation> {
   z.string().uuid().parse(options.requestId); z.string().uuid().parse(options.preparationId)
+  const launch = options.launch && launchSchema.parse(options.launch)
   if (!isAbsolute(options.target) || resolve(options.target) !== options.target) throw new Error('Installation target must be a normalized absolute path')
-  const signal = options.signal ?? new AbortController().signal
-  return withVerifiedStagedCheckpoint(options.checkpoint, options.keyFile, options.destination, signal, async ({ root, manifest, db }) => {
+  const parent = privateDirectory(dirname(options.target))
+  if (join(parent, basename(options.target)) !== options.target) throw new Error('Installation target cannot use a redirected parent directory')
+  const abort = new AbortController(), signal = options.signal ? AbortSignal.any([options.signal, abort.signal]) : abort.signal
+  const release = lockSync(options.target, { realpath: false, stale: 30_000, onCompromised: error => abort.abort(error) })
+  try { return await withVerifiedStagedCheckpoint(options.checkpoint, options.keyFile, options.destination, signal, async ({ root, manifest, db }) => {
     const imageRoot = join(root, 'prepared-' + options.preparationId), image = await verifyReceiptImage(imageRoot, options.keyFile, signal)
     if (image.checkpoint !== manifest.id || image.digest !== fingerprint(manifest)) throw new Error('Installation image differs from its checkpoint')
     for (const proof of ['administration', 'revocations', 'executionConfiguration', 'sessionBackend', 'controlConfiguration', 'inferenceConfiguration',
@@ -91,15 +104,16 @@ export async function installCheckpoint(options: InstallCheckpoint): Promise<Ins
     if (reservation?.phase !== 'reserved' || fingerprint(reservation.recovery) !== fingerprint(image.recovery)) throw new Error('Installation requires the original ownership reservation')
     const requestHash = fingerprint({ requestId: options.requestId, target: options.target, image: fingerprint(image), authority: options.authority,
       endpoints: options.endpoints.map(({ url, endpointId, credentialFile, timeoutMs }) => ({ url, endpointId, credentialFile, timeoutMs })),
-      worlds: options.worlds, publication: options.publication, publicationClient: options.publicationClient, credentials: options.credentials })
-    try {
-      await lstat(options.target)
+      worlds: options.worlds, publication: options.publication, publicationClient: options.publicationClient, credentials: options.credentials,
+      // An empty default keeps original-ID retrieval compatible with installations made before patch generation.
+      ...(launch?.port !== undefined || launch?.sessionRoot !== undefined ? { launch } : {}) })
+    let present = true
+    try { await lstat(options.target) } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; present = false }
+    if (present) {
       const previous = await readInstallation(options.target, options.keyFile, signal)
       if (previous.id !== options.requestId || previous.requestHash !== requestHash) throw new Error('Installation target belongs to a different request')
       return previous
-    } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
-    const parent = privateDirectory(dirname(options.target))
-    if (join(parent, basename(options.target)) !== options.target) throw new Error('Installation target cannot use a redirected parent directory')
+    }
     const workspaces = new Set(manifest.executionWorkspaces)
     for (const file of image.files.filter(item => item.kind === 'world')) {
       const journal = new DatabaseSync(join(imageRoot, file.member), { readOnly: true })
@@ -192,12 +206,23 @@ export async function installCheckpoint(options: InstallCheckpoint): Promise<Ins
         await copyFile(join(imageRoot, session.member), file); await chmod(file, 0o600); await syncRecoveryPath(file)
       }
       await syncRecoveryPath(join(scratch, 'archive')); await syncRecoveryPath(join(scratch, 'worlds'))
-      await writeFile(join(scratch, 'installation.json'), signInstallationValue(value, options.keyFile, 'dsh-installation:1'), { mode: 0o600 })
+      if (launch) {
+        const patch = JSON.stringify(installationPatch(value, options.keyFile, launch), null, 2) + '\n'
+        if (Buffer.byteLength(patch) > 256_000) throw new Error('Installed Harness launch patch exceeds its bound')
+        const patchFile = join(scratch, 'harness.patch.json')
+        await writeFile(patchFile, patch, { mode: 0o600 }); await syncRecoveryPath(patchFile)
+        value = Installation.parse({ ...value, launch: { ...launch, ...await recoveryFileDigest(patchFile, signal, 256_000) } })
+      }
+      const encoded = signInstallationValue(value, options.keyFile, 'dsh-installation:1')
+      if (Buffer.byteLength(encoded) > 32_000_000) throw new Error('Installation manifest exceeds its bound')
+      await writeFile(join(scratch, 'installation.json'), encoded, { mode: 0o600 })
       await syncRecoveryPath(storeFile); await syncRecoveryPath(join(scratch, 'installation.json')); await syncRecoveryPath(scratch)
-      signal.throwIfAborted(); await mkdir(options.target, { mode: 0o700 }); await rename(scratch, options.target); await syncRecoveryPath(parent)
+      // The target lock protects cooperating installers. Publish with one rename; no empty target reservation can
+      // survive a crash between mkdir and rename and prevent an original-request retry.
+      signal.throwIfAborted(); await rename(scratch, options.target); await syncRecoveryPath(parent)
       return value
     } finally { await rm(scratch, { recursive: true, force: true }) }
-  })
+  }) } finally { release() }
 }
 
 /** Return only operational overrides; retained approvals, command fingerprints and world identities stay untouched. */
@@ -206,9 +231,4 @@ export function installationBindings(value: Installation) {
     registration: <T extends { url: string; credentialFile: string }>(record: T): T => resolveRecoveryRegistration(value, record),
     world: (binding: string, config: RemoteWorldConfig): RemoteWorldConfig => resolveRecoveryWorld(value, binding, config),
   }
-}
-
-export function installationProfile(value: Installation, keyFile: string) {
-  return { executionMode: 'local' as const, stateDir: value.stateDir, ownership: value.ownership as CoordinatorOwnershipConfig,
-    ...(value.publication ? { publication: value.publication as PublicationConnection } : {}), restore: { directory: value.root, keyFile } }
 }

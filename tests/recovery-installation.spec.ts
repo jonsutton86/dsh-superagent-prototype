@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { randomUUID } from 'node:crypto'
-import { readFile, rename, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { lockSync } from 'proper-lockfile'
@@ -19,13 +19,15 @@ import { CoordinatorOwnership } from '../src/ownership/lease.ts'
 import { createCheckpoint, stageCheckpoint } from '../src/recovery/checkpoint.ts'
 import { reserveCheckpointOwnership } from '../src/recovery/ownership.ts'
 import type { OwnershipView } from '../src/ownership/protocol.ts'
+import { RemoteWorld } from '../src/remote/world.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { vi.restoreAllMocks(); for (const close of cleanup.splice(0).reverse()) await close() })
-async function fixture() {
-  const f = await recoveryAuditFixture(cleanup, { managed: true })
+async function fixture(options: { managed?: boolean; launch?: boolean } = {}) {
+  const f = await recoveryAuditFixture(cleanup, { managed: options.managed ?? true })
   const audit = await auditCheckpointReceipts(f.audit), preparation = await prepareCheckpointReceipts({ ...f.audit, requestId: randomUUID(), auditId: audit.id })
-  const request = { ...f.audit, requestId: randomUUID(), preparationId: preparation.manifest.requestId, target: join(f.directory, 'installed') }
+  const request = { ...f.audit, requestId: randomUUID(), preparationId: preparation.manifest.requestId, target: join(f.directory, 'installed'),
+    ...(options.launch ? { launch: { port: 3184, sessionRoot: join(f.directory, 'sessions') } } : {}) }
   const installation = await installCheckpoint(request), profile = installationProfile(installation, f.audit.keyFile)
   const machine = { ...testMachine({ stateDir: installation.stateDir }), ...profile }
   f.context.provide('sessionProjections', f.inference.host.projections)
@@ -46,6 +48,7 @@ it('installs separate private state, retains the hold and exposes no credential 
   for (const item of f.installation.credentials) expect(manifest).not.toContain(privateCredential(item.file))
   expect(f.installation.worlds[0]!.config.stateDir).not.toBe(f.worldDir)
   expect(await installCheckpoint(f.request)).toEqual(f.installation)
+  expect(await installCheckpoint({ ...f.request, launch: {} })).toEqual(f.installation) // Pre-profile original-ID retrieval remains valid.
   await expect(installCheckpoint({ ...f.request, requestId: randomUUID() })).rejects.toThrow('different request')
   expect(() => new Runtime(f.context, f.machine, () => {})).toThrow('verified Runtime handoff')
 })
@@ -145,4 +148,53 @@ it('captures relocated journals and supports a second complete checkpoint, reser
   cleanup.push(async () => { await handoff.ownership.close(); handoff.release() })
   expect(handoff.ownership.status().phase).toBe('active')
   expect(handoff.installation.image.recovery.generation).toBe(2)
+})
+
+it.each([true, false])('generates an authenticated launch patch with the complete managed=%s Harness composition', async managed => {
+  const f = await fixture({ managed, launch: true }), file = join(f.installation.root, 'harness.patch.json'), text = await readFile(file, 'utf8')
+  const patch = JSON.parse(text) as { id?: string; config?: any; disabled?: boolean; insert?: any[] }[]
+  expect(patch.find(item => item.id === 'dsh-superagent')).toMatchObject({ disabled: false, config: f.profile })
+  expect(patch.find(item => item.id === 'webserver')!.config).toEqual({ host: '127.0.0.1', port: 3184 })
+  expect(patch.find(item => item.id === 'session-persistence-jsonl')!.config.root).toBe(join(f.directory, 'sessions'))
+  const dedicated = patch.flatMap(item => item.insert ?? []).find(item => item.id === 'operator-remote-world')
+  if (managed) expect(dedicated).toBeUndefined()
+  else {
+    expect(dedicated).toMatchObject({ name: 'dsh-superagent/remote-world', config: { ...f.installation.worlds[0]!.config,
+      ownership: { authorityId: f.installation.ownership.authorityId, coordinatorId: f.installation.ownership.coordinatorId } } })
+    for (const id of ['fs-sandbox', 'subprocess', 'pwsh-sandbox', 'dsh-superagent-worker-preset', 'dsh-superagent-router-preset', 'preset-standard'])
+      expect(patch.find(item => item.id === id)?.disabled).toBe(true)
+  }
+  for (const credential of f.installation.credentials) expect(text).not.toContain(privateCredential(credential.file))
+  expect(await installCheckpoint(f.request)).toEqual(f.installation)
+  await expect(installCheckpoint({ ...f.request, launch: { ...f.request.launch, port: 3185 } })).rejects.toThrow('different request')
+  await writeFile(file, text.replace('3184', '3185'), { mode: 0o600 })
+  await expect(f.activate()).rejects.toThrow('launch patch differs')
+  expect(f.readInstalled()[KV.recovery.hold]).toMatchObject({ state: 'prepared' })
+})
+
+it('verifies a mounted dedicated journal logically and hands the acquired lease to that same world', async () => {
+  const f = await fixture({ managed: false, launch: true }), selected = f.installation.worlds[0]!
+  let owner: CoordinatorOwnership | undefined
+  const world = new RemoteWorld({ ...selected.config, ownership: { authorityId: f.installation.ownership.authorityId,
+    coordinatorId: f.installation.ownership.coordinatorId, proof: () => owner!.proof() } })
+  cleanup.push(() => world.close())
+  await world.start(); f.context.provide('superagentRemoteWorld', world)
+  expect(world.status().ready).toBe(false)
+  const handoff = await f.activate(); owner = handoff.ownership
+  cleanup.push(async () => { await handoff.ownership.close(); handoff.release() })
+  await world.refresh()
+  expect(world.status()).toMatchObject({ ready: true, binding: selected.binding })
+})
+
+it('refuses another installation writer and an existing empty directory without overwriting it', async () => {
+  const f = await fixture(), target = join(f.directory, 'reserved-target'), request = { ...f.request, target, requestId: randomUUID() }
+  const release = lockSync(target, { realpath: false })
+  try { await expect(installCheckpoint(request)).rejects.toThrow('Lock file is already being held') } finally { release() }
+  await mkdir(target, { mode: 0o700 })
+  await expect(installCheckpoint(request)).rejects.toThrow()
+  expect(await readdir(target)).toEqual([])
+  await rm(target, { recursive: true })
+  const installed = await installCheckpoint(request)
+  expect(installed.root).toBe(target)
+  expect(await installCheckpoint(request)).toEqual(installed)
 })

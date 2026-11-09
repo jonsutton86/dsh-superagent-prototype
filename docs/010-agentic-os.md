@@ -649,3 +649,9 @@ replay. The same revision passed 1,945 native Linux / Node 24 tests with bubblew
 [run 42688097294](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42688097294).
 Cross-machine failover, dedicated-profile live startup and all remaining full
 product/architecture requirements remain open. The original app remains running.
+
+Generated recovery launch profiles are implemented in `061-recovery-launch-profile.md`: installation produces a private
+authenticated Harness patch with the complete dedicated or managed composition and optional imported JSONL backend/port
+selection. It preserves provider configuration in the base profile and refuses modified patches before activation. The
+live checks now retire original coordinator/Session/world files before consuming the generated patch and running new work.
+Final local, native and live qualification is pending. Cross-machine failover and all remaining full requirements remain open.
