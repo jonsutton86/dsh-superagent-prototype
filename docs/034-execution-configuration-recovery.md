@@ -84,5 +84,13 @@ account permissions or validate all inference, connector, publication and owners
 authoritative input/state recovery, actual Session-backend validation, stored path remapping, restored activation and clean-host
 failure qualification remain open in the full article and Agentic OS ledgers.
 
-The focused recovery/credential run passed 80 tests with one native opt-in case skipped. Full local checks passed; installed-Harness
-and native Linux qualification are pending.
+The focused recovery/credential run passed 80 tests with one native opt-in case skipped. Code
+`ea66ba2384e1a82da2f24401ab3f3e93f13368b0` passed 1,544 local tests (seven skipped), typechecking and all four builds.
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 193.93 seconds. Managed recovery verified one active
+credential-bound world alongside two revoked worlds, including a lost revocation acknowledgement, then authenticated and
+retried the held image. The dedicated case retained its expected refusal for unrecorded publication probes.
+
+The same code passed 1,546 tests with native Linux confinement (five skipped), typechecking and all builds in
+[run 42561413655](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42561413655).
+Provider-message traffic used local contract servers. The original app remained running. These checks do not qualify
+restored activation or the broader runtime/account configuration listed above.

@@ -301,3 +301,10 @@ credential, managed private pin, root identity and private endpoint credential s
 files before finalizing; no work is dispatched, credentials renewed or authority acquired. Confirmed revoked worlds remain
 non-executable without requiring retired files. Broader runtime/private configuration, account permissions, authoritative state,
 Session-backend validation, remapping and activation remain required.
+
+Execution-configuration qualification: `ea66ba2384e1a82da2f24401ab3f3e93f13368b0` passed 1,544 local tests,
+typechecking and all four builds. Both owned installed-Harness / DeepSeek Flash scenarios passed in 193.93 seconds,
+including original private credential checks for an active world while retaining and reconciling two revoked worlds.
+The same code passed 1,546 tests with native confinement, typechecking and all builds in
+[Linux run 42561413655](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42561413655).
+Provider-message traffic stayed local; the original app remained running. Broader configuration and activation remain open.

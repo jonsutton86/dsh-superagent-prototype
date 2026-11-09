@@ -34,6 +34,12 @@ their non-executable history without requiring retired credential files. Reports
 Inference, connector, publication and ownership-claimant configuration, external account permissions, authoritative state,
 Session-backend validation, remapping and activation remain required alongside the full architecture ledger.
 
+Qualified code `ea66ba2384e1a82da2f24401ab3f3e93f13368b0` passed 1,544 local tests, typechecking and all four builds.
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 193.93 seconds, including an active credential-bound
+world alongside two revoked worlds in authenticated held preparation. Linux passed 1,546 tests with native confinement,
+typechecking and all builds in [run 42561413655](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42561413655).
+Provider-message traffic remained local; the original app stayed running. Restored activation remains unqualified.
+
 ## Implemented increment: original world-revocation recovery
 
 [033 Revocation recovery](033-revocation-recovery.md) confirms the original grant-principal receipt when its acknowledgement
