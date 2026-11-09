@@ -65,3 +65,21 @@ Qualification also exposed repeated ownership fencing rewriting an already reque
 persists only a new cancellation or accepted-to-settled transition while continuing to terminate any live process on every
 fence. This preserves revision stability for unchanged unsettled evidence; it never marks that evidence quiescent. A
 regression test observes repeated monitor polls and then verifies that the unsettled revocation still blocks preparation.
+
+## Qualification
+
+Inference-recovery code `891a31394a55825ab5d24c8eff2e8f858344f4ca` passed 1,616 local tests, typechecking and all four builds.
+The same code passed 1,618 tests with native Linux confinement, typechecking and all builds in
+[run 42567837206](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42567837206).
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 206.52 seconds. Managed recovery used the real
+Session Controller projection and provider path, verified the signed inference summary, and retrieved its original held
+image on retry. The dedicated case retained its expected refusal for unrecorded publication probes. Provider-message
+traffic stayed local; the original app remained running. Source configuration, authoritative state and restored activation
+remain open.
+
+The initial installed-host run exposed undeclared service-property access from the maintenance fiber. The corrected
+implementation uses Cordis's documented lazy lookup and has a regression test running from a restricted plugin fiber.
+The local inference suite covers 23 cases, including both streaming deltas and complete blocks, retired model history,
+queued persona and live descendant routes, missing dependencies, cancellation and safe diagnostics. The full recovery
+suite also exercises failures before and during preparation, original-ID retrieval with the provider removed, older image
+MACs and repeated ownership fencing without spurious inventory revisions.

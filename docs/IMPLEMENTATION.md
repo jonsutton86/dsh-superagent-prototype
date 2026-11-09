@@ -38,6 +38,15 @@ This verifies the selected restore host, including its middleware. It does not e
 private adapter endpoint/account identity. Source configuration, authoritative-state reconciliation, remapping, coordinated
 activation and clean-host failover remain open, alongside every other article/product requirement below.
 
+Inference-recovery code `891a31394a55825ab5d24c8eff2e8f858344f4ca` passed 1,616 local tests, typechecking and all four builds.
+The same code passed 1,618 tests with native Linux confinement, typechecking and all builds in
+[run 42567837206](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42567837206).
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 206.52 seconds. Managed recovery used the real
+Session Controller projection and provider path, verified the signed inference summary, and retrieved its original held
+image on retry. The dedicated case retained its expected refusal for unrecorded publication probes. Provider-message
+traffic stayed local; the original app remained running. Source configuration, authoritative state and restored activation
+remain open.
+
 ## Implemented increment: control credentials and publisher configuration
 
 [036 Control configuration](036-control-configuration-recovery.md) verifies the reserved ownership claimant and the
