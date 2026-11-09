@@ -393,3 +393,11 @@ requeues accepted unread work on restart/retry, and preserves the held-automatio
 retry that finds consumed history now repairs its Store acknowledgement without sending again. Held image reconciliation
 also checks non-trigger read markers. Legacy delivery ambiguity, broader state and cursor reconciliation, deployment
 binding, supported activation, clean-host failover and the remaining full architecture/product scope remain open.
+
+Pending-input code `bc50b29cd3eccbf41c667e25d5cb62a3e75f9943` passed 1,665 local tests, typechecking and all four
+builds; the focused run passed 224 tests. The same code passed 1,667 tests with native Linux confinement, typechecking
+and all builds in [run 42575419242](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42575419242).
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 213.61 seconds. Managed recovery confirmed original
+Store non-trigger read acknowledgements against authenticated worker history and preserved original-ID image retries.
+The dedicated case retained its expected unrecorded-publication refusal. Channel traffic stayed on fixture servers and
+the original app remained running. Full activation, failover and the remaining architecture/product scope remain open.

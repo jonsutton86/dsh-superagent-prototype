@@ -36,6 +36,14 @@ reconciles read markers for every current kind and keeps historical reopen recor
 Legacy inputs without delivery provenance, broader authoritative state, connector cursors, deployment binding, supported
 activation and clean-host failover remain open with all other architecture/product requirements below.
 
+Pending-input code `bc50b29cd3eccbf41c667e25d5cb62a3e75f9943` passed 1,665 local tests, typechecking and all four
+builds; the focused run passed 224 tests. The same code passed 1,667 tests with native Linux confinement, typechecking
+and all builds in [run 42575419242](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42575419242).
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 213.61 seconds. Managed recovery confirmed original
+Store non-trigger read acknowledgements against authenticated worker history and preserved original-ID image retries.
+The dedicated case retained its expected unrecorded-publication refusal. Channel traffic stayed on fixture servers and
+the original app remained running. Full activation, failover and the remaining architecture/product scope remain open.
+
 ## Implemented increment: passive source contracts and settings recovery
 
 [039 Source contracts](039-source-contract-recovery.md) separates loaded source schemas from polling and Runtime startup.

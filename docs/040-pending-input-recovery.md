@@ -46,3 +46,14 @@ settled reports with held automation. Runtime tests exercise retained and cut-of
 consumption, and lost Store acknowledgement repair without a second send. The shared runtime fixture now removes claimed
 messages from its pending lists, matching Harness inbox semantics; it no longer retains consumed/claimed messages as if
 they were pending. Recovery tests authenticate generic consumption and reject unsupported modern read claims.
+
+Code `bc50b29cd3eccbf41c667e25d5cb62a3e75f9943` passed 1,665 local tests (seven skipped), typechecking and all
+four builds. The focused domain/runtime/delivery/recovery/documentation run passed 224 tests. The same code passed
+1,667 tests (five skipped), typechecking and all four builds with native Linux confinement in
+[run 42575419242](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42575419242).
+
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 213.61 seconds. Managed recovery verified that the
+actual workload recorded non-trigger reads in its original Store, checked consumption against authenticated worker history,
+and retrieved the same held image on retry. The dedicated case retained its expected refusal for unrecorded publication
+probes. External channel traffic stayed on fixture servers; the configured inference API was real. The original app process
+remained running. These checks do not establish restored activation or complete the remaining architecture/product scope.
