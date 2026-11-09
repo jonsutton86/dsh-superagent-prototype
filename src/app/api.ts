@@ -11,6 +11,7 @@ import type { TicketListView } from './views/tickets.ts'
 import type { ActionCommandInput, AddActionInput, CreateMissionInput, MissionCommandInput, MissionList, MissionView } from '../workspace/model.ts'
 import type { ArchiveRecordInput, CreateRecordInput, LibraryContent, LibraryEntry, LibraryList, LibraryQueryInput, LibraryRead } from '../workspace/library-model.ts'
 import type { CreateCheckInput, SaveCheckInput, ConfigureCheckInput, RequestCheckInput, CheckRecord, CheckVersion, CheckRun, CheckRunSummary } from '../verification/contracts.ts'
+import type { EvidenceBinding, EvidenceReview } from '../verification/review-model.ts'
 import type { OutputWindow } from '../remote/protocol.ts'
 import type { Conversation, InboxFilter, InboxItem, InboxPage, InboxReplyInput, InboxStartInput } from '../workspace/inbox-model.ts'
 import type { PlanIndex, PlanProposal, PlanVersion, ProposePlanInput, ReviewPlanInput, RequestPlanInput } from '../workspace/plan-model.ts'
@@ -110,7 +111,7 @@ export interface Api {
   'POST inbox/:id/read': { body: { revision: string }; response: { marked: boolean; unread: boolean } }
   'POST inbox/:id/reply': { body: InboxReplyInput; response: InboxItem }
   'GET library': { query?: LibraryQueryInput; response: LibraryList }
-  'GET publication/destinations': { response: { configured: boolean; items: DestinationView[] } }
+  'GET publication/destinations': { response: { configured: boolean; items: DestinationView[]; artifactEvidence?: boolean } }
   'GET library/:id/publications': { response: { items: PublicationRecord[] } }
   'POST library/:id/publications': { body: ApprovePublication; response: PublicationRecord }
   'POST publications/:id/refresh': { response: PublicationRecord }
@@ -125,6 +126,8 @@ export interface Api {
   'POST checks/:id/authority': { body: ConfigureCheckInput; response: CheckRecord }
   'GET checks/:id/versions/:version': { response: CheckVersion }
   'GET library/:id/checks': { query?: Paged; response: { items: CheckRecord[]; nextOffset: number | null } }
+  'GET library/:id/review-checks': { query?: Paged; response: { items: { run: CheckRunSummary; binding: EvidenceBinding }[]; nextOffset: number | null } }
+  'GET evidence-reviews/:id': { response: EvidenceReview }
   'GET library/:id/verification': { query?: Paged; response: { items: CheckRunSummary[]; nextOffset: number | null } }
   'POST library/:id/verification': { body: RequestCheckInput; response: CheckRun }
   'GET verification/:id': { response: CheckRun }

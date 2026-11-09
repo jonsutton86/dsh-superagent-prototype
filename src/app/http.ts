@@ -52,6 +52,7 @@ import { PublicationError } from '../publication/protocol.ts'
 import type { ChannelPublications } from '../publication/channels.ts'
 import type { ConversationInbox } from '../publication/inbound.ts'
 import type { Verification } from '../verification/service.ts'
+import type { VerificationReviews } from '../verification/reviews.ts'
 import { CheckCommandId } from '../verification/contracts.ts'
 
 export interface HttpHost {
@@ -69,6 +70,7 @@ export interface HttpHost {
   readonly inbox: Inbox
   readonly library: Library
   readonly verification?: Verification
+  readonly verificationReviews?: VerificationReviews
   readonly workspace: Workspace
   readonly schedules?: Schedules
   readonly reflections?: Reflections
@@ -304,6 +306,11 @@ function routes(runtime: HttpHost): Routes {
     'POST checks/:id/authority': async ({ params, body }) => verification().definitions.configure(params.id, await body()),
     'GET checks/:id/versions/:version': ({ params }) => verification().definitions.version(params.id, z.coerce.number().int().positive().parse(params.version)),
     'GET library/:id/checks': ({ params, query }) => verification().choices(params.id, offset.parse(query.offset)),
+    'GET library/:id/review-checks': ({ params, query }) => verification().reviewChoices(params.id, offset.parse(query.offset)),
+    'GET evidence-reviews/:id': ({ params }) => {
+      if (!runtime.verificationReviews) throw new WorkspaceError(409, 'Evidence reviews are unavailable')
+      return runtime.verificationReviews.get(params.id)
+    },
     'GET library/:id/verification': ({ params, query }) => verification().list(params.id, offset.parse(query.offset)),
     'POST library/:id/verification': async ({ params, body }) => verification().request(params.id, await body()),
     'GET verification/:id': ({ params }) => verification().get(params.id),
@@ -340,7 +347,7 @@ function routes(runtime: HttpHost): Routes {
     'POST missions/:id/plan-request': async ({ params, body }) => runtime.workspace.plans.request(params.id, await body()),
     'POST missions': async ({ body }) => runtime.workspace.create(await body()),
     'POST missions/:id/actions': async ({ params, body }) => runtime.workspace.add(params.id, await body()),
-    'POST missions/:id/actions/:action': async ({ params, body }) => runtime.workspace.act(params.id, params.action, await body()),
+    'POST missions/:id/actions/:action': async ({ params, body }) => runtime.workspace.actReviewed(params.id, params.action, await body()),
     'PUT missions/:id': async ({ params, body }) => runtime.workspace.update(params.id, await body()),
     'GET state': () => stateView(runtime),
     'GET overview': () => overview(views(runtime), runtime.health, policyVersion(store.settings()),

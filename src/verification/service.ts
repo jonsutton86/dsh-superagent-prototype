@@ -20,6 +20,7 @@ import { CheckEvidenceSchema, snapshotReservation, type CheckEvidence } from './
 import { validateSnapshot } from './snapshot.ts'
 import { HostProcessIsolation, snapshotHelperPath } from './local.ts'
 import { discardSnapshot, runCapturedCheck } from './runner.ts'
+import { EvidenceBinding, CheckSelection, EvidenceSeal, FRESHNESS_WINDOW_MS } from './review-model.ts'
 
 interface Host {
   store: Store; library: Library; stateDir: string; subprocess: SubprocessRuntime; lifetime: AbortSignal
@@ -63,6 +64,7 @@ export class Verification {
     host.store.db.exec(`CREATE TABLE IF NOT EXISTS verification_run (id TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS verification_artifact ON verification_run(json_extract(value,'$.artifact.id'));
       CREATE INDEX IF NOT EXISTS verification_check_run ON verification_run(json_extract(value,'$.check.id'));
+      CREATE INDEX IF NOT EXISTS verification_source ON verification_run(json_extract(value,'$.backend.binding'),json_extract(value,'$.backend.source'));
       CREATE TABLE IF NOT EXISTS verification_output (id TEXT, stream TEXT, data BLOB NOT NULL, total INTEGER NOT NULL, PRIMARY KEY(id,stream));
       CREATE TABLE IF NOT EXISTS verification_control (id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, request TEXT NOT NULL);`)
     for (const row of host.store.db.prepare("SELECT value FROM verification_run WHERE json_extract(value,'$.quiescent') IS NOT 1").all()) {
@@ -85,6 +87,59 @@ export class Verification {
     return run
   }
   get(id: string, actor: Actor = operator): CheckRun { return view(this.require(id, actor)) }
+  /** Bind a host result, not a model-authored success claim. Observation skips dispatch/pause checks. */
+  approval(id: string, expected?: CheckSelection, admit = true): EvidenceBinding {
+    const run = this.require(id), evidence = evidenceOf(run)
+    if (run.status !== 'passed' || run.purpose !== 'check' || run.quiescent !== true || !this.completed(run, evidence))
+      throw new WorkspaceError(409, 'Select a complete successful host check')
+    if (admit) this.authorize({ ...run, actor: 'operator' })
+    else {
+      const artifact = this.artifact(run.artifact.id, operator)
+      if (artifact.revision !== run.artifact.revision || artifact.hash !== run.artifact.hash || fingerprint(artifact.execution) !== fingerprint(run.execution)
+        || !this.definitions.get(run.check.id).enabled || this.definitions.version(run.check.id, run.check.version).hash !== run.check.hash || !this.host.allowed(run.execution))
+        throw new WorkspaceError(409, 'Approved check authority, artifact or execution binding changed')
+    }
+    const evidenceHash = fingerprint({ artifact: run.artifact, check: run.check, execution: run.execution, backend: run.backend,
+      snapshot: evidence!.snapshot, outcome: run.outcome, output: evidence!.output, checkedAt: evidence!.checkedAt, finishedAt: evidence!.finishedAt })
+    if (expected && (expected.runId !== id || expected.evidenceHash !== evidenceHash)) throw new WorkspaceError(409, 'Selected check evidence changed')
+    const repository = evidence!.snapshot!.repository
+    return EvidenceBinding.parse({ selection: { runId: id, evidenceHash }, artifact: { id: run.artifact.id, revision: run.artifact.revision, hash: run.artifact.hash },
+      check: { id: run.check.id, version: run.check.version, hash: run.check.hash }, snapshotHash: evidence!.snapshot!.hash,
+      execution: { binding: run.backend.binding, assignmentId: run.artifact.assignmentId, sessionId: run.artifact.sessionId },
+      ...(repository ? { repository: { commit: repository.commit, tree: repository.tree } } : {}), confinement: evidence!.confinement, checkedAt: evidence!.checkedAt })
+  }
+  reviewChoices(artifactId: string, offset = 0) {
+    const page = this.list(artifactId, offset)
+    return { ...page, items: page.items.flatMap(run => {
+      try { return [{ run, binding: this.approval(run.id, undefined, false) }] } catch { return [] }
+    }) }
+  }
+  /** Reuse a complete captured source for checks on that same snapshot; captures never become check outcomes. */
+  seal(selection: CheckSelection, captureId: string, now = Date.now()): EvidenceSeal {
+    const binding = this.approval(selection.runId, selection), selected = this.require(selection.runId), capture = this.require(captureId), evidence = evidenceOf(capture)
+    if (capture.status !== 'captured' || capture.quiescent !== true || capture.purpose !== 'freshness' || !this.completed(capture, evidence)
+      || !evidence?.snapshot || !evidence.finishedAt || capture.backend.binding !== selected.backend.binding
+      || capture.backend.source !== selected.backend.source || capture.backend.grantId !== selected.backend.grantId
+      || capture.backend.epoch !== selected.backend.epoch || capture.backend.revision !== selected.backend.revision
+      || evidence.snapshot.hash !== binding.snapshotHash || evidence.confinement !== binding.confinement)
+      throw new WorkspaceError(409, 'The original source has no matching complete freshness capture')
+    const at = Date.parse(evidence.snapshot.capturedAt)
+    if (at > now + 5000 || now >= at + FRESHNESS_WINDOW_MS) throw new WorkspaceError(409, 'Source freshness capture expired or its host clock differs; capture again')
+    return EvidenceSeal.parse({ ...binding, capture: { id: captureId, capturedAt: evidence.snapshot.capturedAt, finishedAt: evidence.finishedAt },
+      validUntil: new Date(Math.min(now + FRESHNESS_WINDOW_MS, at + FRESHNESS_WINDOW_MS)).toISOString() })
+  }
+  /** A newer host observation of a different source invalidates claims that the reviewed source remains current. */
+  sourceCurrent(seal: EvidenceSeal): boolean {
+    const selected = this.require(seal.selection.runId)
+    const newer = this.host.store.db.prepare(`SELECT json_extract(coalesce(json_extract(value,'$.receipt.verification'),json_extract(value,'$.evidence')),'$.snapshot.hash') AS hash
+      FROM verification_run WHERE json_extract(value,'$.backend.binding')=? AND json_extract(value,'$.backend.source')=?
+      AND json_extract(coalesce(json_extract(value,'$.receipt.verification'),json_extract(value,'$.evidence')),'$.finishedAt') IS NOT NULL
+      AND json_extract(coalesce(json_extract(value,'$.receipt.verification'),json_extract(value,'$.evidence')),'$.snapshot.capturedAt')>=?
+      AND json_extract(coalesce(json_extract(value,'$.receipt.verification'),json_extract(value,'$.evidence')),'$.snapshot.exclude')=?
+      ORDER BY json_extract(coalesce(json_extract(value,'$.receipt.verification'),json_extract(value,'$.evidence')),'$.snapshot.capturedAt') DESC,rowid DESC LIMIT 1`)
+      .get(selected.backend.binding, selected.backend.source, seal.capture.capturedAt, JSON.stringify(evidenceOf(selected)!.snapshot!.exclude))
+    return !newer || newer.hash === seal.snapshotHash
+  }
   list(artifactId: string, offset = 0, actor: Actor = operator) {
     this.host.library.read(artifactId, {}, actor)
     if (!Number.isSafeInteger(offset) || offset < 0) throw new WorkspaceError(400, 'Invalid verification page')

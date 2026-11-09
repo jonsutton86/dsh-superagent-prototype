@@ -2,6 +2,7 @@ import { useRef, useState, type FormEvent } from 'react'
 import type { LibraryRead } from '../workspace/library-model.ts'
 import type { CheckRecord, CheckRun, CreateCheckInput } from '../verification/contracts.ts'
 import { CheckDefinition } from '../verification/contracts.ts'
+import type { CheckSelection } from '../verification/review-model.ts'
 import { usePoll } from './api.ts'
 import { usePanel } from './provider.tsx'
 import { Button } from './controls.tsx'
@@ -192,5 +193,42 @@ function OutputWindow({ id, stream }: { id: string; stream: 'stdout' | 'stderr' 
     <pre className="dt-library-excerpt">{new TextDecoder().decode(Uint8Array.from(atob(value.data), char => char.charCodeAt(0)))}</pre>
     <Button disabled={!offset} onClick={() => setOffset(0)}>{t('verification.startOutput')}</Button>
     <Button disabled={value.nextOffset >= value.totalBytes || value.nextOffset <= offset} onClick={() => setOffset(value.nextOffset)}>{t('mission.next')}</Button>
+  </>}</>
+}
+
+/** Approval selects an existing host receipt. Commands and success assertions cannot be entered here. */
+export function ArtifactCheckPicker({ artifactId, selected, onChange, disabled = false }: {
+  artifactId: string; selected: CheckSelection[]; onChange(value: CheckSelection[]): void; disabled?: boolean
+}) {
+  const { call, t, navigate } = usePanel(), [offset, setOffset] = useState(0)
+  const catalog = usePoll(() => call('GET library/:id/review-checks', { id: artifactId, query: { offset } }), [call, artifactId, offset])
+  return <fieldset disabled={disabled}>
+    <legend>{t('verification.selectEvidence')}</legend><p>{t('verification.approvalHint')}</p>
+    {catalog.error && <p role="alert">{catalog.error.message}</p>}
+    {catalog.data?.items.length === 0 && <p>{t('verification.noPassed')}</p>}
+    {catalog.data?.items.map(({ run, binding }) => <label key={run.id}>
+      <input type="checkbox" checked={selected.some(item => item.runId === run.id && item.evidenceHash === binding.selection.evidenceHash)} disabled={!!catalog.error}
+        onChange={event => onChange(event.target.checked ? [...selected.filter(item => item.runId !== run.id), binding.selection] : selected.filter(item => item.runId !== run.id))} />
+      {run.check.name} · v{run.check.version} · {new Date(binding.checkedAt).toLocaleString()} · {binding.confinement}
+      <code>{binding.snapshotHash}</code>
+      {binding.repository && <span>Git {binding.repository.commit}</span>}
+    </label>)}
+    <p>{t('verification.selectedCount', { count: selected.length })}</p>
+    <Button onClick={() => navigate({ page: 'library', id: artifactId })}>{t('verification.inspectArtifact')}</Button>
+    <Button disabled={!offset} onClick={() => setOffset(Math.max(0, offset - 30))}>{t('mission.previous')}</Button>
+    <Button disabled={catalog.data?.nextOffset == null} onClick={() => setOffset(catalog.data!.nextOffset!)}>{t('mission.next')}</Button>
+  </fieldset>
+}
+
+export function EvidenceReviewStatus({ id }: { id: string }) {
+  const { call, t } = usePanel(), [runId, setRunId] = useState('')
+  const review = usePoll(() => call('GET evidence-reviews/:id', { id }), [call, id])
+  return <>{review.error && <p role="alert">{review.error.message}</p>}{review.data && <>
+    <p role="status">{t(`verification.review.${review.data.status}`)}</p>{review.data.problem && <p>{review.data.problem}</p>}
+    <p>{t('verification.captureOnly')}</p>
+    {review.data.attempts.map(attempt => <details key={attempt.id}><summary>{new Date(attempt.at).toLocaleString()}</summary>
+      {attempt.captures.map(capture => <Button key={capture.id} onClick={() => setRunId(capture.id)}>{capture.id}</Button>)}
+    </details>)}
+    {runId && <VerificationRun key={runId} id={runId} onSelect={setRunId} onChanged={review.reload} />}
   </>}</>
 }

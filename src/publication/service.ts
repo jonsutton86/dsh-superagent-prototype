@@ -6,6 +6,7 @@ import { ConversationPage, Destination, DestinationConfig, ExternalReceipt, Publ
 import { contentHash, DeliveryRefused, type PublicationAdapter } from './github.ts'
 import { PublicationProviders } from './providers.ts'
 import { ResourceInventory } from '../ownership/inventory.ts'
+import { freshSeal } from '../verification/reviews.ts'
 
 export interface PublicationServiceConfig { stateDir: string; ownership: ResourceOwnershipConfig; destinations: DestinationConfig[] }
 /** Independently fenced publication host. Unknown outcomes block ownership handoff until actual observation or administrator reconciliation. */
@@ -49,7 +50,7 @@ export class PublicationService {
   start(report: (error: unknown) => void = () => {}): void { this.gate.start(report) }
   identity(): PublicationIdentity {
     const { authorityId, coordinatorId, resourceId } = this.config.ownership
-    return { protocol: 1, id: this.journal.id, ownership: { authorityId, coordinatorId, resourceId } }
+    return { protocol: 1, id: this.journal.id, capabilities: { artifactEvidence: true }, ownership: { authorityId, coordinatorId, resourceId } }
   }
   private destination(id: string) {
     const value = this.destinations.get(id)
@@ -134,13 +135,24 @@ export class PublicationService {
           if (fingerprint(publicDestination) !== publication.destinationHash || contentHash(publication.text) !== publication.hash || publication.artifact && publication.artifact.hash !== publication.hash)
             throw new PublicationError(409, 'content_changed', 'Publication content or destination differs from its approved digest')
           if (Buffer.byteLength(publication.text) > destination.maxBytes) throw new PublicationError(413, 'content_too_large', 'Artifact exceeds this destination content limit')
-          const exists = this.journal.get(publication.id), item = this.journal.accept(publication, guard.stamp)
-          if (exists) return item.receipt
+          // An accepted original receipt remains observable even after its freshness window expires.
+          const exists = this.journal.get(publication.id)
+          if (exists) return this.journal.accept(publication, guard.stamp).receipt
+          const assertEvidence = () => {
+            const artifact = publication.artifact
+            if (!artifact?.evidence) return
+            if (new Set(artifact.evidence.map(seal => seal.selection.runId)).size !== artifact.evidence.length || artifact.evidence.some(seal =>
+              seal.artifact.id !== artifact.id || seal.artifact.revision !== artifact.revision || seal.artifact.hash !== artifact.hash || !freshSeal(seal)))
+              throw new PublicationError(409, 'evidence_changed', 'Artifact check evidence is mismatched or expired before dispatch')
+          }
+          assertEvidence()
+          const item = this.journal.accept(publication, guard.stamp)
           this.working.add(item.receipt.id)
           try {
             const signal = AbortSignal.any([guard.signal, this.lifetime.signal])
             const prepared = await this.adapter.prepare(destination, publication, signal)
             await this.gate.verify(guard); signal.throwIfAborted()
+            assertEvidence()
             if (this.item(item.receipt.id).receipt.phase !== 'accepted') throw new Error('Publication was fenced before dispatch')
             item.receipt.phase = 'started'; this.journal.save(item)
             item.receipt.external = await prepared.send(signal)

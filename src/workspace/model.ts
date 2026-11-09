@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { PersonaRef } from '../personas/model.ts'
 import { WorldRef } from '../environments/pool-model.ts'
 import type { ScheduleOrigin } from './schedule-model.ts'
+import { CheckSelections, type CheckSelection, type EvidenceSeal } from '../verification/review-model.ts'
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/)
 const title = z.string().trim().min(1).max(160)
@@ -13,7 +14,8 @@ export const AddAction = z.object({ requestId: id, revision: z.number().int().po
   .refine(value => value.owner === 'agent' || !value.persona && !value.environment, 'Only agent actions can select a persona or execution environment')
 export const ActionCommand = z.object({ requestId: id, revision: z.number().int().positive(),
   command: z.enum(['run', 'complete', 'retry', 'stop', 'steer']), text: z.string().trim().max(12000).default(''),
-  ticketRevision: z.string().max(100).optional() }).strict()
+  ticketRevision: z.string().max(100).optional(), reviewKind: z.enum(['operator', 'checks']).optional(), checks: CheckSelections.optional() }).strict()
+  .refine(value => value.command === 'complete' || !value.reviewKind && !value.checks, 'Check evidence is only valid for result acceptance')
 export const MissionCommand = z.object({ requestId: id, revision: z.number().int().positive(),
   status: z.enum(['active', 'completed', 'archived']) }).strict()
 export type CreateMissionInput = z.input<typeof CreateMission>
@@ -28,7 +30,7 @@ export interface MissionAction {
   dependencyRevision?: string
   definitionRevision?: number
   executionRevision?: number
-  accepted?: { at: string; note: string; ticketRevision?: string }
+  accepted?: { at: string; note: string; ticketRevision?: string; basis?: 'operator' | 'checks'; evidence?: EvidenceSeal[] }
 }
 export interface Mission {
   id: string; title: string; objective: string; acceptance: string; status: 'active' | 'completed' | 'archived'
@@ -39,6 +41,15 @@ export interface MissionEvent { id: number; at: string; kind: string; actionId?:
 export interface ActionView extends MissionAction {
   status: 'todo' | 'waiting' | 'working' | 'blocked' | 'review' | 'stopped' | 'done' | 'outdated'
   ticket?: { id: string; revision: string; sessionId?: string; summary: string; retryable: boolean; stoppable: boolean; ended: boolean; currentDefinition: boolean }
+  review?: ReviewRequirements
+}
+export interface ReviewRequirements { artifacts: { id: string; title: string; revision: number; hash: string }[]; problem?: string }
+export interface WorkspaceReview {
+  requirements(ticketId: string): ReviewRequirements
+  validate(ticketId: string | undefined, kind: 'operator' | 'checks' | undefined, checks: readonly CheckSelection[]): void
+  prepare(id: string, target: string, checks: readonly CheckSelection[]): Promise<EvidenceSeal[]>
+  assert(evidence: readonly EvidenceSeal[], checks: readonly CheckSelection[]): void
+  current(ticketId: string, accepted: NonNullable<MissionAction['accepted']>): boolean
 }
 export interface MissionView extends Omit<Mission, 'actions'> {
   actions: ActionView[]; events: MissionEvent[]; completed: number; needsReview: boolean

@@ -368,6 +368,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/verification/model.ts`, `snapshot.ts`, `snapshot-worker.ts`, `runner.ts` | Bounded host-captured file/Git manifests, private copied inputs, revision-pinned checks, output digests and quiescence-bound cleanup through Harness |
 | `src/verification/contracts.ts`, `definitions.ts` | Strict operator-authored check contracts, immutable versions, scope/worker authority, durable command receipts and metadata limits |
 | `src/verification/service.ts`, `local.ts` | Assignment/environment-bound artifact checks, local/remote Harness execution, captured-source freshness, original receipt recovery and explicit local isolation strength |
+| `src/verification/review-model.ts`, `reviews.ts`, `missions.ts` | Exact selected-check seals, durable grouped freshness capture, original-ID recovery and all-current-artifact mission acceptance |
 | `src/app/tools/verification.ts` | Worker selection of fixed authorized check versions, own-artifact evidence/output and original-ID cancellation |
 | `src/remote/credentials.ts`, `command-worker.ts` | Endpoint-private immutable credential snapshots, version binding/revocation and credential loading inside the command namespace without secret argv |
 | `src/remote/client.ts`, `admin.ts` | Pinned host-side RPC, same-ID retry, reconnect observation and explicit uncertain outcomes |
@@ -512,6 +513,8 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/speculation.spec.ts`, `tests/speculation-runtime.spec.ts`, `tests/speculation-ui.spec.tsx`, `tests/speculation-harness.spec.ts` | Reservation races, preemption, recovery, promotion/publication, HTTP/DOM and opt-in installed-Harness qualification. |
 | `tests/verification-snapshot.spec.ts`, `tests/verification-endpoint.spec.ts` | Actual file/Git evidence, copied-input checks, revision changes, output retention, timeout/cancellation, unknown restart and native Linux read-only/network isolation |
 | `tests/verification-service.spec.ts` | Immutable check definitions, exact artifact/assignment/environment binding, actual local and native remote checks, scope, quotas, output, cancellation, freshness and restart evidence |
+| `tests/verification-review.spec.ts`, `tests/fixtures/verification.ts`, `tests/fixtures/host-verification.ts` | Real Harness checks and grouped source captures, all-artifact acceptance, historical validity, concurrent edits and unknown restart |
+| `tests/publication-evidence.spec.ts`, `tests/evidence-review-ui.spec.tsx` | Selected evidence approval, publisher expiry, observation-before-retry, native Linux acceptance/publication and rendered all-artifact review |
 | `tests/core-engine.spec.ts` | Domain rules on in-memory repositories: receiving, Eval, fan-out, resume and stop, interrupted Assignments, the pause, Policy changes, reports and outcomes, attaching, replies, failed deliveries and dismissed problems |
 | `tests/environments.spec.ts` | Runtime/API enrollment, persistent grants, paired-provider proof, races, revocation, replacement and legacy task binding |
 | `tests/environments-ui.spec.tsx` | Rendered enrollment/recovery and exact mutation retry after response loss and polling |

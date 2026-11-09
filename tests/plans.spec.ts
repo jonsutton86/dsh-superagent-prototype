@@ -38,7 +38,7 @@ async function ready(h: Host, mission: MissionView, index = 0) {
 function accept(workspace: Workspace, mission: MissionView, index = 0) {
   const action = mission.actions[index]!
   return workspace.act(mission.id, action.id, { requestId: rid(), revision: mission.revision, command: 'complete',
-    ticketRevision: action.ticket?.revision, text: 'Independently reviewed the result' })
+    ticketRevision: action.ticket?.revision, text: 'Independently reviewed the result', reviewKind: 'operator' })
 }
 
 it('preserves immutable versions and approval receipts across reopening SQLite without dispatching proposed work', async () => {

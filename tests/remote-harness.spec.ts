@@ -171,14 +171,16 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
     expect(ticket.executionPersona).toMatchObject({ id: persona.id, version: 1, digest: persona.digest, definition })
     expect(await readFile(join(ticket.directory, 'result.txt'), 'utf8')).toBe(proof)
     expect(artifact?.content).toBe(proof)
-    let verification: { request: any; result: CheckRun; capture: CheckRun; artifactId: string } | undefined
-    if (!owned && mode === 'dedicated') {
+    if (otherTask) await vi.waitFor(async () => expect((await api(`inbox/${otherTask}`)).item.status).toBe('review'), { timeout: 120_000, interval: 1000 })
+    const inCheckWorld = async <T>(operation: () => Promise<T>): Promise<T> => {
       // Use the actual coordinator API, original artifact binding and production verification runner. Non-Linux
       // qualification explicitly selects the real host-process implementation; native CI supplies Linux confinement.
       h.host.snapshotHelper = resolve('lib/verification-snapshot-worker.js')
       const previousIsolation = h.host.isolation
       if (!native) h.host.isolation = new HostProcessIsolation()
-      try {
+      try { return await operation() } finally { h.host.isolation = previousIsolation }
+    }
+    const verification = await inCheckWorld(async () => {
         const check = await api('checks', { requestId: randomUUID(), enabled: true, definition: { name: 'Live artifact proof', description: 'Check exact bytes without service credentials',
           argv: ['/bin/sh', '-c', 'test "$(cat result.txt)" = "$1" && test -z "${SERVICE_API_KEY:-}" && printf verified', 'check', proof],
           artifactPath: 'result.txt', confinement: native ? 'linux-bubblewrap' : 'host-process' } })
@@ -195,9 +197,14 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
         expect(capture).toMatchObject({ status: 'captured', sourceCheckId: result.id, evidence: { kind: 'capture', snapshot: { hash: result.evidence!.snapshot!.hash } } })
         expect(capture.outcome).toBeUndefined()
         const raw = h.endpoint.journal.job(result.id) as RemoteJob; expect(raw.credentials).toBeUndefined()
-        verification = { request, result, capture, artifactId: artifact.id }
-      } finally { h.host.isolation = previousIsolation }
-    }
+        const choices = await api(`library/${artifact.id}/review-checks`)
+        const selection = choices.items.find((item: any) => item.run.id === result.id).binding.selection
+        const current = await api(`missions/${mission.id}`), action = current.actions[0]
+        const accepted = await api(runPath, { requestId: randomUUID(), revision: current.revision, command: 'complete',
+          ticketRevision: action.ticket.revision, text: 'Reviewed actual host-checked result bytes', reviewKind: 'checks', checks: [selection] })
+        expect(accepted.actions[0]).toMatchObject({ status: 'done', accepted: { basis: 'checks', evidence: [{ selection }] } })
+        return { request, result, capture, artifactId: artifact.id, selection, acceptance: accepted.actions[0].accepted }
+    })
     let publicationId: string | undefined, channelDelivery: any, inboundRecord: any, inboundDelivery: any
     if (publisher) {
       const deliveries = await api(`missions/${mission.id}/delivery`)
@@ -207,8 +214,9 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
       const destination = (await api('publication/destinations')).items[0]
       publicationId = randomUUID()
       publisher.loseProviderReply(publicationId)
-      const delivery = await api(`library/${artifact.id}/publications`, { requestId: publicationId, revision: artifact.revision, hash: artifact.hash,
-        destination: destination.id, destinationHash: destination.hash })
+      const delivery = await inCheckWorld(() => api(`library/${artifact.id}/publications`, { requestId: publicationId, revision: artifact.revision, hash: artifact.hash,
+        destination: destination.id, destinationHash: destination.hash, checks: [verification.selection] }))
+      expect(delivery.verification.evidence[0].selection).toEqual(verification.selection)
       expect(delivery.receipt.phase).toBe('unknown')
       expect((await api(`publications/${publicationId}/refresh`, {})).receipt).toMatchObject({ phase: 'sent', hash: artifact.hash })
       expect(publisher.comments.filter(comment => comment.body.includes(`dsh-publication:${publicationId}:`))).toHaveLength(1)
@@ -286,6 +294,8 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
       expect(await api(`verification/${verification.capture.id}`)).toEqual(verification.capture)
       expect((await api(`verification/${verification.result.id}/refresh`, {})).evidence).toEqual(verification.result.evidence)
       expect(h.endpoint.journal.jobs().filter(job => [verification.result.id, verification.capture.id].includes(job.id))).toHaveLength(2)
+      if (!publisher && mode === 'dedicated') expect((await api(`missions/${mission.id}`)).actions[0])
+        .toMatchObject({ status: 'done', accepted: verification.acceptance })
     }
     expect((await api(runPath, request)).actions[0].runs).toEqual([task.id])
     expect((await api(`tickets/${task.id}`)).assignments).toHaveLength(publisher ? 2 : 1)

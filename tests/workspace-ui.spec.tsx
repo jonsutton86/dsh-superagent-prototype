@@ -70,6 +70,8 @@ it('creates, delegates, reviews and completes a mission through rendered forms a
   const completeButton = [...container.querySelectorAll('button')].find(button => button.textContent === 'Complete mission')!
   expect(completeButton.disabled).toBe(true)
   await enter(field<HTMLTextAreaElement>('Result or evidence you reviewed'), 'Read the brief and checked its evidence')
+  expect([...container.querySelectorAll('button')].find(button => button.textContent === 'Accept result')?.disabled).toBe(true)
+  await act(async () => { container!.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click() })
   await click('Accept result')
   await vi.waitFor(() => expect(text()).toContain('1 of 1 actions complete'))
   await click('Complete mission')

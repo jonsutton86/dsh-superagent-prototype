@@ -5,11 +5,13 @@ import type { SourceKind } from '../sources/kind.ts'
 import { workspaceContract } from '../sources/contracts.ts'
 import { workerSessionId } from '../executor/dsh.ts'
 import { ActionCommand, AddAction, CreateMission, MissionCommand, WorkspaceError,
-  type ActionView, type Mission, type MissionAction, type MissionEvent, type MissionList, type MissionView } from './model.ts'
+  type ActionView, type Mission, type MissionAction, type MissionEvent, type MissionList, type MissionView, type WorkspaceReview } from './model.ts'
 import { Planning } from './plans.ts'
 import { PlanDefinition, definitionOf } from './plan-model.ts'
 import type { PersonaRef } from '../personas/model.ts'
 import type { ScheduleOrigin } from './schedule-model.ts'
+import { fingerprint } from '../remote/journal.ts'
+import type { EvidenceSeal } from '../verification/review-model.ts'
 
 type Execution = Pick<Engine, 'receive' | 'decide' | 'stopTicket' | 'retryTicket'>
 const SOURCE = 'workspace'
@@ -22,7 +24,8 @@ export class Workspace {
   constructor(private readonly store: Store, private readonly engine: () => Execution, private readonly runnable: () => boolean,
     private readonly evidenceRevision?: (ticketId: string) => string, private readonly executionAuthorization?: (ticket: Ticket) => boolean,
     private readonly personaSelection?: (reference: PersonaRef) => unknown, private readonly environmentSelection?: (reference: string) => unknown,
-    private readonly deliveryChannel?: (mission: Mission, action: MissionAction) => ChannelRef | undefined) {
+    private readonly deliveryChannel?: (mission: Mission, action: MissionAction) => ChannelRef | undefined,
+    private readonly review?: WorkspaceReview) {
     store.db.exec(`CREATE TABLE IF NOT EXISTS workspace_mission (id TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS workspace_event (id INTEGER PRIMARY KEY, mission TEXT NOT NULL, value TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS workspace_event_mission ON workspace_event(mission, id);
@@ -99,7 +102,8 @@ export class Workspace {
     const revision = ticket ? key(JSON.stringify(ticket) + (this.evidenceRevision?.(ticket.id) ?? '')) : undefined
     const currentDefinition = action.owner === 'person' || !ticket || (action.executionRevision ?? 1) === (action.definitionRevision ?? 1)
     const changed = !currentDefinition || !!action.dependencyRevision && action.dependencyRevision !== this.dependencyRevision(action, actions)
-    const accepted = !changed && !!action.accepted && (action.owner === 'person' || (!!ticket?.ended && action.accepted.ticketRevision === revision))
+    const accepted = !changed && !!action.accepted && (action.owner === 'person' || (!!ticket?.ended && action.accepted.ticketRevision === revision
+      && (!this.review || this.review.current(ticket.id, action.accepted))))
     const dependencies = action.dependsOn.every(id => {
       const dependency = actions.find(item => item.id === id)
       return !!dependency && this.viewAction(dependency, actions, memo).status === 'done'
@@ -113,7 +117,7 @@ export class Workspace {
       if (ticket.ended && (changed || !dependencies)) status = 'outdated'
     }
     const assignment = ticket && latestAssignment(ticket)
-    const result = { ...action, status, ...(ticket ? { ticket: { id: ticket.id, revision: revision!,
+    const result = { ...action, status, ...(ticket?.ended && this.review ? { review: this.review.requirements(ticket.id) } : {}), ...(ticket ? { ticket: { id: ticket.id, revision: revision!,
       ...(ticket.execution ? { sessionId: workerSessionId(ticket.id) } : {}),
       summary: assignment?.report?.summary ?? '', retryable: canRetry(ticket), stoppable: canStop(ticket), ended: !!ticket.ended, currentDefinition } } : {}) }
     memo.set(action.id, result)
@@ -248,7 +252,24 @@ export class Workspace {
       return this.get(id)
     })
   }
-  act(id: string, actionId: string, input: unknown, scheduled = false): MissionView {
+  /** The public route prepares fresh host evidence before the synchronous domain acceptance transaction. */
+  async actReviewed(id: string, actionId: string, input: unknown): Promise<MissionView> {
+    const request = ActionCommand.parse(input)
+    if (request.command !== 'complete' || this.store.db.prepare('SELECT 1 FROM workspace_command WHERE id=?').get(request.requestId)) return this.act(id, actionId, request)
+    const mission = this.editable(id, request.revision); this.active(mission)
+    const action = mission.actions.find(item => item.id === actionId)
+    if (!action) throw new WorkspaceError(404, 'Action not found')
+    const view = this.viewAction(action, mission.actions)
+    if (!request.text) throw new WorkspaceError(400, 'Describe the evidence or result you reviewed.')
+    if (!action.dependsOn.every(id => this.viewAction(mission.actions.find(item => item.id === id)!, mission.actions).status === 'done'))
+      throw new WorkspaceError(409, 'Complete the dependencies first.')
+    if (action.owner === 'person' && !['todo', 'outdated'].includes(view.status)) throw new WorkspaceError(409, 'This action is already complete.')
+    if (action.owner === 'agent' && (view.status !== 'review' || request.ticketRevision !== view.ticket?.revision)) throw new WorkspaceError(409, 'Review the latest completed execution before accepting it.')
+    this.review?.validate(view.ticket?.id, request.reviewKind ?? (action.owner === 'person' ? 'operator' : undefined), request.checks ?? [])
+    const evidence = request.checks?.length ? await this.review?.prepare(request.requestId, fingerprint({ id, actionId, ...request }), request.checks) : undefined
+    return this.act(id, actionId, request, false, evidence)
+  }
+  act(id: string, actionId: string, input: unknown, scheduled = false, evidence?: EvidenceSeal[]): MissionView {
     const request = ActionCommand.parse(input)
     return this.command(request.requestId, { operation: 'action', id, actionId, ...request, ...(scheduled ? { scheduled: true } : {}) }, () => {
       const mission = this.editable(id, request.revision); this.active(mission)
@@ -287,7 +308,13 @@ export class Workspace {
         if (action.owner === 'person' && !['todo', 'outdated'].includes(view.status)) throw new WorkspaceError(409, 'This action is already complete.')
         if (action.owner === 'agent' && (view.status !== 'review' || request.ticketRevision !== view.ticket?.revision))
           throw new WorkspaceError(409, 'Review the latest completed execution before accepting it.')
-        action.accepted = { at: now(), note: request.text, ...(view.ticket ? { ticketRevision: view.ticket.revision } : {}) }
+        this.review?.validate(view.ticket?.id, request.reviewKind ?? (action.owner === 'person' ? 'operator' : undefined), request.checks ?? [])
+        if (request.checks?.length) {
+          if (!this.review || !evidence) throw new WorkspaceError(409, 'Prepare fresh host evidence through the reviewed acceptance route')
+          this.review.assert(evidence, request.checks)
+        }
+        action.accepted = { at: now(), note: request.text, basis: request.reviewKind ?? 'operator', ...(evidence?.length ? { evidence } : {}),
+          ...(view.ticket ? { ticketRevision: view.ticket.revision } : {}) }
         action.dependencyRevision = this.dependencyRevision(action, mission.actions)
       } else {
         if (!view.ticket || (request.command !== 'steer' && (request.command === 'stop' ? !view.ticket.stoppable : view.ticket.ended)))

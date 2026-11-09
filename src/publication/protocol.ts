@@ -2,6 +2,7 @@
 import { z } from 'zod'
 import { OwnershipStamp } from '../ownership/protocol.ts'
 import { InventoryPage, InventoryRequest, ReceiptRequest } from '../ownership/inventory.ts'
+import { EvidenceSeal } from '../verification/review-model.ts'
 
 export const PUBLICATION_PATH = '/publication/v1'
 export const PublicationId = z.string().uuid()
@@ -19,7 +20,9 @@ export const Destination = z.discriminatedUnion('kind', destinationShapes)
 export type Destination = z.infer<typeof Destination>
 export const DestinationConfig = z.union(destinationShapes.map(shape => shape.extend({ credentialFile: z.string().startsWith('/') }).strict()))
 export type DestinationConfig = z.infer<typeof DestinationConfig>
-const subject = { artifact: z.object({ id: PublicationId, revision: z.number().int().positive(), hash: Digest }).strict().optional(),
+const subject = { artifact: z.object({ id: PublicationId, revision: z.number().int().positive(), hash: Digest,
+  basis: z.enum(['operator', 'checks']).optional(), evidence: z.array(EvidenceSeal).min(1).max(32).optional() }).strict()
+  .refine(value => value.basis === 'checks' ? !!value.evidence?.length : !value.evidence, 'Checked artifacts require host evidence; operator-reviewed artifacts do not claim checks').optional(),
   message: z.object({ id: z.string().min(1).max(200), ticketId: z.string().min(1).max(200), missionId: PublicationId,
     grantId: PublicationId, planVersion: z.number().int().positive() }).strict().optional() }
 const oneSubject = (value: { artifact?: unknown; message?: unknown }) => !!value.artifact !== !!value.message
@@ -61,6 +64,7 @@ export const PublicationRpc = z.discriminatedUnion('op', [
 ])
 export type PublicationRpc = z.infer<typeof PublicationRpc>
 export const PublicationIdentity = z.object({ protocol: z.literal(1), id: PublicationId,
+  capabilities: z.object({ artifactEvidence: z.literal(true) }).strict().optional(),
   ownership: z.object({ authorityId: z.string().uuid(), coordinatorId: z.string(), resourceId: z.string() }).strict() }).strict()
 export type PublicationIdentity = z.infer<typeof PublicationIdentity>
 export const DestinationView = z.union(destinationShapes.map(shape => shape.extend({ hash: Digest }).strict()))

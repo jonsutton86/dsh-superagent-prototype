@@ -7,9 +7,11 @@ import { Library } from '../src/workspace/library.ts'
 import { Workspace } from '../src/workspace/service.ts'
 import type { Conversation, InboxItem } from '../src/workspace/inbox-model.ts'
 import { startRuntime, type Host } from './fixtures/host.ts'
+import { hostVerification } from './fixtures/host-verification.ts'
 
 let host: Host | undefined
-afterEach(async () => { await host?.stop(); host = undefined; vi.restoreAllMocks() })
+const cleanup: (() => void | Promise<unknown>)[] = []
+afterEach(async () => { await host?.stop(); host = undefined; for (const stop of cleanup.splice(0).reverse()) await stop(); vi.restoreAllMocks() })
 async function fixture() { host = await startRuntime(undefined, { executionMode: 'local', noAccounts: true }); return host }
 const start = { requestId: 'new-task', text: 'Create a useful briefing', title: 'Briefing' }
 function event(seq: number, text: string, overrides = {}): SessionEvent {
@@ -132,7 +134,9 @@ it('shows actual mission review state and artifacts, then clears review only aft
   await h.runtime.idle()
   const beforePublication = h.runtime.inbox.item(item.id)
   h.runtime.inbox.read(item.id, { revision: beforePublication.revision })
+  const check = await hostVerification(h, item.id, cleanup)
   const artifact = await h.runTool(item.sessionId!, 'workspace_publish', { requestId: 'result', kind: 'artifact', title: 'Brief', summary: 'Briefing', content: 'The evidence.' })
+  const selection = await check((artifact as { id: string }).id, 'The evidence.')
   expect(h.runtime.inbox.read(item.id, { revision: beforePublication.revision })).toEqual({ marked: false, unread: true })
   await h.runTool(item.sessionId!, 'orchestrator_report', { state: 'ready', summary: 'Brief ready' })
   expect(h.runtime.inbox.list({ filter: 'review' }).items[0]?.id).toBe(item.id)
@@ -140,8 +144,8 @@ it('shows actual mission review state and artifacts, then clears review only aft
   expect(page.artifacts).toContainEqual({ id: (artifact as { id: string }).id, title: 'Brief', kind: 'artifact' })
   expect(page.item.canReply).toBe(true)
   const mission = h.runtime.workspace.get(item.mission!.id), action = mission.actions[0]!
-  h.runtime.workspace.act(mission.id, action.id, { requestId: 'accept', revision: mission.revision, command: 'complete',
-    ticketRevision: action.ticket!.revision, text: 'Read the evidence and accepted it' })
+  await h.runtime.workspace.actReviewed(mission.id, action.id, { requestId: 'accept', revision: mission.revision, command: 'complete',
+    ticketRevision: action.ticket!.revision, text: 'Read the evidence and accepted it', reviewKind: 'checks', checks: [selection] })
   expect(h.runtime.inbox.list({ filter: 'review' }).items).toEqual([])
   expect(h.runtime.inbox.item(item.id).status).toBe('done')
   expect((await h.api('GET', 'inbox?limit=999')).status).toBe(400)

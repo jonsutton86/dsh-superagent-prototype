@@ -151,12 +151,12 @@ it('reuses committed publication receipts after a ticket ends but denies new wri
   expect(() => library.publish(input(), worker.actor)).toThrow('active ticket')
 })
 
-it('invalidates mission acceptance when reviewed library evidence changes visibility', async () => {
+it('invalidates human-reviewed mission acceptance when library memory changes visibility', async () => {
   const host = await hostFixture(), worker = await missionWorker(host), workspace = host.runtime.workspace, library = host.runtime.library
-  const record = library.publish(input({ kind: 'artifact' }), worker.actor)
-  await host.runTool(worker.sessionId, 'orchestrator_report', { state: 'ready', summary: 'Saved the artifact' })
+  const record = library.publish(input({ kind: 'memory' }), worker.actor)
+  await host.runTool(worker.sessionId, 'orchestrator_report', { state: 'ready', summary: 'Saved the evidence' })
   let mission = workspace.get(worker.mission.id), action = mission.actions[0]!
-  const stale = { requestId: requestId(), revision: mission.revision, command: 'complete', ticketRevision: action.ticket!.revision, text: 'Reviewed artifact' }
+  const stale = { requestId: requestId(), revision: mission.revision, command: 'complete', ticketRevision: action.ticket!.revision, text: 'Reviewed memory', reviewKind: 'operator' }
   library.archive(record.id, { requestId: requestId(), revision: 1, archived: true })
   expect(() => workspace.act(mission.id, action.id, stale)).toThrow('latest completed')
   library.archive(record.id, { requestId: requestId(), revision: 2, archived: false })

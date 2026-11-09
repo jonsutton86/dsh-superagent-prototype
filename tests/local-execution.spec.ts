@@ -17,6 +17,7 @@ import type { LibraryEntry } from '../src/workspace/library-model.ts'
 import { startRuntime } from './fixtures/host.ts'
 import { testMachine } from './fixtures/deployment.ts'
 import { inputMessage } from '../src/executor/dsh.ts'
+import { hostVerification } from './fixtures/host-verification.ts'
 
 const close: (() => void | Promise<void>)[] = []
 afterEach(async () => { for (const dispose of close.splice(0).reverse()) await dispose(); vi.restoreAllMocks() })
@@ -122,11 +123,13 @@ it('runs a local mission through actual management routes and Harness tools with
   expect(inputMessage(resumed)).toContain('git history')
   expect(host.subprocess.spawn.mock.calls.every(([spec]) => spec.argv[0] !== 'git' && spec.argv[0] !== 'sh' && !spec.argv.some(arg => arg.includes('api')))).toBe(true)
   await expect(host.runTool(sessionId, 'orchestrator_report', { state: 'progress', summary: 'Not a PR', pr_number: 42 })).rejects.toThrow('unavailable')
+  const check = await hostVerification(host, mission.actions[0]!.ticket!.id, close)
   const artifact = await host.runTool(sessionId, 'workspace_publish', { requestId: requestId(), kind: 'artifact', title: 'Research brief', summary: 'Saved briefing', content: '# Brief\nEvidence and findings.' }) as unknown as LibraryEntry
+  const selection = await check(artifact.id, '# Brief\nEvidence and findings.')
   await host.runTool(sessionId, 'orchestrator_report', { state: 'ready', summary: `Brief saved: ${artifact.id}` })
   mission = host.runtime.workspace.get(mission.id)
   result = await host.api('POST', `missions/${mission.id}/actions/${mission.actions[0]!.id}`, { requestId: requestId(), revision: mission.revision,
-    command: 'complete', ticketRevision: mission.actions[0]!.ticket!.revision, text: 'Read the saved brief and checked its evidence' })
+    command: 'complete', ticketRevision: mission.actions[0]!.ticket!.revision, text: 'Read the saved brief and checked its evidence', reviewKind: 'checks', checks: [selection] })
   expect(result.status, JSON.stringify(result.body)).toBe(200)
   mission = result.body as unknown as MissionView
   expect((await host.api('PUT', `missions/${mission.id}`, { requestId: requestId(), revision: mission.revision, status: 'completed' })).status).toBe(200)

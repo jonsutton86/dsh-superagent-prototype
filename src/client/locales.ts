@@ -6,6 +6,22 @@ import { SETUP_PROBLEMS } from '../setup.ts'
 import { HEALTH_TEXT } from '../sources/host.ts'
 
 const TEXT = {
+  'verification.selectEvidence': ['选择已通过的检查证据', 'Select passed check evidence'],
+  'verification.approvalHint': ['选择你审阅过的检查。批准前将重新采集原始源目录；文件或 Git 状态变化会阻止批准。', 'Select the checks you reviewed. Before approval, the host captures the original source again; changed files or Git state block approval.'],
+  'verification.noPassed': ['暂无可用的成功检查。请先在产物页面创建或请求检查。', 'No successful checks are available. Define or request a check on the artifact page first.'],
+  'verification.selectedCount': ['已选择 {count} 项检查', '{count} checks selected'],
+  'verification.inspectArtifact': ['查看产物与完整检查证据', 'Inspect artifact and full check evidence'],
+  'verification.publisherUpdate': ['独立发布服务尚不支持检查证据；请先更新发布服务。', 'The independent publisher does not support check evidence yet; update it before publishing this artifact.'],
+  'verification.manualContent': ['你将批准人工提交的确切内容；此批准不声称经过主机检查。', 'You are approving the exact operator-submitted content; this approval does not claim host verification.'],
+  'verification.preparing': ['正在采集并核对原始源；请等待批准结果。', 'Capturing and comparing the original source before approval…'],
+  'verification.approvalEvidence': ['批准所绑定的检查与源采集', 'Checks and source captures bound to approval'],
+  'verification.review.capturing': ['正在采集源', 'Capturing sources'],
+  'verification.review.ready': ['已准备好有时限的源证据', 'Fresh source evidence prepared'],
+  'verification.review.held': ['批准已暂停；检查原始采集记录', 'Approval held; inspect original capture receipts'],
+  'verification.acceptedChecks': ['接受时绑定了主机检查与源证据', 'Accepted with host checks and source evidence'],
+  'verification.acceptedManual': ['人工审阅的结果，不声明主机验证', 'Human-reviewed result; no host verification claimed'],
+  'verification.manualReview': ['我已审阅此无文件产物的结果，并接受其为人工审阅结果；不声明经过主机验证。', 'I reviewed this result without file artifacts and accept it as human-reviewed, without claiming host verification.'],
+  'publication.phase.held': ['发布已暂停；尚未提交到外部服务', 'Publication held before external dispatch'],
   'verification.registry': ['检查定义', 'Check definitions'],
   'verification.registryHint': ['为保存的产物定义固定检查。新检查默认禁用；启用前请审阅命令、范围与隔离方式。', 'Define fixed checks for saved artifacts. New checks are disabled until you review their command, scope and isolation.'],
   'verification.new': ['新建检查', 'Create a check'],

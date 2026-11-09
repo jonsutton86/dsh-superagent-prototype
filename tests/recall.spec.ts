@@ -142,13 +142,13 @@ it('enforces worker scope for every chain node and shares allowance across calls
   await expect(host.runTool(a.sessionId, 'workspace_search', {})).rejects.toThrow('Recall allowance exhausted')
   expect(library.recall.state().attempts.filter(item => item.owner.ticketId === a.ticketId)).toHaveLength(2)
 })
-it('invalidates accepted evidence on distant changes without invalidating for unrelated records', async () => {
+it('invalidates human-reviewed memory on distant changes without invalidating for unrelated records', async () => {
   const host = await startRuntime(); cleanup.push(() => host.stop()); const w = await worker(host), library = host.runtime.library, workspace = host.runtime.workspace
-  const sources = chain(library, 36), artifact = library.publish(input({ kind: 'artifact', sources: [{ id: sources.at(-1)!.id, relation: 'derived_from' }] }), w.actor)
+  const sources = chain(library, 36), artifact = library.publish(input({ kind: 'memory', sources: [{ id: sources.at(-1)!.id, relation: 'derived_from' }] }), w.actor)
   expect(library.read(artifact.id).freshness).toMatchObject({ status: 'unknown', complete: false })
-  await host.runTool(w.sessionId, 'orchestrator_report', { state: 'ready', summary: 'Candidate artifact ready' })
+  await host.runTool(w.sessionId, 'orchestrator_report', { state: 'ready', summary: 'Candidate memory ready' })
   let mission = workspace.get(w.mission.id), action = mission.actions[0]!
-  mission = workspace.act(mission.id, action.id, { requestId: randomUUID(), revision: mission.revision, command: 'complete', ticketRevision: action.ticket!.revision, text: 'Operator reviewed sources' })
+  mission = workspace.act(mission.id, action.id, { requestId: randomUUID(), revision: mission.revision, command: 'complete', ticketRevision: action.ticket!.revision, text: 'Operator reviewed sources', reviewKind: 'operator' })
   const before = library.evidenceRevision(w.ticketId)
   library.publish(input({ title: 'Unrelated record' })); expect(library.evidenceRevision(w.ticketId)).toBe(before)
   library.archive(sources[0]!.id, { requestId: randomUUID(), revision: 1, archived: true })

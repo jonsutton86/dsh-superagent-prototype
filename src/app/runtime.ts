@@ -69,6 +69,8 @@ import { Publications } from '../publication/runtime.ts'
 import { ChannelPublications } from '../publication/channels.ts'
 import { ConversationInbox } from '../publication/inbound.ts'
 import { Verification } from '../verification/service.ts'
+import { VerificationReviews } from '../verification/reviews.ts'
+import { MissionReviews } from '../verification/missions.ts'
 
 // Source plugins interact with dsh-superagent exclusively through the `SourceHost` service interface.
 declare module '@deepseek-ai/cordis' { interface Context { orchestrator: SourceHost } }
@@ -102,6 +104,7 @@ export class Runtime extends Service implements SourceHost {
   readonly inbox: Inbox
   readonly library: Library
   readonly verification: Verification
+  readonly verificationReviews: VerificationReviews
   readonly environments: Environments
   readonly endpoints: Endpoints
   readonly personas: Personas
@@ -178,13 +181,15 @@ export class Runtime extends Service implements SourceHost {
           const ticket = store.tickets.get(id)
           return !ticket ? 'Worker ticket is unavailable' : runtime.speculation?.problem(ticket)
         } })
-      this.publications = new Publications({ store, library, ownership: this.ownership, connection: machine.publication, lifetime: this.lifetime,
+      const reviews = this.verificationReviews = new VerificationReviews({ store, verification, lifetime: this.lifetime,
+        authorize: () => { this.ownership?.proof(); this.lifetime.throwIfAborted() } })
+      this.publications = new Publications({ store, library, verification, reviews, ownership: this.ownership, connection: machine.publication, lifetime: this.lifetime,
         preparationProblem: (ticketId, assignmentId) => runtime.speculation?.publicationProblem(ticketId, assignmentId),
         roots: () => [executionRoot(store.settings(), machine.stateDir, world?.grant.root), ...this.worlds.list().items.map(item => item.root)] })
       const personas = this.personas = new Personas(store, async model => { await resolveRoleModel(ctx, model) })
       const workspace = this.workspace = new Workspace(store, () => runtime.engine, () => !this.paused() && !this.closing(),
         id => library.evidenceRevision(id), ticket => environments.allows(ticket.execution?.environment), reference => personas.snapshot(reference), reference => environments.select(reference),
-        (mission, action) => runtime.channelPublications?.channel(mission, action))
+        (mission, action) => runtime.channelPublications?.channel(mission, action), new MissionReviews(store, library, verification, reviews))
       const reflections = this.reflections = new Reflections(store, workspace, library, () => !this.paused())
       const schedules = this.schedules = new Schedules(store, workspace, () => !this.paused(), Date.now,
         (occurrence, missionId, spec) => reflections.prepare(occurrence, missionId, spec))
@@ -390,6 +395,7 @@ export class Runtime extends Service implements SourceHost {
       ownership: this.ownership, authorizeMutation: () => { this.ownership?.proof(); this.lifetime.throwIfAborted() },
       publications: this.publications,
       verification: this.verification,
+      verificationReviews: this.verificationReviews,
       channelPublications: this.channelPublications,
       conversations: this.conversations,
       get health() { return runtime.health }, remoteEffects: this.remoteWorkspace?.world,
@@ -402,11 +408,11 @@ export class Runtime extends Service implements SourceHost {
   /** Idempotent stop; concurrent or repeated calls share the same shutdown promise. */
   stop(): Promise<void> { return this.stopping ??= this.shutdown() }
   private async shutdown(): Promise<void> {
-    this.closingFlag = true; const passes = this.passes.stop(), verification = this.verification.stop(); this.stopped.abort()
+    this.closingFlag = true; const passes = this.passes.stop(), reviews = this.verificationReviews.stop(), verification = this.verification.stop(); this.stopped.abort()
     // Abort an acquisition wait before awaiting any startup-dependent work; loss is terminal for this instance.
     const ownership = this.ownership?.close()
     try {
-      await verification
+      await reviews; await verification
       await this.endpoints.stop()
       await this.publications.stop()
       await this.channelPublications.stop()

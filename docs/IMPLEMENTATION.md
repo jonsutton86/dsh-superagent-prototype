@@ -20,10 +20,19 @@ not a claim that the prototype already ships every feature or that the article s
 | Compute/state separation | SQLite Store; Harness Session checkpoints, held import, checkpoint-bound claimant replacement, revision-bound receipt audits and authenticated held receipt application including original administration; ownership authority, endpoint handoff fencing, shared Runtime/pool/provider lifecycle and independently fenced artifact/mission delivery with directed inbound replies | Private credential/runtime configuration validation, authoritative input/state recovery, remapping, broader inbound discovery/admission and repository integration, clean-host activation and failover qualification |
 | Remote environments | Paired local/remote providers, authenticated leased grants, durable revocation, mission/Session binding, endpoint-owned versioned credentials, remote profile and artifact/restart qualification, operator enrollment/reconciliation, generated profiles, managed world pool and exact per-action selection | Managed endpoint/machine launch, remote repository workflows, quotas and cross-host acceptance |
 | Watchdog | Existing health and bounded transient executor retry; now `src/supervision/*` | Live-provider and process-level acceptance, incident UI/alerts, retention, richer progress evidence and separately authorized recovery policies |
-| Delivery | Reports and PR binding/closure; content-addressed artifacts, stale mission-review invalidation, reviewed artifacts and plan-authorized mission replies with independent receipts; exact participant/task inbound listeners; versioned checks, original assignment/environment bindings, host-captured file/Git snapshots, original-job evidence, operator controls and source freshness captures | Check-bound mission acceptance/publication, Git/environment-bound publication and current PR-head gates, broader inbound discovery/admission, repository integration and broader speculative quality evaluation |
+| Delivery | Reports and PR binding/closure; content-addressed artifacts, stale mission-review invalidation, reviewed artifacts and plan-authorized mission replies with independent receipts; exact participant/task inbound listeners; versioned checks, original assignment/environment bindings, host-captured file/Git snapshots, original-job evidence, operator controls and selected-check mission acceptance/publication (qualification in progress) | Current remote PR-head gates, continuous freshness/fresh whole-mission closure, broader inbound discovery/admission, repository integration and broader speculative quality evaluation |
 | Operator control | Existing web panel, settings, pause/retry/stop, scoped usage/limits/prices and reconciliation, local/remote environment status and revocation, endpoint enrollment/reconciliation and private profile generation | Supervision, broader workload budgets and evidence surfaces |
 
 No new runtime, orchestration database, or workflow framework is assumed. Work is implemented in integrated slices and not declared complete until acceptance evidence exists. Local deterministic tests do not establish live-provider or cross-platform acceptance.
+
+## Current increment: checked approval and mission acceptance
+
+[048 Checked approvals](048-checked-approvals.md) binds selected successful host checks and fresh original-source captures
+to worker artifact publication and all-current-artifact mission acceptance. Human review remains explicitly labelled.
+Publication recovery observes original receipts before considering any new capture or send; the independent publisher
+enforces the short freshness window immediately before dispatch. Historical acceptance detects known subsequent source
+changes but does not continuously rescan files. Exact PR-head integration, fresh whole-mission closure, continuous source
+freshness and every other remaining full architecture requirement remain open. Qualification is in progress.
 
 ## Implemented increment: artifact check definitions and evidence
 

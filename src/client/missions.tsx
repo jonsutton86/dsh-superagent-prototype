@@ -9,6 +9,8 @@ import { PersonaSelector } from './personas.tsx'
 import type { PersonaRef } from '../personas/model.ts'
 import { WorldSelector } from './worlds.tsx'
 import { MissionDeliveryCard } from './mission-delivery.tsx'
+import { ArtifactCheckPicker } from './verification.tsx'
+import type { CheckSelection } from '../verification/review-model.ts'
 
 /** Retain a request ID after an ambiguous response; identical retries cannot duplicate an execution. */
 function useCommand(done: (mission: MissionView) => void) {
@@ -86,9 +88,9 @@ function MissionDetail({ id }: { id: string }) {
     const body = { revision: mission.revision, status }
     void command.run({ id, body }, requestId => call('PUT missions/:id', { id, body: { ...body, requestId } }))
   }
-  const act = (action: ActionView, operation: ActionCommandInput['command'], text = '') => {
+  const act = (action: ActionView, operation: ActionCommandInput['command'], text = '', review?: Pick<ActionCommandInput, 'reviewKind' | 'checks'>) => {
     if (!mission) return
-    const body = { revision: mission.revision, command: operation, text, ticketRevision: action.ticket?.revision }
+    const body = { revision: mission.revision, command: operation, text, ticketRevision: action.ticket?.revision, ...review }
     void command.run({ id, action: action.id, body }, requestId => call('POST missions/:id/actions/:action', {
       id, action: action.id, body: { ...body, requestId } }))
   }
@@ -138,7 +140,7 @@ function MissionDetail({ id }: { id: string }) {
 }
 
 function Action({ action, mission, busy, runnable, act }: { action: ActionView; mission: MissionView; busy: boolean; runnable: boolean
-  act: (action: ActionView, operation: ActionCommandInput['command'], text?: string) => void }) {
+  act: (action: ActionView, operation: ActionCommandInput['command'], text?: string, review?: Pick<ActionCommandInput, 'reviewKind' | 'checks'>) => void }) {
   const { t, navigate, openSession, notify } = usePanel(), [message, setMessage] = useState('')
   const mutable = mission.status === 'active', ticket = action.ticket
   const complete = action.status === 'review' || (action.owner === 'person' && ['todo', 'outdated'].includes(action.status))
@@ -152,6 +154,7 @@ function Action({ action, mission, busy, runnable, act }: { action: ActionView; 
     {!!dependencies.length && <p className="dt-hint">{t('mission.after', { actions: dependencies.join(', ') })}</p>}
     {ticket?.summary && <blockquote className="dt-mission-prose">{ticket.summary}</blockquote>}
     {action.status === 'done' && <p className="dt-mission-prose">{action.accepted?.note}</p>}
+    {action.accepted && <p>{t(action.accepted.basis === 'checks' ? 'verification.acceptedChecks' : 'verification.acceptedManual')} · {new Date(action.accepted.at).toLocaleString()}</p>}
     <div className="dt-mission-buttons">
       {mutable && action.owner === 'agent' && ['todo', 'stopped', 'outdated'].includes(action.status) &&
         <Button variant="primary" disabled={busy || !runnable} onClick={() => act(action, 'run')}>{t('mission.run')}</Button>}
@@ -163,11 +166,33 @@ function Action({ action, mission, busy, runnable, act }: { action: ActionView; 
         <Button disabled={busy} onClick={() => act(action, 'stop')}>{t('stop')}</Button>
       </>}
     </div>
-    {mutable && (complete || (ticket && !ticket.ended)) && <form className="dt-mission-form" onSubmit={event => {
-      event.preventDefault(); act(action, complete ? 'complete' : 'steer', message)
-    }}><label>{t(complete ? 'mission.reviewNote' : 'mission.message')}
+    {mutable && complete && <ResultAcceptance key={ticket?.revision ?? action.id} action={action} busy={busy} act={act} />}
+    {mutable && !complete && ticket && !ticket.ended && <form className="dt-mission-form" onSubmit={event => {
+      event.preventDefault(); act(action, 'steer', message)
+    }}><label>{t('mission.message')}
         <textarea required value={message} onChange={event => setMessage(event.target.value)} maxLength={12000} rows={2} /></label>
-      <Button type="submit" disabled={busy || !message.trim()}>{t(complete ? 'mission.acceptResult' : 'mission.send')}</Button>
+      <Button type="submit" disabled={busy || !message.trim()}>{t('mission.send')}</Button>
     </form>}
   </article>
+}
+
+function ResultAcceptance({ action, busy, act }: { action: ActionView; busy: boolean;
+  act(action: ActionView, operation: ActionCommandInput['command'], text: string, review: Pick<ActionCommandInput, 'reviewKind' | 'checks'>): void }) {
+  const { t } = usePanel(), [message, setMessage] = useState(''), [manual, setManual] = useState(false), [selected, setSelected] = useState<Record<string, CheckSelection[]>>({})
+  const artifacts = action.review?.artifacts ?? [], checked = artifacts.length > 0
+  const selections = artifacts.flatMap(artifact => selected[artifact.id] ?? []).sort((a, b) => a.runId.localeCompare(b.runId))
+  const ready = !action.review?.problem && (checked ? artifacts.every(artifact => selected[artifact.id]?.length) : action.owner === 'person' || manual)
+  return <form className="dt-mission-form" onSubmit={event => {
+    event.preventDefault(); if (ready) act(action, 'complete', message, { reviewKind: checked ? 'checks' : 'operator', ...(checked ? { checks: selections } : {}) })
+  }}>
+    {action.review?.problem && <p role="alert">{action.review.problem}</p>}
+    {artifacts.map(artifact => <div key={`${artifact.id}:${artifact.revision}:${artifact.hash}`}><h4>{artifact.title}</h4>
+      <ArtifactCheckPicker artifactId={artifact.id} selected={selected[artifact.id] ?? []} disabled={busy}
+        onChange={value => setSelected(previous => ({ ...previous, [artifact.id]: value }))} />
+    </div>)}
+    {!checked && action.owner === 'agent' && <label><input type="checkbox" checked={manual} onChange={event => setManual(event.target.checked)} />{t('verification.manualReview')}</label>}
+    <label>{t('mission.reviewNote')}<textarea required value={message} onChange={event => setMessage(event.target.value)} maxLength={12000} rows={2} /></label>
+    {busy && checked && <p role="status">{t('verification.preparing')}</p>}
+    <Button type="submit" disabled={busy || !message.trim() || !ready}>{t('mission.acceptResult')}</Button>
+  </form>
 }

@@ -9,16 +9,21 @@ import type { CoordinatorOwnership } from '../ownership/lease.ts'
 import type { OwnershipStamp } from '../ownership/protocol.ts'
 import { PublicationClient, type PublicationConnection } from './client.ts'
 import { DestinationView, Digest, PublicationError, PublicationId, PublicationIdentity, PublicationReceipt, type Publication } from './protocol.ts'
+import { CheckSelections, type CheckSelection, type EvidenceSeal } from '../verification/review-model.ts'
+import type { VerificationReviews } from '../verification/reviews.ts'
+import type { Verification } from '../verification/service.ts'
 
 export const ApprovePublication = z.object({ requestId: PublicationId, revision: z.number().int().positive(), hash: Digest,
-  destination: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/), destinationHash: Digest }).strict()
+  destination: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/), destinationHash: Digest, checks: CheckSelections.optional() }).strict()
 export type ApprovePublication = z.infer<typeof ApprovePublication>
 export interface PublicationRecord {
   id: string; serviceId: string; artifactId: string; revision: number; hash: string; destination: string; destinationHash: string;
-  createdAt: string; updatedAt: string; phase: 'pending' | 'unknown' | 'observed'; receipt?: PublicationReceipt; problem?: string
+  createdAt: string; updatedAt: string; phase: 'pending' | 'held' | 'unknown' | 'observed'; receipt?: PublicationReceipt; problem?: string
+  verification?: { checks: CheckSelection[]; reviewId: string; evidence?: EvidenceSeal[] }
 }
 interface Stored extends PublicationRecord { intent: Publication; fingerprint: string; attempts: OwnershipStamp[] }
 interface PublicationHost { store: Store; library: Library; ownership?: CoordinatorOwnership; connection?: PublicationConnection; lifetime: AbortSignal; roots(): string[];
+  verification?: Verification; reviews?: VerificationReviews;
   preparationProblem?(ticketId: string, assignmentId?: string): string | undefined }
 const view = ({ intent: _, fingerprint: __, attempts: ___, ...record }: Stored): PublicationRecord => record
 
@@ -61,12 +66,12 @@ export class Publications {
     this.host.store.db.prepare('INSERT INTO workspace_publication VALUES (?,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value').run(item.id, JSON.stringify(item))
   }
   async destinations() {
-    if (!this.client) return { configured: false, items: [] as z.infer<typeof DestinationView>[] }
+    if (!this.client) return { configured: false, items: [] as z.infer<typeof DestinationView>[], artifactEvidence: false }
     const identity = PublicationIdentity.parse(await this.client.call({ op: 'identity' }, this.stopped.signal))
     assertOwnership(this.host.ownership, identity.ownership)
     const items = z.array(DestinationView).max(100).parse(await this.client.call({ op: 'destinations' }, this.stopped.signal))
     for (const { hash, ...value } of items) if (fingerprint(value) !== hash) throw new PublicationError(409, 'destination_changed', 'Publication destination digest is invalid')
-    return { configured: true, items }
+    return { configured: true, items, artifactEvidence: identity.capabilities?.artifactEvidence === true }
   }
   list(artifactId?: string) {
     if (artifactId) PublicationId.parse(artifactId)
@@ -82,6 +87,22 @@ export class Publications {
       throw new PublicationError(409, 'artifact_changed', 'Select a current, non-conflicting text artifact with a complete source check and review its exact content before publication')
     return record
   }
+  private checks(artifactId: string, revision: number, hash: string, selections: readonly CheckSelection[]): void {
+    const artifact = this.eligible(artifactId, revision, hash)
+    if (artifact.provenance.actor === 'worker' && !selections.length) throw new PublicationError(409, 'checks_required', 'Select successful host checks for this worker artifact before approval')
+    if (selections.length && (!this.host.reviews || !this.host.verification)) throw new PublicationError(409, 'checks_unavailable', 'Artifact verification is unavailable')
+    for (const selection of selections) {
+      const binding = this.host.verification!.approval(selection.runId, selection)
+      if (binding.artifact.id !== artifactId || binding.artifact.revision !== revision || binding.artifact.hash !== hash)
+        throw new PublicationError(409, 'check_changed', 'Selected host check belongs to another artifact or revision')
+    }
+  }
+  private duplicate(item: Pick<Stored, 'id' | 'artifactId' | 'hash' | 'destinationHash'>): boolean {
+    return !!this.host.store.db.prepare(`SELECT id FROM workspace_publication WHERE id!=? AND json_extract(value,'$.artifactId')=?
+      AND json_extract(value,'$.hash')=? AND json_extract(value,'$.destinationHash')=?
+      AND coalesce(json_extract(value,'$.receipt.phase'),CASE WHEN json_extract(value,'$.phase')='held' THEN 'not_delivered' ELSE 'unknown' END)
+        NOT IN ('failed','cancelled','not_delivered') LIMIT 1`).get(item.id, item.artifactId, item.hash, item.destinationHash)
+  }
   async publish(artifactId: string, input: unknown): Promise<PublicationRecord> {
     const request = ApprovePublication.parse(input), digest = fingerprint({ artifactId, ...request })
     const existing = this.host.store.db.prepare('SELECT value FROM workspace_publication WHERE id=?').get(request.requestId)
@@ -90,16 +111,18 @@ export class Publications {
       if (item.fingerprint !== digest) throw new PublicationError(409, 'intent_changed', 'Publication request ID already belongs to another approval')
       return view(item)
     }
-    this.authorize(); this.require(); this.eligible(artifactId, request.revision, request.hash)
+    this.authorize(); this.require(); this.checks(artifactId, request.revision, request.hash, request.checks ?? [])
     const catalog = await this.destinations(), destination = catalog.items.find(value => value.id === request.destination && value.hash === request.destinationHash)
     if (!destination) throw new PublicationError(409, 'destination_changed', 'Publication destination changed; refresh and review it')
+    if (request.checks?.length && !catalog.artifactEvidence) throw new PublicationError(409, 'checks_unavailable', 'Update the independent publisher to support artifact evidence before publishing')
     const owner = this.authorize(); this.eligible(artifactId, request.revision, request.hash)
     const content = this.host.library.content(artifactId), text = Buffer.from(content.data, 'base64').toString('utf8')
     if (Buffer.byteLength(text) > destination.maxBytes) throw new PublicationError(413, 'content_too_large', 'Artifact exceeds the destination content limit')
     const at = timestamp(), item: Stored = { id: request.requestId, serviceId: this.require().config.serviceId, artifactId, revision: request.revision,
       hash: request.hash, destination: request.destination, destinationHash: request.destinationHash, createdAt: at, updatedAt: at, phase: 'pending', fingerprint: digest,
+      ...(request.checks?.length ? { verification: { checks: request.checks, reviewId: request.requestId } } : {}),
       attempts: [owner], intent: { id: request.requestId, destination: request.destination, destinationHash: request.destinationHash, hash: request.hash, text,
-        artifact: { id: artifactId, revision: request.revision, hash: request.hash } } }
+        artifact: { id: artifactId, revision: request.revision, hash: request.hash, basis: 'operator' } } }
     // Recheck after asynchronous discovery: concurrent duplicate approvals must never overwrite the first durable intent.
     const raced = this.host.store.db.prepare('SELECT value FROM workspace_publication WHERE id=?').get(item.id)
     if (raced) {
@@ -107,10 +130,7 @@ export class Publications {
       if (original.fingerprint !== digest) throw new PublicationError(409, 'intent_changed', 'Concurrent publication approval differs')
       return view(original)
     }
-    const duplicate = this.host.store.db.prepare(`SELECT id FROM workspace_publication WHERE json_extract(value,'$.artifactId')=?
-      AND json_extract(value,'$.hash')=? AND json_extract(value,'$.destinationHash')=?
-      AND coalesce(json_extract(value,'$.receipt.phase'),'unknown') NOT IN ('failed','cancelled','not_delivered') LIMIT 1`).get(artifactId, request.hash, request.destinationHash)
-    if (duplicate) throw new PublicationError(409, 'already_published', 'This artifact already has a publication for that destination; inspect or recover the original receipt')
+    if (this.duplicate(item)) throw new PublicationError(409, 'already_published', 'This artifact already has a publication for that destination; inspect or recover the original receipt')
     this.save(item); return this.dispatch(item)
   }
   private observeReceipt(item: Stored, input: unknown): PublicationRecord {
@@ -123,8 +143,35 @@ export class Publications {
   private dispatch(item: Stored): Promise<PublicationRecord> {
     const existing = this.pending.get(item.id); if (existing) return existing
     const operation = (async () => {
-      try { return this.observeReceipt(item, await this.require().call({ op: 'publish', publication: item.intent }, this.stopped.signal)) }
-      catch { item.phase = 'unknown'; item.problem = 'Publication acknowledgement is unavailable; observe or retry this original request, never create a replacement'; this.save(item); return view(item) }
+      let absent = false, sent = false
+      try {
+        // Observation comes before current-source gates. An old accepted effect must never be replaced by a fresh send.
+        try { return this.observeReceipt(item, await this.require().call({ op: 'receipt.observe', id: item.id }, this.stopped.signal)) }
+        catch (error) {
+          if (!(error instanceof PublicationError) || error.status !== 404 || error.code !== 'receipt_missing' || item.receipt) throw error
+          absent = true
+        }
+        this.authorize(); this.checks(item.artifactId, item.revision, item.hash, item.verification?.checks ?? [])
+        if (this.duplicate(item)) throw new PublicationError(409, 'already_published', 'Another approval exists for this artifact and destination; observe that receipt')
+        if (item.verification) {
+          const evidence = await this.host.reviews!.prepare({ id: item.verification.reviewId, purpose: 'publication', target: item.fingerprint, checks: item.verification.checks })
+          this.authorize(); this.checks(item.artifactId, item.revision, item.hash, item.verification.checks)
+          this.host.reviews!.assert(evidence, item.verification.checks)
+          item.verification.evidence = evidence; item.intent.artifact = { id: item.artifactId, revision: item.revision, hash: item.hash, basis: 'checks', evidence }
+        }
+        if (this.duplicate(item)) throw new PublicationError(409, 'already_published', 'Another approval exists for this artifact and destination')
+        const owner = this.authorize()
+        if (!item.attempts.some(previous => sameOwner(previous, owner))) {
+          if (item.attempts.length >= 100) throw new PublicationError(409, 'attempt_limit', 'Publication ownership attempt limit reached')
+          item.attempts.push(owner)
+        }
+        item.phase = 'pending'; delete item.problem; this.save(item); sent = true
+        return this.observeReceipt(item, await this.require().call({ op: 'publish', publication: item.intent }, this.stopped.signal))
+      } catch (error) {
+        item.phase = absent && !sent ? 'held' : 'unknown'
+        item.problem = absent && !sent ? String(error).slice(0, 4000) : 'Publication acknowledgement is unavailable; observe this original request before any new dispatch'
+        this.save(item); return view(item)
+      }
     })().finally(() => this.pending.delete(item.id))
     this.pending.set(item.id, operation); return operation
   }
@@ -140,13 +187,7 @@ export class Publications {
   }
   /** An explicit retry preserves the exact payload and ID. The independent journal prevents a second provider POST. */
   async retry(id: string): Promise<PublicationRecord> {
-    const owner = this.authorize(), item = this.item(id)
-    this.eligible(item.artifactId, item.revision, item.hash)
-    if (!item.attempts.some(previous => sameOwner(previous, owner))) {
-      if (item.attempts.length >= 100) throw new PublicationError(409, 'attempt_limit', 'Publication ownership attempt limit reached')
-      item.attempts.push(owner); this.save(item)
-    }
-    return this.dispatch(item)
+    this.authorize(); return this.dispatch(this.item(id))
   }
   async stop(): Promise<void> { this.stopped.abort(); await Promise.allSettled([...this.pending.values()]) }
 }
