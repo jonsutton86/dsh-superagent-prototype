@@ -9,6 +9,8 @@ Full macOS validation passed 2,063 tests (25 skipped; 177.81 seconds); full nati
 tests (14 skipped; 190.44 seconds), both with typechecking and seven builds. Linux service/Harness/SSH checks passed 30
 tests (14.53 seconds). All 12 repository cases ran under native confinement; fixture worker responses do not establish
 model coding quality or live Git-provider acceptance. The user's app stayed ready and unpaused.
+Runtime/test revision `5830e8cd49031a9cabd80ff9562bba4e80b3a395` is pushed. GitHub reports zero runs for that SHA and
+explicit workflow dispatch still returns HTTP 422 (Actions disabled). The local Linux qualification is independent of CI.
 
 [072 Native Linux qualification](072-native-linux-qualification.md) adds a reproducible isolated Ubuntu 22.04 ARM64 VM,
 disposable bootstrap and native suite runner. Real kernel/resource, installed-Harness-over-SSH and delegated user-service

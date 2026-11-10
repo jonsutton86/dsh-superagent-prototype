@@ -105,5 +105,11 @@ No external Git repository or model provider was contacted. The existing app rem
 No owned test service files or loaded test units remained on Linux after the checks. Cloud and cross-machine acceptance,
 native browser journeys and the complete architecture remain outstanding.
 
+Runtime/test revision `5830e8cd49031a9cabd80ff9562bba4e80b3a395` is pushed to `feat/full-superagent-architecture`.
+GitHub reported zero workflow runs for that SHA, and explicit dispatch returned HTTP 422 because Actions is disabled
+for this repository. No repository settings or billing settings were changed. The native local Linux evidence above
+remains the qualification for this revision; no GitHub-hosted x86-64 CI pass is claimed. The test VM was stopped normally
+after cleanup, retaining its disk for later qualification.
+
 Sources: Git [fetch](https://git-scm.com/docs/git-fetch), [configuration](https://git-scm.com/docs/git-config),
 [credentials](https://git-scm.com/docs/gitcredentials), and Linux [rename semantics](https://man7.org/linux/man-pages/man2/rename.2.html).
