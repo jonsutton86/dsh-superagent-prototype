@@ -26,6 +26,21 @@ class Busy(RuntimeError):
 
 
 def identity(pid):
+    if sys.platform == 'linux':
+        # ps lstart is recomputed from wall time; an early-boot clock correction can change it for a live PID.
+        # Kernel start ticks plus boot ID remain stable and distinguish PID reuse and a replacement OS boot.
+        try:
+            if type(pid) is not int or pid <= 0:
+                return None
+            boot = str(uuid.UUID(Path('/proc/sys/kernel/random/boot_id').read_text().strip()))
+            value = Path('/proc/' + str(pid) + '/stat').read_text()
+            prefix, separator, tail = value.rpartition(')')
+            fields = tail.split()
+            if not separator or not prefix.startswith(str(pid) + ' (') or len(fields) < 20 or not fields[19].isdigit():
+                return None
+            return {'pid': pid, 'bootId': boot, 'startTicks': int(fields[19])}
+        except (OSError, ValueError):
+            return None
     result = subprocess.run(['ps', '-p', str(pid), '-o', 'lstart='], env={**os.environ, 'LC_ALL': 'C'},
                             capture_output=True, text=True)
     return {'pid': pid, 'started': ' '.join(result.stdout.split())} if result.returncode == 0 and result.stdout.strip() else None

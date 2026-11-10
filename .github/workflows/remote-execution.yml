@@ -54,6 +54,16 @@ jobs:
           sudo systemctl daemon-reload
           sudo loginctl enable-linger "$(id -un)"
           # This is a disposable CI runner. Restart only its test user manager after changing delegation.
-          sudo systemctl restart "user@$(id -u).service"
-          systemctl --user show init.scope --property=ControlGroup --value
+          qualification_old_group=$(systemctl show "user@$(id -u).service" --property=ControlGroup --value)
+          sudo systemctl stop "user@$(id -u).service"
+          if [[ -n $qualification_old_group ]]; then
+            [[ $qualification_old_group == /user.slice/* && $qualification_old_group != *..* ]]
+            for ((qualification_wait=0; qualification_wait<150; qualification_wait++)); do
+              [[ ! -e /sys/fs/cgroup${qualification_old_group} ]] && break
+              sleep 0.2
+            done
+            [[ ! -e /sys/fs/cgroup${qualification_old_group} ]]
+          fi
+          sudo systemctl start "user@$(id -u).service"
+          systemctl --user show --property=ControlGroup --value
           DSH_DELEGATED_SERVICE_QUALIFICATION=1 pnpm exec vitest run tests/delegated-service.spec.ts

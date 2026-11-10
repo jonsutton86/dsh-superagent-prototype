@@ -17,13 +17,13 @@ For a prepared Linux execution host, the [endpoint role](docs/067-managed-endpoi
 persistent identity and private enrollment details for the coordinator's Environments page.
 The [service supervisor](docs/068-service-supervision.md) adds optional macOS login and Linux user/boot services,
 bounded process recovery and persistent manual stops while preserving the existing Harness installation.
-Prepared cgroup v2 hosts can configure [worker resource limits](docs/069-execution-resources.md) with durable usage receipts;
-native Linux qualification remains pending.
+Prepared cgroup v2 hosts can configure [worker resource limits](docs/069-execution-resources.md) with durable usage receipts.
 The [delegated endpoint service](docs/070-delegated-endpoint-service.md) now prepares its own worker cgroups and routes
-Start/Restart through the supervisor on a properly delegated Linux user manager; native Linux acceptance is pending.
+Start/Restart through the supervisor on a properly delegated Linux user manager.
 The [managed SSH transport](docs/071-managed-ssh-transport.md) connects a coordinator to an endpoint through a pinned,
-loopback-only forward with supervised reconnect. Native macOS SSH checks pass; Linux Harness-over-SSH and cross-host
-acceptance remain pending.
+loopback-only forward with supervised reconnect. Native macOS SSH and Ubuntu 22.04 ARM64 Harness-over-SSH checks pass.
+The [native Linux qualification](docs/072-native-linux-qualification.md) records kernel resource enforcement, owned user
+services and abrupt VM power-loss recovery. Cloud networking, physical cross-host recovery and clean-host failover remain pending.
 The workflow below configures the repository-backed mode.
 
 Setup has many steps, so an agent does it with you. Ask your coding agent:

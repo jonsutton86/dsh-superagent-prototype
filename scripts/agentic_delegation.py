@@ -41,9 +41,9 @@ class Kernel:
 
 def scope(root, label, manager_group):
     base = MOUNT / manager_group.lstrip('/')
-    if not manager_group.startswith('/') or len(manager_group) > 4096 or any(char in manager_group for char in '\x00\n\r') or base.name != 'init.scope' or '..' in base.parts or base.parent == MOUNT:
+    if not manager_group.startswith('/') or len(manager_group) > 4096 or any(char in manager_group for char in '\x00\n\r') or '..' in base.parts or base == MOUNT or not base.name.startswith('user@') or not base.name.endswith('.service'):
         raise RuntimeError('The user manager returned an unsupported cgroup topology.')
-    unit = base.parent / 'app.slice' / label
+    unit = base / 'app.slice' / label
     return {'schema': 1, 'unit': label, 'cgroup': str(unit), 'workerRoot': str(unit / 'worker-pool')}
 
 
@@ -53,7 +53,8 @@ def plan(root, label):
     executable = shutil.which('systemctl')
     if not executable:
         raise RuntimeError('Delegated service setup requires the systemd user manager.')
-    result = subprocess.run([executable, '--user', 'show', 'init.scope', '--property=ControlGroup', '--value'],
+    # systemd 249 exposes the manager root here, while its synthetic init.scope reports an empty ControlGroup.
+    result = subprocess.run([executable, '--user', 'show', '--property=ControlGroup', '--value'],
                             capture_output=True, text=True, timeout=15)
     if result.returncode:
         raise RuntimeError('Log in as the endpoint service user and make its systemd user manager available before initialization.')

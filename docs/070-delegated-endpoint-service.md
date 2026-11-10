@@ -32,13 +32,17 @@ sudo loginctl enable-linger agentic
 ```
 
 If that user manager was already running without the required delegation, apply the change during maintenance by
-restarting `user@UID.service`. This affects all services of that account, which is why the installation uses a dedicated
+stopping `user@UID.service`, waiting for its old cgroup to disappear, and starting it again. Ubuntu 22.04/systemd 249 can
+race cgroup cleanup during an immediate restart after changing delegation and fail with status `219/CGROUP`. Do not delete
+or forcibly empty a live group. This affects all services of that account, which is why the installation uses a dedicated
 account. The launcher does not perform this privileged operation. Do not assume `systemctl set-property ... Delegate=...`
 works on existing systemd 249 services: that version exposes delegation assignment for transient construction, not general
 live updates. The CI fixture uses a runtime drop-in and restarts only its disposable test user manager.
 
-Log in as the service account. The user manager must expose its `init.scope` control group through `systemctl --user show`.
-The launcher derives the endpoint's sibling `app.slice/<owned unit>/worker-pool` path from this observation, rather than
+Log in as the service account. The user manager must expose its own control group through
+`systemctl --user show --property=ControlGroup --value`. The synthetic `init.scope` unit reports an empty `ControlGroup`
+on systemd 249, so querying that unit does not establish the manager's root. The launcher derives the endpoint's
+`app.slice/<owned unit>/worker-pool` path beneath the observed manager root, rather than
 assuming the host's UID path or trusting a shell-supplied resource directory. Unsupported topologies are refused.
 
 ## Installation and control

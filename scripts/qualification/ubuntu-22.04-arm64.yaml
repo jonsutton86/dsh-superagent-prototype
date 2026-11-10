@@ -1,0 +1,15 @@
+# Native Linux acceptance on Apple Silicon. No host mounts, model credentials or application port forwarding.
+minimumLimaVersion: 2.2.1
+vmType: vz
+arch: aarch64
+cpus: 4
+memory: 6GiB
+disk: 24GiB
+plain: true
+images:
+  - location: https://cloud-images.ubuntu.com/releases/jammy/release-20261020/ubuntu-22.04-server-cloudimg-arm64.img
+    arch: aarch64
+    digest: sha256:e720ae083f93baae47ac9b76a096243fe1027f60998cf1127a47a74c880f64ed
+ssh:
+  loadDotSSHPubKeys: false
+  forwardAgent: false

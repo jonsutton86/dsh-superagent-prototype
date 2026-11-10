@@ -62,9 +62,53 @@ class FakeKernel:
                 self.files[path / name] = value
 
 class DelegationTests(unittest.TestCase):
+    def test_profile_durability(self):
+        owned = self.root / 'profile'
+        owned.mkdir()
+        (owned / 'cordis.patch.yml').write_text('[]\n')
+        outside = self.root / 'external-checkout'
+        outside.mkdir()
+        (outside / 'source.ts').write_text('unrelated source')
+        (owned / 'linked-package').symlink_to(outside, target_is_directory=True)
+        observed = set()
+        original = os.fsync
+        def synced(fd):
+            observed.add(os.fstat(fd).st_ino)
+            original(fd)
+        with patch.object(os, 'fsync', synced):
+            api.sync_tree(owned)
+        self.assertIn((owned / 'cordis.patch.yml').stat().st_ino, observed)
+        self.assertIn(owned.stat().st_ino, observed)
+        self.assertNotIn(outside.stat().st_ino, observed)
+        self.assertNotIn((outside / 'source.ts').stat().st_ino, observed)
+        with patch.object(os, 'fsync', side_effect=OSError('storage refused flush')):
+            with self.assertRaisesRegex(OSError, 'storage refused flush'):
+                api.sync_tree(owned)
+        self.assertEqual((owned / 'cordis.patch.yml').read_text(), '[]\n')
+
+    def test_process_identity(self):
+        boot = '25858999-1b91-45dd-b11f-96d1a9a7a241'
+        fields = ['S'] + ['0'] * 18 + ['90001'] + ['0'] * 4
+        value = '42 (name with ) parentheses) ' + ' '.join(fields)
+        def read(path):
+            return boot if str(path).endswith('boot_id') else value
+        with patch.object(s.sys, 'platform', 'linux'), patch.object(Path, 'read_text', read), patch.object(s.subprocess, 'run', side_effect=AssertionError('Wall-clock process times must not be used')):
+            first = s.identity(42)
+            self.assertEqual(first, {'pid': 42, 'bootId': boot, 'startTicks': 90001})
+            self.assertEqual(s.identity(42), first)
+            value = value.replace('90001', '90002')
+            self.assertNotEqual(s.identity(42), first)
+            value = value.replace('90002', '90001')
+            boot = 'fac7cb7e-4c04-4edf-b5ba-1d6fe10069d6'
+            self.assertNotEqual(s.identity(42), first)
+            value = 'malformed'
+            self.assertIsNone(s.identity(42))
+        with patch.object(s.sys, 'platform', 'linux'), patch.object(Path, 'read_text', side_effect=FileNotFoundError):
+            self.assertIsNone(s.identity(42))
+
     def setUp(self):
         self.root = Path(directory)
-        self.value = d.scope(self.root, 'agentic-os-test.service', '/user.slice/user-1000.slice/user@1000.service/init.scope')
+        self.value = d.scope(self.root, 'agentic-os-test.service', '/user.slice/user-1000.slice/user@1000.service')
         self.kernel = FakeKernel(self.value)
         self.installation = {'role': 'endpoint', 'delegation': self.value,
                              'endpointConfig': {'resources': {'cgroupRoot': self.value['workerRoot']}}}
@@ -83,13 +127,20 @@ class DelegationTests(unittest.TestCase):
             d.scope(self.root, self.value['unit'], '/../../init.scope')
         fake = Mock()
         fake.read.return_value = 'memory pids'
-        with patch.object(d, 'Kernel', return_value=fake), patch.object(d.shutil, 'which', return_value='/usr/bin/systemctl'), patch.object(d.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout='/user.slice/user-1000.slice/user@1000.service/init.scope')):
+        with patch.object(d, 'Kernel', return_value=fake), patch.object(d.shutil, 'which', return_value='/usr/bin/systemctl'), patch.object(d.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout='/user.slice/user-1000.slice/user@1000.service')):
             with self.assertRaisesRegex(RuntimeError, 'administrator'):
                 d.plan(self.root, self.value['unit'])
+        fake.read.return_value = 'cpu memory pids'
+        with patch.object(d, 'Kernel', return_value=fake), patch.object(d.shutil, 'which', return_value='/usr/bin/systemctl'), patch.object(d.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout='/user.slice/user-1000.slice/user@1000.service')) as observed:
+            self.assertEqual(d.plan(self.root, self.value['unit']), self.value)
+            # Ubuntu 22.04 exposes this manager property; its synthetic init.scope property is empty.
+            self.assertNotIn('init.scope', observed.call_args.args[0])
+        with self.assertRaises(RuntimeError):
+            d.scope(self.root, self.value['unit'], '')
         with patch.object(s.sys, 'platform', 'linux'):
             actual = s.service_identity(self.root)
             installation = copy.deepcopy(self.installation)
-            installation['delegation'] = d.scope(self.root, actual['label'], '/user.slice/user-1000.slice/user@1000.service/init.scope')
+            installation['delegation'] = d.scope(self.root, actual['label'], '/user.slice/user-1000.slice/user@1000.service')
             installation['endpointConfig']['resources']['cgroupRoot'] = installation['delegation']['workerRoot']
             self.assertIn('Slice=app.slice\nDelegate=cpu memory pids', s.definition(s.settings(self.root, self.args, installation)))
 

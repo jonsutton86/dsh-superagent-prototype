@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process'
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -67,6 +67,32 @@ it('resumes interrupted plugin installation without replacing the already-create
   expect((await run(directory, 'init')).code).toBe(0)
   expect(readFileSync(profile, 'utf8')).toContain('preserve on resume')
   expect(readFileSync(join(root, 'created'), 'utf8').trim().split('\n')).toHaveLength(1)
+})
+
+it('waits for a recent state lock to age without deleting or modifying it before launch', async () => {
+  const { directory } = await initialize(), lock = join(directory, 'state.lock')
+  mkdirSync(lock, { mode: 0o700 })
+  const touched = new Date(Date.now() - 29500); utimesSync(lock, touched, touched)
+  const before = statSync(lock), launchedAt = Date.now()
+  await start(directory)
+  expect(Date.now() - launchedAt).toBeGreaterThan(1000)
+  const after = statSync(lock)
+  expect(after.ino).toBe(before.ino); expect(after.mtimeMs).toBe(before.mtimeMs)
+  expect(readFileSync(join(directory, 'state/launch-count'), 'utf8')).toBe('1')
+}, 10000)
+
+it('refuses launch while a state-lock heartbeat remains fresh and preserves Stop', async () => {
+  const { directory } = await initialize(), lock = join(directory, 'state.lock')
+  mkdirSync(lock, { mode: 0o700 })
+  const heartbeat = setInterval(() => { const now = new Date(); utimesSync(lock, now, now) }, 100)
+  try {
+    const result = await run(directory, 'start', '--timeout', '0.5')
+    expect(result.code).toBe(1); expect(result.stderr).toContain('State lock is still recent')
+    expect((await state(directory)).process).toBeNull()
+    expect(existsSync(join(directory, 'state/launch-count'))).toBe(false)
+    expect((await run(directory, 'stop')).code).toBe(0)
+    expect(existsSync(lock)).toBe(true)
+  } finally { clearInterval(heartbeat) }
 })
 
 it('isolates identical profile names in two homes and preserves data through duplicate start, graceful stop and restart', async () => {
@@ -183,7 +209,9 @@ it.runIf(process.env.DSH_REMOTE_ISOLATION === '1')('launches a pinned endpoint r
   expect(statSync(value.file).mode & 0o777).toBe(0o600)
   expect(enrollment.stdout).not.toContain(token)
   expect((await run(directory, 'access')).stderr).toContain('headless')
-  expect((await run(directory, 'init', '--role', 'workspace')).stderr).toContain('differs')
+  const refusedRole = await run(directory, 'init', '--role', 'workspace')
+  expect(refusedRole.code).toBe(1); expect(refusedRole.stderr).toContain('different role')
+  expect(await state(directory)).toMatchObject({ role: 'endpoint', process: before.process })
   const restart = await run(directory, 'restart', '--timeout', '4', '--stop-timeout', '3')
   expect(restart.code, restart.stderr).toBe(0)
   expect((await state(directory)).endpoint).toEqual(before.endpoint)

@@ -7,7 +7,7 @@ import { expect, it, vi } from 'vitest'
 import { RemoteClient } from '../src/remote/client.ts'
 import type { GrantReceipt, RemoteJob } from '../src/remote/protocol.ts'
 
-it.each(['plan', 'prepare', 'refusals', 'drain', 'replay', 'manual_stop', 'success', 'failure', 'terminal_intent', 'stop_fence'])('preserves delegated-service %s contracts with an explicit simulated kernel', async name => {
+it.each(['profile_durability', 'process_identity', 'plan', 'prepare', 'refusals', 'drain', 'replay', 'manual_stop', 'success', 'failure', 'terminal_intent', 'stop_fence'])('preserves delegated-service %s contracts with an explicit simulated kernel', async name => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'dsh delegation ')))
   try {
     const result = await new Promise<{ error: Error | null; stderr: string }>(resolveResult => execFile('python3',

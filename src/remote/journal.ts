@@ -1,8 +1,9 @@
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
-import { chmodSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, realpathSync } from 'node:fs'
 import { join, relative, isAbsolute } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { lockSync } from 'proper-lockfile'
+import { privateCredential, privateDirectory, privateFile } from '../environments/endpoint-files.ts'
 import { RemoteError, type Principal, type RemoteGrant, type RemoteJob, type RemoteOperation, type OutputWindow } from './protocol.ts'
 
 export const timestamp = () => new Date().toISOString()
@@ -26,16 +27,20 @@ export class RemoteJournal {
     const control = realpathSync(directory), workspace = realpathSync(root)
     if (inside(workspace, control) || inside(control, workspace)) throw new Error('Endpoint control state and workspaces must be separate directories')
     chmodSync(directory, 0o700)
+    privateDirectory(control) // Persist the control directory's entry before accepting any endpoint identity.
     this.release = lockSync(directory, { stale: 30_000 })
     let opened: DatabaseSync | undefined
     try {
       const readSecret = (name: string): string => {
-        const file = join(directory, name)
-        try { writeFileSync(file, randomBytes(32).toString('base64url'), { flag: 'wx', mode: 0o600 }) }
-        catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error }
-        chmodSync(file, 0o600)
-        const value = readFileSync(file, 'utf8').trim()
+        const file = join(control, name)
+        if (!existsSync(file)) {
+          if (existsSync(join(control, 'endpoint.sqlite')) || existsSync(join(control, 'endpoint.sqlite-wal')))
+            throw new Error(`Missing endpoint credential file: ${name}; restore the original credential before restarting`)
+          privateFile(file, randomBytes(32).toString('base64url'))
+        }
+        const value = privateCredential(file)
         if (!/^[A-Za-z0-9_-]{43,}$/.test(value)) throw new Error(`Invalid endpoint credential file: ${name}`)
+        privateFile(file, value) // Sync existing credentials too, including installations created before durable publication.
         return value
       }
       this.secret = readSecret('signing.key'); this.admin = readSecret('admin.token')
@@ -58,6 +63,8 @@ export class RemoteJournal {
           operation.phase = 'unknown'; this.saveOperation(operation)
         }
       })
+      const parent = openSync(control, 'r')
+      try { fsyncSync(parent) } finally { closeSync(parent) }
     } catch (error) { opened?.close(); this.release(); throw error }
   }
   atomic<T>(run: () => T): T {

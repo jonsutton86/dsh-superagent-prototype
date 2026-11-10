@@ -644,6 +644,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/endpoint-launcher.spec.ts` | Installed Linux Harness endpoint/coordinator enrollment through native SSH, managed-world activation, confinement and original-job recovery through connection interruption and daemon restarts |
 | `tests/launcher-service.spec.ts` | Foreground supervisor, persistent crash budgets/manual stops, real native service installation/removal, changed-definition refusal, systemd parser and installed-Harness service lifecycle |
 | `tests/delegated-service.spec.ts` | Owned cgroup topology, refusal/drain checks, durable service Start/Restart requests and opt-in native delegated Harness lifecycle |
+| `tests/remote-journal.spec.ts` | Durable endpoint credentials, storage sync failure, missing/damaged identity refusal and linked-file rejection |
 | `tests/transport-launcher.spec.ts` | Pinned SSH transport configuration/readiness, private credentials, native forwarding/host-key refusal, supervisor reconnection and owned user-service lifecycle |
 | `tests/client.spec.tsx`, `tests/navigation.spec.ts`, `tests/controls.spec.tsx` | The client plugin's registration and polling, Session navigation and route memory, the local controls, and the panel's imports, which have no cycle |
 | `tests/panel-overview.spec.tsx`, `panel-source.spec.tsx`, `panel-trigger.spec.tsx`, `panel-eval.spec.tsx`, `panel-execution.spec.tsx` | Each page of the panel, against a fake management API answered by route |
