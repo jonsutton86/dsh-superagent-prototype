@@ -368,10 +368,10 @@ def verified(root, api, allow_missing=False):
         if path.read_text() != content:
             raise RuntimeError('Service definition was changed; it was left intact.')
     files = {'agentic-os', 'agentic_endpoint.py', 'agentic_service.py'}
-    if set(value.get('runtimeHashes', {})) not in (files, files | {'agentic_delegation.py'}) or (value.get('delegation') and 'agentic_delegation.py' not in value['runtimeHashes']):
+    if set(value.get('runtimeHashes', {})) not in (files, files | {'agentic_delegation.py'}, files | {'agentic_delegation.py', 'agentic_transport.py'}) or (value.get('delegation') and 'agentic_delegation.py' not in value['runtimeHashes']) or (api.manifest(root)['role'] == 'transport' and 'agentic_transport.py' not in value['runtimeHashes']):
         raise RuntimeError('Service runtime receipt is incomplete.')
     for name, digest in value['runtimeHashes'].items():
-        if name not in ('agentic-os', 'agentic_endpoint.py', 'agentic_service.py', 'agentic_delegation.py'):
+        if name not in ('agentic-os', 'agentic_endpoint.py', 'agentic_service.py', 'agentic_delegation.py', 'agentic_transport.py'):
             raise RuntimeError('Unexpected service runtime file.')
         file = root / 'service-runtime' / name
         info = file.lstat()
@@ -452,7 +452,7 @@ def manage(root, args, api):
                 runtime = root / 'service-runtime'
                 api.private_directory(runtime)
                 hashes = {}
-                for name in ('agentic-os', 'agentic_endpoint.py', 'agentic_service.py', 'agentic_delegation.py'):
+                for name in ('agentic-os', 'agentic_endpoint.py', 'agentic_service.py', 'agentic_delegation.py', 'agentic_transport.py'):
                     content = (Path(api.__file__).resolve().parent / name).read_text()
                     api.atomic(runtime / name, content)
                     hashes[name] = hashlib.sha256(content.encode()).hexdigest()

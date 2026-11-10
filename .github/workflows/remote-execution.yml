@@ -23,7 +23,8 @@ jobs:
       - name: Install the confined runtime
         run: |
           sudo apt-get update
-          sudo apt-get install --yes bubblewrap ripgrep
+          sudo apt-get install --yes bubblewrap ripgrep openssh-server
+          sudo install -d -m 0755 /run/sshd
           sudo install -m 0755 "$(command -v node)" /usr/local/bin/node
           echo /usr/local/bin >> "$GITHUB_PATH"
           npm install --global pnpm@11.25.0
@@ -41,7 +42,7 @@ jobs:
             --unit="agentic-qualification-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --uid="$(id -u)" --property='Delegate=cpu memory pids' \
             --property="WorkingDirectory=$PWD" --setenv="PATH=$PATH" \
-            --setenv=DSH_REMOTE_ISOLATION=1 --setenv=DSH_ENDPOINT_LAUNCHER_QUALIFICATION=1 \
+            --setenv=DSH_REMOTE_ISOLATION=1 --setenv=DSH_ENDPOINT_LAUNCHER_QUALIFICATION=1 --setenv=DSH_SSH_TRANSPORT_QUALIFICATION=1 \
             --setenv="DSH_ENDPOINT_QUALIFICATION_CLI=$DSH_ENDPOINT_QUALIFICATION_CLI" \
             /bin/bash "$PWD/tests/fixtures/resource-qualification.sh" pnpm test
       - name: Qualify delegated user-service endpoint with pinned Harness

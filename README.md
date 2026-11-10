@@ -21,6 +21,9 @@ Prepared cgroup v2 hosts can configure [worker resource limits](docs/069-executi
 native Linux qualification remains pending.
 The [delegated endpoint service](docs/070-delegated-endpoint-service.md) now prepares its own worker cgroups and routes
 Start/Restart through the supervisor on a properly delegated Linux user manager; native Linux acceptance is pending.
+The [managed SSH transport](docs/071-managed-ssh-transport.md) connects a coordinator to an endpoint through a pinned,
+loopback-only forward with supervised reconnect. Native macOS SSH checks pass; Linux Harness-over-SSH and cross-host
+acceptance remain pending.
 The workflow below configures the repository-backed mode.
 
 Setup has many steps, so an agent does it with you. Ask your coding agent:

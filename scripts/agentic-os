@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install and operate a private Agentic OS workspace (macOS/Linux) or execution endpoint (Linux).
+"""Operate a private workspace, Linux execution endpoint, or managed SSH transport.
 
 init prepares a new installation; start/status/stop/restart operate only its exact Harness launch.
 access/open operate workspace browser access; enrollment exports endpoint metadata. No credential values are printed.
@@ -26,6 +26,7 @@ import webbrowser
 import agentic_endpoint
 import agentic_service
 import agentic_delegation
+import agentic_transport
 from contextlib import contextmanager
 
 CHECKOUT = Path(__file__).resolve().parent.parent
@@ -91,16 +92,22 @@ def operation(root):
         yield
 
 
-def environment(root):
+def environment(root, installation=None):
+    if installation and installation['role'] == 'transport':
+        return {'PATH': os.defpath, 'LANG': 'C', 'LC_ALL': 'C'}
     return {**os.environ, 'DSH_HOME': str(root / 'home')}
 
 
 def command(root, installation):
+    if installation['role'] == 'transport':
+        return agentic_transport.command(root, installation)
     return [installation['cli'], '--profile', installation['profile'], '--patch', str(root / 'launch.json'), '--no-open']
 
 
 def manifest(root, ready=True):
     value = read_json(root / 'installation.json')
+    if isinstance(value, dict) and value.get('role') == 'transport':
+        return agentic_transport.manifest(root, value, ready)
     if not isinstance(value, dict) or value.get('schema') != 1 or value.get('root') != str(root) or value.get('version') != HARNESS_VERSION:
         raise RuntimeError('Unsupported or relocated installation metadata. Use the documented recovery process.')
     if not PROFILE_NAME.fullmatch(value.get('profile', '')) or not isinstance(value.get('port'), int) or not 1024 <= value['port'] <= 65535:
@@ -126,6 +133,13 @@ def manifest(root, ready=True):
 
 def initialize(root, args):
     path = root / 'installation.json'
+    existing_role = manifest(root, ready=False)['role'] if path.exists() else None
+    if existing_role and args.role and existing_role != args.role:
+        raise RuntimeError('The selected installation has a different role; it was not changed.')
+    if (args.role or existing_role) == 'transport':
+        return agentic_transport.initialize(root, args, sys.modules[__name__])
+    if args.transport_config:
+        raise RuntimeError('--transport-config requires --role transport.')
     if path.exists():
         value = manifest(root, ready=False)
         requested = {'profile': args.profile, 'port': args.port, 'role': args.role,
@@ -251,6 +265,8 @@ def single(root, installation):
 
 
 def health(root, installation):
+    if installation['role'] == 'transport':
+        return agentic_transport.health(root, installation, NoRedirect)
     if installation['role'] == 'endpoint':
         return agentic_endpoint.health(root, installation, NoRedirect)
     url = 'http://127.0.0.1:' + str(installation['port']) + '/orchestrator/api/state'
@@ -289,8 +305,10 @@ def status(root, installation):
               'url': 'http://127.0.0.1:' + str(installation['port']), 'ready': ready,
               'manuallyStopped': (root / 'manually-stopped').exists(), 'errors': errors,
               'setup': {'code': setup.get('code'), 'place': setup.get('place')} if setup else None}
-    if installation['role'] == 'endpoint':
+    if installation['role'] in ('endpoint', 'transport'):
         result['endpoint'] = (state or {}).get('endpoint')
+    if installation['role'] == 'transport':
+        result['transport'] = {'kind': 'ssh', 'host': installation['transport']['host'], 'remotePort': installation['transport']['remotePort']}
     result['supervision'] = agentic_service.snapshot(root, sys.modules[__name__])
     if installation.get('delegation'):
         result['delegation'] = installation['delegation']
@@ -307,16 +325,19 @@ def launch(root, installation, args):
         return 0
     if installation.get('delegation'):
         agentic_delegation.process_inside(installation['delegation'], {'pid': os.getpid()})
-    read_json(root / 'launch.json')
+    if installation['role'] == 'transport':
+        agentic_transport.validate(root, installation)
+    else:
+        read_json(root / 'launch.json')
     if installation['role'] == 'endpoint':
         agentic_endpoint.require_host()
         agentic_endpoint.validate_directory(root, installation['endpointConfig'])
         private_directory(root / 'workspaces')
         if read_json(root / 'launch.json') != agentic_endpoint.launch_patch(root, installation):
             raise RuntimeError('Endpoint launch configuration differs from its installation metadata.')
-    for name in ('home', 'state', 'sessions', 'logs'):
+    for name in (('logs',) if installation['role'] == 'transport' else ('home', 'state', 'sessions', 'logs')):
         private_directory(root / name)
-    if hashlib.sha256((root / 'launch.json').read_bytes()).hexdigest() != installation.get('launchHash'):
+    if installation['role'] != 'transport' and hashlib.sha256((root / 'launch.json').read_bytes()).hexdigest() != installation.get('launchHash'):
         raise RuntimeError('The generated launch patch was changed; restore the reviewed patch before starting.')
     process = single(root, installation)
     if installation.get('delegation'):
@@ -335,7 +356,7 @@ def launch(root, installation, args):
         log_name = time.strftime('app-%Y%m%d-%H%M%S-') + uuid.uuid4().hex + '.log'
         save(root / 'run.json', {'log': log_name, 'phase': 'launching'})
         with private_log(root / 'logs' / log_name) as output:
-            child = subprocess.Popen(command(root, installation), cwd=installation['checkout'], env=environment(root),
+            child = subprocess.Popen(command(root, installation), cwd=installation['checkout'], env=environment(root, installation),
                                      stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT,
                                      start_new_session=True, close_fds=True)
         print('Private log: ' + str(root / 'logs' / log_name), flush=True)
@@ -362,7 +383,7 @@ def launch(root, installation, args):
                     save(root / 'run.json', {**run, 'phase': 'started', 'process': process})
                 return status(root, installation)
         if child and child.poll() is not None:
-            raise RuntimeError('Harness exited during startup; inspect the private log. Installation data was retained.')
+            raise RuntimeError(('SSH' if installation['role'] == 'transport' else 'Harness') + ' exited during startup; inspect the private log. Installation data was retained.')
         time.sleep(0.2)
     raise RuntimeError('Startup health check timed out; any running process was left intact. Check status before retrying.')
 
@@ -408,8 +429,8 @@ def stop(root, installation, args, intentional=True):
 
 
 def access(root, installation, opening=False):
-    if installation['role'] == 'endpoint':
-        raise RuntimeError('An execution endpoint is headless; use enrollment for its private connection metadata.')
+    if installation['role'] != 'workspace':
+        raise RuntimeError('Endpoints and transports are headless; use enrollment for private connection metadata.')
     process = single(root, installation)
     if not process or not health(root, installation):
         raise RuntimeError('Start this installation before opening its authenticated page.')
@@ -445,13 +466,14 @@ def main():
     parser.add_argument('action', choices=('init', 'start', 'status', 'stop', 'restart', 'access', 'open', 'enrollment',
                                          'supervise', 'service-install', 'service-status', 'service-remove'))
     parser.add_argument('--directory', help='Private installation directory; defaults to your persistent application-data folder.')
-    parser.add_argument('--role', choices=('workspace', 'endpoint'), help='Select the workspace or Linux execution-endpoint role and default directory.')
+    parser.add_argument('--role', choices=('workspace', 'endpoint', 'transport'), help='Select the workspace, Linux endpoint or SSH transport role and default directory.')
+    parser.add_argument('--transport-config', help='init only: private JSON with SSH host/account, identity, known hosts, endpoint enrollment and local credential-file paths.')
     parser.add_argument('--endpoint-config', help='init only: private JSON file containing endpoint limits and optional ownership binding.')
     parser.add_argument('--service-resources', help='init only: pool/command resource-budget JSON for an owned Linux systemd endpoint service.')
     parser.add_argument('--checkout', help='init only: built checkout to install; defaults to this checkout.')
     parser.add_argument('--dsh', help='init only: existing pinned Harness CLI; otherwise install it privately.')
     parser.add_argument('--profile', help='init only: Harness profile name (default agentic-os or agentic-endpoint).')
-    parser.add_argument('--port', type=int, help='init only: loopback port (default workspace 3083, endpoint 3084).')
+    parser.add_argument('--port', type=int, help='init only: loopback port (default workspace 3083, endpoint 3084, transport 3085).')
     parser.add_argument('--timeout', type=float, default=60, help='Startup health timeout in seconds; expiry never kills the process.')
     parser.add_argument('--stop-timeout', type=float, default=300, help='Graceful stop timeout in seconds; never force-kill.')
     parser.add_argument('--respect-stop', action='store_true', help='start/restart: honor an intentional stop marker.')
@@ -459,7 +481,7 @@ def main():
     parser.add_argument('--restart-limit', type=int, default=5, help='supervise/service-install: maximum automatic starts per window (default 5).')
     parser.add_argument('--restart-window', type=float, default=600, help='supervise/service-install: rolling start budget in seconds (default 600).')
     args = parser.parse_args()
-    if args.action != 'init' and any(value is not None for value in (args.checkout, args.dsh, args.profile, args.port, args.endpoint_config, args.service_resources)):
+    if args.action != 'init' and any(value is not None for value in (args.checkout, args.dsh, args.profile, args.port, args.endpoint_config, args.service_resources, args.transport_config)):
         parser.error('Installation settings apply only to init; use --directory to select an existing installation.')
     if not 0 < args.timeout <= 3600 or not 0 < args.stop_timeout <= 3600:
         parser.error('Timeouts must be positive and at most 3600 seconds.')
@@ -469,6 +491,8 @@ def main():
         default = default.with_name(default.name + (' Endpoint' if sys.platform == 'darwin' else '-endpoint'))
         if args.action == 'init':
             agentic_endpoint.require_host()
+    elif args.role == 'transport':
+        default = default.with_name(default.name + (' Transport' if sys.platform == 'darwin' else '-transport'))
     root = Path(args.directory or default).expanduser()
     if not root.is_absolute() or '\n' in str(root) or '\r' in str(root) or root.is_symlink():
         parser.error('--directory must be an absolute non-symlink path without newlines.')
@@ -499,11 +523,12 @@ def main():
         if args.role and args.role != installation['role']:
             raise RuntimeError('The selected installation has a different role; it was not changed.')
         if args.action == 'enrollment':
-            if installation['role'] != 'endpoint':
-                raise RuntimeError('Enrollment details are only available for execution endpoints.')
+            if installation['role'] not in ('endpoint', 'transport'):
+                raise RuntimeError('Enrollment details are only available for endpoints and transports.')
             if not single(root, installation):
                 raise RuntimeError('Start this endpoint before exporting enrollment details.')
-            value = agentic_endpoint.enrollment(root, installation, health(root, installation))
+            module = agentic_transport if installation['role'] == 'transport' else agentic_endpoint
+            value = module.enrollment(root, installation, health(root, installation))
             target = root / 'enrollment.json'
             save(target, value)
             print(json.dumps({'file': str(target), **value}))

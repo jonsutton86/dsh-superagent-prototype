@@ -148,7 +148,7 @@ print(json.dumps(out))`
 
 it.runIf(process.platform === 'linux')('passes the native systemd unit parser with spaces, dollar signs and percent specifiers in the installation path', async () => {
   const runtime = join(directory, 'service-runtime'); mkdirSync(runtime, { mode: 0o700 })
-  for (const file of ['agentic-os', 'agentic_endpoint.py', 'agentic_service.py', 'agentic_delegation.py']) copyFileSync(resolve('scripts', file), join(runtime, file))
+  for (const file of ['agentic-os', 'agentic_endpoint.py', 'agentic_service.py', 'agentic_delegation.py', 'agentic_transport.py']) copyFileSync(resolve('scripts', file), join(runtime, file))
   const source = `import sys,subprocess,os
 from pathlib import Path
 from types import SimpleNamespace
