@@ -9,6 +9,8 @@ typechecking and seven builds. Native Linux service/Harness/SSH checks passed 30
 download case passed on both systems. The existing app remained ready and unpaused. No live Git provider or model was used.
 After a final negative-offset integrity guard, macOS typechecking, seven builds and 15 focused export/UI/documentation tests
 passed. The full-suite figures precede that small guard; the exact validation boundary is recorded in the increment guide.
+Runtime/test revision `dd1b3fe2469b8e63f71d09aaa8814b3b4e68bae5` is pushed. GitHub reports zero runs for that SHA;
+explicit workflow dispatch returned HTTP 422 because Actions remains disabled. The local VM was stopped after cleanup.
 
 [073 Remote repositories](073-remote-repositories.md) adds immutable repository selection to managed worlds and the existing
 mission executor. Endpoint-owned credentials prepare the exact commit on a per-task branch through ordinary confined

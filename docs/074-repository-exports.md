@@ -98,6 +98,11 @@ without a restart. No external Git provider or model call was made. Linux report
 loaded test units after qualification. Physical/cloud execution, live provider publication and clean-host failover remain
 unqualified; the native results cover the recorded local VM configuration.
 
+Runtime/test revision `dd1b3fe2469b8e63f71d09aaa8814b3b4e68bae5` is pushed to `feat/full-superagent-architecture`.
+GitHub returned zero workflow runs for that SHA and rejected explicit dispatch with HTTP 422: Actions is disabled for
+this repository. No repository or billing settings were changed. Local Linux qualification is independent of CI, and the
+test VM was stopped normally after cleanup. The running app was not restarted to load this increment.
+
 Next, the independent publisher needs resumable chunk ingestion, base/object verification, write credentials isolated from
 workers, an ownership check and durable uncertainty boundary before each branch push and PR mutation, exact provider
 observation after response loss, explicit partial-result recovery, operator destination review, and recovery inventory
