@@ -68,7 +68,13 @@ node scripts/abliteration-provider.mjs models
 
 This makes one authenticated `GET https://api.abliteration.ai/v1/models`. It does not call a completion endpoint, follow redirects, retry, enumerate local credential stores or alter configuration. Its output contains only fixed requested model IDs, whether they were listed, any advertised access/readiness flags, and a bounded status. Responses are limited to 1 MiB; the timeout is 15 seconds. Raw provider bodies, keys and exception messages are never printed.
 
-Exit statuses: `0` means a valid catalog was received, `2` means no key is configured, and `1` means the check failed. A valid catalog may still show a requested model as absent, locked or of unknown readiness; it does not establish inference quality, vision accuracy or tool reliability. The missing-key path was executed locally and returned `{"status":"not_configured"}` without a network request. No key has been supplied, so the authenticated live check remains pending.
+Exit statuses: `0` means a valid catalog was received, `2` means no key is configured, and `1` means the check failed. A valid catalog may still show a requested model as absent, locked or of unknown readiness; it does not establish inference quality, vision accuracy or tool reliability. The initial missing-key path returned `{"status":"not_configured"}` without a network request.
+
+On 2026-11-10, after the operator saved `ABLIT_KEY` privately through the Harness credential provider, an authenticated
+catalog check succeeded. Both requested model IDs were listed with access available and readiness true. The
+[catalog verification receipt](evidence/076-live-model-catalog.json) contains only those bounded facts and the credential
+reference name, never the credential value or raw provider response. No completion was requested, provider defaults were
+not changed, and live text/tool/vision inference remains unqualified.
 
 ## Usage, cost and qualification
 
@@ -88,10 +94,11 @@ Use Node 24 or newer. The adapter path is explicit; the test skips when no insta
 
 The provider suite also checks secret-safe catalog behavior, other-provider isolation, immutable per-task persona selection, session model events and persistence through database reopen. Existing role/persona and usage suites remain applicable.
 
-Implemented and locally tested: opt-in configuration, retained Harness routing, persona persistence, image/output guard, safe catalog command and local wire compatibility. Not claimed: authenticated live catalog access, live text/tool/vision inference, provider billing accuracy, deployment into the running app, or completion of broader Agentic OS qualification. These remain explicit qualification/deployment steps, not inferred successes.
+Implemented and locally tested: opt-in configuration, retained Harness routing, persona persistence, image/output guard, safe catalog command and local wire compatibility. Authenticated live catalog access is also verified. Not claimed: live text/tool/vision inference, provider billing accuracy, deployment into the running app, or completion of broader Agentic OS qualification. These remain explicit qualification/deployment steps, not inferred successes.
 
 Final source revision `3a31fb5445a35877b25ebaef60d6493eb6f6853c` passed full macOS and native Linux qualification with the
 installed adapter test enabled on both platforms: 2,136 / 2,149 tests passed respectively, with 25 / 14 skipped. Typechecking
 and seven builds passed on each platform. Native service checks passed separately. The shared
 [qualification receipt](evidence/075-076-qualification.json) records exact versions, counts, digests and CI limitations.
-The user confirmed that no Abliteration key exists; no authenticated vendor request was attempted.
+No key was available during that initial full-suite qualification. The subsequent authenticated catalog check above is
+separate evidence and does not replace or broaden the recorded inference-test boundary.

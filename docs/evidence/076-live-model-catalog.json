@@ -1,0 +1,41 @@
+{
+  "observedOn": "2026-11-10",
+  "timezone": "America/New_York",
+  "sourceCommit": "5be266cb1cf4c71dcd7cb4911d237d5055b252fa",
+  "credential": {
+    "reference": "ABLIT_KEY",
+    "resolver": "Harness credentials-local",
+    "present": true,
+    "source": "file",
+    "valueIncluded": false
+  },
+  "request": {
+    "method": "GET",
+    "url": "https://api.abliteration.ai/v1/models",
+    "completionRequested": false
+  },
+  "result": {
+    "status": "catalog_received",
+    "models": [
+      {
+        "id": "abliterated-model",
+        "listed": true,
+        "access": "available",
+        "ready": true
+      },
+      {
+        "id": "abliterated-model-large-flash",
+        "listed": true,
+        "access": "available",
+        "ready": true
+      }
+    ]
+  },
+  "defaultModelsChanged": false,
+  "limitations": [
+    "Catalog availability is the provider's reported status, not an inference test.",
+    "No text, tool or vision completion was requested.",
+    "No evaluation-credit entitlement or billing accuracy was established.",
+    "This check did not deploy the provider configuration into the running application."
+  ]
+}
