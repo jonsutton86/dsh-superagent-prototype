@@ -13,6 +13,8 @@ It is also a way of working with an agent: **take as little human attention as p
 For standalone missions without a GitHub repository, follow [Local execution](docs/012-local-execution.md).
 For a new persistent macOS/Linux installation without tmux, use the [local launcher](docs/066-persistent-launcher.md).
 It retains DeepSeek Harness, installs a pinned CLI and provides start, status, graceful stop/restart and private browser access.
+For a prepared Linux execution host, the [endpoint role](docs/067-managed-endpoint-launch.md) adds confined endpoint launch,
+persistent identity and private enrollment details for the coordinator's Environments page.
 The workflow below configures the repository-backed mode.
 
 Setup has many steps, so an agent does it with you. Ask your coding agent:

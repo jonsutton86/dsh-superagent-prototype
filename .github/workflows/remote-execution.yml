@@ -29,8 +29,12 @@ jobs:
           npm install --global pnpm@11.25.0
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
+      - name: Install pinned Harness for real endpoint launch qualification
+        run: |
+          npm install --prefix "$RUNNER_TEMP/agentic-endpoint-harness" --no-audit --no-fund @deepseek-ai/dsh@0.2.1-rc.3
+          echo "DSH_ENDPOINT_QUALIFICATION_CLI=$RUNNER_TEMP/agentic-endpoint-harness/node_modules/.bin/dsh" >> "$GITHUB_ENV"
       - name: Check the complete suite with native confinement enabled
         run: |
           pnpm typecheck
           pnpm build
-          DSH_REMOTE_ISOLATION=1 pnpm test
+          DSH_REMOTE_ISOLATION=1 DSH_ENDPOINT_LAUNCHER_QUALIFICATION=1 pnpm test

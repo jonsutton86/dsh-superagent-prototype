@@ -639,6 +639,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/service-script.spec.ts` | `scripts/dsh-superagent` against fake `ps`, `tmux` and `dsh` |
 | `tests/client-bundle.spec.ts` | Actual production browser build and factory loading with only declared React modules, rejecting host-only or undeclared imports |
 | `tests/launcher.spec.ts` | Persistent installation, real detached process ownership, graceful restart, stop markers, locks, health identity and private browser shortcuts |
+| `tests/endpoint-launcher.spec.ts` | Installed Linux Harness endpoint/coordinator launch, enrollment, managed-world activation, native filesystem/process confinement and receipt-preserving daemon restarts |
 | `tests/client.spec.tsx`, `tests/navigation.spec.ts`, `tests/controls.spec.tsx` | The client plugin's registration and polling, Session navigation and route memory, the local controls, and the panel's imports, which have no cycle |
 | `tests/panel-overview.spec.tsx`, `panel-source.spec.tsx`, `panel-trigger.spec.tsx`, `panel-eval.spec.tsx`, `panel-execution.spec.tsx` | Each page of the panel, against a fake management API answered by route |
 | `tests/panel-settings.spec.tsx`, `panel-prompts.spec.tsx`, `panel-deployment.spec.tsx`, `panel-panel.spec.tsx` | The settings groups, drafts and history, the prompts, the Deployment page, and the panel's search, glossary and route memory |

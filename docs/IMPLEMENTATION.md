@@ -1,5 +1,15 @@
 # Article implementation tracker
 
+[067 Managed endpoint launch](067-managed-endpoint-launch.md) adds a Linux endpoint role to the persistent launcher:
+pinned Harness installation, separated control/workspace directories, native confinement readiness, persisted endpoint and
+credential fingerprints, private enrollment metadata and graceful lifecycle control. Existing ownership bindings and
+bounded command/output configuration are supported; credentials are never printed. A new native qualification starts
+real endpoint and coordinator profiles, enrolls a managed world and checks confined execution and restart receipts.
+Local focused checks passed 25 tests with three platform/installed-Harness cases skipped; typechecking passed.
+Local `pnpm check` passed typechecking, six builds and 2,005 tests (19 skipped; 136.55 seconds). Native installed-Harness
+validation is pending. Cloud-machine/fleet provisioning, managed network
+transport, resource quotas, cross-host recovery and the remaining full architecture stay open.
+
 Browser startup repair: the user observed a real Harness plugin-load failure because persona/reflection schemas imported
 the host Policy, which transitively pulled process execution into the browser bundle. Model selection now lives in a pure
 shared contract and Zod is bundled explicitly. A regression check builds the production client in a temporary directory

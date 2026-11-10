@@ -13,7 +13,7 @@ beforeEach(() => {
   cli = join(root, 'fake harness.cjs'); copyFileSync(resolve('tests/fixtures/launcher.cjs'), cli); chmodSync(cli, 0o700)
   checkout = join(root, 'built checkout'); mkdirSync(join(checkout, 'lib'), { recursive: true })
   writeFileSync(join(checkout, 'package.json'), JSON.stringify({ name: 'dsh-superagent' }))
-  for (const name of ['index.js', 'client.js']) writeFileSync(join(checkout, 'lib', name), 'export {}\n')
+  for (const name of ['index.js', 'client.js', 'remote-endpoint.js', 'remote-fs-worker.js', 'remote-command-worker.js', 'verification-snapshot-worker.js']) writeFileSync(join(checkout, 'lib', name), 'export {}\n')
 })
 afterEach(async () => {
   for (const directory of installations.splice(0).reverse()) {
@@ -34,10 +34,10 @@ async function port() {
   const listener = createServer(); await new Promise<void>(resolve => listener.listen(0, '127.0.0.1', resolve))
   const value = (listener.address() as { port: number }).port; await new Promise<void>(resolve => listener.close(() => resolve())); return value
 }
-async function initialize(name = 'application') {
+async function initialize(name = 'application', role?: string) {
   const directory = join(root, name); installations.push(directory)
   const selectedPort = await port()
-  const result = await run(directory, 'init', '--checkout', checkout, '--dsh', cli, '--port', String(selectedPort))
+  const result = await run(directory, 'init', '--checkout', checkout, '--dsh', cli, '--port', String(selectedPort), ...(role ? ['--role', role] : []))
   expect(result.code, result.stderr).toBe(0)
   return { directory, port: selectedPort }
 }
@@ -150,4 +150,50 @@ it('does not signal a running instance while another operation holds its lock', 
     expect(existsSync(join(directory, 'manually-stopped'))).toBe(false)
   } finally { holder.stdin.end(); await closed }
   expect((await state(directory)).process).toEqual(before.process)
+})
+
+it.runIf(process.platform !== 'linux')('refuses endpoint installation on an unsupported host without creating an installation', async () => {
+  const directory = join(root, 'endpoint unsupported')
+  const result = await run(directory, 'init', '--role', 'endpoint', '--checkout', checkout, '--dsh', cli)
+  expect(result.code).toBe(1); expect(result.stderr).toContain('no unconfined fallback')
+  expect(existsSync(directory)).toBe(false)
+})
+
+it.runIf(process.env.DSH_REMOTE_ISOLATION === '1')('launches a pinned endpoint role, exports metadata privately and preserves identity through restart', async () => {
+  const { directory } = await initialize('endpoint host', 'endpoint')
+  const patch = JSON.parse(readFileSync(join(directory, 'launch.json'), 'utf8'))
+  expect(patch.find((entry: any) => entry.id === 'dsh-superagent')).toEqual({ id: 'dsh-superagent', disabled: true })
+  expect(patch.flatMap((entry: any) => entry.insert ?? [])[0]).toMatchObject({ name: 'dsh-superagent/remote-endpoint', config: {
+    stateDir: join(directory, 'state'), workspaceRoot: join(directory, 'workspaces'), maxRunning: 8,
+  } })
+  const before = await start(directory)
+  expect(before).toMatchObject({ role: 'endpoint', ready: true, endpoint: { platform: 'linux', confinement: 'linux-bubblewrap' } })
+  const enrollment = await run(directory, 'enrollment'); expect(enrollment.code, enrollment.stderr).toBe(0)
+  const value = JSON.parse(enrollment.stdout), token = readFileSync(join(directory, 'state/admin.token'), 'utf8')
+  expect(value.endpointId).toBe(before.endpoint.id)
+  expect(value.credentialFile).toBe(join(directory, 'state/admin.token'))
+  expect(statSync(value.file).mode & 0o777).toBe(0o600)
+  expect(enrollment.stdout).not.toContain(token)
+  expect((await run(directory, 'access')).stderr).toContain('headless')
+  expect((await run(directory, 'init', '--role', 'workspace')).stderr).toContain('differs')
+  const restart = await run(directory, 'restart', '--timeout', '4', '--stop-timeout', '3')
+  expect(restart.code, restart.stderr).toBe(0)
+  expect((await state(directory)).endpoint).toEqual(before.endpoint)
+  expect(readFileSync(join(directory, 'state/admin.token'), 'utf8')).toBe(token)
+}, 20000)
+
+it.runIf(process.env.DSH_REMOTE_ISOLATION === '1')('refuses changed endpoint credentials or weakened confinement without changing its saved identity', async () => {
+  const { directory } = await initialize('pinned endpoint', 'endpoint')
+  const before = await start(directory), receipt = readFileSync(join(directory, 'installation.json'), 'utf8')
+  const tokenFile = join(directory, 'state/admin.token'), token = readFileSync(tokenFile, 'utf8')
+  writeFileSync(join(directory, 'state/health.json'), JSON.stringify({ confinement: 'none' }))
+  expect(await state(directory)).toMatchObject({ ready: false, process: before.process })
+  expect((await run(directory, 'enrollment')).code).toBe(1)
+  rmSync(join(directory, 'state/health.json'))
+  writeFileSync(tokenFile, 'a'.repeat(43))
+  expect(await state(directory)).toMatchObject({ ready: false, process: before.process })
+  expect((await run(directory, 'start', '--timeout', '0.1')).stderr).toContain('left intact')
+  expect(readFileSync(join(directory, 'installation.json'), 'utf8')).toBe(receipt)
+  writeFileSync(tokenFile, token)
+  expect((await state(directory)).endpoint).toEqual(before.endpoint)
 })

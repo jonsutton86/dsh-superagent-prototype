@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Install and operate a private persistent Agentic OS profile (macOS/Linux, no tmux required).
+"""Install and operate a private Agentic OS workspace (macOS/Linux) or execution endpoint (Linux).
 
 init prepares a new installation; start/status/stop/restart operate only its exact Harness launch.
-access saves a private browser shortcut; open opens it explicitly. No credential values are printed.
+access/open operate workspace browser access; enrollment exports endpoint metadata. No credential values are printed.
 """
 import argparse
 import fcntl
@@ -23,6 +23,7 @@ import urllib.parse
 import urllib.request
 import uuid
 import webbrowser
+import agentic_endpoint
 
 CHECKOUT = Path(__file__).resolve().parent.parent
 HARNESS_VERSION = '0.2.1-rc.3'
@@ -95,6 +96,16 @@ def manifest(root, ready=True):
         raise RuntimeError('Invalid installation paths.')
     if ready and value.get('phase') != 'ready':
         raise RuntimeError('Installation is incomplete; rerun init to resume it.')
+    value.setdefault('role', 'workspace')
+    if value['role'] not in ('workspace', 'endpoint'):
+        raise RuntimeError('Unknown installation role.')
+    if value['role'] == 'endpoint':
+        if not isinstance(value.get('endpointConfig'), dict):
+            raise RuntimeError('Endpoint installation has no configuration.')
+        if ('endpointId' in value) != ('adminHash' in value):
+            raise RuntimeError('Endpoint installation identity is incomplete.')
+        if 'endpointId' in value and (str(uuid.UUID(value['endpointId'])) != value['endpointId'] or not re.fullmatch(r'[a-f0-9]{64}', value['adminHash'])):
+            raise RuntimeError('Invalid endpoint installation identity.')
     return value
 
 
@@ -102,11 +113,13 @@ def initialize(root, args):
     path = root / 'installation.json'
     if path.exists():
         value = manifest(root, ready=False)
-        requested = {'profile': args.profile, 'port': args.port,
+        requested = {'profile': args.profile, 'port': args.port, 'role': args.role,
                      'checkout': str(Path(args.checkout).expanduser().resolve()) if args.checkout else None,
                      'cli': str(Path(args.dsh).expanduser().resolve()) if args.dsh else None}
         if any(item is not None and item != value[key] for key, item in requested.items()):
             raise RuntimeError('Existing installation differs from the requested settings; it was not changed.')
+        if args.endpoint_config and agentic_endpoint.configuration(read_json(Path(args.endpoint_config).expanduser())) != value.get('endpointConfig'):
+            raise RuntimeError('Existing endpoint configuration differs; it was not changed.')
         if value.get('phase') == 'ready':
             print(json.dumps({'installed': True, 'directory': str(root), 'profile': value['profile']}))
             return 0
@@ -114,16 +127,28 @@ def initialize(root, args):
         if any(item.name != 'operation.lock' for item in root.iterdir()):
             raise RuntimeError('Refusing to initialize a nonempty directory without installation metadata.')
         checkout = Path(args.checkout or CHECKOUT).expanduser().resolve()
+        role = args.role or 'workspace'
         package = json.loads((checkout / 'package.json').read_text())
-        if package.get('name') != 'dsh-superagent' or not all((checkout / 'lib' / name).is_file() for name in ('index.js', 'client.js')):
+        required = ('index.js', 'client.js') + (('remote-endpoint.js', 'remote-fs-worker.js', 'remote-command-worker.js', 'verification-snapshot-worker.js') if role == 'endpoint' else ())
+        if package.get('name') != 'dsh-superagent' or not all((checkout / 'lib' / name).is_file() for name in required):
             raise RuntimeError('Select a built dsh-superagent checkout; run pnpm install --frozen-lockfile and pnpm build there first.')
-        profile, port = args.profile or 'agentic-os', args.port or 3083
+        if role == 'endpoint':
+            agentic_endpoint.require_host()
+        elif args.endpoint_config:
+            raise RuntimeError('--endpoint-config requires --role endpoint.')
+        profile, port = args.profile or ('agentic-endpoint' if role == 'endpoint' else 'agentic-os'), args.port or (3084 if role == 'endpoint' else 3083)
         if not PROFILE_NAME.fullmatch(profile) or not 1024 <= port <= 65535:
             raise RuntimeError('Use a valid profile name and a port between 1024 and 65535.')
         cli = str(Path(args.dsh).expanduser().resolve()) if args.dsh else str(root / 'runtime' / 'node_modules' / '.bin' / 'dsh')
         value = {'schema': 1, 'root': str(root), 'phase': 'preparing', 'profile': profile, 'port': port,
-                 'checkout': str(checkout), 'cli': cli, 'version': HARNESS_VERSION, 'externalCli': bool(args.dsh), 'profileIntent': False}
+                 'checkout': str(checkout), 'cli': cli, 'version': HARNESS_VERSION, 'externalCli': bool(args.dsh), 'profileIntent': False, 'role': role}
+        if role == 'endpoint':
+            value['endpointConfig'] = agentic_endpoint.configuration(read_json(Path(args.endpoint_config).expanduser()) if args.endpoint_config else {})
         save(path, value)
+    if value['role'] == 'endpoint':
+        agentic_endpoint.require_host()
+        agentic_endpoint.validate_directory(root, value['endpointConfig'])
+        private_directory(root / 'workspaces')
     for name in ('home', 'state', 'sessions', 'logs'):
         private_directory(root / name)
     with private_log(root / 'install.log') as log:
@@ -152,7 +177,7 @@ def initialize(root, args):
         if not all((profile / name).is_file() for name in ('package.json', 'cordis.yml', 'cordis.patch.yml')):
             raise RuntimeError('Profile creation was interrupted with incomplete files; inspect the private install log. Existing files were preserved.')
         run([value['cli'], 'plugin', '--profile', value['profile'], 'add', 'link:' + value['checkout']])
-    launch = [
+    launch = agentic_endpoint.launch_patch(root, value) if value['role'] == 'endpoint' else [
         {'id': 'webserver', 'config': {'host': '127.0.0.1', 'port': value['port']}},
         {'id': 'dsh-superagent', 'config': {'stateDir': str(root / 'state'), 'executionMode': 'local'}},
         {'id': 'dsh-superagent-github', 'disabled': True}, {'id': 'dsh-superagent-feishu', 'disabled': True},
@@ -168,7 +193,7 @@ def initialize(root, args):
     value['phase'] = 'ready'
     save(path, value)
     print(json.dumps({'installed': True, 'directory': str(root), 'profile': value['profile'], 'version': HARNESS_VERSION,
-                      'next': 'Configure a provider privately in Harness Settings → Models after starting.'}))
+                      'role': value['role'], 'next': 'Start the endpoint, then use enrollment to export private connection metadata.' if value['role'] == 'endpoint' else 'Configure a provider privately in Harness Settings → Models after starting.'}))
     return 0
 
 
@@ -194,6 +219,8 @@ def single(root, installation):
 
 
 def health(root, installation):
+    if installation['role'] == 'endpoint':
+        return agentic_endpoint.health(root, installation, NoRedirect)
     url = 'http://127.0.0.1:' + str(installation['port']) + '/orchestrator/api/state'
     try:
         request = urllib.request.Request(url, headers={'x-orchestrator-request': '1'})
@@ -222,13 +249,16 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 def status(root, installation):
     process = single(root, installation)
     state = health(root, installation) if process else None
-    ready = bool(state and state.get('health', {}).get('runtime', {}).get('state') in ('ready', 'paused'))
+    ready = bool(state and state.get('health', {}).get('runtime', {}).get('state') in ('ready', 'paused')
+                 and (installation['role'] != 'endpoint' or installation.get('endpointId')))
     errors = [name for name, entry in (state or {}).get('health', {}).items() if entry.get('state') == 'error']
     setup = (state or {}).get('setup', {}).get('problem')
-    result = {'directory': str(root), 'profile': installation['profile'], 'process': process,
+    result = {'directory': str(root), 'profile': installation['profile'], 'role': installation['role'], 'process': process,
               'url': 'http://127.0.0.1:' + str(installation['port']), 'ready': ready,
               'manuallyStopped': (root / 'manually-stopped').exists(), 'errors': errors,
               'setup': {'code': setup.get('code'), 'place': setup.get('place')} if setup else None}
+    if installation['role'] == 'endpoint':
+        result['endpoint'] = (state or {}).get('endpoint')
     print(json.dumps(result))
     return 1 if not ready else 3 if setup else 2 if errors else 0
 
@@ -238,6 +268,12 @@ def launch(root, installation, args):
         print('Intentional stop is active; automatic recovery skipped.')
         return 0
     read_json(root / 'launch.json')
+    if installation['role'] == 'endpoint':
+        agentic_endpoint.require_host()
+        agentic_endpoint.validate_directory(root, installation['endpointConfig'])
+        private_directory(root / 'workspaces')
+        if read_json(root / 'launch.json') != agentic_endpoint.launch_patch(root, installation):
+            raise RuntimeError('Endpoint launch configuration differs from its installation metadata.')
     for name in ('home', 'state', 'sessions', 'logs'):
         private_directory(root / name)
     if hashlib.sha256((root / 'launch.json').read_bytes()).hexdigest() != installation.get('launchHash'):
@@ -273,6 +309,10 @@ def launch(root, installation, args):
             save(root / 'process.json', process)
             current = health(root, installation)
             if current and current.get('health', {}).get('runtime', {}).get('state') in ('ready', 'paused'):
+                if installation['role'] == 'endpoint' and 'endpointId' not in installation:
+                    installation['endpointId'] = current['endpoint']['id']
+                    installation['adminHash'] = current['adminHash']
+                    save(root / 'installation.json', installation)
                 if child:
                     run = read_json(root / 'run.json')
                     save(root / 'run.json', {**run, 'phase': 'started', 'process': process})
@@ -319,6 +359,8 @@ def stop(root, installation, args, intentional=True):
 
 
 def access(root, installation, opening=False):
+    if installation['role'] == 'endpoint':
+        raise RuntimeError('An execution endpoint is headless; use enrollment for its private connection metadata.')
     process = single(root, installation)
     if not process or not health(root, installation):
         raise RuntimeError('Start this installation before opening its authenticated page.')
@@ -351,24 +393,32 @@ def access(root, installation, opening=False):
 def main():
     default = Path.home() / 'Library' / 'Application Support' / 'Agentic OS' if sys.platform == 'darwin' else Path(os.environ.get('XDG_DATA_HOME', str(Path.home() / '.local' / 'share'))) / 'agentic-os'
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=('init', 'start', 'status', 'stop', 'restart', 'access', 'open'))
-    parser.add_argument('--directory', default=str(default), help='Private installation directory; defaults to your persistent application-data folder.')
+    parser.add_argument('action', choices=('init', 'start', 'status', 'stop', 'restart', 'access', 'open', 'enrollment'))
+    parser.add_argument('--directory', help='Private installation directory; defaults to your persistent application-data folder.')
+    parser.add_argument('--role', choices=('workspace', 'endpoint'), help='Select the workspace or Linux execution-endpoint role and default directory.')
+    parser.add_argument('--endpoint-config', help='init only: private JSON file containing endpoint limits and optional ownership binding.')
     parser.add_argument('--checkout', help='init only: built checkout to install; defaults to this checkout.')
     parser.add_argument('--dsh', help='init only: existing pinned Harness CLI; otherwise install it privately.')
-    parser.add_argument('--profile', help='init only: Harness profile name (default agentic-os).')
-    parser.add_argument('--port', type=int, help='init only: loopback port (default 3083).')
+    parser.add_argument('--profile', help='init only: Harness profile name (default agentic-os or agentic-endpoint).')
+    parser.add_argument('--port', type=int, help='init only: loopback port (default workspace 3083, endpoint 3084).')
     parser.add_argument('--timeout', type=float, default=60, help='Startup health timeout in seconds; expiry never kills the process.')
     parser.add_argument('--stop-timeout', type=float, default=300, help='Graceful stop timeout in seconds; never force-kill.')
     parser.add_argument('--respect-stop', action='store_true', help='start/restart: honor an intentional stop marker.')
     args = parser.parse_args()
-    if args.action != 'init' and any(value is not None for value in (args.checkout, args.dsh, args.profile, args.port)):
+    if args.action != 'init' and any(value is not None for value in (args.checkout, args.dsh, args.profile, args.port, args.endpoint_config)):
         parser.error('Installation settings apply only to init; use --directory to select an existing installation.')
     if not 0 < args.timeout <= 3600 or not 0 < args.stop_timeout <= 3600:
         parser.error('Timeouts must be positive and at most 3600 seconds.')
-    root = Path(args.directory).expanduser()
+    if args.role == 'endpoint':
+        default = default.with_name(default.name + (' Endpoint' if sys.platform == 'darwin' else '-endpoint'))
+        if args.action == 'init':
+            agentic_endpoint.require_host()
+    root = Path(args.directory or default).expanduser()
     if not root.is_absolute() or '\n' in str(root) or '\r' in str(root) or root.is_symlink():
         parser.error('--directory must be an absolute non-symlink path without newlines.')
     root = root.resolve()
+    if args.role == 'endpoint':
+        agentic_endpoint.validate_directory(root)
     os.umask(0o077)
     private_directory(root)
     with private_log(root / 'operation.lock') as lock:
@@ -379,8 +429,20 @@ def main():
         if args.action == 'init':
             return initialize(root, args)
         installation = manifest(root)
+        if args.role and args.role != installation['role']:
+            raise RuntimeError('The selected installation has a different role; it was not changed.')
         if args.action == 'status':
             return status(root, installation)
+        if args.action == 'enrollment':
+            if installation['role'] != 'endpoint':
+                raise RuntimeError('Enrollment details are only available for execution endpoints.')
+            if not single(root, installation):
+                raise RuntimeError('Start this endpoint before exporting enrollment details.')
+            value = agentic_endpoint.enrollment(root, installation, health(root, installation))
+            target = root / 'enrollment.json'
+            save(target, value)
+            print(json.dumps({'file': str(target), **value}))
+            return 0
         if args.action in ('access', 'open'):
             return access(root, installation, args.action == 'open')
         if args.respect_stop and args.action in ('start', 'restart') and (root / 'manually-stopped').exists():

@@ -728,3 +728,11 @@ bundle; a hard refresh replaces its cached predecessor. Exact repair revision
 The operator subsequently confirmed that the app opens after refresh. This establishes browser startup for the observed
 installation, not acceptance of every page, task journey, microphone flow, layout or accessibility behavior. The remaining
 architecture stays open.
+
+Managed endpoint launch is implemented in `067-managed-endpoint-launch.md`: a prepared Linux host can install/start the
+pinned Harness endpoint, verify native confinement and its persisted identity, export private enrollment metadata and
+restart without replacing authority or effect receipts. Local focused checks passed 25 tests (three platform/native
+qualification cases skipped). Local `pnpm check` passed typechecking, six builds and 2,005 tests (19 skipped; 136.55 seconds).
+Installed-Harness Linux validation is pending.
+Automatic machine/fleet provisioning, managed transport, broader resource quotas, cross-host qualification and the rest of
+the full architecture remain open. This daemon installer does not substitute for those requirements.
