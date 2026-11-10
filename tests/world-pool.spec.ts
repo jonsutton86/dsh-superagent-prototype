@@ -57,6 +57,14 @@ it('maintains two paired worlds without replacing host services and keeps activa
   expect((await h.api('GET', `worlds/${first.id}/execution`)).status).toBe(200)
 })
 
+it('rejects repository activation without network authority before persisting a world', async () => {
+  const h = await startRuntime(undefined, { executionMode: 'local', noAccounts: true, managed: true })
+  const remote = await endpoint(h.runtime.endpoints, 'repository-without-network'); cleanup.push(() => h.stop())
+  await expect(h.runtime.worlds.activate({ ...remote.activation, repository: { url: 'https://example.invalid/source.git',
+    commit: 'a'.repeat(40), username: 'x-access-token' } })).rejects.toThrow('network access')
+  expect(h.runtime.worlds.list().items).toHaveLength(0)
+})
+
 it('dispatches actions into selected worlds, verifies actual Session providers, and revokes only the bound work', async () => {
   const { h, first, second, pool } = await fixture(), workspace = h.runtime.workspace
   const settings = h.runtime.store.settings(); h.runtime.store.saveSettings({ ...settings, executor: { ...settings.executor, directory: join(h.directory, 'custom-default') } })

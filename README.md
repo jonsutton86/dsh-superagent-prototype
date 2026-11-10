@@ -24,6 +24,8 @@ The [managed SSH transport](docs/071-managed-ssh-transport.md) connects a coordi
 loopback-only forward with supervised reconnect. Native macOS SSH and Ubuntu 22.04 ARM64 Harness-over-SSH checks pass.
 The [native Linux qualification](docs/072-native-linux-qualification.md) records kernel resource enforcement, owned user
 services and abrupt VM power-loss recovery. Cloud networking, physical cross-host recovery and clean-host failover remain pending.
+Managed worlds can select a [pinned remote repository](docs/073-remote-repositories.md) for per-task branches, original-receipt
+recovery and cancellation without resetting later work. Independent branch/PR publication remains in the implementation ledger.
 The workflow below configures the repository-backed mode.
 
 Setup has many steps, so an agent does it with you. Ask your coding agent:

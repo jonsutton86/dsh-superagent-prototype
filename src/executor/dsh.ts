@@ -231,6 +231,7 @@ export class DshExecutor implements Executor {
    * runs again or its Assignment ends.
    */
   private readonly settling = new Map<string, AbortController>()
+  private readonly preparingRepositories = new Map<string, AbortController>()
   /** The stops of tickets' background work that run, by ticket, which a launch or a delivery of the ticket waits for. */
   private readonly stopping = new Map<string, Promise<void>>()
   /** The jobs workers left to a person when they handed off, by ticket, and the collecting of their ends. */
@@ -409,6 +410,7 @@ export class DshExecutor implements Executor {
   }
   /** Stop what a ticket's worker runs in the background (see `stopBackground`). */
   private stopWork(ticketId: string, reason: string, keepInbox = false): void {
+    this.preparingRepositories.get(ticketId)?.abort(new Error(reason))
     this.track(ticketId, stopBackground(this.host.context, workerSessionId(ticketId), reason, keepInbox))
   }
   /** A stop of a ticket's background work, which a launch or a delivery of the ticket waits for while it runs. */
@@ -474,6 +476,7 @@ export class DshExecutor implements Executor {
    * of the jobs left to a person, which were killed, and cancel a worker turn that started meanwhile, keeping its inbox.
    */
   async shutdown(): Promise<void> {
+    for (const preparation of this.preparingRepositories.values()) preparation.abort(new Error('Coordinator is stopping'))
     const agents = this.host.store.tickets.list().map(ticket => this.host.context.agents.get(workerSessionId(ticket.id) as SessionId))
       .filter((agent): agent is Agent => agent !== undefined)
     const stop = async () => {
@@ -540,8 +543,15 @@ export class DshExecutor implements Executor {
       catch (error) { throw new PrepareFailed(`Execution environment unavailable: ${error instanceof Error ? error.message : String(error)}`) }
     }
     if (!current()) return
-    // Prepare the workspace directory once; an existing directory counts as already prepared, including worktrees created before `prepare` commands existed.
-    if (!await (remote ? remote.exists(workspace) : stat(workspace).then(() => true, () => false))) {
+    // Repository worlds require the original endpoint receipt; a partial or preexisting directory is never adopted.
+    if (remote?.repository) {
+      const preparation = new AbortController()
+      this.preparingRepositories.set(ticket.id, preparation)
+      try { await remote.prepareRepository(workspace, ticket.id, preparation.signal) }
+      catch (error) { throw new PrepareFailed(String(error)) }
+      finally { if (this.preparingRepositories.get(ticket.id) === preparation) this.preparingRepositories.delete(ticket.id) }
+      if (!current()) return
+    } else if (!await (remote ? remote.exists(workspace) : stat(workspace).then(() => true, () => false))) {
       await this.prepareDirectory(ticket)
       if (!current()) return
     }
@@ -574,6 +584,8 @@ export class DshExecutor implements Executor {
     const batch = told ? [] : batchOf(this.host, ticket).map(batchLine)
     const text = told ? JSON.stringify({ ticket_id: ticket.id, assignment: ticket.assignments.length, ...retried })
       : JSON.stringify({ ticket_id: ticket.id, title: ticket.title, ...(brief ? { assignment: brief } : {}),
+        ...(remote?.repository ? { repository: { url: remote.repository.url, baseCommit: remote.repository.commit, branch: 'agentic/' + ticket.id,
+          note: 'This is the original prepared source. Continue from current files and Git history; do not reset the task to the base commit. External publication requires its own authorization.' } } : {}),
         ...(read ? { assignment_chars: chars, assignment_read: read } : {}), ...(card ? { trigger: card } : {}),
         ...(batch.length ? { batch } : {}), ...retried })
     const requestId = later ? `assignment:${ticket.id}:${assignment.id}` : first

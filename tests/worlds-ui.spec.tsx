@@ -23,8 +23,10 @@ async function render(children: ReactNode) {
   await act(async () => root!.render(<PanelProvider t={translator(en)} navigate={() => {}}>{children}</PanelProvider>))
 }
 
-it('retries the submitted activation after response loss without substituting an edited name or a new request ID', async () => {
+it('retries the submitted activation after response loss without substituting edited repository fields or a new request ID', async () => {
   const requests: unknown[] = [], value = world()
+  const repository = { url: 'https://example.invalid/source.git', commit: 'a'.repeat(40), credentialId: 'git-read', username: 'x-access-token' }
+  value.repository = repository
   vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
     if (String(url).endsWith('/state')) return new Response(JSON.stringify({ load: { running: 0 } }))
     requests.push(JSON.parse(String(init.body)))
@@ -32,11 +34,16 @@ it('retries the submitted activation after response loss without substituting an
     return new Response(JSON.stringify(value), { headers: { 'content-type': 'application/json' } })
   })
   await render(<ActivateWorldForm endpointId={value.endpointId} commandId="original-grant" name="Original world" />)
+  await act(async () => { container!.querySelector<HTMLInputElement>('input[type=checkbox]')!.click() })
+  for (const [name, text] of Object.entries({ repositoryUrl: repository.url, repositoryCommit: repository.commit, repositoryCredential: repository.credentialId }))
+    await enter(container!.querySelector<HTMLInputElement>(`input[name=${name}]`)!, text)
   await click('Activate in this coordinator')
   await enter(container!.querySelector('input')!, 'Edited after response loss')
+  await enter(container!.querySelector<HTMLInputElement>('input[name=repositoryCommit]')!, 'b'.repeat(40))
+  await enter(container!.querySelector<HTMLInputElement>('input[name=repositoryUrl]')!, 'https://example.invalid/other.git')
   await click('Retry submitted change')
   expect(requests).toHaveLength(2); expect(requests[1]).toEqual(requests[0])
-  expect(requests[0]).toMatchObject({ endpointId: value.endpointId, commandId: 'original-grant', name: 'Original world' })
+  expect(requests[0]).toMatchObject({ endpointId: value.endpointId, commandId: 'original-grant', name: 'Original world', repository })
   expect(container!.querySelector('[role=status]')!.textContent).toContain(value.id)
 })
 
@@ -55,6 +62,7 @@ it('retains an exact selection outside the current page and requires an explicit
 
 it('retries the original revocation revision after a lost reply and directs receipt reads to that world', async () => {
   let value = world()
+  value.repository = { url: 'https://example.invalid/source.git', commit: 'c'.repeat(40), username: 'x-access-token' }
   const requests: { path: string; body?: any }[] = []
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
     const path = String(url).replace('/orchestrator/api/', ''), body = init?.body ? JSON.parse(String(init.body)) : undefined
@@ -68,6 +76,8 @@ it('retries the original revocation revision after a lost reply and directs rece
     return new Response(JSON.stringify(path.includes('/execution') ? { items: [], total: 0, nextOffset: null } : { items: [value], nextOffset: null }))
   })
   await render(<WorldPoolPanel />)
+  expect(container!.textContent).toContain(value.repository.url)
+  expect(container!.textContent).toContain(value.repository.commit)
   await enter(container!.querySelector('textarea')!, 'Retire this machine')
   await click('Revoke this execution world')
   await click('Refresh')

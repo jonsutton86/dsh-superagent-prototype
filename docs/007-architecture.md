@@ -367,6 +367,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/client/endpoints.tsx` | Endpoint registration, grant/credential administration, reconciliation, command recovery and inspectable profile UI |
 | `src/client/operator-command.ts` | Shared operator submission hook retaining payloads and IDs across ambiguous management responses |
 | `src/environments/remote-workspace.ts` | Bound remote provider verification and workspace preparation without host path interpretation |
+| `src/environments/repository-model.ts`, `repository.ts`, `repository-program.ts` | Immutable managed repository sources, original preparation receipts and confined pinned Git checkout with no-replace publication |
 | `src/remote/recovery.ts` | Safe revision-bound historical administration/revocation receipts, current resources and original-generation quiescence observations |
 | `src/remote/protocol.ts`, `limits.ts` | Versioned endpoint RPC, grant generations, process/file receipts and bounded transport windows |
 | `src/remote/journal.ts` | Independent single-writer SQLite state, HMAC credentials, intent deduplication, output offsets and restart uncertainty |
@@ -552,6 +553,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/environments-ui.spec.tsx` | Rendered enrollment/recovery and exact mutation retry after response loss and polling |
 | `tests/world-pool.spec.ts` | Independent paired worlds, per-action dispatch, revocation/recovery, credential fencing and revoked receipts |
 | `tests/worlds-ui.spec.tsx` | Lost activation/revocation replies, preserved revisions, exact-generation selection and receipt routing |
+| `tests/remote-repository.spec.ts` | Authenticated HTTPS Git preparation, pinned task branches, continued commits, cancellation, unknown/original receipts and recovery validation |
 | `tests/stage.spec.ts` | The Ticket stages, row by row |
 | `tests/supervision.spec.ts` | Real HTTP transport, token authentication, stale commands, transactional receipts and existing worker delivery integration |
 | `tests/library.spec.ts` | Library restart/replay, atomic rollback, scoping, provenance, integrity, freshness, review invalidation and Runtime/API integration |

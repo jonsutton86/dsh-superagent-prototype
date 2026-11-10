@@ -93,13 +93,18 @@ export class RemoteSubprocess extends SubprocessRuntime {
     return job
   }
   spawn(spec: SubprocessSpawnSpec): SubprocessHandle {
+    return this.spawnIntent(randomUUID(), spec)
+  }
+  /** Host-owned preparation can supply its durable command ID while retaining normal handles, cancellation and admission. */
+  spawnIntent(id: string, spec: SubprocessSpawnSpec): SubprocessHandle {
+    if (!/^[A-Za-z0-9_-]{1,100}$/.test(id)) throw new Error('Invalid remote command identity')
     spec.signal?.throwIfAborted()
     this.commands.assertReady()
     if (!spec.argv.length || spec.argv.some(value => typeof value !== 'string' || value.includes('\0')) || !spec.cwd
       || !Number.isFinite(spec.graceMs) || spec.graceMs <= 0 || spec.graceMs > 30_000) throw new Error('Invalid remote process specification')
     if (spec.stdio.stdin === 'pipe' || spec.stdio.control) throw new Error('This endpoint does not provide interactive stdin or a control channel')
     for (const mode of [spec.stdio.stdout, spec.stdio.stderr]) if (typeof mode === 'object' && (!Number.isSafeInteger(mode.maxBytes) || mode.maxBytes < 0)) throw new Error('Invalid output collection bound')
-    const id = randomUUID(), outcome = Promise.withResolvers<SubprocessOutcome>(), stopped = Promise.withResolvers<boolean>()
+    const outcome = Promise.withResolvers<SubprocessOutcome>(), stopped = Promise.withResolvers<boolean>()
     const tails = { stdout: new OutputTail(typeof spec.stdio.stdout === 'object' ? spec.stdio.stdout.maxBytes : MAX_WINDOW),
       stderr: new OutputTail(typeof spec.stdio.stderr === 'object' ? spec.stdio.stderr.maxBytes : MAX_WINDOW) }
     const pipes = { stdout: spec.stdio.stdout === 'pipe' ? new PassThrough() : undefined, stderr: spec.stdio.stderr === 'pipe' ? new PassThrough() : undefined }

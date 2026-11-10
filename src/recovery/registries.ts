@@ -13,6 +13,7 @@ import { GrantMetadata } from '../environments/endpoint-model.ts'
 import { fingerprint } from '../remote/journal.ts'
 import { remotePresetBinding } from '../remote/presets.ts'
 import { worldBinding, type WorldRecord } from '../remote/world-journal.ts'
+import { RepositorySource, repositoryCredential } from '../environments/repository-model.ts'
 
 const id = z.string().min(1).max(4096), uuid = z.string().uuid(), at = z.iso.datetime({ offset: true })
 const positive = z.number().int().positive().max(Number.MAX_SAFE_INTEGER), digest = z.string().regex(/^[a-f0-9]{64}$/)
@@ -30,7 +31,7 @@ const worldRecord = z.object({ id: digest, name: z.string().trim().min(1).max(16
   epoch: positive, root: absolute, revision: positive, enabled: z.boolean(), createdAt: at, updatedAt: at, credentialPin: digest,
   grant: GrantMetadata, config: z.object({ endpointId: uuid, url: id, credentialFile: absolute, stateDir: absolute,
     timeoutMs: z.number().int().min(100).max(60000).optional() }).strict(),
-  revoke: z.object({ requestId, reason: z.string().trim().min(1).max(2000) }).strict().optional() }).strict()
+  revoke: z.object({ requestId, reason: z.string().trim().min(1).max(2000) }).strict().optional(), repository: RepositorySource.optional() }).strict()
 const executionGrant = z.object({ environmentId: id, revision: positive, epoch: positive, world: digest.optional() }).strict()
 
 export interface RegistryStateVerification {
@@ -134,6 +135,7 @@ export async function verifyRegistryState(db: DatabaseSync, context: RegistrySta
       [value.id, worldBinding(value.config.endpointId, value.grant), value.config.endpointId, value.grant.id, value.grant.epoch, value.grant.root], 'managed_world_binding')
     same(value.id, worldBinding(original.endpointId, original.grant), 'managed_world_authority')
     if (!value.grant.enabled || !value.grant.operations.includes('fs.read') || !value.grant.operations.includes('process.spawn')) fail('authority', 'managed_world_original_grant')
+    if (value.repository) try { repositoryCredential(value.repository, value.grant) } catch { fail('authority', 'managed_repository_grant') }
     same([value.revision, value.enabled], value.revoke ? [2, false] : [1, true], 'managed_world_generation')
     same(value.revoke ?? null, original.revocation ? { requestId: original.revocation.requestId, reason: original.revocation.reason } : null, 'managed_world_revocation')
     if (!value.revoke) same(value.createdAt, value.updatedAt, 'managed_world_time')

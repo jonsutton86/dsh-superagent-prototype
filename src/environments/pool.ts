@@ -11,6 +11,7 @@ import { fingerprint } from '../remote/journal.ts'
 import type { Endpoints, EndpointWorld } from './endpoints.ts'
 import { privateCredential } from './endpoint-files.ts'
 import { RemoteWorkspace } from './remote-workspace.ts'
+import { repositoryCredential } from './repository-model.ts'
 import { EnvironmentError } from './model.ts'
 import { ActivateWorld, RevokeWorld, type WorldList, type WorldView } from './pool-model.ts'
 import { EndpointPage } from './endpoint-model.ts'
@@ -110,14 +111,18 @@ export class WorldPool extends Service {
     return this.serial(async () => {
       const replay = this.replay(request.requestId, digest); if (replay) return replay
       const connection = await this.host.endpoints.world(request.endpointId, request.commandId)
+      if (request.repository) repositoryCredential(request.repository, connection.grant)
       const id = worldBinding(request.endpointId, connection.grant), at = stamp()
       const existing = this.records().find(record => record.id === id)
       if (existing) {
+        if (fingerprint(existing.repository ?? null) !== fingerprint(request.repository ?? null))
+          throw new EnvironmentError(409, 'This grant generation already has a different repository source; authorize a new generation to change it')
         if (!existing.enabled) throw new EnvironmentError(409, 'This generation was revoked; explicitly authorize and activate a new generation')
         this.receipt(request.requestId, digest, id); return this.view(existing)
       }
       const record: WorldRecord = { ...connection, id, name: request.name, endpointId: request.endpointId, grantId: connection.grant.id,
-        epoch: connection.grant.epoch, root: connection.grant.root, revision: 1, enabled: true, createdAt: at, updatedAt: at }
+        epoch: connection.grant.epoch, root: connection.grant.root, revision: 1, enabled: true, createdAt: at, updatedAt: at,
+        ...(request.repository ? { repository: request.repository } : {}) }
       this.host.store.atomic(() => { this.save(record); this.receipt(request.requestId, digest, id) })
       await this.open(record)
       return this.get(id)
@@ -179,7 +184,7 @@ export class WorldPool extends Service {
       await world.start()
       context = new Context()
       const client = world.executionClient(), filesystem = new RemoteFileSystem(context, client, world.grant), subprocess = new RemoteSubprocess(context, client, world.grant, world.commands)
-      const workspace = new RemoteWorkspace(world, filesystem, subprocess, this.host.lifetime)
+      const workspace = new RemoteWorkspace(world, filesystem, subprocess, this.host.lifetime, record.repository)
       presets = new RemotePresets(this.ctx, world, true)
       const entry: Entry = { world, filesystem, subprocess, workspace, presets, context, prepared: false }
       this.opened.set(record.id, entry); this.problems.delete(record.id)

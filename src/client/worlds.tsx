@@ -31,13 +31,25 @@ export function WorldSelector({ value, change }: { value?: string; change(value:
 }
 export function ActivateWorldForm({ endpointId, commandId, name }: { endpointId: string; commandId: string; name: string }) {
   const { call, t } = usePanel(), [activated, setActivated] = useState<WorldView>()
+  const [repositoryEnabled, setRepositoryEnabled] = useState(false)
   const command = useOperatorCommand(() => {})
   const activate = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); const name = String(new FormData(event.currentTarget).get('name'))
-    void command.run({ endpointId, commandId, name }, async requestId => setActivated(await call('POST worlds', { body: { requestId, endpointId, commandId, name } })))
+    event.preventDefault(); const form = new FormData(event.currentTarget), name = String(form.get('name'))
+    const credentialId = String(form.get('repositoryCredential') ?? '').trim()
+    const repository = repositoryEnabled ? { url: String(form.get('repositoryUrl')).trim(), commit: String(form.get('repositoryCommit')).trim(),
+      username: String(form.get('repositoryUsername') || 'x-access-token').trim(), ...(credentialId ? { credentialId } : {}) } : undefined
+    const body = { endpointId, commandId, name, ...(repository ? { repository } : {}) }
+    void command.run(body, async requestId => setActivated(await call('POST worlds', { body: { requestId, ...body } })))
   }
   return <form className="dt-mission-form" onSubmit={activate}><p className="dt-hint">{t('world.activateHint')}</p>
     <label>{t('world.name')}<input name="name" required maxLength={160} defaultValue={name} /></label>
+    <label><input type="checkbox" checked={repositoryEnabled} onChange={event => setRepositoryEnabled(event.target.checked)} />{t('world.repository')}</label>
+    {repositoryEnabled && <fieldset><legend>{t('world.repository')}</legend><p className="dt-hint">{t('world.repositoryHint')}</p>
+      <label>{t('world.repositoryUrl')}<input name="repositoryUrl" type="url" required maxLength={2048} /></label>
+      <label>{t('world.repositoryCommit')}<input name="repositoryCommit" required pattern="([a-f0-9]{40}|[a-f0-9]{64})" maxLength={64} /></label>
+      <label>{t('world.repositoryCredential')}<input name="repositoryCredential" maxLength={100} /></label>
+      <label>{t('world.repositoryUsername')}<input name="repositoryUsername" defaultValue="x-access-token" maxLength={100} /></label>
+    </fieldset>}
     <Button type="submit" disabled={command.busy}>{t('world.activate')}</Button><CommandError command={command} />
     {activated && <p role="status">{t(activated.ready ? 'world.ready' : 'world.unavailable')} · <code>{activated.id}</code>{activated.problem && ` · ${activated.problem}`}</p>}
   </form>
@@ -50,6 +62,7 @@ function WorldCard({ world, changed }: { world: WorldView; changed(): void }) {
   }
   return <article className="dt-mission-card"><h4>{world.name}</h4><p>{t(world.ready ? 'world.ready' : world.enabled ? 'world.unavailable' : 'environment.revoked')}</p>
     <p><code>{world.root}</code> · {t('environment.grant', { revision: world.revision, epoch: world.epoch })}</p><p><code>{world.id}</code></p>
+    {world.repository && <p>{t('world.repository')} · <code>{world.repository.url}</code><br /><code>{world.repository.commit}</code></p>}
     {world.problem && <p role="status" className="dt-error">{world.problem}</p>}
     {world.status?.revocation && <p>{t(world.status.revocation.quiescent ? 'execution.stopped' : 'world.revocationPending')}</p>}
     <Button disabled={command.busy} onClick={() => { void command.run({ refresh: world.id }, () => call('POST worlds/:id/refresh', { id: world.id })) }}>{t('world.refresh')}</Button>
