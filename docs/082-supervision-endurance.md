@@ -118,8 +118,17 @@ response-size limit as a generic provider error. The corrected evaluator reconci
 trace, preserving contract, cancellation and deadline semantics. A gated fixture forces the provider bytes to arrive after
 the trace read and before the HTTP status response. Failed installed acceptance runs now retain private diagnostic reports.
 The [race evidence](evidence/082-evaluation-limit-race.json) includes both baseline-classifier reproductions and the
-five passing installed evaluation tests after the correction (38.06 seconds). Revised exact-source macOS/Linux
-qualification is pending. No eight-hour result is claimed yet. The final receipt must identify the exact tested revision, observed start/end and duration, coverage gaps, faults actually exercised, output
+five passing installed evaluation tests after the correction (38.06 seconds).
+
+Final runtime/test revision `59497bc31932d1073ca44e872d454a7a6347d938` passed full macOS qualification: 2,290 tests passed,
+25 skipped (402.55 seconds), typecheck and all seven builds. Native macOS service/SSH checks passed 16 with one skip
+(21.56 seconds). The same revision passed hosted native Linux: 2,303 tests passed, 14 skipped (380.27 seconds), typecheck,
+seven builds and all 30 native service/SSH checks (22.83 seconds). All six installed Harness boundaries ran on both platforms.
+The [qualification receipt](evidence/082-qualification.json) identifies logs, hashes and the successful automatic GitHub run.
+
+The final macOS workload produced 122 checked samples over 120.5235 productive seconds; Linux produced 122 over 120.1827
+seconds. Both completed exactly two native wakes and two nonwaiting output reads, preserved their original assignment,
+and confirmed process-group absence for normal completion and cancellation. No eight-hour result is claimed yet. The final receipt must identify the exact tested revision, observed start/end and duration, coverage gaps, faults actually exercised, output
 verification, process cleanup and platform. An in-progress run remains in progress even if its plan or deadline has elapsed.
 
 Real-model diagnosis quality, manual evidence review, live operator alert acceptance, active-job crash recovery,

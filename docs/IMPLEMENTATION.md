@@ -15,8 +15,11 @@ The completed-milestone history below remains unchanged.
 
 Current continuation: [082 Sustained supervision qualification](082-supervision-endurance.md) adds a plan-first operator
 runner with private runtime snapshots, native background-job wakeups, bounded sequential jobs under one assignment,
-independently checked output history and cancellation/quiescence evidence. The asynchronous two-minute preflight passed;
-final exact-revision qualification and the actual eight-hour run remain pending. The original five-second job wait and
+independently checked output history and cancellation/quiescence evidence. Exact runtime/test revision
+`59497bc31932d1073ca44e872d454a7a6347d938` passed full macOS (2,290 passed / 25 skipped) and native Linux (2,303 / 14),
+typecheck, seven builds and all six installed Harness boundaries. Native checks passed 16 with one skip on macOS and 30 on
+Linux. The first macOS attempt exposed an evaluation trace/status classification race; it is fixed with controlled regression
+evidence. `docs/evidence/082-qualification.json` records both attempts. The actual eight-hour run remains pending. The original five-second job wait and
 thirty-minute idle-job limit remain unchanged. This is synthetic local endurance tooling, not semantic model-quality or
 cross-host acceptance. The next recovery defect is a reproduced local stop boundary: replacement dispatch can proceed after
 a timed-out wait while the prior job is still running. Its original-operation hold must be fixed and qualified separately.
@@ -1078,7 +1081,8 @@ incomplete turns, unknown usage and unsettled cases cannot inflate completed-ass
 scripted loopback provider; manual evidence review and real-model diagnosis quality remain open alongside unattended
 endurance, live alerts, further narrow recovery policies and cross-host quiescence/isolation acceptance.
 Increment 082 adds isolated endurance tooling that preserves production job limits and uses native job-completion wakeups
-across bounded chunks. Its final exact-revision qualification and eight-hour duration acceptance remain pending. A controlled
+across bounded chunks. Its two-minute installed boundary and full suites passed on macOS and native Linux at `59497bc`;
+eight-hour duration acceptance remains pending. A controlled
 Runtime reproduction also confirms an ordinary-retry stop boundary: a replacement and queued input may dispatch while the
 old job is still running after its stop wait expires. Repairing that boundary is the next recovery implementation item.
 
