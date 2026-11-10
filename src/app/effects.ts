@@ -3,6 +3,8 @@
  * Effects reschedules the row after the initial retry delay without incrementing its failure count, and DshExecutor throws it from launch and delivery handlers.
  */
 export class Later extends Error {}
+/** A definite failed launch eligible for retry; Effects records its spent attempt and closes its dispatch marker atomically. */
+export class RetryLaunch extends Error {}
 /** Consecutive failures before an effect kind reports an error, matching the Sources poll failure threshold. */
 export const FAILURES_BEFORE_ERROR = 3
 import type { HealthBoard, HealthEntry } from '../infra/health.ts'
@@ -59,10 +61,37 @@ export class Effects {
   }
   /** Upserts an effect in the caller's transaction, coalescing with any waiting row of the same kind and key while keeping its queue position. */
   enqueue<K extends EffectKind>(kind: K, key: string, payload: EffectPayloads[K]): void {
+    if (kind === 'launch' && this.retryState(kind, key)?.launchStarted) throw new Error('Cannot replace an uncertain launch intent')
     this.store.db.prepare(`INSERT INTO effect (kind, key, value, seq, due, since) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(kind, key) DO UPDATE
       SET value = excluded.value, generation = generation + 1, attempts = 0, error = '', due = excluded.due`)
       .run(kind, key, JSON.stringify(payload), ++this.seq, this.now(), new Date(this.now()).toISOString())
     this.kick()
+  }
+  /** Recover an existing intent without changing its payload, generation, spent attempts or due time. */
+  ensure<K extends EffectKind>(kind: K, key: string, payload: EffectPayloads[K]): void {
+    this.store.atomic(() => {
+      const row = this.store.db.prepare('SELECT value FROM effect WHERE kind=? AND key=?').get(kind, key)
+      if (row) {
+        if (String(row.value) !== JSON.stringify(payload)) throw new Error('Existing effect intent differs')
+        return
+      }
+      this.enqueue(kind, key, payload)
+    })
+  }
+  /** Read persisted delivery failures; this is transport evidence, not a count of model requests. */
+  retryState(kind: EffectKind, key: string): { attempts: number; due: number; launchStarted: boolean } | undefined {
+    const row = this.store.db.prepare('SELECT attempts, due, launch_started FROM effect WHERE kind=? AND key=?').get(kind, key)
+    if (row && (row.launch_started !== 0 && row.launch_started !== 1 || kind !== 'launch' && row.launch_started !== 0)) throw new Error('Invalid launch recovery marker')
+    return row ? { attempts: Number(row.attempts), due: Number(row.due), launchStarted: row.launch_started === 1 } : undefined
+  }
+  /** Persist the launch dispatch boundary before I/O; an unclosed boundary is held after a process loss. */
+  beginLaunch(key: string): void {
+    const changed = this.store.db.prepare("UPDATE effect SET launch_started=1 WHERE kind='launch' AND key=? AND launch_started=0").run(key)
+    if (changed.changes !== 1) throw new Error('Launch dispatch is unavailable or already uncertain')
+  }
+  /** Only the live handler that observed a definite return can close its dispatch boundary. */
+  finishLaunch(key: string): void {
+    this.store.db.prepare("UPDATE effect SET launch_started=0 WHERE kind='launch' AND key=?").run(key)
   }
   handle<K extends EffectKind>(kind: K, run: Handler<K>['run'], options: Options<K> = {}): void {
     if (this.handlers.has(kind)) throw new Error(`The ${kind} effects already have a handler`)
@@ -75,9 +104,9 @@ export class Effects {
   pending(kind: EffectKind, key?: string): boolean {
     return key === undefined ? !!this.store.db.prepare('SELECT 1 FROM effect WHERE kind = ? LIMIT 1').get(kind) : !!this.store.db.prepare('SELECT 1 FROM effect WHERE kind = ? AND key = ?').get(kind, key)
   }
-  /** Drops a queued row by kind and key; if it is already running, that attempt finishes normally. */
+  /** Drops a queued row unless its launch outcome is uncertain; those original records remain held even after task retirement. */
   cancel(kind: EffectKind, key: string): void {
-    this.store.db.prepare('DELETE FROM effect WHERE kind = ? AND key = ?').run(kind, key)
+    this.store.db.prepare('DELETE FROM effect WHERE kind = ? AND key = ? AND launch_started = 0').run(kind, key)
     this.store.afterCommit(() => { this.report(kind) })
   }
   start(): void { this.started = true; this.kick() }
@@ -107,8 +136,8 @@ export class Effects {
         const running = new Set([...this.tasks].filter(task => task.kind === kind).map(task => task.key))
         // Ordered kinds block behind their oldest row even when it is not yet due; limit() is queried only after ready rows exist.
         const rows = (handler.ordered
-          ? this.store.db.prepare('SELECT key, value, seq, generation, attempts, due FROM effect WHERE kind = ? ORDER BY seq LIMIT 1').all(kind)
-          : this.store.db.prepare('SELECT key, value, seq, generation, attempts, due FROM effect WHERE kind = ? AND due <= ? ORDER BY seq LIMIT ?')
+          ? this.store.db.prepare('SELECT key, value, seq, generation, attempts, due FROM effect WHERE kind = ? AND launch_started = 0 ORDER BY seq LIMIT 1').all(kind)
+          : this.store.db.prepare('SELECT key, value, seq, generation, attempts, due FROM effect WHERE kind = ? AND launch_started = 0 AND due <= ? ORDER BY seq LIMIT ?')
             .all(kind, this.now(), 16 + running.size)) as unknown as Row[]
         const ready = handler.ordered && running.size ? [] : rows.filter(row => row.due <= this.now() && !running.has(row.key))
         let room = ready.length ? handler.limit() - running.size : 0
@@ -132,14 +161,15 @@ export class Effects {
     try { await handler.run(JSON.parse(row.value) as never, row.key) } catch (error) { failure = { error } }
     // Match seq and generation so a row replaced or re-queued while running is not overwritten.
     const own = 'kind = ? AND key = ? AND seq = ? AND generation = ?', ownRow = [kind, row.key, row.seq, row.generation] as const
-    if (!failure) this.store.db.prepare(`DELETE FROM effect WHERE ${own}`).run(...ownRow)
+    if (!failure) this.store.db.prepare(`DELETE FROM effect WHERE ${own} AND launch_started = 0`).run(...ownRow)
     // Leave running rows untouched on shutdown so they retry on the next start.
     else if (this.stopped) return
     else if (failure.error instanceof Later) {
       this.store.db.prepare(`UPDATE effect SET due = ? WHERE ${own}`).run(this.now() + handler.retry[0], ...ownRow)
     } else {
       const delay = Math.min(handler.retry[1], handler.retry[0] * 2 ** Math.min(row.attempts, 16))
-      this.store.db.prepare(`UPDATE effect SET attempts = attempts + 1, error = ?, due = ? WHERE ${own}`)
+      const closeLaunch = kind === 'launch' && failure.error instanceof RetryLaunch ? ', launch_started = 0' : ''
+      this.store.db.prepare(`UPDATE effect SET attempts = attempts + 1, error = ?, due = ?${closeLaunch} WHERE ${own}`)
         .run(String(failure.error).slice(0, 1000), this.now() + delay, ...ownRow)
     }
     if (!this.stopped) this.report(kind)

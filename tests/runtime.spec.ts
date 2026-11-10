@@ -31,6 +31,7 @@ import { IM_WORDS } from '../src/infra/text.ts'
 import { observePull, pullOf } from '../src/sources/github-pull.ts'
 import { credentialHelper, workerGitConfig } from '../src/infra/environment.ts'
 import { policyHistory } from '../src/app/settings-history.ts'
+import { canRetry, ticketStage } from '../src/core/stage.ts'
 import { overview } from '../src/app/views/overview.ts'
 import { preview, readable } from '../src/app/views/text.ts'
 import { decisionList, search, threadDetail, threadList } from '../src/app/views/threads.ts'
@@ -1488,8 +1489,12 @@ it('relays the status-request hint when a worker\'s turn ends with no text and n
 
 it('fails a ticket at once on a worker error that is not passing, and relays it', async () => {
   const { ticket, sessionId } = await acceptedTicket()
-  ;(runtime as unknown as { ctx: Context }).ctx.emit('agent/error', { agent: agents.get(sessionId), turn: 1, step: 1, error: new Error('Invalid tool schema') } as never)
-  await vi.waitFor(() => expect(runtime.store.tickets.get(ticket.id)!.assignments.at(-1)!.report).toMatchObject({ state: 'failed', summary: expect.stringContaining('Invalid tool schema') }))
+  const ctx = (runtime as unknown as { ctx: Context }).ctx, agent = agents.get(sessionId)! as any
+  ctx.emit('session/event', agent.session, { type: 'turn/start', data: { turn: 1 } } as never)
+  await ctx.waterfall('agent/request', { agent, turn: 1, step: 1, signal: new AbortController().signal } as never, async () => ({} as never))
+  ctx.emit('agent/error', { agent, turn: 1, step: 1, error: new Error('Invalid tool schema') } as never)
+  await vi.waitFor(() => expect(runtime.store.tickets.get(ticket.id)!.assignments.at(-1)!.report).toMatchObject({ state: 'failed', summary: expect.not.stringContaining('Invalid tool schema') }))
+  await runtime.idle()
   expect(relays(runtime.masterId).at(-1)).toMatchObject({ kind: 'worker_report', ticket: { ticket_id: ticket.id }, state: 'failed' })
 })
 
@@ -1761,4 +1766,93 @@ it('keeps the Policy the main Session judges by in its prompt, after admission a
   await runtime.settings.save('policy', { ...saved.policy, rules: rules.map(rule => ({ ...rule, enabled: false })) }, runtime.store.blockRevision('policy'), 'panel')
   expect(policy()).toContain('No rule is enabled: a proactive candidate can only be ignored.')
   expect(policy()).toContain('The accept mode and the rules decide proactive candidates only')
+})
+
+
+it('preserves the exact pending launch backoff and spent retry budget through a Runtime restart', async () => {
+  const original = controller.resolveAgent.getMockImplementation()! as (id: string) => Promise<unknown>
+  let tries = 0
+  controller.resolveAgent.mockImplementation(async (id: string) => {
+    if (String(id).startsWith('worker-')) { tries++; throw Object.assign(new Error('private response'), { status: 503 }) }
+    return original(id)
+  })
+  const { ticket } = await acceptedTicket()
+  await runtime.idle()
+  const assignmentId = ticket.assignments.at(-1)!.id
+  const row = () => runtime.store.db.prepare('SELECT * FROM effect WHERE kind=? AND key=?').get('launch', assignmentId)
+  const originalIntent = row()
+  expect(originalIntent?.attempts).toBe(1)
+  const recovered = await restart(); await recovered.ready; await recovered.idle()
+  expect(row()).toEqual(originalIntent); expect(tries).toBe(1)
+  let clock = Date.now()
+  for (let attempt = 0; attempt < 3; attempt++) {
+    clock += 5000 * 2 ** attempt + 1000
+    vi.useFakeTimers({ toFake: ['Date'], now: clock })
+    try { await runtime.pump(); await runtime.idle() } finally { vi.useRealTimers() }
+  }
+  expect(tries).toBe(4)
+  expect(row()).toBeUndefined()
+  expect(runtime.store.tickets.get(ticket.id)!.assignments.at(-1)!.report?.state).toBe('failed')
+  expect(JSON.stringify(runtime.store.tickets.get(ticket.id))).not.toContain('private response')
+})
+
+
+it('holds an interrupted launch under its original assignment and queue identity after restart', async () => {
+  const original = controller.resolveAgent.getMockImplementation()! as (id: string) => Promise<unknown>
+  let tries = 0
+  controller.resolveAgent.mockImplementation(async (id: string) => {
+    if (String(id).startsWith('worker-')) { tries++; throw Object.assign(new Error('private'), { status: 503 }) }
+    return original(id)
+  })
+  const { ticket, trigger } = await acceptedTicket(); await runtime.idle()
+  const assignment = ticket.assignments.at(-1)!
+  // Durable boundary before I/O, then process loss before a known return. The original intent remains uncertain.
+  runtime.effects.beginLaunch(assignment.id)
+  const intent = runtime.store.db.prepare("SELECT value,seq,generation FROM effect WHERE kind='launch' AND key=?").get(assignment.id)
+  const recovered = await restart(); await recovered.ready; await recovered.idle()
+  expect(tries).toBe(1)
+  const after = runtime.store.tickets.get(ticket.id)!
+  expect(after.assignments.map(item => item.id)).toEqual([assignment.id])
+  expect(after.assignments.at(-1)!.report).toMatchObject({ state: 'failed', summary: expect.stringContaining('outcome is unknown') })
+  expect(runtime.effects.retryState('launch', assignment.id)?.launchStarted).toBe(true)
+  expect(runtime.store.db.prepare("SELECT value,seq,generation FROM effect WHERE kind='launch' AND key=?").get(assignment.id)).toEqual(intent)
+  expect(() => runtime.effects.enqueue('launch', assignment.id, { ticketId: ticket.id, assignmentId: assignment.id })).toThrow('uncertain launch')
+  // This case exercises an admitted human follow-up, independently of the fixture's reset source filters.
+  vi.spyOn(runtime.sources, 'scope').mockReturnValue({ listened: true, observed: false })
+  vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 1000 })
+  try {
+    expect(runtime.engine.receiveForTicket({ ...trigger, id: 'unknown-followup', at: new Date().toISOString(), text: 'What happened to this task?' }, ticket.id)).toBe('stored')
+    await runtime.idle()
+  } finally { vi.useRealTimers() }
+  const held = runtime.store.tickets.get(ticket.id)!
+  expect(ticketStage(held)).toEqual({ stage: 'person', action: 'failed' })
+  expect(canRetry(held)).toBe(true)
+  expect(held.inputs.some(input => input.kind === 'trigger' && input.triggerId === 'unknown-followup' && held.undelivered.includes(input.id))).toBe(true)
+  expect(tries).toBe(1)
+})
+
+it('holds a launch accepted by Harness when its acknowledgement fails, including after coordinator restart', async () => {
+  const original = runtime.sessions.prompt.bind(runtime.sessions)
+  let dispatches = 0
+  const prompt = vi.spyOn(runtime.sessions, 'prompt').mockImplementation(async (...args) => {
+    const result = await original(...args)
+    if (args[0].startsWith('worker-')) { dispatches++; throw Object.assign(new Error('private acknowledgement detail'), { status: 503 }) }
+    return result
+  })
+  const { ticket, sessionId } = await acceptedTicket(); await runtime.idle()
+  const assignment = ticket.assignments.at(-1)!
+  expect(dispatches).toBe(1)
+  expect(agents.get(sessionId)!.cancel).toHaveBeenCalled()
+  expect(runtime.store.tickets.get(ticket.id)!.assignments.at(-1)!.report).toMatchObject({ state: 'failed', summary: expect.stringContaining('outcome is unknown') })
+  const row = runtime.store.db.prepare("SELECT * FROM effect WHERE kind='launch' AND key=?").get(assignment.id)
+  expect(row?.launch_started).toBe(1)
+  prompt.mockRestore()
+  const recovered = await restart(); await recovered.ready; await recovered.idle()
+  expect(dispatches).toBe(1)
+  const after = runtime.store.tickets.get(ticket.id)!
+  expect(after.assignments.map(item => item.id)).toEqual([assignment.id])
+  expect(after.assignments.at(-1)!.report?.state).toBe('failed')
+  expect(runtime.store.db.prepare("SELECT value,seq,generation,launch_started FROM effect WHERE kind='launch' AND key=?").get(assignment.id))
+    .toEqual({ value: row!.value, seq: row!.seq, generation: row!.generation, launch_started: 1 })
+  expect(JSON.stringify(after)).not.toContain('private acknowledgement detail')
 })

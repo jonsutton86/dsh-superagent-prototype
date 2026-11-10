@@ -1,0 +1,895 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-11-10T19:52:03.767759+00:00",
+  "sourceRevision": "0db02c586b82872d1dcdbc7a37460e132da605a7",
+  "scope": "Inert shipped Harness rc.3 provider-error contract compared to pinned alpha.2 development SDK; no configuration or execution changes",
+  "sources": [
+    {
+      "id": "installed-rc3/dsh-agent/package.json",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-agent/package.json",
+      "sha256": "3ed4384bc3bf273bfc1d8cba104f073daf9d72fb8e7e995325708cd22b510f99",
+      "bytes": 1978
+    },
+    {
+      "id": "installed-rc3/dsh-agent/lib/index.js",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-agent/lib/index.js",
+      "sha256": "7b59cf82c2784c25bdce4e3e24e5e5303b02b9f1003efacf50255492d17baf8b",
+      "bytes": 28257
+    },
+    {
+      "id": "installed-rc3/dsh-agent/lib/types/runtime-types.d.ts",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-agent/lib/types/runtime-types.d.ts",
+      "sha256": "7c03f0f92be4a48cc7960ac02fc040b2088b462ae790eab1427e50bfe5e74b31",
+      "bytes": 20625
+    },
+    {
+      "id": "installed-rc3/dsh-agent-loop/package.json",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-agent-loop/package.json",
+      "sha256": "dfda3a973125f1ff946d292740d0bfad6333bbb81cd94f77c8c9ba8803f815a5",
+      "bytes": 1986
+    },
+    {
+      "id": "installed-rc3/dsh-agent-loop/lib/index.js",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js",
+      "sha256": "cf57e3ecd487ac5c2553455aaa5cef2c6fb41e6bd61be5aa455675d1d7193033",
+      "bytes": 74599
+    },
+    {
+      "id": "installed-rc3/dsh-llm/package.json",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-llm/package.json",
+      "sha256": "381b8948adee1ae66db2a301a22df879aa780604143e494daf1b07ada57d668f",
+      "bytes": 2099
+    },
+    {
+      "id": "installed-rc3/dsh-llm/lib/types/index.js",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-llm/lib/types/index.js",
+      "sha256": "03b16dc51a3e6712823d57afaf74a7663d628aefd05ae7768d2cea89d05f7197",
+      "bytes": 53756
+    },
+    {
+      "id": "installed-rc3/dsh-llm/lib/types/index.d.ts",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-llm/lib/types/index.d.ts",
+      "sha256": "895a2d357b3da2d2ec18eada1271274d43169acaa6591d57bb6e84878e1b88fe",
+      "bytes": 24302
+    },
+    {
+      "id": "installed-rc3/dsh-llm/lib/types/types.d.ts",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-llm/lib/types/types.d.ts",
+      "sha256": "f07f8f22ba299522421716e5abcf2d3ed4147a9ffc500b14d943701ee40d6ee8",
+      "bytes": 23784
+    },
+    {
+      "id": "installed-rc3/dsh-llm/lib/types/adapter-failure.js",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-llm/lib/types/adapter-failure.js",
+      "sha256": "f1213f11f11e0f20aae26c09a5e0cf3d72512c1f1519e1b3f107edf64af43c28",
+      "bytes": 4326
+    },
+    {
+      "id": "installed-rc3/dsh-llm/lib/types/retry-policy.js",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-llm/lib/types/retry-policy.js",
+      "sha256": "f0a8fe075ac24c56ed2aa5d5e359a85539f5ffa237af54b68d3f4fc5124b5d83",
+      "bytes": 5591
+    },
+    {
+      "id": "installed-rc3/dsh-llm/lib/types/error.js",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-llm/lib/types/error.js",
+      "sha256": "103b72873eafc3512d717593f802bbf09230c52b7fcd31aa6ec10b5fd147e1cb",
+      "bytes": 8459
+    },
+    {
+      "id": "installed-rc3/dsh-llm-pi-ai/package.json",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-llm-pi-ai/package.json",
+      "sha256": "7ea54aa1b0c42ece4661182b45fd34b7ef19b7f843b151d904cd9c0290ae01da",
+      "bytes": 2225
+    },
+    {
+      "id": "installed-rc3/dsh-llm-pi-ai/lib/index.js",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-llm-pi-ai/lib/index.js",
+      "sha256": "99b5c20830a52f69641df8a18a39206079b0c725201958cce2c4a934f1d4f7cd",
+      "bytes": 125589
+    },
+    {
+      "id": "installed-rc3/dsh-llm-deepseek/package.json",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-llm-deepseek/package.json",
+      "sha256": "c098926a0149812eba7f39e65c68dd5d4d46c41827366ba3ec4da6be9f7ffb2e",
+      "bytes": 3114
+    },
+    {
+      "id": "installed-rc3/dsh-llm-deepseek/lib/index.js",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-llm-deepseek/lib/index.js",
+      "sha256": "21fedb71f8d9aafea73b35ee13bc73737a8271d7ffa261697d4208e8563196cb",
+      "bytes": 121538
+    },
+    {
+      "id": "installed-rc3/dsh-llm-retry/package.json",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-llm-retry/package.json",
+      "sha256": "ea0b5d17bd0eda5398819dea3e7be8e627f236ba2739d90712ba30020f78ae0b",
+      "bytes": 2176
+    },
+    {
+      "id": "installed-rc3/dsh-llm-retry/lib/index.js",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-llm-retry/lib/index.js",
+      "sha256": "cbb99f1c5038e4a9167aedf333343cb3e3adfb5c9f45a37ef7562b024429d050",
+      "bytes": 6280
+    },
+    {
+      "id": "installed-rc3/dsh-llm-retry/lib/types/types.d.ts",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-llm-retry/lib/types/types.d.ts",
+      "sha256": "f9457963d07a32bf72a85086fdd09f2dd071bc347c5ad7a3a1c085e4849a1421",
+      "bytes": 1297
+    },
+    {
+      "id": "installed-rc3/dsh-session/package.json",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-session/package.json",
+      "sha256": "ac94962142eea00322f5d52370e1bd83a7f37a1de88b1b96e923427aa7dcebe6",
+      "bytes": 1576
+    },
+    {
+      "id": "installed-rc3/dsh-session/lib/index.js",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-session/lib/index.js",
+      "sha256": "2f5dd07cb5c744a29abbb8003a8a4cefd9e582c6e2538074ca299a0ddd02a3bf",
+      "bytes": 94982
+    },
+    {
+      "id": "installed-rc3/dsh-session/lib/types/types.d.ts",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-session/lib/types/types.d.ts",
+      "sha256": "8e3b1b7f54d504ca91d3496376f9ea619f99ce1afe2739d35d9c2f2f69320950",
+      "bytes": 25369
+    },
+    {
+      "id": "installed-rc3/dsh-session-projection/package.json",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-session-projection/package.json",
+      "sha256": "9101acadf96250b5e8c7b9f41f46eec71dface5e71a27d8d4112239be14fe0f6",
+      "bytes": 1309
+    },
+    {
+      "id": "installed-rc3/dsh-session-projection/lib/index.js",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-session-projection/lib/index.js",
+      "sha256": "7dc2b212819baf4fc292751054d30b97afcbdee0a4733230abf92c6722e6550c",
+      "bytes": 19981
+    },
+    {
+      "id": "installed-rc3/dsh-session-checkpoint-policy/package.json",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-session-checkpoint-policy/package.json",
+      "sha256": "1e3bb6b4f118bca19a6b219f6b5958f2f8fc29de0b198596b906db6c75201343",
+      "bytes": 1745
+    },
+    {
+      "id": "installed-rc3/dsh-session-checkpoint-policy/lib/index.js",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-session-checkpoint-policy/lib/index.js",
+      "sha256": "80a4475de0594399bfdd3203e000cfe0bf1967af163f8747c45b9b80e9549f2a",
+      "bytes": 2666
+    },
+    {
+      "id": "sdk-alpha2/dsh-agent/package.json",
+      "originalPath": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/node_modules/.pnpm/@deepseek-ai+dsh-agent@0.2.1-alpha.2_3dc6930769662420cb44e109694f1822/node_modules/@deepseek-ai/dsh-agent/package.json",
+      "sha256": "59296f117b6487d4ada7a8cc20069420cec4af2e496bce83ef40c6e96dfb14b8",
+      "bytes": 1985
+    },
+    {
+      "id": "sdk-alpha2/dsh-agent/lib/types/runtime-types.d.ts",
+      "originalPath": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/node_modules/.pnpm/@deepseek-ai+dsh-agent@0.2.1-alpha.2_3dc6930769662420cb44e109694f1822/node_modules/@deepseek-ai/dsh-agent/lib/types/runtime-types.d.ts",
+      "sha256": "7c03f0f92be4a48cc7960ac02fc040b2088b462ae790eab1427e50bfe5e74b31",
+      "bytes": 20625
+    },
+    {
+      "id": "sdk-alpha2/dsh-llm/package.json",
+      "originalPath": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/node_modules/.pnpm/@deepseek-ai+dsh-llm@0.2.1-alpha.2_@deepseek-ai+cordis@4.0.5-alpha.1/node_modules/@deepseek-ai/dsh-llm/package.json",
+      "sha256": "a8413fe498f22e759e5e1538fa932620fc074684e24cd7f8b32ef076d9a1854a",
+      "bytes": 2082
+    },
+    {
+      "id": "sdk-alpha2/dsh-llm/lib/types/index.js",
+      "originalPath": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/node_modules/.pnpm/@deepseek-ai+dsh-llm@0.2.1-alpha.2_@deepseek-ai+cordis@4.0.5-alpha.1/node_modules/@deepseek-ai/dsh-llm/lib/types/index.js",
+      "sha256": "f271c32244e949db71a728374a68f8a475697e7e330dc28e953ccc55bad9a450",
+      "bytes": 52262
+    },
+    {
+      "id": "sdk-alpha2/dsh-llm/lib/types/index.d.ts",
+      "originalPath": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/node_modules/.pnpm/@deepseek-ai+dsh-llm@0.2.1-alpha.2_@deepseek-ai+cordis@4.0.5-alpha.1/node_modules/@deepseek-ai/dsh-llm/lib/types/index.d.ts",
+      "sha256": "2cc4a6fb7861c9ef339e47f6d9c763097a37547e91ef106e612c478653d6b83a",
+      "bytes": 23275
+    },
+    {
+      "id": "sdk-alpha2/dsh-llm/lib/types/types.d.ts",
+      "originalPath": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/node_modules/.pnpm/@deepseek-ai+dsh-llm@0.2.1-alpha.2_@deepseek-ai+cordis@4.0.5-alpha.1/node_modules/@deepseek-ai/dsh-llm/lib/types/types.d.ts",
+      "sha256": "b77d5a4dc7eb651fb1eb883bc55f79fde377099aef9b2b3d17d88ba114a74536",
+      "bytes": 22875
+    },
+    {
+      "id": "sdk-alpha2/dsh-llm/lib/types/adapter-failure.js",
+      "originalPath": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/node_modules/.pnpm/@deepseek-ai+dsh-llm@0.2.1-alpha.2_@deepseek-ai+cordis@4.0.5-alpha.1/node_modules/@deepseek-ai/dsh-llm/lib/types/adapter-failure.js",
+      "sha256": "f1213f11f11e0f20aae26c09a5e0cf3d72512c1f1519e1b3f107edf64af43c28",
+      "bytes": 4326
+    },
+    {
+      "id": "sdk-alpha2/dsh-llm/lib/types/retry-policy.js",
+      "originalPath": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/node_modules/.pnpm/@deepseek-ai+dsh-llm@0.2.1-alpha.2_@deepseek-ai+cordis@4.0.5-alpha.1/node_modules/@deepseek-ai/dsh-llm/lib/types/retry-policy.js",
+      "sha256": "f0a8fe075ac24c56ed2aa5d5e359a85539f5ffa237af54b68d3f4fc5124b5d83",
+      "bytes": 5591
+    },
+    {
+      "id": "sdk-alpha2/dsh-llm/lib/types/error.js",
+      "originalPath": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/node_modules/.pnpm/@deepseek-ai+dsh-llm@0.2.1-alpha.2_@deepseek-ai+cordis@4.0.5-alpha.1/node_modules/@deepseek-ai/dsh-llm/lib/types/error.js",
+      "sha256": "103b72873eafc3512d717593f802bbf09230c52b7fcd31aa6ec10b5fd147e1cb",
+      "bytes": 8459
+    },
+    {
+      "id": "sdk-alpha2/dsh-session/package.json",
+      "originalPath": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/node_modules/.pnpm/@deepseek-ai+dsh-session@0.2.1-alpha.2_@deepseek-ai+cordis@4.0.5-alpha.1_@deepseek-ai+d_2f6e90015528321e57f5b21fac4f3d76/node_modules/@deepseek-ai/dsh-session/package.json",
+      "sha256": "a3fc9844c0c6f9bd800f1d510bfe69300f9c1d5d201d869f5e15e854ef3b961b",
+      "bytes": 1553
+    },
+    {
+      "id": "sdk-alpha2/dsh-session/lib/types/types.d.ts",
+      "originalPath": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/node_modules/.pnpm/@deepseek-ai+dsh-session@0.2.1-alpha.2_@deepseek-ai+cordis@4.0.5-alpha.1_@deepseek-ai+d_2f6e90015528321e57f5b21fac4f3d76/node_modules/@deepseek-ai/dsh-session/lib/types/types.d.ts",
+      "sha256": "7a5fd07cd4bb4fd2e70a69db791852b6bef7e239f5fe279f0a292e8e27f85226",
+      "bytes": 25116
+    }
+  ],
+  "method": {
+    "tool": "rea-agents@6.8.0",
+    "mode": "inert JavaScript application analysis plus direct shipped source inspection",
+    "fabricPattern": "review_design",
+    "fabricRevision": "de0b72766db0436b6c1887bb75768cb3960e67e5",
+    "evidenceWrapperVersion": 1,
+    "officialSource": "https://github.com/deepseek-ai/deepseek-harness",
+    "provenance": "Package manifests name the DeepSeek official repository and package subdirectories; source hashes identify installed npm bytes, not a claimed Git commit."
+  },
+  "rea": {
+    "parentEvidenceId": "ev_0be451653f18833ad38e11dc9906f2a889b73638b7a73c50a2b0e2f70589a730",
+    "artifactSha256": "f11cec037f0ee0a6658af43c518677b7e5845dc7410b7b7699153edeff36a4f6",
+    "bundleSha256": "68e2fb61e5be9d53bbc3c88273b12a613a9cb7ec4765164f7326d2effe68a7b3",
+    "bundleBytes": 45710887,
+    "sourceSelection": {
+      "requested_paths": [
+        "installed-rc3/dsh-agent-loop/lib/index.js",
+        "installed-rc3/dsh-llm-retry/lib/index.js",
+        "installed-rc3/dsh-llm/lib/types/adapter-failure.js",
+        "installed-rc3/dsh-llm/lib/types/retry-policy.js",
+        "installed-rc3/dsh-llm-pi-ai/lib/index.js",
+        "installed-rc3/dsh-llm-deepseek/lib/index.js"
+      ],
+      "unselected_files": 31
+    },
+    "statistics": {
+      "relevant_files": 37,
+      "nested_asar_containers": 0,
+      "text_bytes_read": 337923,
+      "invalid_utf8_files": 0,
+      "parsed_javascript_files": 6,
+      "skipped_javascript_files": 0,
+      "visited_ast_nodes": 38557,
+      "findings": 277,
+      "modules": 0,
+      "parse_failures": 0
+    },
+    "coverage": {
+      "static_sources": {
+        "sources": 25,
+        "unmeasured_sources": 0,
+        "syntax": {
+          "complete": 6,
+          "recovered": 0,
+          "failed": 0,
+          "not-examined": 19
+        },
+        "semantics": {
+          "unknown_sources": 1,
+          "unexamined_sources": 19
+        },
+        "examination": {
+          "complete": 6,
+          "limited": 0,
+          "not-examined": 19
+        },
+        "electron_applicability": {
+          "observed": 0,
+          "unknown": 25
+        }
+      },
+      "application": {
+        "status": "partial",
+        "truncated": false,
+        "omitted_count": null,
+        "limits": []
+      },
+      "semantic": {
+        "status": "partial",
+        "truncated": false,
+        "omitted_nodes": null,
+        "omitted_relations": null,
+        "limits": [],
+        "families": [
+          {
+            "family": "boundary",
+            "status": "partial",
+            "retained_relations": 32,
+            "omitted_relations": null,
+            "unknown_count": 21
+          },
+          {
+            "family": "call-flow",
+            "status": "partial",
+            "retained_relations": 1743,
+            "omitted_relations": null,
+            "unknown_count": 2153
+          },
+          {
+            "family": "child-process",
+            "status": "partial",
+            "retained_relations": 0,
+            "omitted_relations": null,
+            "unknown_count": 19
+          },
+          {
+            "family": "closure",
+            "status": "partial",
+            "retained_relations": 1400,
+            "omitted_relations": null,
+            "unknown_count": 19
+          },
+          {
+            "family": "configuration",
+            "status": "partial",
+            "retained_relations": 0,
+            "omitted_relations": null,
+            "unknown_count": 19
+          },
+          {
+            "family": "data-flow",
+            "status": "partial",
+            "retained_relations": 16826,
+            "omitted_relations": null,
+            "unknown_count": 2616
+          },
+          {
+            "family": "event",
+            "status": "partial",
+            "retained_relations": 18,
+            "omitted_relations": null,
+            "unknown_count": 30
+          },
+          {
+            "family": "object-flow",
+            "status": "partial",
+            "retained_relations": 2653,
+            "omitted_relations": null,
+            "unknown_count": 3955
+          },
+          {
+            "family": "promise-ownership",
+            "status": "partial",
+            "retained_relations": 285,
+            "omitted_relations": null,
+            "unknown_count": 191
+          },
+          {
+            "family": "request",
+            "status": "partial",
+            "retained_relations": 16,
+            "omitted_relations": null,
+            "unknown_count": 22
+          },
+          {
+            "family": "resource-lifecycle",
+            "status": "partial",
+            "retained_relations": 0,
+            "omitted_relations": null,
+            "unknown_count": 19
+          },
+          {
+            "family": "timer",
+            "status": "partial",
+            "retained_relations": 2,
+            "omitted_relations": null,
+            "unknown_count": 19
+          }
+        ]
+      },
+      "application_unknowns": 31,
+      "semantic_unknowns": 9083
+    },
+    "limitations": [
+      "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+      "Caller-selected source analysis leaves 31 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+      "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+      "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+      "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+      "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+      "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+      "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+      "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+      "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+      "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+      "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+      "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+      "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+      "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+      "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+      "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+      "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+    ],
+    "unknowns": [
+      "31 application graph unknowns remain in the parent Evidence.",
+      "9083 semantic graph unknowns remain in the parent Evidence."
+    ]
+  },
+  "findings": [
+    {
+      "id": "event-shape",
+      "classification": "Observed",
+      "claim": "agent/error carries exact Agent object plus numeric turn/step and verbatim unknown error. The event has no assignment ID, model-call ID, attempt ID or Session seq. agentEvents injects the originating Agent object into the payload.",
+      "sources": [
+        {
+          "id": "installed-rc3/dsh-agent/lib/types/runtime-types.d.ts",
+          "lines": [
+            393,
+            408
+          ]
+        },
+        {
+          "id": "installed-rc3/dsh-agent/lib/index.js",
+          "lines": [
+            242,
+            263
+          ]
+        },
+        {
+          "id": "installed-rc3/dsh-agent-loop/lib/index.js",
+          "lines": [
+            875,
+            885
+          ]
+        }
+      ]
+    },
+    {
+      "id": "error-normalization",
+      "classification": "Observed",
+      "claim": "LlmError owns code and frozen failure {message,code,status?,providerRetryAfterMs?,requestId?,offloadImages?}; status validates integer 100..599 and retry delay validates positive finite. Adapter normalization accepts carried facts across package copies only when own data-backed failure/code agree. Raw messages/causes/request IDs can be private and are not needed for eligibility.",
+      "sources": [
+        {
+          "id": "installed-rc3/dsh-llm/lib/types/index.js",
+          "lines": [
+            66,
+            101
+          ]
+        },
+        {
+          "id": "installed-rc3/dsh-llm/lib/types/adapter-failure.js",
+          "lines": [
+            13,
+            108
+          ]
+        },
+        {
+          "id": "installed-rc3/dsh-llm/lib/types/error.js",
+          "lines": [
+            12,
+            20
+          ]
+        }
+      ]
+    },
+    {
+      "id": "provider-code-provenance",
+      "classification": "Observed",
+      "claim": "DeepSeek Messages uses HTTP status and provider error type to produce AUTH,QUOTA,RATE_LIMIT,CONTEXT_WINDOW_EXCEEDED,INVALID_REQUEST,SERVER or HTTP_<status>, preserving status/retry delay when present. Idle watchdog emits TIMEOUT; caller abort emits ABORTED; other transport throws become TRANSPORT.",
+      "sources": [
+        {
+          "id": "installed-rc3/dsh-llm-deepseek/lib/index.js",
+          "lines": [
+            1762,
+            1790
+          ]
+        },
+        {
+          "id": "installed-rc3/dsh-llm-deepseek/lib/index.js",
+          "lines": [
+            2145,
+            2172
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pi-ai-provenance",
+      "classification": "Observed",
+      "claim": "pi-ai terminal error events become typed Harness finish failures using adapter-owned classifyPiAiError(message); this classifier itself uses provider error-text patterns. Its mapped failures normally have no HTTP status. It separately emits typed timeout/abort for its watchdog/caller. Consuming Harness codes avoids adding a coordinator regex but does not prove all codes originate from typed HTTP status.",
+      "sources": [
+        {
+          "id": "installed-rc3/dsh-llm-pi-ai/lib/index.js",
+          "lines": [
+            1448,
+            1459
+          ]
+        },
+        {
+          "id": "installed-rc3/dsh-llm-pi-ai/lib/index.js",
+          "lines": [
+            1469,
+            1531
+          ]
+        },
+        {
+          "id": "installed-rc3/dsh-llm-pi-ai/lib/index.js",
+          "lines": [
+            2007,
+            2012
+          ]
+        }
+      ]
+    },
+    {
+      "id": "terminal-order",
+      "classification": "Observed",
+      "claim": "For a normalized failed model stream, AgentLoop appends assistant/attempt, calls agent/request-error, and only if recovery declines throws a new LlmError. step/end is appended before terminal agent/error. turn/end follows agent/error. Append/settlement failures can instead yield unknown/AggregateError, which must not be automatically reclassified as provider failures.",
+      "sources": [
+        {
+          "id": "installed-rc3/dsh-agent-loop/lib/index.js",
+          "lines": [
+            1129,
+            1146
+          ]
+        },
+        {
+          "id": "installed-rc3/dsh-agent-loop/lib/index.js",
+          "lines": [
+            986,
+            1036
+          ]
+        }
+      ]
+    },
+    {
+      "id": "attempt-identity",
+      "classification": "Observed",
+      "claim": "assistant/attempt data contains turn,step,stream and the Session envelope seq is the durable attempt identity. Multiple inner request retries can share turn+step. Live assistant attemptId uses sessionId plus a lifecycle-local counter reset to zero in a new Agent and is not restart-stable. Committed end frames refer to the appended event seq.",
+      "sources": [
+        {
+          "id": "installed-rc3/dsh-session/lib/types/types.d.ts",
+          "lines": [
+            342,
+            349
+          ]
+        },
+        {
+          "id": "installed-rc3/dsh-agent-loop/lib/index.js",
+          "lines": [
+            355,
+            437
+          ]
+        },
+        {
+          "id": "installed-rc3/dsh-agent-loop/lib/index.js",
+          "lines": [
+            764,
+            785
+          ]
+        },
+        {
+          "id": "installed-rc3/dsh-agent-loop/lib/index.js",
+          "lines": [
+            1078,
+            1087
+          ]
+        }
+      ]
+    },
+    {
+      "id": "request-binding",
+      "classification": "Observed",
+      "claim": "agent/request waterfall has {agent,turn,step,signal}; invoked before prepareCall and before accepted prompt messages are appended. turn/start and step/start are logged before this request hook. There is no source-established agent/request-start event.",
+      "sources": [
+        {
+          "id": "installed-rc3/dsh-agent/lib/types/runtime-types.d.ts",
+          "lines": [
+            312,
+            356
+          ]
+        },
+        {
+          "id": "installed-rc3/dsh-agent-loop/lib/index.js",
+          "lines": [
+            937,
+            979
+          ]
+        },
+        {
+          "id": "installed-rc3/dsh-agent-loop/lib/index.js",
+          "lines": [
+            1048,
+            1088
+          ]
+        },
+        {
+          "id": "installed-rc3/dsh-agent-loop/lib/index.js",
+          "lines": [
+            1189,
+            1214
+          ]
+        }
+      ]
+    },
+    {
+      "id": "inner-policy",
+      "classification": "Observed",
+      "claim": "dsh-llm-retry normal defaults: five retries, 500ms initial delay, 10s maximum, jitter 0.1, codes EMPTY_RESPONSE/RATE_LIMIT/SERVER/TIMEOUT/TRANSPORT. Provider-owned always mode is unbounded. This inner policy executes before agent/error; an outer continuation creates a new turn after it declines/exhausts and is not a total provider-request budget.",
+      "sources": [
+        {
+          "id": "installed-rc3/dsh-llm/lib/types/retry-policy.js",
+          "lines": [
+            10,
+            23
+          ]
+        },
+        {
+          "id": "installed-rc3/dsh-llm-retry/lib/index.js",
+          "lines": [
+            151,
+            181
+          ]
+        }
+      ],
+      "limits": "Package availability does not establish active mounting or configured policy; private installation settings were not inspected."
+    },
+    {
+      "id": "inner-durability",
+      "classification": "Observed",
+      "claim": "Inner retry count/ID are reconstructed by the llmRetry Session projection keyed by provider+policyKey, not an isolated process-local counter. llm/retry is appended before a cancellable timer and llm/retry-started afterward. No explicit persistence flush is awaited before that timer. Projection resets on step/start or turn/end.",
+      "sources": [
+        {
+          "id": "installed-rc3/dsh-llm-retry/lib/index.js",
+          "lines": [
+            67,
+            110
+          ]
+        },
+        {
+          "id": "installed-rc3/dsh-llm-retry/lib/index.js",
+          "lines": [
+            126,
+            174
+          ]
+        },
+        {
+          "id": "installed-rc3/dsh-session-projection/lib/index.js",
+          "lines": [
+            26,
+            40
+          ]
+        }
+      ],
+      "limits": "A committed Session append is not by itself evidence of a completed disk durability barrier."
+    },
+    {
+      "id": "inner-restart",
+      "classification": "Observed",
+      "claim": "AgentLoop resume loads persisted events and appends interruptedTurnClosers before preparing the restored Session. Those closers end the prior turn; the retry projection resets on turn/end. A new Agent starts from lastTurn and advances to a new turn. The retry plugin has no handler that resumes an interrupted pending delay: it handles only fresh agent/request-error calls.",
+      "sources": [
+        {
+          "id": "installed-rc3/dsh-agent-loop/lib/index.js",
+          "lines": [
+            1969,
+            2013
+          ]
+        },
+        {
+          "id": "installed-rc3/dsh-session/lib/index.js",
+          "lines": [
+            899,
+            910
+          ]
+        },
+        {
+          "id": "installed-rc3/dsh-agent-loop/lib/index.js",
+          "lines": [
+            781,
+            786
+          ]
+        },
+        {
+          "id": "installed-rc3/dsh-agent-loop/lib/index.js",
+          "lines": [
+            937,
+            949
+          ]
+        },
+        {
+          "id": "installed-rc3/dsh-llm-retry/lib/index.js",
+          "lines": [
+            87,
+            110
+          ]
+        },
+        {
+          "id": "installed-rc3/dsh-llm-retry/lib/index.js",
+          "lines": [
+            174,
+            190
+          ]
+        }
+      ]
+    },
+    {
+      "id": "success-contract",
+      "classification": "Observed",
+      "claim": "Turn-end reasons include completed,aborted,blocked,error,max-tokens,interrupted,forked. completed can also describe a no-input/no-model turn. Noninterrupted assistant/message records model output; a later completed turn with a matching successful assistant message is stronger success evidence than idle, enqueue, request-start, or turn/end alone.",
+      "sources": [
+        {
+          "id": "installed-rc3/dsh-session/lib/types/types.d.ts",
+          "lines": [
+            166,
+            211
+          ]
+        },
+        {
+          "id": "installed-rc3/dsh-agent-loop/lib/index.js",
+          "lines": [
+            961,
+            969
+          ]
+        },
+        {
+          "id": "installed-rc3/dsh-agent-loop/lib/index.js",
+          "lines": [
+            1147,
+            1167
+          ]
+        }
+      ]
+    }
+  ],
+  "sdkComparison": {
+    "installed": "0.2.1-rc.3",
+    "development": "0.2.1-alpha.2",
+    "comparisons": [
+      {
+        "path": "dsh-agent/package.json",
+        "byteIdentical": false
+      },
+      {
+        "path": "dsh-agent/lib/types/runtime-types.d.ts",
+        "byteIdentical": true
+      },
+      {
+        "path": "dsh-llm/package.json",
+        "byteIdentical": false
+      },
+      {
+        "path": "dsh-llm/lib/types/index.js",
+        "byteIdentical": false
+      },
+      {
+        "path": "dsh-llm/lib/types/index.d.ts",
+        "byteIdentical": false
+      },
+      {
+        "path": "dsh-llm/lib/types/types.d.ts",
+        "byteIdentical": false
+      },
+      {
+        "path": "dsh-llm/lib/types/adapter-failure.js",
+        "byteIdentical": true
+      },
+      {
+        "path": "dsh-llm/lib/types/retry-policy.js",
+        "byteIdentical": true
+      },
+      {
+        "path": "dsh-llm/lib/types/error.js",
+        "byteIdentical": true
+      },
+      {
+        "path": "dsh-session/package.json",
+        "byteIdentical": false
+      },
+      {
+        "path": "dsh-session/lib/types/types.d.ts",
+        "byteIdentical": false
+      }
+    ],
+    "observed": "runtime-types event definitions, adapter-failure normalization, retry-policy and HarnessError code definition are byte-identical. LlmError constructor/failure shape are unchanged; broader LLM index differs in image/directory functionality. Session event definitions of interest are unchanged; rc.3 adds a Typert session resource declaration. Alpha.2 development dependencies do not include an installed AgentLoop or retry implementation, so no alpha.2 runtime equivalence is claimed."
+  },
+  "proposedImplementationContract": {
+    "classification": "Proposed",
+    "eligibility": {
+      "codes": [
+        "RATE_LIMIT",
+        "SERVER",
+        "TIMEOUT",
+        "TRANSPORT"
+      ],
+      "optionalCompatibilityCase": {
+        "code": "HTTP_408",
+        "requiredStatus": 408
+      },
+      "excluded": "EMPTY_RESPONSE not proposed for outer retries initially; auth/quota/config/context/abort/unknown/stream-settlement failures are ineligible. Do not inspect message/cause or treat arbitrary HTTP status as authority. Cross-package own-property shape matching is not a security boundary against trusted host plugins forging events."
+    },
+    "fence": [
+      "Capture exact Agent+Session+assignment at live turn/start; pending latest assignment may be legitimate because followup wakes before accepted callback.",
+      "Bind request turn+step+signal at agent/request before await next; do not relabel an existing turn when assignment changes.",
+      "Require current registry Agent/Session identity, current assignment matching captured binding, live turn/request evidence, un-aborted signal and host lifetime.",
+      "A committed final assistant/attempt Session seq gives a durable dedup identity; unanchored arbitrary errors should not become automatic continuation.",
+      "Reset only a matching completed turn with a noninterrupted successful assistant/message in the same turn; preserve bounds across errors/cancellation/interruption and empty completed turns."
+    ],
+    "persistence": "Superseded after source review: root chose Harness-owned provider request retry only. Remove the outer three new-turn continuations. Terminal worker failure becomes a sanitized hold; it does not start another inference chain. Existing separate launch/crash-recovery policies remain host-owned and independently bounded.",
+    "limits": [
+      "No live provider calls or runtime probes performed in this capture.",
+      "Static source supports lifecycle behavior but cannot establish active installation config.",
+      "Durable event seq identities assume original Session lineage/prefix; a fork or replacement is a different authority context.",
+      "Exact attachment-time/turn assignment binding and crash-committed receipt semantics need local runtime tests before implementation acceptance."
+    ],
+    "status": "Historical proposal; outer worker retry authority was rejected in favor of native Harness request retry ownership."
+  },
+  "implementationDecision": {
+    "status": "integrated source; final committed-source qualification pending",
+    "files": [
+      "src/executor/failure.ts",
+      "tests/executor-failure.spec.ts"
+    ],
+    "exports": [
+      "safeWorkerFailure",
+      "safeLaunchFailure",
+      "WorkerFailureFence",
+      "WorkerFailureIdentity"
+    ],
+    "workerAction": "classification only; terminal provider failure never authorizes outer retry",
+    "launchAction": "separate typed HTTP 408/429/500..599 or exact Node/undici transport code eligibility; no message matching",
+    "fence": "one bounded WeakMap binding per Agent; exact live registry Agent/Session/original assignment and monotonic turn; beginStep records committed step/start, request anchors live same-turn signal; consumeRequest requires request, consumeTerminal accepts known turn step0 or committed step/request position for sanitized hold only; close/retire preserve rejection floors",
+    "sourceSignalFact": "AgentLoop turn captures phase.abort.signal at lines940-943; each step reads same phase.abort at1046 and supplies it to prepareRequest at1051; replaced after completed turn at1040. Turn and step increment from zero at943/956.",
+    "sourceDigests": {
+      "src/executor/failure.ts": "39e6793bbd445ade16468d1fa6a7e56e8f5125af891f3a76c54c0bfc1d852727",
+      "tests/executor-failure.spec.ts": "49c2c39aa931deba7c0048f45509aece65d50e5ef47fbdbe44d6030a26b4dc88"
+    },
+    "journal": "Existing effect row only: schema12 launch_started marker, atomic known-failure count/backoff, retained unknown outcomes and original IDs; assignment history supplies host restart budget."
+  },
+  "launchTransportSources": [
+    {
+      "path": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/undici/types/errors.d.ts",
+      "sha256": "a712be2c8cbe0154bd17d1d7bff503d7c04331e0745eb9eea3d303e0e5d9401e",
+      "lines": [
+        11,
+        35,
+        99,
+        106
+      ],
+      "scope": "typed timeout/socket code definitions, not part of prior REA input tree"
+    },
+    {
+      "url": "https://nodejs.org/api/errors.html#common-system-errors",
+      "scope": "official Node system error names; read-only lookup, no quoted messages"
+    }
+  ],
+  "validation": {
+    "focused": "12 tests passed on final pre-request-fencing helper/test source, vitest4.1.8; final rerun after preserving root summary wording.",
+    "typecheck": "pnpm exec tsc --noEmit passed on shared in-progress working tree after pre-request fencing. Exact committed source qualification remains root responsibility.",
+    "configuration": "No keys/profile/default model changes; no model requests made.",
+    "rootQualification": "Precommit only; exact source revision and full platform qualification follow separately."
+  },
+  "qualificationPrecommit": {
+    "focused": {
+      "passed": 262,
+      "files": 10,
+      "seconds": 9.13,
+      "scope": "final launch-journal fixes, runtime/core/failure/graph/migration/evidence/UI/docs"
+    },
+    "typecheck": "passed",
+    "builds": "seven passed",
+    "browser": {
+      "browser": "Chrome",
+      "at": "2026-11-10T20:24:17Z",
+      "method": "actual served production watchdog UI in isolated synthetic journal; selected incident via UI",
+      "observed": [
+        "Harness native request retry owner",
+        "zero additional worker-turn retries",
+        "durable launch failure count 2",
+        "host restart budget used3/remaining0/exhausted",
+        "acknowledgement does not retry/reset"
+      ],
+      "fixture": "temporary synthetic loopback, no user app or credentials; stopped and state removed"
+    },
+    "installedHarness": "preliminary 1 pass in19.00s before final launch-journal review fixes; rerun on committed revision required"
+  }
+}

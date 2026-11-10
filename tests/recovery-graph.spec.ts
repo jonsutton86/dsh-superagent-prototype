@@ -101,6 +101,35 @@ it('retains expired evaluation tags as history and removes the exact assessment 
   expect(f.store.threads.get('chat:thread')!.pending.length + Number(!!f.store.threads.get('chat:thread')!.evaluating)).toBeGreaterThan(0)
 })
 
+it('retains the original uncertain launch after acceptance without replaying or rewriting it', async () => {
+  const f = fixture(), ticket = f.accept(), assignment = ticket.assignments[0]!
+  f.effects.beginLaunch(assignment.id)
+  f.engine.assignmentStarted(ticket.id, assignment.id)
+  f.engine.report(ticket.id, { state: 'failed', summary: 'Launch outcome is unknown' })
+  const row = () => f.store.db.prepare("SELECT * FROM effect WHERE kind='launch' AND key=?").get(assignment.id)
+  const before = row()
+  await f.reconcile()
+  expect(row()).toEqual(before)
+  expect(f.effects.retryState('launch', assignment.id)?.launchStarted).toBe(true)
+  expect(f.store.tickets.get(ticket.id)?.assignments.map(item => item.id)).toEqual([assignment.id])
+  f.engine.retryTicket(ticket.id)
+  await f.reconcile()
+  expect(row()).toEqual(before)
+  f.engine.stopTicket(ticket.id)
+  await f.reconcile()
+  expect(row()).toEqual(before)
+})
+
+it.each([['launch', 2], ['reply', 1]] as const)('rejects invalid launch metadata on %s without repairing state', async (kind, marker) => {
+  const f = fixture(); f.accept()
+  f.store.db.prepare('UPDATE effect SET launch_started=? WHERE kind=?').run(marker, kind)
+  const before = recoveryStateDigest(f.store.db)
+  await expect(f.reconcile()).rejects.toThrow('recovery_graph_')
+  expect(recoveryStateDigest(f.store.db)).toBe(before)
+  const key = String(f.store.db.prepare('SELECT key FROM effect WHERE kind=?').get(kind)!.key)
+  expect(() => f.effects.retryState(kind, key)).toThrow('Invalid launch recovery marker')
+})
+
 it('retains historical disposition context after a ticket lets go of a trigger', async () => {
   const f = fixture(), ticket = f.accept()
   const disposition = f.store.triggers.disposition('request')!

@@ -13,7 +13,13 @@ subsequently saved `ABLIT_KEY` privately in Harness; authenticated catalog acces
 and pinned Fabric operation patterns are recorded in `REFERENCE-TOOLS.md`. This is not completion of the full project.
 The completed-milestone history below remains unchanged.
 
-Current continuation: [079 Execution observations](079-execution-observations.md) adds bounded host-collected metadata,
+Current continuation: [080 Bounded worker recovery](080-worker-recovery.md) consolidates provider retries in Harness,
+removes terminal worker continuation turns, preserves launch backoff and unknown dispatch identities in the existing effect
+journal, and caps automatic host-restart replacements from assignment history. Coordinator schema 12 holds unconfirmed
+launches, including after explicit task retirement. Source-derived fences and the console expose the recovery limits.
+Qualification of the final source is in progress; the previous qualified revision below remains the baseline.
+
+Previous continuation: [079 Execution observations](079-execution-observations.md) adds bounded host-collected metadata,
 explicit Session/assignment attribution, coherent observation frames and evidence-bound assessment/review without resetting
 the existing delivery budget. Exact runtime/test revision `418bb6de16e546058557191e4068e77f2b6e7174` passed full macOS
 (2,200 passed / 25 skipped) and native Linux (2,213 / 14), typecheck and seven builds on both. Native service/SSH checks
@@ -1040,11 +1046,12 @@ quality or overnight endurance. Source `e73c1f3` passed full macOS/native Linux 
 Increment 079 adds bounded host job/subagent/coordinator/remote-receipt observations, explicit unknown attribution, immutable
 transport frames and evidence-bound assessments without renewing delivery budgets. Source `418bb6d` passed full macOS/native
 Linux suites, installed-process checks and actual browser startup. Richer observations do not establish useful progress.
-Narrow audited recovery policies remain implementation work. The existing launcher already owns bounded process-absence
-restart; the next proposed increment makes the existing executor transient-provider continuation budget and original delivery
-identity durable, with exact Agent/assignment/world fencing. This is a source-derived implementation choice, not an
-article-prescribed protocol or permission to deploy automatic task retries. Process restarts or new-assignment retries require
-their own narrow audited policies; they must not be inferred from arbitrary worker text.
+Increment 080 consolidates native provider retry authority in Harness, replacing the proposed outer continuation journal
+with a terminal failed hold. It preserves launch failures/backoff and unknown dispatch identities in the existing queue,
+and bounds automatic host-restart replacements using saved assignment history. Source inspection showed that retaining
+the extra continuation loop would duplicate Harness retry ownership. Its guide records the evidence and qualification
+status. Real-model diagnosis quality, unattended endurance, live alerts, further narrow recovery policies and cross-host
+quiescence/isolation acceptance remain open.
 
 ### 2. Compute/state/environment contracts and remote execution — whole-profile mission integration implemented
 

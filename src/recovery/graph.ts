@@ -224,6 +224,7 @@ export async function reconcileStateGraph(db: DatabaseSync, signal: AbortSignal)
       const kind = String(row.kind), key = String(row.key), schema = effectPayload[kind as keyof typeof effectPayload]
       if (!schema || !id.safeParse(key).success || !Number.isSafeInteger(row.seq) || Number(row.seq) < 0 || sequences.has(Number(row.seq))
         || !Number.isSafeInteger(row.generation) || Number(row.generation) < 0 || !Number.isSafeInteger(row.attempts) || Number(row.attempts) < 0
+        || ![0, 1].includes(Number(row.launch_started)) || row.launch_started === 1 && kind !== 'launch'
         || !Number.isSafeInteger(row.due) || !id.safeParse(row.since).success || !text.safeParse(row.error).success) fail('effect_shape', `${kind}:${key}`)
       sequences.add(Number(row.seq))
       let value: Record<string, string>
@@ -232,7 +233,7 @@ export async function reconcileStateGraph(db: DatabaseSync, signal: AbortSignal)
       if (kind === 'launch') {
         const ticket = require(tickets, value!.ticketId!, 'launch'), assignment = assignments.get(value!.assignmentId!)
         if (!assignment || assignment.ticket.id !== ticket.id || key !== value!.assignmentId) fail('effect_reference', `launch:${key}`)
-        obsolete = !!ticket.ended || ticket.assignments[assignment.index]!.state !== 'pending'
+        obsolete = row.launch_started !== 1 && (!!ticket.ended || ticket.assignments[assignment.index]!.state !== 'pending')
       } else if (kind === 'delivery') {
         const ticket = require(tickets, value!.ticketId!, 'delivery')
         if (key !== ticket.id) fail('effect_reference', `delivery:${key}`)

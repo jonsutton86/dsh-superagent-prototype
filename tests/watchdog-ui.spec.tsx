@@ -217,3 +217,18 @@ it('retains an unconfirmed acknowledgement identity across an execution evidence
   await waitFor(() => expect(text()).toContain('New evidence since acknowledgement'))
   expect(host.journal.counts().unacknowledged).toBe(1)
 })
+
+
+it('shows durable recovery allowances separately from provider request retries', async () => {
+  const value = execution()
+  value.executor = { ...value.executor, provenance: 'process-and-durable-queue', launchRetryAttempts: 2,
+    recovery: { providerRetryOwner: 'harness', terminalTurnRetries: 0, launchRetryLimit: 3,
+      hostRestart: { limit: 3, used: 5, remaining: 0, exhausted: true } } }
+  container = document.createElement('div'); document.body.append(container); root = createRoot(container)
+  await act(async () => root!.render(<ExecutionEvidenceView evidence={value} />))
+  expect(text()).toContain('Managed by DeepSeek Harness')
+  expect(text()).toContain('failed launch deliveries come from the durable queue')
+  expect(text()).toContain('Automatic host recoveries used5')
+  expect(text()).toContain('Automatic host recovery limit reachedYes')
+  expect(text()).toContain('does not retry a task or reset recovery allowances')
+})

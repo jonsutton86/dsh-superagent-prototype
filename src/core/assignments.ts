@@ -6,6 +6,7 @@ import type { ReportState, Ticket } from './model.ts'
 import { EnginePart, type EngineOptions } from './part.ts'
 import type { Replies } from './replies.ts'
 import { automatic, type Tickets } from './tickets.ts'
+import { automaticRestartBudget, isAutomaticRestartInput } from './recovery.ts'
 
 /** What an Assignment reports: a worker's report, or the Executor's own (`waiting` after an idle turn, `failed` after an error). */
 export interface WorkerReport {
@@ -19,6 +20,7 @@ export interface WorkerReport {
   answers?: string
 }
 const RECOVERY_NOTE = 'The host restarted during this ticket. Inspect the current worktree, git history and GitHub state before continuing. Do not repeat an already completed external operation. Finish the original assignment and report its status.'
+const RECOVERY_LIMIT = 'Automatic host restart recovery reached its limit. Review the current work and execution receipts, then explicitly retry this task to authorize another recovery cycle.'
 
 /**
  * Assignments records what the Executor and its workers report about the Assignments that run tickets: one started, Inputs
@@ -79,7 +81,8 @@ export class Assignments extends EnginePart {
   /**
    * Handles a running assignment interrupted by a host restart: restarts it with a recovery note unless its latest report is
    * `waiting`, `ready`, `blocked`, or `failed` and no input was delivered after that report, in which case it keeps its
-   * session and recovers unread accepted inputs without releasing automated work held for a person.
+   * session and recovers unread accepted inputs without releasing automated work held for a person. At most three
+   * consecutive automatic replacements are admitted; the existing failed report holds an exhausted chain for review.
    */
   interrupted(ticketId: string, assignmentId: string): void {
     const ticket = this.running(ticketId, assignmentId)
@@ -88,7 +91,10 @@ export class Assignments extends EnginePart {
     const report = running.report
     const busy = !!running.deliveredAt && !!report && running.deliveredAt >= report.at
     const settled = !!report && ['waiting', 'ready', 'blocked', 'failed'].includes(report.state) && !busy
-    if (!settled) this.tickets.restart(ticket, running, 'hostRestarted', RECOVERY_NOTE)
+    if (!settled) {
+      if (automaticRestartBudget(ticket).exhausted) this.report(ticketId, { state: 'failed', summary: RECOVERY_LIMIT })
+      else this.tickets.restart(ticket, running, 'hostRestarted', RECOVERY_NOTE)
+    }
     else {
       this.tickets.requeueUntaken(ticket, running, waitsForPerson(ticket))
       this.repo.tickets.save(ticket)
@@ -128,7 +134,8 @@ export class Assignments extends EnginePart {
     ticket.updatedAt = at
     if (report.answers && !ticket.answers?.includes(report.answers)) ticket.answers = [...ticket.answers ?? [], report.answers]
     if (report.answers) this.takeUp(ticketId, report.answers)
-    if (report.state === 'blocked' || report.state === 'failed') ticket.undelivered = ticket.undelivered.filter(id => !automatic(ticket.inputs.find(input => input.id === id)))
+    if (report.state === 'blocked' || report.state === 'failed') ticket.undelivered = ticket.undelivered.filter(id =>
+      !automatic(ticket.inputs.find(input => input.id === id)) && !isAutomaticRestartInput(ticket, id))
     this.repo.tickets.save(ticket)
     // A ticket that follows Threads ends with them: a ready report ends it only once followsDone holds, with that outcome.
     const ready = !ticket.follows?.length ? 'completed' : this.tickets.followsDone(ticket)?.outcome

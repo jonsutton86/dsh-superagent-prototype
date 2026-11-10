@@ -92,12 +92,12 @@ describe('bounded execution evidence', () => {
     let stored: Ticket | undefined = ticket
     const executor = Object.create(DshExecutor.prototype) as DshExecutor
     const remoteFor = vi.fn(() => { throw new Error('Unloaded managed world must not fall back to local') })
-    Object.assign(executor, { host: { store: { tickets: { get: () => stored } }, context: { agents: host.input.agents, get: () => host.input.jobs() }, environments: { remoteFor } },
-      transient: new Map([['assignment', 2], ['launch:assignment', 1]]), resuming: new Set(['assignment']), settling: new Map([['ticket', {}]]),
+    Object.assign(executor, { host: { store: { tickets: { get: () => stored } }, context: { agents: host.input.agents, get: () => host.input.jobs() }, effects: { retryState: () => ({ attempts: 1, due: 0 }) }, environments: { remoteFor } },
+       settling: new Map([['ticket', {}]]),
       preparingRepositories: new Map(), stopping: new Map(), left: new Map([['ticket', { jobs: new Set(['left']) }]]) })
     host.rows.push({ id: 'left', owner: host.parent.id, status: 'running' })
     const value = executor.executionEvidence(ticket)
-    expect(value.executor).toMatchObject({ availability: 'available', provenance: 'process-local', retrying: true, turnRetryAttempts: 2, launchRetryAttempts: 1, settling: true, knownHandedOffJobs: 1 })
+    expect(value.executor).toMatchObject({ availability: 'available', provenance: 'process-and-durable-queue', retrying: false, turnRetryAttempts: 0, launchRetryAttempts: 1, settling: true, knownHandedOffJobs: 1 })
     expect(value.jobs.counts.running).toBe(0); expect(value.jobs.handedOff.running).toBe(1); expect(value.remoteEffects.availability).toBe('unavailable')
     stored = { ...ticket, assignments: [{ id: 'replacement' }] } as Ticket
     expect(executor.executionEvidence(ticket)).toEqual(unavailableExecutionEvidence(host.parent.id, 'assignment'))

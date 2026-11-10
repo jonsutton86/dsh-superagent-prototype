@@ -25,7 +25,9 @@ export const ExecutionEvidenceSchema = z.object({
   subagents: z.object({ availability, attribution: z.literal('observed-session-lineage'), assignmentAttribution: z.literal('unknown'),
     coverage: z.enum(['loaded-only', 'unavailable']), sampled: count, sampleRevision, truncated: z.boolean(),
     counts: z.object({ running: count, idle: count, unknown: count }).strict() }).strict(),
-  executor: z.object({ availability, provenance: z.literal('process-local'), retrying: z.boolean(), turnRetryAttempts: count, launchRetryAttempts: count,
+  executor: z.object({ availability, provenance: z.enum(['process-local', 'process-and-durable-queue']), retrying: z.boolean(), turnRetryAttempts: count, launchRetryAttempts: count,
+    recovery: z.object({ providerRetryOwner: z.literal('harness'), terminalTurnRetries: z.literal(0), launchRetryLimit: z.literal(3),
+      hostRestart: z.object({ limit: z.literal(3), used: z.number().int().nonnegative(), remaining: z.number().int().min(0).max(3), exhausted: z.boolean() }).strict() }).strict().optional(),
     settling: z.boolean(), preparing: z.boolean(), stopping: z.boolean(), knownHandedOffJobs: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER) }).strict(),
   remoteEffects: RemoteExecutionEvidenceSchema,
 }).strict()

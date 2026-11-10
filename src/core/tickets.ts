@@ -8,6 +8,7 @@ import type { AssessmentOutcome } from './ports.ts'
 import { EnginePart, type EngineOptions } from './part.ts'
 import type { Replies } from './replies.ts'
 import { canRetry, hasPendingFollowup } from './stage.ts'
+import { isAutomaticRestartInput } from './recovery.ts'
 
 const sameChannel = (a: ChannelRef, b: ChannelRef): boolean => JSON.stringify(a) === JSON.stringify(b)
 /** Whether an Input is a message no person wrote, such as CI's, a bot's, or the main Session's note. */
@@ -332,8 +333,11 @@ export class Tickets extends EnginePart {
    * A settled interruption can keep automated inputs held while the worker waits for a person.
    */
   requeueUntaken(ticket: Ticket, replaced: Assignment, holdAutomatic = false): void {
+    // Older failed reports may have left a host-generated recovery note queued as ordinary text. Its original record
+    // remains available for audit, but the failed handoff cannot release that automatic continuation on another boot.
+    if (holdAutomatic) ticket.undelivered = ticket.undelivered.filter(id => !isAutomaticRestartInput(ticket, id))
     const untaken = ticket.inputs.filter(input => input.kind !== 'reopen' && input.readAt === null && input.deliveredTo === replaced.id
-      && !(holdAutomatic && automatic(input)) && !ticket.undelivered.includes(input.id))
+      && !(holdAutomatic && (automatic(input) || isAutomaticRestartInput(ticket, input))) && !ticket.undelivered.includes(input.id))
     ticket.undelivered.unshift(...untaken.map(input => input.id))
   }
   /**
