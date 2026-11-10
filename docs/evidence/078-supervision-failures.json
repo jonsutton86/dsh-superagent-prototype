@@ -54,7 +54,7 @@
     ]
   },
   "qualification": {
-    "status": "installed-process and focused tests passed; full exact-revision qualification pending",
+    "status": "full exact-revision macOS and native Linux qualification passed",
     "scriptedInferenceOnly": true,
     "focused": {
       "testsPassed": 21,
@@ -105,7 +105,9 @@
       "files": 9,
       "seconds": 1.41,
       "logSha256": "45e639c09b27849cd20d5f7df90dd15eb59f723a722d013d9a1323100ad879d1"
-    }
+    },
+    "testedRevision": "e73c1f3baab3699538a37e88306df8744c64b8c3",
+    "finalReceipt": "078-qualification.json"
   },
   "boundaries": {
     "defaultModel": "unchanged",

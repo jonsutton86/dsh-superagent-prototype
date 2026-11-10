@@ -153,8 +153,10 @@ Reviewed repository transfer and independent same-repository branch/PR publicati
 074–075, with fresh approval and original-ID recovery. Live publication, fork/CI/merge policy and broader repository
 workflows remain open. These increments do not qualify deployment or complete the architecture.
 
-1. **Supervision and operational visibility:** alert destination acceptance, broader provider/process-failure and productive long-running-job
-   evaluation, diagnosis quality and narrow audited recovery policies. Independent observation and the incident console exist.
+1. **Supervision and operational visibility:** richer host-collected execution evidence, alert destination acceptance,
+   diagnosis quality, unattended-duration evaluation and narrow audited recovery policies. Independent observation and the
+   incident console exist; `078-supervision-failures.md` qualifies provider faults and a 30-second productive job in installed
+   Harness processes, without establishing semantic quality or overnight reliability.
 2. **Compute/state/environment contracts:** guided managed machine/fleet setup, broader/reverse transport, native endpoint/resource/
    delegated-service qualification and host-user setup, broader remote repository workflows, disk quotas and per-workspace
    aggregate allocation. Preserve paired process/filesystem, grant, ownership and host-verification boundaries.

@@ -63,9 +63,13 @@ the complete run then passed. Assistant statements are not used as proof of outp
 Codegraph supplies checkout context; REA captures selected source evidence, supplemented by direct inspection of the
 installed Harness error-event contract. The [evidence record](evidence/078-supervision-failures.json) preserves these source identities and limits.
 Pinned Fabric design/code review applies the repository evidence wrapper. Static analysis is not a runtime trace, and a
-scripted model is not evidence of semantic diagnosis quality. Focused runtime/monitor tests passed 21 cases, typechecking
-passed and seven bundles built. The final full qualification receipt will identify the exact committed source, platforms,
-executed scenarios and results; the previous increment's full-suite results do not validate this change.
+scripted model is not evidence of semantic diagnosis quality. Focused runtime/monitor tests passed 21 cases, and the combined
+supervision/documentation run passed 75. Final runtime/test revision **`e73c1f3baab3699538a37e88306df8744c64b8c3`** passed
+typechecking and all seven builds on both platforms. macOS passed 2,173 tests (25 skipped; 259.07 seconds).
+[Native Linux CI](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42880502038) passed 2,186 tests
+(14 skipped; 378.14 seconds). The installed watchdog, publisher and provider adapter boundaries executed on both platforms.
+Native macOS service/SSH checks passed 16 with one platform skip; Linux native/installed/delegated service/SSH checks passed
+30. The [qualification receipt](evidence/078-qualification.json) records the exact source/archive, versions, logs and limits.
 
 Live diagnosis quality, useful versus false-positive interventions on representative workloads, live operator destination
 acceptance and separately authorized recovery policies remain open. An accelerated long-running fixture proves its recorded

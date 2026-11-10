@@ -15,8 +15,11 @@ The completed-milestone history below remains unchanged.
 
 Current continuation: [078 Supervision failures](078-supervision-failures.md) addresses asynchronous Harness assessment
 errors and adds isolated installed-process fault qualification with a local scripted provider. The installed process test
-passed in 66.26 seconds, including a real 30-second productive job and original-receipt restart recovery. Full qualification
-of the committed source is pending; the previous full baseline below is not evidence for these changes. Diagnosis quality and live destination
+passed in 66.26 seconds, including a real 30-second productive job and original-receipt restart recovery. Exact runtime/test
+revision `e73c1f3baab3699538a37e88306df8744c64b8c3` passed full macOS (2,173 passed / 25 skipped) and native Linux
+(2,186 / 14), typecheck and seven builds on both. Native macOS service/SSH checks passed 16 with one skip; Linux passed 30.
+Installed watchdog, publisher and provider boundaries ran on both; `docs/evidence/078-qualification.json` records scope.
+Diagnosis quality and live destination
 acceptance remain open. This work follows item 1, without changing Harness, provider defaults or the remaining scope.
 
 Previous continuation: [077 Independent supervision alerts](077-supervision-alerts.md) adds opt-in, host-configured
@@ -1024,7 +1027,8 @@ still need evaluation. Increment 077 adds receipt-aware alert routing and consol
 and broader diagnosis quality remain open before calling the operational experience complete.
 Increment 078 addresses asynchronous assessment errors and qualifies provider faults, a real 30-second productive job and
 original receipt recovery in isolated installed Harness processes. Its scripted model cannot establish semantic diagnosis
-quality or overnight endurance; full qualification of the committed source is pending.
+quality or overnight endurance. Source `e73c1f3` passed full macOS/native Linux suites and installed-process qualification;
+richer host-collected progress evidence and narrow audited recovery policies remain implementation work in this item.
 Process restarts or task retries require their own narrow,
 audited recovery policies; they must not be inferred from arbitrary worker text.
 
