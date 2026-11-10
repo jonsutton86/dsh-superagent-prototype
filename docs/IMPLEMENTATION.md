@@ -10,8 +10,9 @@ resource caching requires a hard refresh after this live development rebuild. Lo
 all six builds and 2,004 tests (16 skipped; 129.91 seconds). Exact repair revision
 `e889f97871d1cab9ce8f8df8d348ccad03b954dd` passed native Linux / Node 24 typechecking, six builds and 2,012 tests
 (10 skipped; 293.71 seconds) in [run 42725936622](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42725936622).
-Actual visual browser acceptance remains separate evidence. On macOS, the cache-bypassing refresh is Option-Command-R
-in Safari and Shift-Command-R in Chrome; the running user app was not restarted.
+The operator confirmed that the app opens after refresh. That proves startup for the observed installation; complete
+browser journeys, layout, microphone behavior and accessibility still need acceptance. On macOS, the cache-bypassing refresh
+is Option-Command-R in Safari and Shift-Command-R in Chrome; the running user app was not restarted.
 
 [066 Persistent launcher](066-persistent-launcher.md) adds a private macOS/Linux source-checkout installation with pinned
 Harness, resumable profile setup, persistent coordinator/Session/attachment paths, detached start and graceful stop/restart,
