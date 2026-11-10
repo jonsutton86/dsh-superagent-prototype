@@ -1,0 +1,198 @@
+{
+  "kind": "increment-080-qualification",
+  "capturedAt": "2026-11-10T20:34:26.966187+00:00",
+  "testedRevision": "c8ed7328d932172c9c0752e3f016a2bfa708158c",
+  "sourceArchiveSha256": "77f0802357aa09040b9b833801ea9cd2cdd9c452ac2c6ef444bef3c0980d8ab3",
+  "macOS": {
+    "os": "Darwin27.2.0 arm64",
+    "node": "25.9.0",
+    "pnpm": "11.25.0",
+    "typecheck": "passed",
+    "builds": 7,
+    "full": {
+      "passed": 2237,
+      "skipped": 25,
+      "filesPassed": 161,
+      "filesSkipped": 4,
+      "seconds": 262.45
+    },
+    "installedHarness": "0.2.1-rc.3",
+    "publicationHarnessEnabled": true,
+    "abliterationInstalledAdapterEnabled": true,
+    "watchdogProcessHarnessEnabled": true,
+    "executorRecoveryHarnessEnabled": true,
+    "logs": {
+      "full": {
+        "file": "/tmp/dsh-080-macos-full.log",
+        "sha256": "f3d064b81845cc9de5202d9db101020ac0768f433c7d16a2506fbe8df0e1edaf"
+      },
+      "typecheck": {
+        "file": "/tmp/dsh-080-macos-typecheck.log",
+        "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+      },
+      "build": {
+        "file": "/tmp/dsh-080-macos-build.log",
+        "sha256": "5523f352f2b666ac19c6f512b3672bbec390c19a0b7d69b8184662bf48870bae"
+      },
+      "native": {
+        "file": "/tmp/dsh-080-macos-native.log",
+        "sha256": "ca4d9e533553a16ff4a7e09a92366a466942e467b337ef0e2bdf1c6a0ecc25da"
+      }
+    },
+    "nativeServices": {
+      "passed": 16,
+      "skipped": 1,
+      "filesPassed": 2,
+      "seconds": 21.82
+    }
+  },
+  "boundaries": {
+    "runtime": "DeepSeek Harness retained",
+    "defaultModel": "deepseek-official/deepseek-flash unchanged",
+    "abliteration": "optional route remains opt-in; live inference not dispatched; evaluation entitlement confirmation pending",
+    "existingAppDeployment": "not started or restarted",
+    "liveOperatorAlerts": "not configured or sent",
+    "unknownLaunches": "original effect identities retained; no automatic redispatch or conclusion of success",
+    "cleanHostRecovery": "isolated fresh installed-Harness fixture; not physical cross-host failover qualification",
+    "diagnosisQuality": "scripted provider and lifecycle tests do not qualify semantic diagnosis quality",
+    "longRunningDuration": "worker recovery hold16.1s beyond terminal failure; existing productive-job fixture30s; not overnight endurance",
+    "fullProject": "incomplete; tracker requirements remain open"
+  },
+  "linux": {
+    "schema": 1,
+    "status": "passed",
+    "revision": "c8ed7328d932172c9c0752e3f016a2bfa708158c",
+    "repository": "jonsutton86/dsh-superagent-prototype",
+    "branch": "feat/full-superagent-architecture",
+    "run": {
+      "id": 42895073356,
+      "url": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42895073356",
+      "event": "push",
+      "attempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "createdAt": "2026-11-10T20:25:04Z",
+      "startedAt": "2026-11-10T20:25:04Z",
+      "completedAt": "2026-11-10T20:33:05Z",
+      "jobId": 130105931740,
+      "jobStartedAt": "2026-11-10T20:25:06Z",
+      "jobCompletedAt": "2026-11-10T20:33:04Z",
+      "jobDurationSeconds": 478,
+      "jobHeadSha": "c8ed7328d932172c9c0752e3f016a2bfa708158c"
+    },
+    "platform": {
+      "os": "Ubuntu 22.04.5 LTS",
+      "architecture": "x64",
+      "runnerImage": "ubuntu-22.04",
+      "runnerImageVersion": "20261101.347.1",
+      "runnerVersion": "2.338.2",
+      "node": "24.22.2",
+      "npm": "11.19.1",
+      "effectivePnpm": "11.7.0",
+      "installedPnpmBootstrap": "11.25.0",
+      "pnpmExplanation": "Repository packageManager pin selects 11.7.0; preparation logs explicitly report pnpm v11.7.0.",
+      "harness": "0.2.1-rc.3"
+    },
+    "validation": {
+      "typecheck": "passed",
+      "buildsPassed": 7,
+      "fullSuite": {
+        "filesPassed": 162,
+        "filesSkipped": 3,
+        "testsPassed": 2250,
+        "testsSkipped": 14,
+        "durationSeconds": 340.41
+      },
+      "nativeServicesAndSsh": {
+        "filesPassed": 3,
+        "filesSkipped": 0,
+        "testsPassed": 30,
+        "testsSkipped": 0,
+        "durationSeconds": 25.8
+      },
+      "finalNativeSuites": {
+        "transport-launcher.spec.ts": {
+          "testsPassed": 8,
+          "testsSkipped": 0,
+          "durationMilliseconds": 6388,
+          "evidence": "tests/transport-launcher.spec.ts passed, not skipped"
+        },
+        "delegated-service.spec.ts": {
+          "testsPassed": 13,
+          "testsSkipped": 0,
+          "durationMilliseconds": 19532,
+          "evidence": "tests/delegated-service.spec.ts passed, not skipped"
+        },
+        "launcher-service.spec.ts": {
+          "testsPassed": 9,
+          "testsSkipped": 0,
+          "durationMilliseconds": 25567,
+          "evidence": "tests/launcher-service.spec.ts passed, not skipped"
+        }
+      }
+    },
+    "requiredBoundaryTests": {
+      "executorRecoveryInstalledHarness": {
+        "testsPassed": 1,
+        "testsSkipped": 0,
+        "durationMilliseconds": 23986,
+        "evidence": "tests/executor-recovery-harness.spec.ts passed, not skipped"
+      },
+      "watchdogInstalledProcesses": {
+        "testsPassed": 1,
+        "testsSkipped": 0,
+        "durationMilliseconds": 74594,
+        "evidence": "tests/watchdog-process-harness.spec.ts passed, not skipped"
+      },
+      "repositoryPublisherInstalledHarness": {
+        "testsPassed": 1,
+        "testsSkipped": 0,
+        "durationMilliseconds": 77702,
+        "evidence": "tests/repository-publisher-harness.spec.ts passed, not skipped"
+      },
+      "abliterationInstalledAdapter": {
+        "testsPassed": 1,
+        "testsSkipped": 0,
+        "durationMilliseconds": 634,
+        "evidence": "tests/abliteration-harness.spec.ts passed, not skipped"
+      }
+    },
+    "flags": [
+      "DSH_REMOTE_ISOLATION=1",
+      "DSH_ENDPOINT_LAUNCHER_QUALIFICATION=1",
+      "DSH_SSH_TRANSPORT_QUALIFICATION=1",
+      "DSH_PUBLICATION_HARNESS_QUALIFICATION=1",
+      "DSH_WATCHDOG_PROCESS_QUALIFICATION=1",
+      "DSH_EXECUTOR_RECOVERY_QUALIFICATION=1",
+      "DSH_ABLITERATION_ADAPTER_PACKAGE=installed pinned Harness adapter",
+      "DSH_DELEGATED_SERVICE_QUALIFICATION=1",
+      "DSH_NATIVE_SERVICE_QUALIFICATION=1",
+      "DSH_INSTALLED_SERVICE_QUALIFICATION=1"
+    ],
+    "evidence": {
+      "logFile": "/tmp/dsh-080-hosted-qualification.log",
+      "logSha256": "f117d017eb31d2ed85975371a8c2ae2230ea0e422f9ce3248583708558b284be",
+      "workflowSha256": "9f7821470d0bd4ec10078c6b7ade9431f32a202658798504cf7996d41f2227f2",
+      "sourceArchiveSha256": "77f0802357aa09040b9b833801ea9cd2cdd9c452ac2c6ef444bef3c0980d8ab3",
+      "runMetadataFile": "/tmp/dsh-080-hosted-run.json",
+      "jobsMetadataFile": "/tmp/dsh-080-hosted-jobs.json"
+    },
+    "scope": {
+      "modelTraffic": "Only loopback/scripted provider qualification and synthetic credentials; no live paid model request",
+      "deployment": false,
+      "supervisionSemanticDiagnosisQuality": "Not claimed by scripted inference tests",
+      "cleanHostCrossMachineFailover": "Not claimed by these tests",
+      "additionalDispatches": 0
+    },
+    "annotations": [
+      "SHA-pinned checkout/setup-node v4 actions declare Node20; GitHub forced their action runtime to Node24. Workflow succeeded without changing action pins.",
+      "Some jsdom UI tests emitted React act scheduling warnings; their assertions and the complete job passed. This is not a claim of warning-free logs."
+    ]
+  },
+  "documentationValidation": {
+    "passed": 6,
+    "files": 1,
+    "scope": "Documentation-only qualification receipt after tested runtime/test revision; no runtime/test changes",
+    "logSha256": "2f0a642cea6c14e7c6c364255fe77def698784037e39e073751bf761bf4d3167"
+  }
+}

@@ -824,7 +824,7 @@
     "status": "Historical proposal; outer worker retry authority was rejected in favor of native Harness request retry ownership."
   },
   "implementationDecision": {
-    "status": "integrated source; final committed-source qualification pending",
+    "status": "integrated and qualified at c8ed7328d932172c9c0752e3f016a2bfa708158c; not deployed",
     "files": [
       "src/executor/failure.ts",
       "tests/executor-failure.spec.ts"
@@ -866,7 +866,7 @@
     "focused": "12 tests passed on final pre-request-fencing helper/test source, vitest4.1.8; final rerun after preserving root summary wording.",
     "typecheck": "pnpm exec tsc --noEmit passed on shared in-progress working tree after pre-request fencing. Exact committed source qualification remains root responsibility.",
     "configuration": "No keys/profile/default model changes; no model requests made.",
-    "rootQualification": "Precommit only; exact source revision and full platform qualification follow separately."
+    "rootQualification": "See 080-qualification.json for exact committed source, full macOS/native Linux, installed Harness and native service results."
   },
   "qualificationPrecommit": {
     "focused": {

@@ -84,10 +84,17 @@ fixture-only policy allows two native retries: three identical requests in one S
 failed report and blocked inbox. It waits beyond the former 15-second continuation timer and verifies no extra turn or
 assignment. No real provider credentials or user profile are loaded.
 
-Pre-commit installed qualification passed in 19.00 seconds before the final launch-journal review fixes. It is preliminary,
-not validation of those later changes. The final focused pass covered 262 tests in ten files, with typecheck and seven builds passing. Chrome loaded the actual
+The final focused pass covered 262 tests in ten files, with typecheck and seven builds passing. Chrome loaded the actual
 served console and displayed Harness ownership, zero extra turn retries and the exhausted host-restart allowance. The
-synthetic server was stopped and its temporary state removed. Exact committed-source macOS/Linux qualification follows.
+synthetic server was stopped and its temporary state removed.
+
+Exact runtime/test revision `c8ed7328d932172c9c0752e3f016a2bfa708158c` passed full macOS qualification (2,237 passed,
+25 skipped; 262.45 seconds) and hosted native Linux qualification (2,250 passed, 14 skipped; 340.41 seconds), with typecheck
+and seven builds on both. Native service/SSH checks passed 16 with one skip on macOS and all 30 on Linux. Installed executor,
+watchdog, publisher and provider-adapter fixtures were enabled on both. Linux logs confirm all four executed and passed;
+the new executor fixture passed in 23.986 seconds. The preliminary 19.00-second Mac run preceded the final journal review
+fixes; the full committed-source run is the final acceptance evidence. [The qualification receipt](evidence/080-qualification.json)
+records source/archive identity, platform versions, log digests and the successful automatic push workflow.
 
 Real-model diagnosis quality, long unattended endurance, live operator alert acceptance, further narrow recovery policies,
 physical cross-host failover and the remaining full architecture remain open. This is an implemented recovery increment,

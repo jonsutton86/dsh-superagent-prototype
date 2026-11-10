@@ -17,7 +17,11 @@ Current continuation: [080 Bounded worker recovery](080-worker-recovery.md) cons
 removes terminal worker continuation turns, preserves launch backoff and unknown dispatch identities in the existing effect
 journal, and caps automatic host-restart replacements from assignment history. Coordinator schema 12 holds unconfirmed
 launches, including after explicit task retirement. Source-derived fences and the console expose the recovery limits.
-Qualification of the final source is in progress; the previous qualified revision below remains the baseline.
+Exact runtime/test revision `c8ed7328d932172c9c0752e3f016a2bfa708158c` passed full macOS (2,237 passed / 25 skipped)
+and native Linux (2,250 / 14), typecheck and seven builds on both. Native service/SSH checks passed 16 with one skip on macOS
+and all 30 on Linux. Installed executor-recovery, watchdog, publisher and provider-adapter fixtures ran on both. Chrome
+verified the served recovery-policy view. `docs/evidence/080-qualification.json` records the exact scope and successful CI run.
+Full architecture work remains active; no user-app deployment or live inference is claimed.
 
 Previous continuation: [079 Execution observations](079-execution-observations.md) adds bounded host-collected metadata,
 explicit Session/assignment attribution, coherent observation frames and evidence-bound assessment/review without resetting

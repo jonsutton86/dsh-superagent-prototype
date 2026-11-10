@@ -35,8 +35,9 @@ receipt-aware destinations and console recovery without resending uncertain deli
 [Supervision failure qualification](docs/078-supervision-failures.md) records asynchronous assessment failures and checks
 productive work through isolated Harness process faults; model diagnosis quality remains a separate acceptance boundary.
 [Bounded worker recovery](docs/080-worker-recovery.md) keeps provider retries inside Harness, holds uncertain launches under
-their original identities and limits automatic host-restart replacements using saved assignment history. Final qualification
-of this increment is in progress; it does not change the default model or deploy the app.
+their original identities and limits automatic host-restart replacements using saved assignment history. Revision `c8ed732`
+passed 2,237 macOS and 2,250 Linux tests, typecheck, seven builds and native service checks. It does not change the default
+model or deploy the app.
 
 [Execution observations](docs/079-execution-observations.md) adds bounded host metadata, explicit attribution limits and
 current-evidence checks without increasing the watchdog's assessment budget or recovery authority.
