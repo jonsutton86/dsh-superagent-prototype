@@ -2,10 +2,11 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { createServer } from 'node:http'
-import { readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { abliterationProvider } from '../../src/providers/abliteration-config.ts'
+import { abliterationPatch, abliterationProvider } from '../../src/providers/abliteration-config.ts'
 import { installAbliterationGuard } from '../../src/providers/abliteration-guard.ts'
 
 const requireHarness = createRequire(join(process.argv[2], 'package.json'))
@@ -13,7 +14,24 @@ const load = name => import(pathToFileURL(requireHarness.resolve(name)).href)
 const { Context } = await load('@deepseek-ai/cordis')
 const { default: LlmRuntime } = await load('@deepseek-ai/dsh-llm')
 const pi = await load('@deepseek-ai/dsh-llm-pi-ai')
+const { renderConfigDump } = await load('@deepseek-ai/dsh-app-boot')
+const yaml = requireHarness('js-yaml')
 const version = JSON.parse(await readFile(join(process.argv[2], 'package.json'), 'utf8')).version
+const directory = await mkdtemp(join(tmpdir(), 'dsh-abliteration-config-'))
+try {
+  const configPath = join(directory, 'cordis.json')
+  const existing = { providers: { existing: { apiKeyEnv: 'EXISTING_KEY', models: [{ id: 'selected-model' }] } }, timeoutMs: 1234 }
+  const defaultEntry = { id: 'agent-default-model', config: { provider: 'existing', model: 'selected-model' } }
+  await writeFile(configPath, JSON.stringify([{ id: 'llm-pi-ai', config: existing }, defaultEntry]))
+  const compose = patches => yaml.load(renderConfigDump('test', configPath, [{ label: 'optional-provider', patches }], message => { throw new Error(message) }))
+  // The boot algorithm replaces config wholesale: the standalone example cannot preserve a configured adapter.
+  assert.deepEqual(Object.keys(compose(abliterationPatch())[0].config.providers), ['abliteration'])
+  const merged = compose(abliterationPatch(existing))
+  assert.deepEqual(merged[0].config.providers.existing, existing.providers.existing)
+  assert.equal(merged[0].config.timeoutMs, existing.timeoutMs)
+  assert.deepEqual(merged[0].config.providers.abliteration, abliterationProvider())
+  assert.deepEqual(merged[1], defaultEntry)
+} finally { await rm(directory, { recursive: true, force: true }) }
 const requests = [], key = 'synthetic-loopback-key'
 let mode = 'text', configured = true
 const server = createServer(async (request, response) => {
@@ -86,7 +104,7 @@ try {
   const missing = await stream()
   assert.ok(missing.some(chunk => chunk.type === 'finish' && chunk.reason.kind === 'error' && chunk.reason.failure.code === 'MISSING_CREDENTIAL'))
   assert.equal(requests.length, before + 1)
-  process.stdout.write(JSON.stringify({ status: 'passed', harnessAdapter: version, cases: ['model-resolution', 'streaming-text', 'usage', 'output-cap',
+  process.stdout.write(JSON.stringify({ status: 'passed', harnessAdapter: version, cases: ['profile-config-preservation', 'model-resolution', 'streaming-text', 'usage', 'output-cap',
     'tool-call-fragments', 'four-images', 'offloaded-image-omitted', 'tool-history-image-limit', 'single-failed-request', 'missing-credential'] }) + '\n')
 } finally {
   await ctx.fiber.dispose(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve))

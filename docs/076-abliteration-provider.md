@@ -2,7 +2,7 @@
 
 Agentic OS can route selected tasks to `abliteration` through the existing Harness `llm-pi-ai` adapter. Harness remains the runtime, session owner, tool executor, credential resolver and model transport. The adapter already uses the OpenAI SDK with the configured base URL; this increment introduces no replacement inference engine or SDK dependency.
 
-The integration is opt-in. The shipped patch declares a provider and two models; it never selects a global model, changes existing providers, enables title generation, writes a running profile, purchases credit or sends inference. Existing installations retain their defaults until an operator explicitly configures and selects the route.
+The integration is opt-in. The configuration helper declares a provider and two models; it never selects a global model, enables title generation, writes a running profile, purchases credit or sends inference. Supply the adapter's complete effective configuration to preserve its existing providers and settings. Existing installations retain their defaults until an operator explicitly selects another model.
 
 ## Verified contract and configuration
 
@@ -13,13 +13,17 @@ Official documentation inspected on 2026-11-10:
 - [Models](https://docs.abliteration.ai/models): `abliterated-model` has a 262,144-token context; `abliterated-model-large-flash` has a 1,048,576-token context. Both accept text and images.
 - [Image constraints](https://docs.abliteration.ai/capabilities/images): no more than four images across request history, accepted PNG/JPEG/WebP/GIF, 12 MB per image, no video.
 
-`src/providers/abliteration-config.ts` generates the checked-in `examples/abliteration/cordis.patch.json`. The patch contains only the `llm-pi-ai` entry and its `providers.abliteration` declaration. Cordis merges this provider entry with the existing provider dictionary. Preserve the rest of the existing profile/launch overlay when incorporating it; do not replace an installation's full patch with this one-entry example.
+`src/providers/abliteration-config.ts` generates the checked-in `examples/abliteration/cordis.patch.json`. The example contains only the `llm-pi-ai` entry and its `providers.abliteration` declaration. **Harness replaces the entry's entire supplied `config`; it does not merge provider dictionaries.** The standalone example is suitable only when the effective adapter config is empty. Applying it directly over an adapter with other routes would remove those explicit route settings.
+
+For an existing installation, first resolve the effective `llm-pi-ai` entry after its base profile and all current overlay layers. Call `abliterationPatch(existingConfig)` with that entry's complete config. The helper preserves its settings and provider declarations while adding `providers.abliteration`, without mutating the input. It refuses malformed provider maps and an existing `abliteration` route, which must be reviewed explicitly rather than overwritten. Incorporate the resulting adapter entry while preserving every other profile/overlay entry, including `agent-default-model`. Do not replace an installation's full patch with this one-entry example.
+
+This replacement behavior was observed in installed `@deepseek-ai/dsh-app-boot@0.2.1-rc.3`: `applyEntryPatches` assigns each override directly to the target entry. Its exported `renderConfigDump` uses the same algorithm as boot. The installed-Harness test composes a synthetic existing adapter and default-model entry, proves that the unmerged example removes the other route, then proves the merged helper preserves the route, adapter settings and default-model entry. The [configuration evidence receipt](evidence/076-provider-config.json) records source identity, REA coverage and this behavioral check.
 
 ```sh
 node scripts/abliteration-provider.mjs config
 ```
 
-The command prints configuration without modifying files or reading credentials. The generated profile has:
+The command prints the empty-adapter example without modifying files or reading credentials. It does not discover or merge the active profile. The generated provider has:
 
 | Setting | Value |
 | --- | --- |
@@ -76,6 +80,12 @@ catalog check succeeded. Both requested model IDs were listed with access availa
 reference name, never the credential value or raw provider response. No completion was requested, provider defaults were
 not changed, and live text/tool/vision inference remains unqualified.
 
+The optional route was subsequently saved in the local `agentic-os` profile, preserving its seven prior patch entries and
+the `deepseek-official/deepseek-flash` default. An isolated real Harness context resolved both configured models and the
+authenticated provider catalog. The existing application was not started or restarted, so this is prepared configuration
+and isolated integration evidence, not deployment acceptance. The account's credit metadata exposed only aggregate
+credits/usage, not evaluation-credit provenance; the single completion check remains pending that spending constraint.
+
 ## Usage, cost and qualification
 
 The [pricing page](https://abliteration.ai/pricing) advertises an evaluation credit, but the integration does not assume this account has it or that an existing balance is free. Do not purchase, top up or initiate paid inference without the operator's authorization. A metadata listing is not authorization to send tasks.
@@ -90,13 +100,13 @@ DSH_ABLITERATION_ADAPTER_PACKAGE=/absolute/path/to/node_modules/@deepseek-ai/dsh
   node node_modules/vitest/vitest.mjs run tests/abliteration-harness.spec.ts
 ```
 
-Use Node 24 or newer. The adapter path is explicit; the test skips when no installed adapter is provided, rather than installing a package or substituting a mock adapter. Its server and credential are synthetic and local. It exercises the real installed Harness LLM service, provider schema, pi-ai adapter and OpenAI SDK for model resolution, streaming text, usage counters, fragmented tool calls, output defaults, four-image requests, offloaded-image exclusion, history-limit rejection, HTTP failures and missing credentials. The fixture supplies an attachment service with fixed PNG bytes; it does not independently qualify image normalization or vendor-side interpretation.
+Use Node 24 or newer. The adapter path is explicit; the test skips when no installed adapter is provided, rather than installing a package or substituting a mock adapter. Its server and credential are synthetic and local. It exercises the installed Harness profile-composition algorithm and the real LLM service, provider schema, pi-ai adapter and OpenAI SDK for configuration preservation, model resolution, streaming text, usage counters, fragmented tool calls, output defaults, four-image requests, offloaded-image exclusion, history-limit rejection, HTTP failures and missing credentials. The fixture supplies an attachment service with fixed PNG bytes; it does not independently qualify image normalization or vendor-side interpretation.
 
-The provider suite also checks secret-safe catalog behavior, other-provider isolation, immutable per-task persona selection, session model events and persistence through database reopen. Existing role/persona and usage suites remain applicable.
+The provider suite also checks nonmutating configuration preservation, malformed/duplicate route refusal, secret-safe catalog behavior, other-provider isolation, immutable per-task persona selection, session model events and persistence through database reopen. Existing role/persona and usage suites remain applicable. The configuration correction passed 13 focused tests across both suites and TypeScript checking on macOS; its evidence receipt identifies the tested working-tree file digests separately from the earlier full-suite revision.
 
 Implemented and locally tested: opt-in configuration, retained Harness routing, persona persistence, image/output guard, safe catalog command and local wire compatibility. Authenticated live catalog access is also verified. Not claimed: live text/tool/vision inference, provider billing accuracy, deployment into the running app, or completion of broader Agentic OS qualification. These remain explicit qualification/deployment steps, not inferred successes.
 
-Final source revision `3a31fb5445a35877b25ebaef60d6493eb6f6853c` passed full macOS and native Linux qualification with the
+Initial qualified source revision `3a31fb5445a35877b25ebaef60d6493eb6f6853c` passed full macOS and native Linux qualification with the
 installed adapter test enabled on both platforms: 2,136 / 2,149 tests passed respectively, with 25 / 14 skipped. Typechecking
 and seven builds passed on each platform. Native service checks passed separately. The shared
 [qualification receipt](evidence/075-076-qualification.json) records exact versions, counts, digests and CI limitations.

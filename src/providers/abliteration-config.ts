@@ -17,7 +17,13 @@ export function abliterationProvider() {
   }
 }
 
-/** Cordis merges this route into llm-pi-ai; no agent-default-model or unrelated plugin entry is emitted. */
-export function abliterationPatch() {
-  return [{ id: 'llm-pi-ai', config: { providers: { [ABLITERATION_ROUTE]: abliterationProvider() } } }]
+/** Harness replaces an entry's whole config. Supply its effective config to preserve existing routes and settings. */
+export function abliterationPatch(existingConfig: Record<string, unknown> = {}) {
+  const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object'
+    && !Array.isArray(value) && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null)
+  if (!record(existingConfig)) throw new Error('Existing llm-pi-ai configuration must be an object')
+  const providers = existingConfig.providers === undefined ? {} : existingConfig.providers
+  if (!record(providers)) throw new Error('Existing llm-pi-ai providers must be an object')
+  if (Object.hasOwn(providers, ABLITERATION_ROUTE)) throw new Error('Abliteration is already configured; review the existing route before changing it')
+  return [{ id: 'llm-pi-ai', config: { ...existingConfig, providers: { ...providers, [ABLITERATION_ROUTE]: abliterationProvider() } } }]
 }

@@ -34,6 +34,32 @@ it('emits only an optional provider patch with bounded retries/output and no def
   expect(template).toEqual(abliterationPatch())
 })
 
+it('preserves the effective adapter configuration without mutating it when adding the optional route', () => {
+  const existing = { providers: { existing: { apiKeyEnv: 'EXISTING_KEY', models: [{ id: 'selected-model' }] } },
+    timeoutMs: 1234, customSetting: { enabled: true } }
+  const before = structuredClone(existing)
+  Object.freeze(existing.providers); Object.freeze(existing)
+  const patch = abliterationPatch(existing)
+  expect(patch).toHaveLength(1)
+  expect(patch[0]!.id).toBe('llm-pi-ai')
+  expect(patch[0]!.config).toMatchObject(before)
+  expect(Object.keys(patch[0]!.config.providers)).toEqual(['existing', 'abliteration'])
+  expect(existing).toEqual(before)
+  expect(patch[0]!.config).not.toBe(existing)
+  expect(patch[0]!.config.providers).not.toBe(existing.providers)
+})
+
+it('refuses malformed existing adapter/provider maps and an already configured Abliteration route', () => {
+  for (const bad of [null, [], 'private-value', 42, new Date()]) {
+    expect(() => abliterationPatch(bad as unknown as Record<string, unknown>)).toThrow('configuration must be an object')
+    expect(() => abliterationPatch({ providers: bad })).toThrow('providers must be an object')
+  }
+  for (const existing of [undefined, null, { apiKeyEnv: 'PRIVATE_REFERENCE', models: [] }]) {
+    expect(() => abliterationPatch({ providers: { abliteration: existing } })).toThrow('already configured')
+  }
+  expect(abliterationPatch(Object.create(null))[0]!.config.providers.abliteration).toEqual(abliterationProvider())
+})
+
 it('counts every retained image occurrence across user and tool history, excluding only offloaded references', () => {
   const content = [image(), image(), image(), image()]
   expect(() => assertAbliterationRequest(request(content))).not.toThrow()

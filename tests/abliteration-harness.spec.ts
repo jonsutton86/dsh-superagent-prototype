@@ -9,6 +9,6 @@ it.runIf(!!process.env.DSH_ABLITERATION_ADAPTER_PACKAGE)('qualifies the installe
     { timeout: 30_000, maxBuffer: 65536, env: { PATH: process.env.PATH ?? '' } })
   const receipt = JSON.parse(result.stdout.trim())
   expect(receipt.status).toBe('passed')
-  expect(receipt.cases).toEqual(['model-resolution', 'streaming-text', 'usage', 'output-cap', 'tool-call-fragments', 'four-images',
+  expect(receipt.cases).toEqual(['profile-config-preservation', 'model-resolution', 'streaming-text', 'usage', 'output-cap', 'tool-call-fragments', 'four-images',
     'offloaded-image-omitted', 'tool-history-image-limit', 'single-failed-request', 'missing-credential'])
 })
