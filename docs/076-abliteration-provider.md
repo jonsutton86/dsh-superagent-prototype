@@ -112,3 +112,9 @@ and seven builds passed on each platform. Native service checks passed separatel
 [qualification receipt](evidence/075-076-qualification.json) records exact versions, counts, digests and CI limitations.
 No key was available during that initial full-suite qualification. The subsequent authenticated catalog check above is
 separate evidence and does not replace or broaden the recorded inference-test boundary.
+
+The configuration-preservation correction was subsequently included in source revision
+`8b1c2ca72e11335460e85bfbee74d8466b527fef`, which passed full macOS and hosted native Linux qualification with the installed
+adapter enabled: 2,167 / 2,180 tests passed respectively, plus typecheck and all seven builds on both platforms. See the
+[updated qualification receipt](evidence/077-qualification.json). Live completion remains pending evaluation-credit
+confirmation; these real-adapter tests use synthetic loopback provider responses and do not prove vendor inference.

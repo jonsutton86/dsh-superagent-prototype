@@ -132,3 +132,11 @@ provided same-origin navigation without changing the production management guard
 No live operator destination was enabled and the existing app was not started or restarted. Live destination acceptance,
 broader diagnosis quality and productive long-running-job evaluations, incident recovery policies, clean-host failover and
 the remaining tracker items stay open. The project's deployment and completion gates remain with the owner.
+
+Final runtime/test revision **`8b1c2ca72e11335460e85bfbee74d8466b527fef`** passed typechecking and all seven builds on both
+macOS ARM64 and native Ubuntu 22.04 x64. macOS passed 2,167 tests (25 skipped; 239.94 seconds), and
+[hosted Linux CI](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42876345111) passed 2,180 (14 skipped;
+238.62 seconds). Installed publisher and Abliteration adapter boundary tests executed on both platforms. Native macOS
+service/SSH checks passed 16 tests with one platform skip; Linux native/installed/delegated service and SSH checks passed
+30 tests. The [qualification receipt](evidence/077-qualification.json) records versions, flags, exact source/archive identity,
+log hashes and remaining boundaries. All provider qualification traffic in this pass used local synthetic receivers.

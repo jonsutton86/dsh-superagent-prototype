@@ -14,8 +14,10 @@ and pinned Fabric operation patterns are recorded in `REFERENCE-TOOLS.md`. This 
 The completed-milestone history below remains unchanged.
 
 Current continuation: [077 Independent supervision alerts](077-supervision-alerts.md) adds opt-in, host-configured
-receipt-aware webhook routing and original-ID console recovery. It is under integration/qualification; no live operator
-route or deployed app is claimed. This follows item 1 below; `010-agentic-os.md` now uses this same sequence instead of its
+receipt-aware webhook routing and original-ID console recovery. Source revision `8b1c2ca72e11335460e85bfbee74d8466b527fef`
+passed full macOS (2,167 passed / 25 skipped) and hosted native Linux (2,180 / 14), plus typecheck and seven builds on each.
+Native macOS service/SSH checks passed 16 with one skip; Linux passed 30. Installed publisher/provider boundaries ran on
+both platforms. `docs/evidence/077-qualification.json` records the exact scope. No live operator route or deployed app is claimed. This follows item 1 below; `010-agentic-os.md` now uses this same sequence instead of its
 conflicting fleet-first order. Broader diagnosis/productive-job evaluation remains open. The optional provider preservation
 correction is committed at `5716c393297157752fc7ae9afc155cbf4342c0d3`: 13 focused tests including real Harness composition
 passed before commit, without changing the default model. The single live completion remains pending evaluation-credit
