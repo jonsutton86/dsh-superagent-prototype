@@ -1,6 +1,6 @@
 /** Independent Harness composition tests. Provider inference is simulated; tool registration and lifecycle use Cordis. */
 import { Context } from '@deepseek-ai/cordis'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import { emitAgentEvent, type Agent } from '@deepseek-ai/dsh-agent'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -62,7 +62,7 @@ function harness(extra: Partial<WatchdogConfig> = {}) {
     })
     return { code, body: JSON.parse(result) }
   }
-  return { ctx, config, watchdog, tools, restrictions, guards, prompts, controller, agents, delivered, routes, run, status }
+  return { ctx, config, watchdog, tools, restrictions, guards, prompts, controller, agents, delivered, routes, run, status, flush }
 }
 function remote() {
   const snapshot = { instance: 'main-1', version: 'v1', at: new Date().toISOString(), nextOffset: null, configured: true, paused: false,
@@ -103,11 +103,105 @@ it('runs its own restricted Session and persists a diagnosis before requesting a
 
 it('keeps observing the main service when its model Session cannot be created', async () => {
   remote(); const host = harness()
-  host.controller.resolveAgent.mockRejectedValue(new Error('model unavailable'))
+  host.controller.resolveAgent.mockRejectedValue(new Error('model unavailable: private-provider-key'))
   await host.watchdog.start(); await vi.advanceTimersByTimeAsync(1)
   const status = await host.status()
-  expect(status.body.monitor).toMatchObject({ reachable: true, modelError: expect.stringContaining('model unavailable') })
+  expect(status.body.monitor).toMatchObject({ reachable: true, modelError: 'Assessment delivery failed; a bounded retry is pending' })
+  expect(JSON.stringify(status.body)).not.toContain('private-provider-key')
   expect(status.body.incidents).toHaveLength(1)
+})
+
+it('latches sanitized asynchronous Harness failures and clears only after a fresh accepted assessment', async () => {
+  remote(); const host = harness({ retryMs: 1000 })
+  await host.watchdog.start(); await vi.advanceTimersByTimeAsync(1)
+  const agent = host.agents.get(host.watchdog.sessionId)!
+  const failure = { turn: 1, step: 1, error: new Error('Bearer private-provider-key at https://private-provider.example/request') }
+  emitAgentEvent(host.ctx, agent, 'agent/error', failure)
+  const expected = 'Assessment failed in Harness; review the configured provider and watchdog Session'
+  expect((await host.status()).body.monitor.modelError).toBe(expected)
+  expect(JSON.stringify((await host.status()).body)).not.toContain('private-provider')
+  // Harness has consumed the failed turn's message; the next delivery is a separate bounded retry.
+  ;(agent.inbox.nextTurn as UserMessage[]).splice(0)
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(host.delivered).toHaveLength(2)
+  expect((await host.status()).body.monitor.modelError).toBe(expected)
+  const observation = await host.run('watchdog_observe', {})
+  const incident = (observation.incidents as { id: string; revision: string }[])[0]!
+  const assessment = { incidentId: incident.id, incidentRevision: incident.revision, finding: 'progressing', evidence: 'Long build is progressing.' }
+  expect(await host.run('watchdog_assess', { ...assessment, incidentRevision: 'stale-evidence' })).toMatchObject({ accepted: false })
+  expect((await host.status()).body.monitor.modelError).toBe(expected)
+  expect(await host.run('watchdog_assess', assessment)).toMatchObject({ accepted: true })
+  expect((await host.status()).body.monitor.modelError).toBeUndefined()
+  // A later failed step remains visible even if this turn already recorded its assessment.
+  emitAgentEvent(host.ctx, agent, 'agent/error', { ...failure, turn: 2, step: 2 })
+  expect((await host.status()).body.monitor.modelError).toBe(expected)
+  expect(await host.run('watchdog_assess', assessment)).toMatchObject({ accepted: false, reason: 'already_assessed' })
+  expect((await host.status()).body.monitor.modelError).toBe(expected)
+})
+
+it('does not clear an inference failure emitted before the queue flush acknowledgement returns', async () => {
+  remote(); const host = harness()
+  host.flush.mockImplementation(async () => {
+    if (host.delivered.length) emitAgentEvent(host.ctx, host.agents.get(host.watchdog.sessionId)!, 'agent/error', {
+      turn: 1, step: 1, error: { message: 'private-provider-key', response: 'untrusted provider body' },
+    })
+  })
+  await host.watchdog.start(); await vi.advanceTimersByTimeAsync(1)
+  expect((await host.status()).body.monitor.modelError).toBe('Assessment failed in Harness; review the configured provider and watchdog Session')
+  expect(host.delivered).toHaveLength(1)
+})
+
+it('ignores errors from unrelated and retired Agents and tears the error listener down before closing state', async () => {
+  remote(); const host = harness()
+  await host.watchdog.start(); await vi.advanceTimersByTimeAsync(1)
+  const agent = host.agents.get(host.watchdog.sessionId)!
+  emitAgentEvent(host.ctx, { ...agent, id: 'other-session' } as Agent, 'agent/error', { turn: 1, step: 1, error: 'unrelated' })
+  emitAgentEvent(host.ctx, { ...agent } as Agent, 'agent/error', { turn: 1, step: 1, error: 'retired object, same id' })
+  expect((await host.status()).body.monitor.modelError).toBeUndefined()
+  host.agents.delete(agent.id)
+  emitAgentEvent(host.ctx, agent, 'agent/error', { turn: 1, step: 1, error: 'disposed current object' })
+  expect((await host.status()).body.monitor.modelError).toBeUndefined()
+  host.agents.set(agent.id, agent)
+  const on = vi.spyOn(host.ctx, 'on'), next = new HarnessWatchdog(host.ctx, { ...host.config, stateDir: join(directory, 'another-watchdog') })
+  active.push(next); await next.start()
+  const index = on.mock.calls.findIndex(([event]) => event === 'agent/error')
+  expect(index).toBeGreaterThanOrEqual(0)
+  const handler = on.mock.calls[index]![1] as (payload: { agent: Agent }) => void
+  await next.stop()
+  // Calling a captured late callback is harmless after lifetime cancellation, even after the database closed.
+  expect(() => handler({ agent: host.agents.get(next.sessionId)! })).not.toThrow()
+  expect(() => emitAgentEvent(host.ctx, agent, 'agent/error', { turn: 1, step: 1, error: { get message() { throw new Error('Do not inspect provider errors') } } })).not.toThrow()
+})
+
+it('fences retained tools from retired Agents before they can consume current evidence or clear a failure', async () => {
+  remote(); const host = harness()
+  await host.watchdog.start(); await vi.advanceTimersByTimeAsync(1)
+  const oldAgent = host.agents.get(host.watchdog.sessionId)!, oldAssess = host.tools.get('watchdog_assess')!
+  const oldObserve = host.tools.get('watchdog_observe')!, oldStatus = host.tools.get('watchdog_request_status')!
+  const incident = (await host.run('watchdog_observe', {})).incidents as { id: string; revision: string }[]
+  const assessment = { incidentId: incident[0]!.id, incidentRevision: incident[0]!.revision,
+    finding: 'progressing', evidence: 'Work is continuing.' }
+  await host.controller.create({ sessionId: host.watchdog.sessionId, agentPreset: 'dsh-superagent-watchdog' })
+  const current = host.agents.get(host.watchdog.sessionId)!
+  expect(current).not.toBe(oldAgent)
+  emitAgentEvent(host.ctx, current, 'agent/error', { turn: 2, step: 1, error: 'current provider failure' })
+  expect(await oldAssess.execute(assessment)).toEqual({ accepted: false, reason: 'watchdog_session_not_current' })
+  expect(await oldObserve.execute({})).toEqual({ accepted: false, reason: 'watchdog_session_not_current' })
+  expect(await oldStatus.execute({ incidentId: incident[0]!.id, incidentRevision: incident[0]!.revision }))
+    .toEqual({ accepted: false, reason: 'watchdog_session_not_current' })
+  expect((await host.status()).body.monitor.modelError).toContain('Assessment failed in Harness')
+  expect(await host.run('watchdog_assess', assessment)).toMatchObject({ accepted: true })
+  expect((await host.status()).body.monitor.modelError).toBeUndefined()
+  expect(oldAgent.cancel).not.toHaveBeenCalled(); expect(current.cancel).not.toHaveBeenCalled()
+})
+
+it('keeps the timeout diagnosis when cancellation is followed by a late Harness error', async () => {
+  remote(); const host = harness({ assessmentTimeoutMs: 1000 })
+  await host.watchdog.start(); await vi.advanceTimersByTimeAsync(1000)
+  const agent = host.agents.get(host.watchdog.sessionId)!
+  expect((await host.status()).body.monitor.modelError).toBe('Assessment timed out; a bounded retry is pending')
+  emitAgentEvent(host.ctx, agent, 'agent/error', { turn: 1, step: 1, error: new Error('late cancellation with private-provider-key') })
+  expect((await host.status()).body.monitor.modelError).toBe('Assessment timed out; a bounded retry is pending')
 })
 
 it('refuses shared state and concurrent writers, releasing its lock on stop', async () => {

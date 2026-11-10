@@ -32,6 +32,8 @@ the task's commits in resumable, verified Git bundles. [Independent repository p
 adds fresh approval, branch/PR receipts and original-ID recovery. [Optional Abliteration routing](docs/076-abliteration-provider.md)
 preserves existing providers and default models. [Independent operator alerts](docs/077-supervision-alerts.md) adds opt-in
 receipt-aware destinations and console recovery without resending uncertain deliveries.
+[Supervision failure qualification](docs/078-supervision-failures.md) records asynchronous assessment failures and checks
+productive work through isolated Harness process faults; model diagnosis quality remains a separate acceptance boundary.
 The workflow below configures the repository-backed mode.
 
 Setup has many steps, so an agent does it with you. Ask your coding agent:

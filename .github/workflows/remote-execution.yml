@@ -44,7 +44,7 @@ jobs:
             --uid="$(id -u)" --property='Delegate=cpu memory pids' \
             --property="WorkingDirectory=$PWD" --setenv="PATH=$PATH" \
             --setenv=DSH_REMOTE_ISOLATION=1 --setenv=DSH_ENDPOINT_LAUNCHER_QUALIFICATION=1 --setenv=DSH_SSH_TRANSPORT_QUALIFICATION=1 \
-            --setenv=DSH_PUBLICATION_HARNESS_QUALIFICATION=1 \
+            --setenv=DSH_PUBLICATION_HARNESS_QUALIFICATION=1 --setenv=DSH_WATCHDOG_PROCESS_QUALIFICATION=1 \
             --setenv="DSH_ABLITERATION_ADAPTER_PACKAGE=$DSH_ABLITERATION_ADAPTER_PACKAGE" \
             --setenv="DSH_ENDPOINT_QUALIFICATION_CLI=$DSH_ENDPOINT_QUALIFICATION_CLI" \
             /bin/bash "$PWD/tests/fixtures/resource-qualification.sh" pnpm test --maxWorkers=4

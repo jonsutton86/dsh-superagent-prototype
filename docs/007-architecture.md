@@ -329,8 +329,8 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/supervision/service.ts` | Main-process supervision observations and transactional, idempotent, assignment-bounded progress requests |
 | `src/supervision/client.ts` | Authenticated loopback transport, bounded responses, consistent pagination and restart fencing |
 | `src/supervision/journal.ts` | Independent SQLite incident history, assessment reservations, operator review receipts, consistent pages and bounded retention |
-| `src/supervision/monitor.ts` | Continuous monitoring, bounded semantic assessments, timeout cancellation and incident reconciliation |
-| `src/supervision/plugin.ts` | Separate Harness profile/Session lifecycle, restricted tools, local console and periodic retention |
+| `src/supervision/monitor.ts` | Continuous monitoring, bounded semantic assessments, timeout cancellation, sanitized delivery failures and incident reconciliation |
+| `src/supervision/plugin.ts` | Separate Harness profile/Session lifecycle, restricted tools, scoped inference failures, current-assessment recovery, local console and periodic retention |
 | `src/supervision/http.ts` | Same-origin standalone console assets and bounded operator incident/history/acknowledgement APIs |
 | `src/supervision/console.tsx`, `console-entry.tsx`, `console.css` | Independent operator console, service health, evidence review, durable ambiguous-response retry and paginated history |
 | `src/supervision/alert-protocol.ts` | Host-only alert routes, immutable evidence/destination identities and strict receiver receipt protocol |
@@ -631,12 +631,13 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/remote-credentials.spec.ts` | Private import validation, environment/file bindings, secret-free provider argv and receipts, rotation/rebind, restart, tamper refusal and native Linux mounts/cancellation |
 | `tests/execution-receipts-ui.spec.tsx` | Rendered receipt pagination, separate outcome/quiescence and same-ID cancellation retry after an ambiguous response |
 | `tests/watchdog.spec.ts` | Independent journal recovery, assessment budgets, service outages, bounded interventions and concurrent polling |
-| `tests/watchdog-runtime.spec.ts` | Independent Cordis/Harness composition with simulated inference: restricted tools, Session creation, state ownership and shutdown |
+| `tests/watchdog-runtime.spec.ts` | Independent Cordis/Harness composition with simulated inference: restricted tools, scoped errors, evidence-bound recovery, Session creation, state ownership and shutdown |
 | `tests/watchdog-console.spec.ts`, `tests/fixtures/watchdog.ts` | Journal migration, review fencing/replay, consistent pages, bounded retention and real HTTP access controls |
 | `tests/watchdog-ui.spec.tsx` | Rendered standalone console, outage evidence, response-loss retry after remount, stale review refusal and pagination |
 | `tests/watchdog-alert-ui.spec.tsx` | Rendered alert actions, original-ID response-loss recovery, stale refusals, untrusted text and pagination |
 | `tests/watchdog-alerts.spec.ts` | Authenticated local receivers, crash/response-loss recovery, no resend, retargeting refusal, source/receipt limits and loopback management |
 | `tests/watchdog-harness.spec.ts` | Opt-in real-model, two-process Harness supervision with abrupt main/watchdog failure, receipt recovery and observed resolution |
+| `tests/watchdog-process-harness.spec.ts`, `tests/fixtures/watchdog-scripted-provider.ts` | Opt-in fresh installed Harness processes with synthetic loopback inference, provider failures/deadlines, real productive output and original receipt recovery; not semantic diagnosis evaluation |
 | `tests/policy.spec.ts` | Source scope, the gate, the admission table, Mandate revalidation, the Policy version, settings migrations and assessment outcomes |
 | `tests/registry.spec.ts` | `SourceRegistry`: instances, validation, Policy parts, Channels and Thread context |
 | `tests/sources.spec.ts` | The Feishu and GitHub Sources on a `SourceContext`: translation, polls and read positions, the pull request rules, health |

@@ -13,7 +13,13 @@ subsequently saved `ABLIT_KEY` privately in Harness; authenticated catalog acces
 and pinned Fabric operation patterns are recorded in `REFERENCE-TOOLS.md`. This is not completion of the full project.
 The completed-milestone history below remains unchanged.
 
-Current continuation: [077 Independent supervision alerts](077-supervision-alerts.md) adds opt-in, host-configured
+Current continuation: [078 Supervision failures](078-supervision-failures.md) addresses asynchronous Harness assessment
+errors and adds isolated installed-process fault qualification with a local scripted provider. The installed process test
+passed in 66.26 seconds, including a real 30-second productive job and original-receipt restart recovery. Full qualification
+of the committed source is pending; the previous full baseline below is not evidence for these changes. Diagnosis quality and live destination
+acceptance remain open. This work follows item 1, without changing Harness, provider defaults or the remaining scope.
+
+Previous continuation: [077 Independent supervision alerts](077-supervision-alerts.md) adds opt-in, host-configured
 receipt-aware webhook routing and original-ID console recovery. Source revision `8b1c2ca72e11335460e85bfbee74d8466b527fef`
 passed full macOS (2,167 passed / 25 skipped) and hosted native Linux (2,180 / 14), plus typecheck and seven builds on each.
 Native macOS service/SSH checks passed 16 with one skip; Linux passed 30. Installed publisher/provider boundaries ran on
@@ -221,7 +227,7 @@ not a claim that the prototype already ships every feature or that the article s
 | Full duplex | Harness job/subagent services, `src/executor/background.ts`, `src/app/delivery.ts`, remote receipts, durable assignment/tool ownership, receipt-only restart recovery and operator cancellation | Broader long-running job, process-failure and cross-host acceptance |
 | Compute/state separation | SQLite Store; Harness Session checkpoints, held import, checkpoint-bound claimant replacement, revision-bound receipt audits, authenticated held receipt application, consumed-input proof, core Engine graph reconciliation, built-in cursor/inbound receipts, mission/plan/schedule authority and artifact/check/review/completion evidence verification; authenticated private installation, relocated bindings, Session-prefix-preserving Runtime activation/restart, generated managed/dedicated launch profiles and repeated recovery cycles; ownership authority, endpoint handoff fencing, shared Runtime/pool/provider lifecycle and independently fenced artifact/mission delivery with directed inbound replies | Other product-extension state, broader inbound discovery/admission and repository integration, clean-host and cross-machine failover qualification |
 | Remote environments | Paired local/remote providers, authenticated leased grants, durable revocation, mission/Session binding, endpoint-owned versioned credentials, remote profile and artifact/restart qualification, operator enrollment/reconciliation, generated profiles, managed world pool, exact per-action selection, prepared-host endpoint launcher, configured cgroup limits/usage receipts, owned delegated services, pinned managed SSH transport native Ubuntu ARM64 kernel/Harness/service qualification and pinned remote repository preparation | Broader OS/CPU and physical/cloud qualification, privileged host-user setup, managed machine/fleet provisioning and broader/reverse transport, independent remote branch/PR publication and broader Git provisioning, disk quotas, per-workspace aggregate allocation and cross-host acceptance |
-| Watchdog | Independent Harness assessor and journal, standalone incident console, evidence-bound operator review/replay, bounded retention and actual-model main/watchdog process-failure recovery | Alert routing, broader diagnosis/productive-job quality, cross-host/process-failure acceptance, richer progress evidence and separately authorized recovery policies |
+| Watchdog | Independent Harness assessor and journal, standalone incident console, evidence-bound operator review/replay, bounded retention, receipt-aware alerts and actual-model main/watchdog process-failure recovery; current inference-failure qualification in 078 | Live alert destination acceptance, broader diagnosis/productive-job quality, cross-host/process-failure acceptance, richer progress evidence and separately authorized recovery policies |
 | Delivery | Reports and PR binding/closure; content-addressed artifacts, stale mission-review invalidation, reviewed artifacts and plan-authorized mission replies with independent receipts; exact participant/task inbound listeners; versioned checks, original assignment/environment bindings, host-captured file/Git snapshots, original-job evidence, selected-check acceptance/publication, explicit-commit PR reviews, plan-bound PR result targets and fresh all-action mission completion | CI/branch-policy and merge integration, continuous freshness, broader inbound discovery/admission, remote branch/PR publication and broader Git provisioning, and speculative quality evaluation |
 | Operator control | Existing web panel, settings, pause/retry/stop, scoped usage/limits/prices and reconciliation, local/remote environment status and revocation, endpoint enrollment/reconciliation and private profile generation | Supervision, broader workload budgets and evidence surfaces |
 
@@ -1016,6 +1022,9 @@ It qualifies real configured-model worker/assessor inference, the served console
 with durable evidence through an outage. Broader provider/process-failure coverage and deliberately long productive jobs
 still need evaluation. Increment 077 adds receipt-aware alert routing and console recovery; live destination acceptance
 and broader diagnosis quality remain open before calling the operational experience complete.
+Increment 078 addresses asynchronous assessment errors and qualifies provider faults, a real 30-second productive job and
+original receipt recovery in isolated installed Harness processes. Its scripted model cannot establish semantic diagnosis
+quality or overnight endurance; full qualification of the committed source is pending.
 Process restarts or task retries require their own narrow,
 audited recovery policies; they must not be inferred from arbitrary worker text.
 

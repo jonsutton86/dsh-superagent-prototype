@@ -70,12 +70,14 @@ it('reuses the same intervention id after a lost acknowledgement, allowing serve
 })
 
 it('reuses an unsent reservation after a delivery crash and caps assessment retries', async () => {
-  assessor.send.mockRejectedValueOnce(new Error('flush failed'))
+  assessor.send.mockRejectedValueOnce(new Error('flush failed: private-provider-key'))
   await monitor.poll()
   const deliveryId = assessor.send.mock.calls[0]![0]
-  expect(journal.status()!.modelError).toContain('flush failed')
+  expect(journal.status()!.modelError).toBe('Assessment delivery failed; a bounded retry is pending')
+  expect(JSON.stringify(journal.status())).not.toContain('private-provider-key')
   journal.close(); journal = new WatchdogJournal(join(directory, 'watchdog.sqlite')); monitor = create()
   await monitor.poll(); expect(assessor.send.mock.calls[1]![0]).toBe(deliveryId)
+  expect(journal.status()!.modelError).toBe('Assessment delivery failed; a bounded retry is pending')
   expect(journal.open()[0]!.attempts).toBe(1)
   for (let index = 0; index < 5; index++) { now += options.retryMs; await monitor.poll() }
   expect(journal.open()[0]!.attempts).toBe(3)

@@ -1,0 +1,126 @@
+{
+  "kind": "supervision-inference-failure-evidence",
+  "capturedAt": "2026-11-10T18:57:14.376600+00:00",
+  "workingTreeBase": "a77af272aacc2fec15242ef690913f72da8d55bf",
+  "reaBaseline": {
+    "revision": "a77af272aacc2fec15242ef690913f72da8d55bf",
+    "tool": "rea-agents@6.8.0",
+    "parentEvidenceId": "ev_39a89cf83fd3ac0d69984c84b309ec810b4b58b55c0538acb77c17cb4602e9b4",
+    "sourceArtifactSha256": "427c19b57d2ae11d6082a86e6bd51ff5be721af6d7fe141ae5db2c2db9f3390a",
+    "bundleSha256": "023c3ca19c42ffb6ef89570bde00eb93363e999875e23619281ba2675f1e9dce",
+    "selectedFiles": [
+      "supervision/plugin.ts",
+      "supervision/monitor.ts",
+      "supervision/journal.ts",
+      "app/delivery.ts"
+    ],
+    "parsed": 4,
+    "parseFailures": 0,
+    "excluded": 312,
+    "semanticUnknowns": 5181,
+    "coverage": "partial",
+    "limitation": "Static source evidence does not prove runtime dispatch, inference outcome or crash behavior."
+  },
+  "installedHarness": {
+    "version": "0.2.1-rc.3",
+    "sourceDigests": {
+      "@deepseek-ai/dsh-agent/lib/types/runtime-types.d.ts": "7c03f0f92be4a48cc7960ac02fc040b2088b462ae790eab1427e50bfe5e74b31",
+      "@deepseek-ai/dsh-agent-loop/lib/index.js": "cf57e3ecd487ac5c2553455aaa5cef2c6fb41e6bd61be5aa455675d1d7193033"
+    },
+    "observedContracts": [
+      "@deepseek-ai/dsh-agent/lib/types/runtime-types.d.ts:393-408",
+      "@deepseek-ai/dsh-agent-loop/lib/index.js:875-885",
+      "@deepseek-ai/dsh-agent-loop/lib/index.js:1018-1033",
+      "@deepseek-ai/dsh-agent-loop/lib/index.js:1129-1145"
+    ],
+    "finding": "AgentDelivery.send acknowledges durable enqueue. Later terminal model failures emit agent/error with the original Agent and verbatim error; its payload must not become operator status."
+  },
+  "codegraph": {
+    "tool": "@colbymchenry/codegraph@1.6.2",
+    "baselineSync": "completed before investigation; local derived index not committed",
+    "finalSync": "completed after implementation and new fixture files"
+  },
+  "review": {
+    "fabricRevision": "de0b72766db0436b6c1887bb75768cb3960e67e5",
+    "patterns": [
+      "review_design",
+      "review_code"
+    ],
+    "evidenceWrapperVersion": 1,
+    "correctedFindings": [
+      "Durable enqueue did not establish successful inference; asynchronous terminal failures were not observed.",
+      "Setup/delivery exception bodies must not become operator status.",
+      "Retired Agent callbacks must be fenced before consuming current incident evidence."
+    ]
+  },
+  "qualification": {
+    "status": "installed-process and focused tests passed; full exact-revision qualification pending",
+    "scriptedInferenceOnly": true,
+    "focused": {
+      "testsPassed": 21,
+      "filesPassed": 2,
+      "typecheck": "passed",
+      "scope": "Runtime/monitor source changes; final installed process and full revision qualification pending."
+    },
+    "installedProcess": {
+      "testsPassed": 1,
+      "seconds": 66.26,
+      "harness": "0.2.1-rc.3",
+      "inference": "scripted OpenAI-compatible loopback fixture with synthetic credentials",
+      "productiveSeconds": 30,
+      "samplesVerified": 30,
+      "workerInvocations": 1,
+      "assignments": 1,
+      "scenarios": [
+        "terminal HTTP503 visible without provider body",
+        "hung stream deadline and observed abort",
+        "accepted current assessment clears failure while worker is still working",
+        "real bash output matches proof and30individually computed SHA256samples",
+        "artifact bytes match local proof; provenance remains agent_submission",
+        "SIGKILL both processes and wait for production lock expiry",
+        "watchdog restart during main outage preserves original acknowledgement and delivery ID",
+        "main restart retains one assignment and unchanged output without another bash call"
+      ],
+      "logs": {
+        "process": {
+          "file": "/tmp/dsh-078-process-test.log",
+          "sha256": "1eb9793b90a1c8aadf591622c6cd4f219e80bc5f150df36e7923db9cef99d20a"
+        },
+        "build": {
+          "file": "/tmp/dsh-078-process-build.log",
+          "sha256": "7b5916c71bc3594daecf8a0420a1bdbc7cfdfc0569819b5e9986520599cc4329"
+        }
+      },
+      "limitations": [
+        "not semantic diagnosis quality",
+        "30seconds with accelerated stale threshold, not overnight endurance",
+        "same-host fresh profile restart, not cross-host failover"
+      ]
+    },
+    "fixtureCorrections": [
+      "First run passed503/deadline/recovery but stopped at schema validation; installed workspace_publish advertises encoding and sources as required. Added explicit utf8 and empty sources, then all stages passed."
+    ],
+    "integrationFocused": {
+      "passed": 75,
+      "files": 9,
+      "seconds": 1.41,
+      "logSha256": "45e639c09b27849cd20d5f7df90dd15eb59f723a722d013d9a1323100ad879d1"
+    }
+  },
+  "boundaries": {
+    "defaultModel": "unchanged",
+    "runtime": "DeepSeek Harness retained",
+    "liveProviderInference": false,
+    "existingAppStarted": false,
+    "operatorDestinationConfigured": false,
+    "fullProjectComplete": false
+  },
+  "sourceDigests": {
+    "src/supervision/plugin.ts": "383bdcb90091297548167a269e566795a0edaccead40b84f9d15d5e953198183",
+    "src/supervision/monitor.ts": "31c10f63ca55f8bdb45f7466c6850995179abf76521e44ca39b7c4e117b0eba3",
+    "tests/watchdog-runtime.spec.ts": "bcd32c7b54a2ddb6807e8b64a4cf805ec3121c58eed291f916804661a0611fa3",
+    "tests/watchdog.spec.ts": "1e9cac20159fbbe1e1417324253828d87f6d90789fc9986c77475c13c47b368e",
+    "tests/watchdog-process-harness.spec.ts": "c39f7b250de97e8e394ccda6fc2e0ebb23e5547a22c3dc1a3f008e277d649fff",
+    "tests/fixtures/watchdog-scripted-provider.ts": "e09eacd930577eb2cc0646fc2def62f7c27678f6473463e317e10e3894cfbc42"
+  }
+}
