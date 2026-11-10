@@ -12,6 +12,9 @@ and seven builds; the separate native service/SSH run passed 16 tests (one skipp
 also passed, all owned test services were removed, and the existing Mac app remained ready and unpaused.
 This proves the recorded local VM configuration, not physical/cloud networking, clean-host restore, fleet provisioning or
 the rest of the architecture. Cloud hosting and repository Actions qualification remain separate outstanding work.
+Runtime/test revision `c3747d3d2e00e7ee6b8e0eb020d4178dd7a0814a` is pushed. GitHub returned no runs for the exact SHA
+and rejected explicit dispatch with HTTP 422 (Actions disabled). The local native VM was stopped normally after cleanup;
+its private evidence remains available without leaving its services running.
 
 [071 Managed SSH transport](071-managed-ssh-transport.md) adds a separate coordinator-side launcher role with a pinned
 host key, dedicated identity, loopback forward, exact endpoint/resource readiness, private enrollment and existing bounded

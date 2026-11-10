@@ -166,6 +166,11 @@ The user's existing Mac app remained HTTP 200, ready and unpaused. The qualifica
 to release its memory; its disk and private evidence remain available for future qualification. These results do not depend
 on GitHub Actions being available. The shell workflow blocks, qualification scripts and documentation checks also passed.
 
+Runtime/test revision `c3747d3d2e00e7ee6b8e0eb020d4178dd7a0814a` is pushed to `feat/full-superagent-architecture`.
+GitHub reported zero workflow runs for that exact SHA and rejected explicit workflow dispatch with HTTP 422 because
+Actions is disabled for this repository. No Actions settings or billing settings were changed. The local native Linux
+receipts above remain valid; this increment does not claim a GitHub-hosted x86-64 CI pass.
+
 Cloud/fleet provisioning, physical cross-machine qualification, clean-host restore/failover and credential/path remapping,
 broader/reverse transport, disk quotas, workspace allocation, supported upgrades, browser journeys and the rest of the full
 Agentic OS architecture remain open. Passing native infrastructure tests does not complete those product requirements.
