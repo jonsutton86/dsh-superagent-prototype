@@ -7,6 +7,7 @@ export async function supervisionEvaluationProvider() {
   const providerKey = 'synthetic-supervision-evaluation-key', privateCanary = 'synthetic-private-evaluation-provider-body'
   const requests: { model: string; body: string }[] = [], failures: string[] = []
   let onRequest: (() => void) | undefined
+  let beforeOversized: (() => Promise<void>) | undefined
   const server = createServer(async (incoming, response) => {
     try {
       if (incoming.method !== 'POST' || incoming.url !== '/v1/chat/completions' || incoming.headers.authorization !== `Bearer ${providerKey}`)
@@ -36,7 +37,7 @@ export async function supervisionEvaluationProvider() {
         emit({}, 'tool_calls')
       }
       emit({ role: 'assistant', content: '' })
-      if (request.model === 'oversized') emit({ content: 'x'.repeat(1100000) }, 'stop')
+      if (request.model === 'oversized') { await beforeOversized?.(); emit({ content: 'x'.repeat(1100000) }, 'stop') }
       else if (request.model === 'incomplete' && prior.includes('watchdog_assess')) emit({ content: 'Synthetic response ended at the token limit.' }, 'length')
       else if (request.model === 'looping' || !prior.includes('watchdog_observe')) tool('watchdog_observe', { incidentId: incident.id })
       else if (!prior.includes('watchdog_assess')) tool('watchdog_assess', { incidentId: incident.id, incidentRevision: incident.revision, finding: 'stalled',
@@ -51,6 +52,7 @@ export async function supervisionEvaluationProvider() {
   server.listen(0, '127.0.0.1'); await once(server, 'listening')
   return { url: `http://127.0.0.1:${(server.address() as { port: number }).port}/v1`, providerKey, privateCanary, requests, failures,
     onRequest(callback?: () => void) { onRequest = callback },
+    beforeOversized(callback?: () => Promise<void>) { beforeOversized = callback },
     async close() { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())) },
   }
 }

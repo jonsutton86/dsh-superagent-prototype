@@ -111,8 +111,15 @@ The first installed preflight passed a 120-second workload and a separate cancel
 exposed the effective five-second job wait and used repeated polling, so it is not validation of the revised asynchronous
 workload. The replacement asynchronous preflight passed in 151.46 seconds: two sixty-second chunks, two native wakes,
 two nonwaiting reads and 122 independently checked samples, plus cancellation cleanup. This preflight precedes the final
-exit-code-zero guard; six final unit tests and typechecking passed afterward. Full exact-revision macOS/Linux qualification
-is pending. No eight-hour result is claimed yet. The final receipt must identify the exact tested revision, observed start/end and duration, coverage gaps, faults actually exercised, output
+exit-code-zero guard; six final unit tests and typechecking passed afterward. The initial full qualification at `6f41fda605eeeacdc5e7ec8e83b1d7be7eb4bdc4` passed 2,302 Linux tests (14 skipped),
+typecheck, seven builds and 30 native service/SSH tests. macOS passed the new endurance boundary but failed one existing
+evaluation case (2,288 passed / one failed / 25 skipped): a status error could overtake the trace poll and mask a recorded
+response-size limit as a generic provider error. The corrected evaluator reconciles its terminal status with the sealed
+trace, preserving contract, cancellation and deadline semantics. A gated fixture forces the provider bytes to arrive after
+the trace read and before the HTTP status response. Failed installed acceptance runs now retain private diagnostic reports.
+The [race evidence](evidence/082-evaluation-limit-race.json) includes both baseline-classifier reproductions and the
+five passing installed evaluation tests after the correction (38.06 seconds). Revised exact-source macOS/Linux
+qualification is pending. No eight-hour result is claimed yet. The final receipt must identify the exact tested revision, observed start/end and duration, coverage gaps, faults actually exercised, output
 verification, process cleanup and platform. An in-progress run remains in progress even if its plan or deadline has elapsed.
 
 Real-model diagnosis quality, manual evidence review, live operator alert acceptance, active-job crash recovery,

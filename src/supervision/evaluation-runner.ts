@@ -86,6 +86,16 @@ export function parseEvaluationTrace(data: string, writerActive: boolean): Probe
     return events
   } catch { throw new EvaluationTraceError('Evaluation trace metadata is invalid') }
 }
+/** Reconcile the sealed probe with a poll result: HTTP failure may arrive after that poll's trace snapshot. */
+export function evaluationStatusFromFinalTrace(status: CaseOutcome['status'], events: readonly ProbeEvent[]): CaseOutcome['status'] {
+  if (status === 'cancelled') return status
+  if (!events.some(event => event.type === 'contract_verified' && event.digest === watchdogContractDigest())
+    || events.some(event => event.type === 'scope_refused' || event.type === 'contract_refused')) return 'startup_error'
+  if (status === 'deadline') return status
+  if (events.some(event => event.type === 'stream_limit')) return 'response_limit'
+  if (events.some(event => event.type === 'request_limit')) return 'request_limit'
+  return status
+}
 export function selectSupervisionEvaluationCases(ids?: readonly string[]): readonly EvaluationCase[] {
   if (ids === undefined) return evaluationCases
   if (!ids.length || new Set(ids).size !== ids.length) throw new Error('Evaluation case selection must be nonempty and distinct')
@@ -252,7 +262,7 @@ async function runCase(original: EvaluationCase, options: EvaluationRunOptions, 
     await rm(directory, { recursive: true, force: true })
     if (traceInvalid) throw new EvaluationTraceError('Evaluation outcome remains unsettled because its trace is invalid')
   }
-  if (!events.some(event => event.type === 'contract_verified' && event.digest === watchdogContractDigest()) && status !== 'cancelled') status = 'startup_error'
+  status = evaluationStatusFromFinalTrace(status, events)
   const redacted = redactAssessment(assessment, [token, ...(credential ? [credential] : [])])
   return { caseId: value.id, status, turnEnd: events.findLast(event => event.type === 'turn/end')?.reason ?? null,
     incident, assessment: redacted.assessment, monitorReachable, modelAttempts: events.filter(event => event.type === 'request').length,

@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { expect, it, vi } from 'vitest'
-import { runSupervisionEvaluation, supervisionEvaluationPlan, validateEvaluationProvider, parseEvaluationTrace, selectSupervisionEvaluationCases } from '../src/supervision/evaluation-runner.ts'
+import { runSupervisionEvaluation, supervisionEvaluationPlan, validateEvaluationProvider, parseEvaluationTrace, selectSupervisionEvaluationCases, evaluationStatusFromFinalTrace } from '../src/supervision/evaluation-runner.ts'
+import { watchdogContractDigest } from '../src/supervision/assessment-contract.ts'
 import { type EvaluationCase, CaseOutcomeSchema } from '../src/supervision/evaluation.ts'
 import { EVALUATION_REFERENCE_TIME } from '../src/supervision/evaluation-cases.ts'
 import { supervisionEvaluationProvider } from './fixtures/supervision-evaluation-provider.ts'
@@ -36,6 +37,17 @@ it('validates every complete trace record and preserves uncertainty for only an 
     [JSON.stringify({ type: 'request', ordinal: 1, at: 1, rawCredential: 'never accepted' }) + '\n', false]] as const)
     expect(() => parseEvaluationTrace(data, active)).toThrow()
 })
+it('retains the sealed limit cause when an HTTP error overtakes the trace poll without erasing cancellation, deadline or contract failure', () => {
+  const verified = { type: 'contract_verified' as const, at: 1, digest: watchdogContractDigest() }
+  const stream = { type: 'stream_limit' as const, at: 2 }, requests = { type: 'request_limit' as const, at: 2 }
+  expect(evaluationStatusFromFinalTrace('provider_error', [verified, stream])).toBe('response_limit')
+  expect(evaluationStatusFromFinalTrace('provider_error', [verified, requests])).toBe('request_limit')
+  expect(evaluationStatusFromFinalTrace('provider_error', [verified])).toBe('provider_error')
+  expect(evaluationStatusFromFinalTrace('provider_error', [stream])).toBe('startup_error')
+  expect(evaluationStatusFromFinalTrace('provider_error', [verified, stream, { type: 'scope_refused', at: 3 }])).toBe('startup_error')
+  expect(evaluationStatusFromFinalTrace('cancelled', [stream])).toBe('cancelled')
+  expect(evaluationStatusFromFinalTrace('deadline', [verified, stream])).toBe('deadline')
+})
 it('accepts only a bounded key-free provider definition and the explicitly selected credential name', () => {
   expect(validateEvaluationProvider(definition(), 'fixture', 'scripted', 'SUPERVISION_EVALUATION_FIXTURE_KEY')).toMatchObject({ api: 'openai-completions' })
   for (const change of [{ apiKey: 'private' }, { insert: [] }, { baseURL: 'https://user:password@provider.invalid/v1' }, { baseURL: 'http://provider.invalid/v1' },
@@ -51,6 +63,7 @@ it.runIf(process.env.DSH_SUPERVISION_EVALUATION_QUALIFICATION === '1')('qualifie
   if (!cli) throw new Error('Supply an installed Harness qualification CLI')
   const directory = await mkdtemp(join(tmpdir(), 'dsh evaluation acceptance ')), provider = await supervisionEvaluationProvider()
   const credentialEnv = 'SUPERVISION_EVALUATION_FIXTURE_KEY', previous = process.env[credentialEnv]
+  let passed = false
   process.env[credentialEnv] = provider.providerKey
   try {
     const plan = await promisify(execFile)(process.execPath, [resolve('scripts/supervision-eval.mjs')], { cwd: directory, env: { PATH: process.env.PATH }, timeout: 10000 })
@@ -98,8 +111,33 @@ it.runIf(process.env.DSH_SUPERVISION_EVALUATION_QUALIFICATION === '1')('qualifie
     const incomplete = await runSupervisionEvaluation({ ...base, output: join(directory, 'incomplete'), model: 'incomplete', cases: [testCase] })
     expect(incomplete.outcomes[0]).toMatchObject({ status: 'turn_incomplete', turnEnd: 'max-tokens', modelAttempts: 3, assessment: { finding: 'stalled' } })
     expect(incomplete.scoredCases[0]?.assessmentCompleted).toBe(false)
-    const oversized = await runSupervisionEvaluation({ ...base, output: join(directory, 'oversized'), model: 'oversized', cases: [testCase] })
-    expect(oversized.outcomes[0]).toMatchObject({ status: 'response_limit', modelAttempts: 1, assessment: null })
+    // Force the observed race: the status response sees the probe failure after this poll already read its trace.
+    const fetch = globalThis.fetch; let errorStatusObserved = false, gateReleased = false, releaseOversized!: () => void
+    const oversizedGate = new Promise<void>(resolve => { releaseOversized = resolve })
+    provider.beforeOversized(() => oversizedGate)
+    const delayedStatus = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      let response = await fetch(input, init)
+      if (String(input).endsWith('/watchdog/api/status') && response.ok) {
+        // No stream_limit can exist in the preceding trace read: its provider bytes are still gated here.
+        gateReleased = true; releaseOversized()
+        const deadline = Date.now() + 10000
+        while (Date.now() < deadline) {
+          const current = await response.clone().json() as { monitor?: { modelError?: string } }
+          if (current.monitor?.modelError) { errorStatusObserved = true; return response }
+          await response.body?.cancel()
+          await new Promise(resolve => setTimeout(resolve, 25))
+          response = await fetch(input, { ...init, signal: AbortSignal.timeout(2000) })
+        }
+        await response.body?.cancel(); throw new Error('Fixture did not observe the expected provider failure')
+      }
+      return response
+    })
+    try {
+      const oversized = await runSupervisionEvaluation({ ...base, output: join(directory, 'oversized'), model: 'oversized', cases: [testCase] })
+      expect(errorStatusObserved).toBe(true)
+      expect(gateReleased).toBe(true)
+      expect(oversized.outcomes[0]).toMatchObject({ status: 'response_limit', modelAttempts: 1, assessment: null })
+    } finally { releaseOversized(); provider.beforeOversized(); delayedStatus.mockRestore() }
     const probeOutput = join(directory, 'probe-refused'), requestsBeforeProbe = provider.requests.length
     const refusedProbe = runSupervisionEvaluation({ ...base, output: probeOutput, model: 'scripted', cases: [testCase], caseDeadlineMs: 9000 })
     await vi.waitFor(async () => {
@@ -118,8 +156,11 @@ it.runIf(process.env.DSH_SUPERVISION_EVALUATION_QUALIFICATION === '1')('qualifie
     expect(cancelled.state).toBe('partial'); expect(cancelled.outcomes[0]?.status).toBe('cancelled'); expect(cancelled.runProgress.notStartedCases).toBe(1)
     expect(JSON.parse(await readFile(join(directory, 'cancelled/report.json'), 'utf8'))).toMatchObject({ state: 'partial', runProgress: { notStartedCases: 1 } })
     expect(provider.failures).toEqual([])
+    passed = true
   } finally {
     if (previous === undefined) delete process.env[credentialEnv]; else process.env[credentialEnv] = previous
-    await provider.close(); await rm(directory, { recursive: true, force: true })
+    await provider.close()
+    if (passed) await rm(directory, { recursive: true, force: true })
+    else console.warn('EVALUATION_ACCEPTANCE_RETAINED ' + JSON.stringify({ directory }))
   }
 }, 240000)
