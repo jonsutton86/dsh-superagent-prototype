@@ -52,6 +52,8 @@ client bundle returned the new guide and inbox-selection code after the build; t
 configuration and served-bundle evidence, not an inference test or visual browser acceptance. Exact runtime/test revision
 `bfebde2ec8fbb85e47f3a1529db142fef36cb43e` passed native Linux / Node 24 typechecking, six builds and 2,002 tests
 (10 skipped; 311.70 seconds) in [run 42719686052](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42719686052).
-Live inference remains dependent
-on the operator's configured provider; real browser acceptance, managed endpoint launch, broader deployment packaging
+After private provider setup, the running catalog advertised DeepSeek without lookup failures. An installed-Harness /
+DeepSeek Flash drill on that runtime build passed in 285.90 seconds with inbox persona/environment selection, attachments,
+checked results, restart and authenticated installed checkpoint recovery. The test fixture was adjusted to accept the
+copied JSON-form profile patch; the user app remained running. Real browser acceptance, managed endpoint launch, broader deployment packaging
 and every remaining architecture/product requirement stay open.

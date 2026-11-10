@@ -685,14 +685,27 @@ Local verification passed 1,988 tests, typechecking and six builds. Exact runtim
 in [run 42716861135](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42716861135).
 After resumption the prior temporary installation and app process were absent. A new persistent local profile passed
 authenticated page, management-health and default-environment HTTP checks and remains running for private provider setup.
-This does not recover the removed instance's history. Live inference/restart/recovery qualification awaits a configured
-provider; browser/provider acceptance and the full remaining architecture/product scope stay open.
+This does not recover the removed instance's history. After private provider setup, the owned-managed installed-Harness /
+DeepSeek Flash inbox/attachment/restart/recovery drill passed in 285.90 seconds on runtime build
+`bfebde2ec8fbb85e47f3a1529db142fef36cb43e`, with copied JSON-form profile support in the test fixture.
+The app remained running. Broader browser/provider acceptance and the full remaining architecture/product scope stay open.
 
 Guided setup is implemented in `065-guided-setup.md`: live role/default model catalog hints, default/managed environment
 guidance, optional persona/budget/context setup, empty inbox draft entry without dispatch, and current mission review status.
 Local verification passed 1,994 tests, typechecking and six builds. Exact runtime/test revision
 `bfebde2ec8fbb85e47f3a1529db142fef36cb43e` passed 2,002 native Linux / Node 24 tests (10 skipped), typechecking and six builds
 in [run 42719686052](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42719686052).
-Authenticated retrieval confirmed the running app serves the guide bundle; real catalog reads show the selected default
-without advertised models while its provider key is absent. Catalog presence is not inference success. Live provider setup,
-visual browser acceptance, managed endpoint launch, broader packaging and the full remaining architecture stay open.
+Authenticated retrieval confirmed the running app serves the guide bundle. After private provider setup, the catalog
+advertised DeepSeek without lookup failures and the real inbox/attachment/restart/recovery drill passed as recorded above.
+Catalog presence alone is not inference success. Visual browser acceptance, managed endpoint launch, broader packaging
+and the full remaining architecture stay open.
+
+Persistent local launch is implemented in `066-persistent-launcher.md`: pinned Harness source-checkout installation,
+private durable paths, resumable profile setup, detached start, graceful stop/restart, exact installation process ownership,
+intentional-stop markers, serialized controls and authenticated browser shortcuts without printing access tokens.
+Process-level launcher/control checks passed 24 tests. A fresh installed-Harness profile passed initialization, duplicate
+start, authenticated access, graceful restart retaining pause and intentional-stop handling while the user app stayed up.
+Local `pnpm check` passed typechecking, six builds and 2,003 tests (16 skipped; 133.16 seconds); native Linux qualification
+is pending.
+It creates new installations without replacing an existing profile or claiming to migrate its history. Login/boot services,
+automatic crash recovery, supervised upgrades, desktop packaging and the full remaining architecture stay open.

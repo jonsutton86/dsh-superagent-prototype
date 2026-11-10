@@ -1,13 +1,24 @@
 # Article implementation tracker
 
+[066 Persistent launcher](066-persistent-launcher.md) adds a private macOS/Linux source-checkout installation with pinned
+Harness, resumable profile setup, persistent coordinator/Session/attachment paths, detached start and graceful stop/restart,
+current-process ownership, serialized control, intentional-stop markers and authenticated browser shortcuts without token
+output. It preserves existing profile credentials and does not adopt or migrate an unrelated running installation.
+Process-level launcher/control checks passed 24 tests. A fresh installed-Harness profile passed initialization, duplicate
+start, authenticated access, graceful restart with persisted pause and intentional-stop handling. The existing user app
+remained running. Local `pnpm check` passed typechecking, six builds and 2,003 tests (16 skipped; 133.16 seconds).
+Native Linux qualification is pending.
+Login/boot services, supervised upgrades, desktop packaging and the remaining full architecture stay open.
+
 [065 Guided setup](065-guided-setup.md) adds model and environment guidance, private Harness provider-setup instructions,
 optional persona/budget/context navigation, empty inbox draft entry and current mission review status. The guide reads
 existing authorities and does not equate catalog presence with inference success or create work while navigating.
 Local typechecking, six builds and 1,994 tests passed (16 skipped; 135.12 seconds); 36 focused checks passed. Exact
 runtime/test revision `bfebde2ec8fbb85e47f3a1529db142fef36cb43e` passed native Linux / Node 24 typechecking, six builds
 and 2,002 tests (10 skipped; 311.70 seconds) in [run 42719686052](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42719686052).
-The running installed Harness serves the new client bundle, and its real model catalog matches the guide's unlisted-model
-case. Live inference, visual browser acceptance and the remaining full architecture stay open.
+The running installed Harness serves the new client bundle. After private provider setup its catalog advertised DeepSeek
+without lookup failures, and the installed-Harness / DeepSeek Flash inbox/attachment/restart/recovery drill passed in
+285.90 seconds on that runtime build. Visual browser acceptance and the remaining full architecture stay open.
 
 [064 Inbox execution settings](064-inbox-execution-settings.md) adds reviewed persona versions and default/managed
 environment selection to new inbox tasks, exact default-grant preconditions and captured execution details. Ambiguous Send
@@ -16,11 +27,11 @@ the existing Workspace, Engine and DeepSeek Harness. Local typechecking, six bui
 130.32 seconds). Exact runtime/test revision `432f4aeeca76177f32a2944932db48899a8d77db` passed native Linux / Node 24
 typechecking, six builds and 1,996 tests (10 skipped; 244.42 seconds) in
 [run 42716861135](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42716861135).
-Live Harness qualification remains pending. Broader browser/provider acceptance
-and all remaining full architecture and product requirements below remain open. After resuming, the prior temporary Harness
-installation and app process were absent. A new persistent local profile is running and passed authenticated page,
-management-health and default-environment HTTP checks. It does not recover the removed instance's history, and live
-inference awaits provider configuration in the Harness Models page.
+Live owned-managed Harness qualification passed with private DeepSeek setup in 285.90 seconds, including the original
+persona proof in the selected world, attachments, checked results, Runtime restart and installed checkpoint recovery.
+The runtime build was `bfebde2ec8fbb85e47f3a1529db142fef36cb43e`; the test fixture now handles copied JSON-form profile patches.
+The new persistent user app remained running. It does not recover the removed temporary instance's history. Broader
+browser/provider acceptance and all remaining full architecture and product requirements below remain open.
 
 [063 Conversation attachments](063-attachments.md) adds resumable file uploads, exact task/reply bindings, native Harness image
 projection and verified copies through the existing scoped subprocess service. Source bytes reside in the checkpointed Store.

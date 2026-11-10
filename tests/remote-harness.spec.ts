@@ -87,6 +87,12 @@ it.runIf(process.env.DSH_HARNESS_QUALIFICATION === '1').each(['dedicated', 'mana
   await mkdir(directory, { mode: 0o700 })
   cleanup.push(() => rm(directory, { recursive: true, force: true }))
   for (const file of ['package.json', 'cordis.yml', 'cordis.patch.yml']) await copyFile(join(source, file), join(directory, file))
+  // Harness also writes JSON arrays to its .yml patch file. Convert that copied form to a
+  // YAML block sequence before appending qualification-only overrides; never edit the source.
+  const basePatch = join(directory, 'cordis.patch.yml'), originalPatch = await readFile(basePatch, 'utf8')
+  let jsonPatch: unknown
+  try { jsonPatch = JSON.parse(originalPatch) } catch { /* Existing YAML block patch. */ }
+  if (Array.isArray(jsonPatch)) await writeFile(basePatch, jsonPatch.map(entry => '- ' + JSON.stringify(entry)).join('\n') + '\n')
   // Select the qualification model in this temporary base profile. The operator-generated overlay stays byte-for-byte unchanged.
   await appendFile(join(directory, 'cordis.patch.yml'), '\n- id: agent-default-model\n  config:\n    provider: deepseek-official\n    model: deepseek-flash\n')
   const routerProbeToken = randomUUID()
