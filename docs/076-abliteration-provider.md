@@ -89,3 +89,9 @@ Use Node 24 or newer. The adapter path is explicit; the test skips when no insta
 The provider suite also checks secret-safe catalog behavior, other-provider isolation, immutable per-task persona selection, session model events and persistence through database reopen. Existing role/persona and usage suites remain applicable.
 
 Implemented and locally tested: opt-in configuration, retained Harness routing, persona persistence, image/output guard, safe catalog command and local wire compatibility. Not claimed: authenticated live catalog access, live text/tool/vision inference, provider billing accuracy, deployment into the running app, or completion of broader Agentic OS qualification. These remain explicit qualification/deployment steps, not inferred successes.
+
+Final source revision `3a31fb5445a35877b25ebaef60d6493eb6f6853c` passed full macOS and native Linux qualification with the
+installed adapter test enabled on both platforms: 2,136 / 2,149 tests passed respectively, with 25 / 14 skipped. Typechecking
+and seven builds passed on each platform. Native service checks passed separately. The shared
+[qualification receipt](evidence/075-076-qualification.json) records exact versions, counts, digests and CI limitations.
+The user confirmed that no Abliteration key exists; no authenticated vendor request was attempted.

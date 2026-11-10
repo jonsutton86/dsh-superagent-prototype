@@ -1,0 +1,78 @@
+{
+  "date": "2026-11-10",
+  "sourceCommit": "3a31fb5445a35877b25ebaef60d6493eb6f6853c",
+  "sourceArchiveSha256": "281d317f6ded60effa2952ddb255248e92d108ed248582e0979bc351473591b0",
+  "baseCommit": "3d62647a5e1d558b3c614d06701cdd8fa2bd264f",
+  "macos": {
+    "platform": "Darwin 27.2.0 arm64",
+    "node": "25.9.0",
+    "pnpm": "11.25.0",
+    "typecheck": "passed",
+    "builds": 7,
+    "fullSuite": {
+      "passed": 2136,
+      "skipped": 25,
+      "filesPassed": 154,
+      "filesSkipped": 4,
+      "seconds": 273.37
+    },
+    "nativeServiceSuite": {
+      "passed": 16,
+      "skipped": 1,
+      "seconds": 26.63
+    }
+  },
+  "linux": {
+    "platform": "Ubuntu 22.04 ARM64, Linux 5.15.0-198-generic",
+    "node": "24.22.2",
+    "pnpm": "11.7.0",
+    "typecheck": "passed",
+    "builds": 7,
+    "fullSuite": {
+      "passed": 2149,
+      "skipped": 14,
+      "filesPassed": 155,
+      "filesSkipped": 3,
+      "seconds": 237.45
+    },
+    "nativeServiceHarnessSshSuite": {
+      "passed": 30,
+      "skipped": 0,
+      "seconds": 16.27
+    }
+  },
+  "enabledQualification": [
+    "DSH_PUBLICATION_HARNESS_QUALIFICATION",
+    "DSH_ABLITERATION_ADAPTER_PACKAGE (installed 0.2.1-rc.3)",
+    "native Linux confinement, cgroup and endpoint launch",
+    "native Linux service/Harness/SSH lifecycle",
+    "native macOS service/Harness/SSH lifecycle"
+  ],
+  "githubCi": {
+    "runsForSourceCommit": 0,
+    "dispatch": "rejected",
+    "httpStatus": 422,
+    "message": "Actions has been disabled for this repository.",
+    "settingsObservation": {
+      "enabled": true,
+      "workflowState": "active"
+    },
+    "settingsChanged": false
+  },
+  "boundaries": [
+    "All repository writes in qualification targeted local contract servers, not live GitHub.",
+    "Abliteration adapter used a loopback server and synthetic key.",
+    "No ABLIT_KEY exists or was supplied; authenticated catalog and inference remain unverified.",
+    "Independent publisher tests use synthetic seals; coordinator tests use actual host checks and freshness captures.",
+    "Native Linux used the existing disposable local VM, not a physical or cloud second host.",
+    "No running application profile was changed or restarted.",
+    "Full Agentic OS architecture and deployment acceptance remain incomplete."
+  ],
+  "logSha256": {
+    "macos-full": "4e4d63bb6e76c508bb39543d719d4236db196e717645d4d5ce38d42158f634e5",
+    "macos-build": "29f6a64df05a9c50e075b4ee0dd74ac1bc209cbfac2d465dfdc74a218535ea19",
+    "linux-full-and-services": "71f92f2e221b718ab7dc7b941101f0804229ad02ba7fc54753ed504d395255d5",
+    "macos-native-services": "67123634f0c07374c4a16d865d61ed8041e2f84a51422ffedc7cbe57ae669938",
+    "typecheck": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+  }
+}

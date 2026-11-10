@@ -1,7 +1,8 @@
 # Independent repository publication
 
 Status: implementation resumed on 2026-11-10. This document begins with the observed contract at checkpoint
-`5c487b6729acd0ac931499d5fd6844a647cc8304`; coordinator/UI and recovery integration are implemented. Full qualification is in progress.
+`5c487b6729acd0ac931499d5fd6844a647cc8304`; coordinator/UI and recovery integration are implemented and qualified locally
+at `3a31fb5445a35877b25ebaef60d6493eb6f6853c`. Live GitHub acceptance and the full architecture remain open.
 DeepSeek Harness remains the runtime. The [reviewed export](074-repository-exports.md) is its input.
 
 ## Evidence and baseline
@@ -141,7 +142,29 @@ staged and reconciled into an authenticated held image. A substituted observatio
 ID recovered the published receipt without a second push/POST. Review found and corrected queued cancellation overtaking
 and missing reconciliation metadata. Their focused regressions passed; final full-suite checks follow.
 
-Native Linux, full-suite qualification and live provider acceptance remain open at this source checkpoint. Terminal receipt
-garbage collection, fork destinations, broader Git provisioning, CI/branch-policy and merge authorization remain separate
-architecture work. The remaining full architecture from
+Terminal receipt garbage collection, fork destinations, broader Git provisioning, CI/branch-policy and merge authorization
+remain separate architecture work. The remaining full architecture from
 [Agentic OS](010-agentic-os.md) is unchanged.
+
+## Final qualification
+
+The [qualification receipt](evidence/075-076-qualification.json) records exact source commit
+`3a31fb5445a35877b25ebaef60d6493eb6f6853c`, source archive/log digests and the boundaries below. All runtime and test files
+were unchanged during these runs. Later documentation-only commits do not change that tested source.
+
+| Environment | Result |
+| --- | --- |
+| macOS arm64 / Node 25.9.0 | Typecheck, seven builds, 2,136 tests passed / 25 skipped; 273.37 seconds |
+| Native Ubuntu 22.04 arm64 / Node 24.22.2 | Typecheck, seven builds, 2,149 tests passed / 14 skipped; 237.45 seconds |
+| Native Linux services, Harness and SSH | 30 tests passed; 16.27 seconds |
+| Native macOS services, Harness and SSH | 16 passed / one skipped; 26.63 seconds |
+
+Both full runs enabled the actual installed-Harness repository publisher and OpenAI-compatible adapter tests. Linux also
+enabled native namespace/cgroup execution. The new encrypted checkpoint/held-image recovery and cancellation-race cases
+passed in the full runs. No live provider mutations, inference charges or new hosting were used. The qualification VM was
+stopped after cleanup; the existing application profile was not changed or restarted.
+
+GitHub returned zero workflow runs for the tested SHA. Explicit dispatch returned HTTP 422, “Actions has been disabled for
+this repository,” despite read-only settings reporting enabled/active. No Actions or billing setting was changed. Local
+native qualification is independent of that unavailable CI execution. Live GitHub publication, physical/cloud networking,
+clean-host deployment, retention/scale work and the remainder of Agentic OS are not implied by these tests.
