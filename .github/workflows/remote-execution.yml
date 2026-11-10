@@ -34,6 +34,7 @@ jobs:
         run: |
           npm install --prefix "$RUNNER_TEMP/agentic-endpoint-harness" --no-audit --no-fund @deepseek-ai/dsh@0.2.1-rc.3
           echo "DSH_ENDPOINT_QUALIFICATION_CLI=$RUNNER_TEMP/agentic-endpoint-harness/node_modules/.bin/dsh" >> "$GITHUB_ENV"
+          echo "DSH_ABLITERATION_ADAPTER_PACKAGE=$RUNNER_TEMP/agentic-endpoint-harness/node_modules/@deepseek-ai/dsh-llm-pi-ai" >> "$GITHUB_ENV"
       - name: Check the complete suite with native confinement enabled
         run: |
           pnpm typecheck
@@ -43,9 +44,11 @@ jobs:
             --uid="$(id -u)" --property='Delegate=cpu memory pids' \
             --property="WorkingDirectory=$PWD" --setenv="PATH=$PATH" \
             --setenv=DSH_REMOTE_ISOLATION=1 --setenv=DSH_ENDPOINT_LAUNCHER_QUALIFICATION=1 --setenv=DSH_SSH_TRANSPORT_QUALIFICATION=1 \
+            --setenv=DSH_PUBLICATION_HARNESS_QUALIFICATION=1 \
+            --setenv="DSH_ABLITERATION_ADAPTER_PACKAGE=$DSH_ABLITERATION_ADAPTER_PACKAGE" \
             --setenv="DSH_ENDPOINT_QUALIFICATION_CLI=$DSH_ENDPOINT_QUALIFICATION_CLI" \
-            /bin/bash "$PWD/tests/fixtures/resource-qualification.sh" pnpm test
-      - name: Qualify delegated user-service endpoint with pinned Harness
+            /bin/bash "$PWD/tests/fixtures/resource-qualification.sh" pnpm test --maxWorkers=4
+      - name: Qualify native services and SSH transport with pinned Harness
         run: |
           export XDG_RUNTIME_DIR="/run/user/$(id -u)"
           export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
@@ -66,4 +69,6 @@ jobs:
           fi
           sudo systemctl start "user@$(id -u).service"
           systemctl --user show --property=ControlGroup --value
-          DSH_DELEGATED_SERVICE_QUALIFICATION=1 pnpm exec vitest run tests/delegated-service.spec.ts
+          DSH_DELEGATED_SERVICE_QUALIFICATION=1 DSH_NATIVE_SERVICE_QUALIFICATION=1 DSH_INSTALLED_SERVICE_QUALIFICATION=1 \
+            DSH_SSH_TRANSPORT_QUALIFICATION=1 DSH_SERVICE_QUALIFICATION_CLI="$DSH_ENDPOINT_QUALIFICATION_CLI" \
+            pnpm exec vitest run tests/delegated-service.spec.ts tests/launcher-service.spec.ts tests/transport-launcher.spec.ts
