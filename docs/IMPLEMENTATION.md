@@ -13,7 +13,18 @@ subsequently saved `ABLIT_KEY` privately in Harness; authenticated catalog acces
 and pinned Fabric operation patterns are recorded in `REFERENCE-TOOLS.md`. This is not completion of the full project.
 The completed-milestone history below remains unchanged.
 
-Tested and pushed runtime/test revision: `3a31fb5445a35877b25ebaef60d6493eb6f6853c`. Full macOS qualification passed
+Current continuation: [077 Independent supervision alerts](077-supervision-alerts.md) adds opt-in, host-configured
+receipt-aware webhook routing and original-ID console recovery. It is under integration/qualification; no live operator
+route or deployed app is claimed. This follows item 1 below; `010-agentic-os.md` now uses this same sequence instead of its
+conflicting fleet-first order. Broader diagnosis/productive-job evaluation remains open. The optional provider preservation
+correction is committed at `5716c393297157752fc7ae9afc155cbf4342c0d3`: 13 focused tests including real Harness composition
+passed before commit, without changing the default model. The single live completion remains pending evaluation-credit
+confirmation. GitHub's authenticated UI exposed a separate fork workflow suppression and showed **Actions Enabled** after
+re-enabling it. The subsequent dispatch passed at exact revision `592dfa20`: 2,147 Linux tests passed (16 skipped), typecheck and seven
+builds passed, plus 13 delegated-service tests. `docs/evidence/077-ci-dispatch.json` records the exact run and result.
+The updated workflow also enables installed publisher/provider and native service qualification for subsequent source runs.
+
+Earlier tested and pushed runtime/test revision: `3a31fb5445a35877b25ebaef60d6493eb6f6853c`. Full macOS qualification passed
 2,136 tests (25 skipped; 273.37 seconds); native Ubuntu ARM64 passed 2,149 (14 skipped; 237.45 seconds), both with typecheck
 and seven builds. Installed-Harness publication and actual OpenAI adapter loopback tests ran on both. Native Linux
 service/Harness/SSH checks passed 30 tests; native macOS service/Harness/SSH checks passed 16 (one skipped). The source
@@ -1001,7 +1012,8 @@ Current code provides independent observations, semantic assessments and one fen
 Increment 052 adds independent incident UI, explicit evidence-bound acknowledgement, paginated history and bounded retention.
 It qualifies real configured-model worker/assessor inference, the served console bundle and abrupt main/watchdog restart
 with durable evidence through an outage. Broader provider/process-failure coverage and deliberately long productive jobs
-still need evaluation. Add alert routing before calling the operational experience complete.
+still need evaluation. Increment 077 adds receipt-aware alert routing and console recovery; live destination acceptance
+and broader diagnosis quality remain open before calling the operational experience complete.
 Process restarts or task retries require their own narrow,
 audited recovery policies; they must not be inferred from arbitrary worker text.
 

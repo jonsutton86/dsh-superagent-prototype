@@ -36,6 +36,8 @@
           auditDays: 90
           maxClosed: 5000
           maxAudit: 50000
+        # Opt-in receipt-aware alert receivers; see docs/077-supervision-alerts.md.
+        alertRoutes: []
         # Omit to inherit this independent profile's default model.
         # model:
         #   provider: <configured provider>

@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import { key } from '../core/index.ts'
+import { AlertJournal } from './alert-journal.ts'
 import type { ObservationSet } from './client.ts'
 import type { Assessment, InterventionResult, Observation } from './protocol.ts'
 import { ACK_WINDOW_MS, AcknowledgeSchema, WatchdogOperatorError, type Acknowledge, type Acknowledgement,
@@ -28,13 +29,14 @@ export interface MonitorStatus { at: number; reachable: boolean; lastSuccess?: n
 /** Owns watchdog state only; transactions keep observations, diagnoses and delivery reservations consistent after restart. */
 export class WatchdogJournal {
   private readonly db: DatabaseSync
+  readonly alerts: AlertJournal
   constructor(file: string) {
     this.db = new DatabaseSync(file)
     chmodSync(file, 0o600)
     try {
       this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;')
       const version = this.db.prepare('PRAGMA user_version').get()!.user_version as number
-      if (version > 2) throw new Error(`Unsupported watchdog schema ${version}`)
+      if (version > 3) throw new Error(`Unsupported watchdog schema ${version}`)
       this.db.exec(`CREATE TABLE IF NOT EXISTS incidents (id TEXT PRIMARY KEY, closed INTEGER NOT NULL, data TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS monitor (id INTEGER PRIMARY KEY CHECK(id=1), data TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS audit (seq INTEGER PRIMARY KEY, at INTEGER NOT NULL, kind TEXT NOT NULL, incident TEXT, data TEXT NOT NULL);
@@ -45,7 +47,8 @@ export class WatchdogJournal {
         CREATE INDEX IF NOT EXISTS acknowledgements_expiry ON acknowledgements(expires);
         CREATE INDEX IF NOT EXISTS audit_incident ON audit(incident, seq);
         CREATE INDEX IF NOT EXISTS incident_closed ON incidents(closed);
-        PRAGMA user_version=2;`)
+        PRAGMA user_version=3;`)
+      this.alerts = new AlertJournal(this.db, (at, kind, incident, data) => this.event(at, kind, incident, data))
     } catch (error) { this.db.close(); throw error }
   }
   private atomic<T>(work: () => T): T {

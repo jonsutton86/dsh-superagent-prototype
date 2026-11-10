@@ -333,6 +333,10 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/supervision/plugin.ts` | Separate Harness profile/Session lifecycle, restricted tools, local console and periodic retention |
 | `src/supervision/http.ts` | Same-origin standalone console assets and bounded operator incident/history/acknowledgement APIs |
 | `src/supervision/console.tsx`, `console-entry.tsx`, `console.css` | Independent operator console, service health, evidence review, durable ambiguous-response retry and paginated history |
+| `src/supervision/alert-protocol.ts` | Host-only alert routes, immutable evidence/destination identities and strict receiver receipt protocol |
+| `src/supervision/alert-journal.ts` | Watchdog-database alert intents, dispatch-before-I/O receipts, deduplication, admission limits and bounded retention |
+| `src/supervision/alerts.ts` | Independent authenticated alert routing, conservative unknown outcomes and observation without resend |
+| `src/supervision/alerts-console.tsx` | Operator alert receipts, original-ID observation, unsent retry/cancel and pagination |
 | `src/deployment.ts` | The plugin `Config` and `Machine`; `resolveDeployment` and `resolveFeishuBot` read the repository and the accounts from the Source settings, each CLI run as Executor shells run it; `SETUP_FIELDS` lists the Source fields setup reads. The code names no person, account or organization |
 | `src/setup.ts` | Setup problems: `SetupError`, with a code, the place that fixes it and the English text the log, the main Session and the panel share |
 | `src/policy.ts` | The Policy: the settings schemas by block, the Policy version, the gate and Mandate revalidation |
@@ -630,6 +634,8 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/watchdog-runtime.spec.ts` | Independent Cordis/Harness composition with simulated inference: restricted tools, Session creation, state ownership and shutdown |
 | `tests/watchdog-console.spec.ts`, `tests/fixtures/watchdog.ts` | Journal migration, review fencing/replay, consistent pages, bounded retention and real HTTP access controls |
 | `tests/watchdog-ui.spec.tsx` | Rendered standalone console, outage evidence, response-loss retry after remount, stale review refusal and pagination |
+| `tests/watchdog-alert-ui.spec.tsx` | Rendered alert actions, original-ID response-loss recovery, stale refusals, untrusted text and pagination |
+| `tests/watchdog-alerts.spec.ts` | Authenticated local receivers, crash/response-loss recovery, no resend, retargeting refusal, source/receipt limits and loopback management |
 | `tests/watchdog-harness.spec.ts` | Opt-in real-model, two-process Harness supervision with abrupt main/watchdog failure, receipt recovery and observed resolution |
 | `tests/policy.spec.ts` | Source scope, the gate, the admission table, Mandate revalidation, the Policy version, settings migrations and assessment outcomes |
 | `tests/registry.spec.ts` | `SourceRegistry`: instances, validation, Policy parts, Channels and Thread context |

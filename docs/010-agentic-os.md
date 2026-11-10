@@ -58,7 +58,7 @@ refer to the same environment. Remote access requires authentication; do not exp
 | Usage and budgets | Worker concurrency, schedule run/open-mission reservations, managed Harness call/token ledger, versioned estimated pricing, scoped call/token/spend reservations, reconciliation and operator UI (`042-usage-budgets.md`); speculative reservation/promotion integration (`045-speculative-preparation.md`) | Broader provider/adapter acceptance, invoice import, metadata generation binding, non-token fees, retention and multi-workspace ownership |
 | Models and connectors | Harness configuration, opt-in Abliteration models through the existing OpenAI-compatible adapter with per-task persona selection and guarded image/output requests (`076-abliteration-provider.md`; live catalog access verified, inference unverified), optional GitHub/Feishu, local grants, authenticated remote transport, paired Harness services, persistent remote authority/revocation and native Linux namespace/cancellation CI, whole-profile and per-action world binding, durable command/file ownership and operator receipts, endpoint-owned versioned credentials, real model artifact/restart qualification, endpoint enrollment/reconciliation, independent managed worlds, prepared-host endpoint launch, configured cgroup limits/usage receipts, owned delegated-service setup, managed pinned SSH forwarding, native Ubuntu ARM64 kernel/Harness/service qualification and pinned repository preparation | Broader OS/CPU and physical/cloud qualification, privileged host-user setup, managed machine/fleet and broader/reverse transport, disk quotas, per-workspace aggregate allocation, cross-host deployment qualification and connector scope |
 | Voice | Local/HTTP speech adapters, explicit local/cloud modes, editable dictation, reply playback, interruption, durable request/restart handling and text fallback (`062-voice.md`) | Browser/microphone acceptance, cloud-provider qualification, streaming/realtime sessions, long-reply chunking, speech billing and receipt maintenance |
-| Supervision and recovery | Independent watchdog console, evidence review receipts, bounded history/retention and real-model process-failure recovery; encrypted checkpoints/held Session import, checkpoint-bound claimant replacement, configuration/receipt/input validation, core Engine/connector/mission/plan/schedule authority and artifact/check/review/completion evidence checks, authenticated held receipt application, ownership authority, endpoint and artifact/mission publication fencing and owned Runtime/dedicated/managed provider lifecycle; repository intent/export/approval graphs and encrypted held recovery of original branch/PR receipts (`075-repository-publication.md`) | Remaining product authority graphs, deployment binding/remapping, broader inbound connector/repository integration, clean-host activation/failover, alert routing, diagnosis quality and broader live failure tests |
+| Supervision and recovery | Independent watchdog console, opt-in receipt-aware operator alert routing and original-ID recovery (`077-supervision-alerts.md`), evidence review receipts, bounded history/retention and real-model process-failure recovery; encrypted checkpoints/held Session import, checkpoint-bound claimant replacement, configuration/receipt/input validation, core Engine/connector/mission/plan/schedule authority and artifact/check/review/completion evidence checks, authenticated held receipt application, ownership authority, endpoint and artifact/mission publication fencing and owned Runtime/dedicated/managed provider lifecycle; repository intent/export/approval graphs and encrypted held recovery of original branch/PR receipts (`075-repository-publication.md`) | Remaining product authority graphs, deployment binding/remapping, broader inbound connector/repository integration, clean-host activation/failover, live alert-destination acceptance, diagnosis quality and broader live failure tests |
 | Whole-product qualification | Deterministic unit, API/DOM flows, actual Harness restarts, live local model/tool, inbox and planner-to-execution missions; persistent local launcher (`066-persistent-launcher.md`), production browser-factory regression coverage, operator-confirmed browser startup and optional service supervision with native macOS lifecycle drills (`068-service-supervision.md`) and native Ubuntu ARM64 systemd/Harness, abrupt VM power-loss and intentional-stop reboot qualification (`072-native-linux-qualification.md`) | Full browser/desktop journeys and layout, broader provider acceptance, clean-host backup/restore drills, accessibility, broader Linux/CPU and physical/cloud reboot qualification, supported upgrades and desktop packaging |
 
 ## Missions increment
@@ -145,27 +145,37 @@ remain outstanding.
 
 ## Next implementation order
 
-Reviewed repository transfer is implemented in `074-repository-exports.md`: original-history bundles, resumable chunks,
-fresh host review and held-image validation. Independent branch/PR publication remains the next repository integration
-step; exports do not remove the remaining architecture or qualify cloud deployment.
+The numbered **Implementation sequence and acceptance** in `IMPLEMENTATION.md` is the authoritative execution order.
+The earlier workspace list put fleet work first and supervision last; that conflicted with the article tracker and is
+superseded by the aligned order below. The ledger above still defines the full product scope.
+
+Reviewed repository transfer and independent same-repository branch/PR publication are implemented through increments
+074–075, with fresh approval and original-ID recovery. Live publication, fork/CI/merge policy and broader repository
+workflows remain open. These increments do not qualify deployment or complete the architecture.
+
+1. **Supervision and operational visibility:** alert destination acceptance, broader provider/process-failure and productive long-running-job
+   evaluation, diagnosis quality and narrow audited recovery policies. Independent observation and the incident console exist.
+2. **Compute/state/environment contracts:** guided managed machine/fleet setup, broader/reverse transport, native endpoint/resource/
+   delegated-service qualification and host-user setup, broader remote repository workflows, disk quotas and per-workspace
+   aggregate allocation. Preserve paired process/filesystem, grant, ownership and host-verification boundaries.
+3. **Durable restore and state ownership:** clean-host checkpoint restore/failover, deployment/path remapping,
+   credential/identity rotation and abrupt host-loss drills preserving Harness Sessions, world authority and original receipts.
+   Same-host installed recovery does not prove cross-host recovery. Multi-workspace ownership/lifecycle still needs implementation.
+4. **Chain of Recall and long-term knowledge:** measured retrieval/reflection quality, external-source imports/freshness,
+   model-token-aware context selection, history/attachment/artifact retention, larger files and multi-workspace scope.
+5. **Speculative work and budgets:** long-horizon quality/waste evaluation, broader provider accounting and budget acceptance,
+   scaling, multi-workspace ownership and stronger confinement. Reservations, expiry and promotion are implemented.
+6. **Verified artifacts and delivery:** continuous freshness, large/streamed files, matched-environment imports/directory sync,
+   retention, fork/CI/branch-policy/merge integration, broader channel/repository delivery and live publication acceptance.
+7. **Router authority and operator experience:** task-centered incident/evidence/environment/budget navigation, richer conversation
+   tools, full browser/desktop journeys and accessibility, realtime/streaming voice and microphone/cloud-speech acceptance.
+   Keep asynchronous steering and the existing working panel.
+8. **Whole-system qualification:** supported provider/OS/CPU combinations, clean-host recovery, real logout/reboot services,
+   upgrades/packaging and repeatable workloads measuring quality, interruptions, latency, usage, waste and duplicate effects.
+   Audit every ledger row before requesting owner approval to mark the project complete.
 
 The durable memory/artifact increment is described in `011-library.md`; its application-level scope boundary does not
 replace the article's isolated execution environments. It uses the existing SQLite database and Harness tool registration.
-
-1. Managed machine/fleet setup, broader/reverse transport, native endpoint/resource/delegated-service qualification and host-user setup,
-   remote repository workflows, disk quotas and per-workspace aggregate allocation. Keep the existing
-   paired process/filesystem, grant, ownership and host-verification boundaries throughout the supported setup path.
-2. Clean-host checkpoint restore and failover: deployment/path remapping, credential/identity rotation and abrupt host-loss
-   drills that preserve Harness Sessions, world authority and original effect receipts. Same-host installed recovery is
-   implemented; it does not prove this cross-host requirement.
-3. Multi-workspace ownership and lifecycle management across conversations, plans, personas, memory, schedules and budgets;
-   history/attachment/artifact retention, larger files, external-source imports/freshness and repository delivery integration.
-4. Retrieval/reflection quality and long-horizon evaluation, broader provider accounting, realtime/streaming voice and
-   microphone/cloud-speech acceptance. Speculative reservations/expiry/promotion and basic speech adapters are implemented;
-   their broader operational acceptance and remaining interfaces still need work.
-5. Supervision alerts/quality and incident integration, complete browser/desktop user journeys, accessibility, broader OS/CPU boot
-   and real logout/reboot service acceptance, supported upgrades and packaging. Record supported provider/OS combinations and audit every row above before
-   declaring the full goal achieved.
 
 Local environment increment: `015-execution-environments.md` records paired filesystem/process verification, persisted task grants,
 explicit changed-root enrollment, revoke/reauthorize/replace controls, and mutation replay after response loss. These local

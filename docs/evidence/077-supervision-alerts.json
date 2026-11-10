@@ -1,0 +1,85 @@
+{
+  "kind": "independent-supervision-alert-evidence",
+  "capturedAt": "2026-11-10T18:32:29.441854+00:00",
+  "workingTreeBase": "8479b758a04a47158c0ce9527d7af1c530ccd457",
+  "sourceDigests": {
+    "src/supervision/alert-protocol.ts": "20117146521d6d9519751c3557f0fc468564fe1262c298d3bfb031b0f6d32919",
+    "src/supervision/alert-journal.ts": "8ca180acae90939812a39b0057b6fdde72e3ebb63d8735e7bbe6ac44dac8f1f1",
+    "src/supervision/alerts.ts": "206bc9f520fab87e4661ff087604ad807d1c2777cd75b8d4bf3185e038eb2e6e",
+    "src/supervision/alerts-console.tsx": "19f0ec1bb2769e7662674b89de35e094739962b58f3a7ede84288452b482b31f",
+    "src/supervision/journal.ts": "3c6e8d4921139da67ffefefdb4b8bad21fda66fc9b70e3d822f011cc8ba8a04d",
+    "src/supervision/plugin.ts": "cb4ef37ffbdc5029983c60bdf29fd14b6f3efa485a233a4176be14c47d0639f7",
+    "src/supervision/http.ts": "fff85ba3917c1af0fc28cd032da30d6f8a17c33ff4eb1cce462d192551cf3b5b",
+    "src/supervision/console.tsx": "8284d95d2197fd9394a796272a0542712023aa6306db2b185320e9af46a83d82",
+    "tests/watchdog-alerts.spec.ts": "3cfbf91f5b681272f73d88938aac6c3219b46393f04b7f657b78d9d74731e9e1",
+    "tests/watchdog-alert-ui.spec.tsx": "a50013ff4d82beb75417b1f035d96048aff97ee10e9fbbc157f7f43e53113983",
+    "tests/watchdog-runtime.spec.ts": "2d544863762c1b091229843d5636759fd613b7eef86f0cdcadbc6643d2c2759e"
+  },
+  "reaBaseline": {
+    "revision": "592dfa20dda1b03116cdf0b63b5182492165b42d",
+    "tool": "rea-agents@6.8.0",
+    "parentEvidenceId": "ev_b6e54fa04bd1f522471d177360966b7bd87a8ca7aeaea03a302058a14e0f7f53",
+    "sourceArtifactSha256": "14270be4cb521a3995bca740865b533591b62649ac3a5b4ca70b8e2c64596470",
+    "bundleSha256": "3c242cfe1b6edcc65ad0082af93da23de8495d079c3226a34743619ce971c60a",
+    "selectedFiles": [
+      "supervision/journal.ts",
+      "supervision/monitor.ts",
+      "supervision/plugin.ts",
+      "supervision/http.ts"
+    ],
+    "parsed": 4,
+    "parseFailures": 0,
+    "excluded": 308,
+    "semanticUnknowns": 5128,
+    "coverage": "partial",
+    "limitation": "Static source evidence does not prove delivery or crash behavior."
+  },
+  "codegraph": {
+    "tool": "@colbymchenry/codegraph@1.6.2",
+    "sync": "completed after source integration; local derived index not committed"
+  },
+  "review": {
+    "fabricRevision": "de0b72766db0436b6c1887bb75768cb3960e67e5",
+    "patterns": [
+      "review_design",
+      "review_code"
+    ],
+    "evidenceWrapperVersion": 1,
+    "correctedFindings": [
+      "disabled-route metadata was unbounded",
+      "HTTP500 outcome must remain unconfirmed",
+      "slow alert receiver must not delay monitor cadence"
+    ]
+  },
+  "browserObservation": {
+    "surface": "Chrome served watchdog bundle, synthetic loopback receiver",
+    "bundleSha256": "8aa7b52a933f1336fc564c6757c98ca8df7e57ac9aeadf111dbebe4dc5fe23a6",
+    "fixtureSha256": "0f259ba187812c92bbdc3dfa25f0e8c6ad7c01bbc2acdc0263bdec1704e04778",
+    "originalId": "5b441578-a399-44b0-af45-d786b6af90d1",
+    "before": "unknown",
+    "after": "accepted",
+    "networkMethods": [
+      "POST",
+      "GET"
+    ],
+    "postCount": 1,
+    "getCount": 1,
+    "crossSiteNavigation": "refused; same-origin fixture link used without altering production guard",
+    "limitation": "Later source changes improve labels; this observation proves the recorded bundle flow only. Not full workspace/browser acceptance."
+  },
+  "deployment": {
+    "existingAppStarted": false,
+    "liveOperatorDestinationConfigured": false,
+    "externalAlertSent": false
+  },
+  "qualification": {
+    "integrationFocused": {
+      "passed": 70,
+      "files": 9,
+      "seconds": 1.39,
+      "typecheck": "passed",
+      "builds": 7,
+      "scope": "Pre-final migration-test and label edits; final committed revision requires full qualification."
+    }
+  }
+}

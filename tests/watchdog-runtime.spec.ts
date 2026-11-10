@@ -6,7 +6,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { Config, HarnessWatchdog } from '../src/supervision/plugin.ts'
+import { Config, HarnessWatchdog, type WatchdogConfig } from '../src/supervision/plugin.ts'
 
 let directory: string
 const active: HarnessWatchdog[] = []
@@ -21,7 +21,7 @@ afterEach(async () => {
   vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); rmSync(directory, { recursive: true, force: true })
 })
 type Tool = { name: string; execute(args: unknown): Promise<unknown> }
-function harness() {
+function harness(extra: Partial<WatchdogConfig> = {}) {
   const ctx = new Context(), agents = new Map<string, Agent>(), tools = new Map<string, Tool>()
   const restrictions: unknown[] = [], guards: ((execution: { name: string }) => string | undefined)[] = [], prompts: string[] = []
   const flush = vi.fn(async () => {}), delivered: UserMessage[] = []
@@ -52,7 +52,7 @@ function harness() {
   ctx.reflect.provide('webServer', { host: '127.0.0.1', port: 3083, register: (route: { path: string; handler: (req: unknown, res: unknown) => unknown }) => {
     routes.set(route.path, route); return () => routes.delete(route.path)
   } })
-  const config = Config({ stateDir: join(directory, 'watchdog'), tokenFile: join(directory, 'main/watchdog.token'), pollMs: 1000 })
+  const config = Config({ stateDir: join(directory, 'watchdog'), tokenFile: join(directory, 'main/watchdog.token'), pollMs: 1000, ...extra })
   const watchdog = new HarnessWatchdog(ctx, config); active.push(watchdog)
   const run = async (name: string, args: unknown) => tools.get(name)!.execute(args) as Promise<Record<string, unknown>>
   async function status(headers = { host: '127.0.0.1:3083', 'x-orchestrator-request': '1' }) {
@@ -131,4 +131,29 @@ it('does not start a polling loop after shutdown races Session restoration', asy
   expect(fetcher).not.toHaveBeenCalled()
   expect(host.routes.size).toBe(0)
   expect(host.controller.create).not.toHaveBeenCalled()
+})
+
+it('keeps observations and assessor deadlines running while a receiver is slow, then aborts and drains it on shutdown', async () => {
+  const fetcher = remote(), credentialFile = join(directory, 'alert.token')
+  writeFileSync(credentialFile, 'local-alert-test-credential', { mode: 0o600 })
+  let sends = 0, aborted = false
+  vi.stubGlobal('fetch', async (input: string | URL, init?: RequestInit) => {
+    if (String(input) !== 'https://receiver.invalid/alerts') return fetcher(String(input))
+    sends++
+    return new Promise<Response>((_resolve, reject) => {
+      init!.signal!.addEventListener('abort', () => { aborted = true; reject(new Error('Aborted')) }, { once: true })
+    })
+  })
+  const host = harness({ assessmentTimeoutMs: 1000, alertRoutes: [{ id: 'operations', name: 'Operations',
+    url: 'https://receiver.invalid/alerts', tokenFile: credentialFile, cooldownMs: 1000 }] })
+  await host.watchdog.start(); await vi.advanceTimersByTimeAsync(1)
+  const incident = (await host.run('watchdog_observe', {})).incidents as { id: string; revision: string }[]
+  await host.run('watchdog_assess', { incidentId: incident[0]!.id, incidentRevision: incident[0]!.revision,
+    finding: 'stalled', evidence: 'Local test requires review' })
+  await vi.advanceTimersByTimeAsync(1000); expect(sends).toBe(1)
+  const observations = fetcher.mock.calls.length
+  await vi.advanceTimersByTimeAsync(2000)
+  expect(fetcher.mock.calls.length).toBeGreaterThanOrEqual(observations + 2)
+  expect(host.agents.values().next().value!.cancel).toHaveBeenCalled()
+  await host.watchdog.stop(); expect(aborted).toBe(true); expect(sends).toBe(1)
 })

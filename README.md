@@ -1,6 +1,6 @@
 # dsh-superagent
 
-> **Development resumed (2026-11-10).** This feature branch includes incomplete repository branch/PR publication work. The [publication contract and validation record](docs/075-repository-publication.md) tracks the resumed implementation. The [saved handoff](docs/WIP-REPOSITORY-PUBLICATION.md) records the earlier pause; the last completed increment remains 074 at commit `e29fa1026738e3369aa4a1113fcbd314d793178d`.
+> **Standalone Agentic OS development is active (2026-11-10).** This feature branch retains DeepSeek Harness and now includes reviewed repository publication, an optional Abliteration provider, and independent operator alert routing. The [implementation tracker](docs/IMPLEMENTATION.md) distinguishes implemented, tested and deployed scope and keeps the remaining full architecture open. The [saved handoff](docs/WIP-REPOSITORY-PUBLICATION.md) is historical; its pause has been superseded by the owner.
 
 > **Research prototype for reference only, not an official DeepSeek product.** This code grew out of our team's day-to-day development work, with much of the engineering done by coding agents. Treat it as research code, not production-ready software. It may still contain bugs, and its coding style and engineering practices may be inconsistent. Review and adapt it before using it in your own environment.
 >
@@ -28,7 +28,10 @@ The [native Linux qualification](docs/072-native-linux-qualification.md) records
 services and abrupt VM power-loss recovery. Cloud networking, physical cross-host recovery and clean-host failover remain pending.
 Managed worlds can select a [pinned remote repository](docs/073-remote-repositories.md) for per-task branches, original-receipt
 recovery and cancellation without resetting later work. [Reviewed repository exports](docs/074-repository-exports.md) preserve
-the task's commits in resumable, verified Git bundles. Independent branch/PR publication remains in the implementation ledger.
+the task's commits in resumable, verified Git bundles. [Independent repository publication](docs/075-repository-publication.md)
+adds fresh approval, branch/PR receipts and original-ID recovery. [Optional Abliteration routing](docs/076-abliteration-provider.md)
+preserves existing providers and default models. [Independent operator alerts](docs/077-supervision-alerts.md) adds opt-in
+receipt-aware destinations and console recovery without resending uncertain deliveries.
 The workflow below configures the repository-backed mode.
 
 Setup has many steps, so an agent does it with you. Ask your coding agent:

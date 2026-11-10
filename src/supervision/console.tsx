@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AuditEntry, IncidentView, MonitorStatus } from './journal.ts'
 import type { Acknowledge, IncidentFilter, Page, RetentionPolicy } from './protocol.ts'
+import { WatchdogAlertsConsole } from './alerts-console.tsx'
 
 interface Status {
   now: number; mainUrl: string; pollMs: number; monitor: MonitorStatus | null; retention: RetentionPolicy;
@@ -149,6 +150,7 @@ export function WatchdogConsole() {
           <button className="wd-primary" type="submit" disabled={!!pending || sending || !!detail.error || detail.loading}>Acknowledge evidence</button></form>}
       </>}
     </section></div>
+    <WatchdogAlertsConsole revision={revision + tick} />
     <History key={`${selected ?? 'all'}:${revision}`} incident={selected} revision={revision} />
     {status.data && <footer>Retention: closed incidents {status.data.retention.closedDays} days / {status.data.retention.maxClosed.toLocaleString()} records;
       audit history {status.data.retention.auditDays} days / {status.data.retention.maxAudit.toLocaleString()} records. Open incidents are retained.

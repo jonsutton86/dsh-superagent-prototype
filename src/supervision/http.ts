@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { z } from 'zod'
 import { AcknowledgeSchema, WatchdogOperatorError, type RetentionPolicy } from './protocol.ts'
 import type { WatchdogJournal } from './journal.ts'
+import type { WatchdogAlerts } from './alerts.ts'
 
 const query = z.object({ cursor: z.string().max(1024).optional(), state: z.enum(['open', 'unacknowledged', 'closed', 'all']).optional(),
   incident: z.string().min(1).max(200).optional() }).strict()
@@ -21,6 +22,7 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
 }
 export function watchdogHttp(journal: WatchdogJournal, options: {
   port: number; sessionId: string; mainUrl: string; pollMs: number; retention: RetentionPolicy; asset(): string; now?: () => number; active(): boolean;
+  alerts?: WatchdogAlerts;
 }) {
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const json = (status: number, value: unknown) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(value)) }
@@ -42,6 +44,20 @@ export function watchdogHttp(journal: WatchdogJournal, options: {
       // Reject duplicate keys instead of silently choosing one value for a bounded query.
       if (new Set(url.searchParams.keys()).size !== [...url.searchParams].length) throw new WatchdogOperatorError(400, 'duplicate_query')
       const params = query.parse(Object.fromEntries(url.searchParams))
+      if (req.method === 'GET' && path === '/watchdog/api/alerts' && !params.incident && !params.state) {
+        json(200, options.alerts?.list(params.cursor) ?? { routes: [], items: [], capacity: { used: 0, limit: 1000 }, cursor: null }); return
+      }
+      const alert = /^\/watchdog\/api\/alerts\/([a-f0-9-]{36})(?:\/(observe|retry|cancel))?$/.exec(path)
+      if (alert && !url.search && options.alerts) {
+        if (req.method === 'GET' && !alert[2]) { json(200, options.alerts.get(alert[1]!)); return }
+        if (req.method === 'POST' && alert[2]) {
+          if (!req.headers['content-type']?.startsWith('application/json')) throw new WatchdogOperatorError(415, 'json_required')
+          z.object({}).strict().parse(await readBody(req))
+          if (!options.active()) throw new WatchdogOperatorError(503, 'watchdog_stopping')
+          const action = alert[2] as 'observe' | 'retry' | 'cancel'
+          json(200, await options.alerts[action](alert[1]!)); return
+        }
+      }
       if (req.method === 'GET' && path === '/watchdog/api/status' && !url.search) {
         json(200, { sessionId: options.sessionId, mainUrl: options.mainUrl, pollMs: options.pollMs, now: (options.now ?? Date.now)(),
           monitor: journal.status() ?? null, counts: journal.counts(), retention: options.retention,

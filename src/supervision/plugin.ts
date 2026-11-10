@@ -19,11 +19,14 @@ import { WatchdogJournal } from './journal.ts'
 import { WatchdogMonitor, type MonitorOptions } from './monitor.ts'
 import { AssessmentSchema, DEFAULT_RETENTION, type RetentionPolicy } from './protocol.ts'
 import { watchdogHttp } from './http.ts'
+import { WatchdogAlerts } from './alerts.ts'
+import type { AlertRoute } from './alert-protocol.ts'
 
 export const name = 'dsh-superagent-watchdog'
 export const inject = ['agents', 'sessionController', 'sessionPersistence', 'workspaceRegistry', 'tools', 'systemPrompt', 'llm', 'webServer']
 const absolute = () => s.string().pattern(/^\//).required()
-export interface WatchdogConfig extends MonitorOptions { stateDir: string; tokenFile: string; url: string; model?: RoleModel | null; retention: RetentionPolicy }
+export interface WatchdogConfig extends MonitorOptions { stateDir: string; tokenFile: string; url: string; model?: RoleModel | null;
+  retention: RetentionPolicy; alertRoutes: AlertRoute[] }
 export const Config: s<Partial<WatchdogConfig>, WatchdogConfig> = s.object({
   stateDir: absolute().description('Independent watchdog state directory; different from the main agent.'),
   tokenFile: absolute().description('Main agent state directory/watchdog.token. Never included in model context.'),
@@ -40,6 +43,8 @@ export const Config: s<Partial<WatchdogConfig>, WatchdogConfig> = s.object({
     maxAudit: s.number().min(1000).max(1000000).step(1).default(DEFAULT_RETENTION.maxAudit),
   }).default(DEFAULT_RETENTION),
   model: s.union([s.const(null), s.object({ provider: s.string().required(), model: s.string().required(), reasoningEffort: s.string() })]).default(null),
+  alertRoutes: s.array(s.object({ id: s.string().required(), name: s.string().required(), url: s.string().required(),
+    tokenFile: absolute(), cooldownMs: s.number().min(1000).max(86400000).step(1).default(300000) })).default([]),
 })
 const ACTION = z.object({ incidentId: z.string().min(1).max(200), incidentRevision: z.string().min(1).max(100) }).strict()
 const TOOLS = ['watchdog_observe', 'watchdog_assess', 'watchdog_request_status']
@@ -60,6 +65,7 @@ export class HarnessWatchdog {
   private readonly client: SupervisionClient
   private readonly release: () => void
   private readonly delivery: AgentDelivery
+  private readonly alerts: WatchdogAlerts
   private readonly disposers: (() => void)[] = []
   private readonly decorated = new WeakSet<Agent>()
   private agent?: Agent
@@ -78,7 +84,11 @@ export class HarnessWatchdog {
       ctx.logger.error('watchdog state lock lost: %s', error.message)
       void this.stop().catch(error => ctx.logger.error('watchdog shutdown failed: %s', String(error)))
     } })
-    try { this.journal = new WatchdogJournal(join(config.stateDir, 'watchdog.sqlite')) }
+    try {
+      this.journal = new WatchdogJournal(join(config.stateDir, 'watchdog.sqlite'))
+      try { this.alerts = new WatchdogAlerts(this.journal, config.alertRoutes, this.lifetime.signal) }
+      catch (error) { this.journal.close(); throw error }
+    }
     catch (error) { this.release(); throw error }
     this.sessionId = `watchdog-${key(config.stateDir)}` as SessionId
     this.delivery = new AgentDelivery(ctx)
@@ -101,6 +111,7 @@ export class HarnessWatchdog {
     this.disposers.push(this.ctx.webServer.register({ kind: 'prefix', path: '/watchdog', handler: watchdogHttp(this.journal, {
       port: this.ctx.webServer.port, sessionId: this.sessionId, mainUrl: new URL(this.config.url).origin,
       pollMs: this.config.pollMs, retention: this.config.retention, active: () => !this.lifetime.signal.aborted,
+      alerts: this.alerts,
       asset: () => readFileSync(new URL('./watchdog-ui.js', import.meta.url), 'utf8'),
     }) }))
     this.journal.unavailable(Date.now(), 'Awaiting first observation')
@@ -149,6 +160,8 @@ export class HarnessWatchdog {
   private schedule(delay: number): void {
     this.timer = setTimeout(() => {
       this.polling = this.monitor!.poll().then(() => {
+        // A slow receiver must not delay main observations or the assessor's independent deadline checks.
+        if (!this.lifetime.signal.aborted) void this.alerts.poll().catch(() => this.ctx.logger.error('watchdog alert routing failed'))
         if (!this.lifetime.signal.aborted) this.journal.maintain(Date.now(), this.config.retention)
       }).catch(error => {
         this.ctx.logger.error('watchdog poll failed: %s', String(error))
@@ -162,6 +175,7 @@ export class HarnessWatchdog {
     await this.starting?.catch(() => {})
     this.agent?.cancel({ kind: 'user' }, { keepInbox: true })
     await this.polling
+    await this.alerts.idle()
     try {
       await this.agent?.whenIdle()
       await this.ctx.sessionPersistence.flush()
