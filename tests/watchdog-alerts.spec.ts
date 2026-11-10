@@ -56,9 +56,9 @@ async function receiver() {
   const alerts = () => new WatchdogAlerts(journal, [route], undefined, () => now)
   return { route, alerts, stored, calls, control }
 }
-function observe(stage = 'person/blocked', revision = 'r1') {
+function observe(stage = 'person/blocked', revision = 'r1', episodeRevision?: string) {
   journal.reconcile({ instance: 'main', version: 'v1', at: new Date(now).toISOString(), configured: true, paused: false,
-    health: {}, tickets: [{ id: 'task', assignmentId: 'assignment', revision, title: 'Review task', scope: 'Do the requested work',
+    health: {}, tickets: [{ id: 'task', assignmentId: 'assignment', revision, ...(episodeRevision ? { episodeRevision } : {}), title: 'Review task', scope: 'Do the requested work',
       stage, updatedAt: new Date(now - 60000).toISOString(), report: null, canNudge: false }] }, now, 1000, 3600000)
 }
 const candidate = (id: string, evidenceKey = 'r1'): AlertCandidate => ({ subjectId: id, evidenceKey, title: id,
@@ -92,6 +92,17 @@ it('migrates a schema-two journal without losing incidents, acknowledgement rece
   expect(journal.recent()[0]!.seq).toBe(sequence); expect(journal.alerts.size()).toBe(0)
   const remote = await receiver(); journal.alerts.sync([candidate('migration')], [remote.route], now)
   expect(journal.recent()[0]!.seq).toBeGreaterThan(sequence)
+})
+
+it('preserves unknown alert receipts and deduplication floors while upgrading schema three to four', async () => {
+  const remote = await receiver(); remote.control.mode = 'lost'; observe(); const alerts = remote.alerts(); await alerts.poll()
+  const before = alerts.list(), original = before.items[0]!
+  expect(original.phase).toBe('unknown'); journal.close()
+  const old = new DatabaseSync(join(directory, 'watchdog.sqlite')); old.exec('PRAGMA user_version=3;'); old.close()
+  journal = new WatchdogJournal(join(directory, 'watchdog.sqlite')); const restored = remote.alerts()
+  expect(restored.list().items).toEqual(before.items); expect(restored.list().capacity).toEqual(before.capacity)
+  await restored.poll(); await restored.retry(original.id)
+  expect(remote.calls).toEqual([{ method: 'POST', id: original.id }])
 })
 
 it('retains the dispatched identity after response loss and recovers only by receiver observation', async () => {
@@ -194,6 +205,22 @@ it('does not alert on quiet productive work, and distinguishes an assessment lim
   await alerts.poll()
   expect(alerts.list().items[0]).toMatchObject({ finding: 'assessment_delivery_limit_reached', phase: 'accepted' })
   expect([...remote.stored.values()][0]!.payload.evidence).toContain('may still be running')
+})
+
+it('does not route a stale diagnosis as a current alert after material evidence changes', async () => {
+  const remote = await receiver(); observe('working', 'r1', 'same-task'); const alerts = remote.alerts(), original = journal.open()[0]!
+  journal.assess({ incidentId: original.id, incidentRevision: original.revision, finding: 'stalled', evidence: 'Old execution evidence.' }, now)
+  await alerts.poll(); expect(remote.calls).toHaveLength(1)
+  now += 2000; observe('working', 'r2', 'same-task'); await alerts.poll()
+  expect(journal.open()[0]!.assessment?.incidentRevision).toBe(original.revision)
+  expect(remote.calls).toHaveLength(1)
+  for (let index = 0; index < 3; index++) {
+    const reservation = journal.reserve(original.id, now, 1000)!
+    journal.delivered(original.id, reservation.delivery!.id); now += 1000
+  }
+  await alerts.poll()
+  expect(alerts.list().items[0]!.finding).toBe('assessment_delivery_limit_reached')
+  expect([...remote.stored.values()].at(-1)!.payload.evidence).not.toContain('Old execution evidence')
 })
 
 it('applies cooldown to new evidence and uses a new identity only after earlier delivery is settled', async () => {

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AuditEntry, IncidentView, MonitorStatus } from './journal.ts'
-import type { Acknowledge, IncidentFilter, Page, RetentionPolicy } from './protocol.ts'
+import { assessmentIsCurrent, type Acknowledge, type IncidentFilter, type Page, type RetentionPolicy } from './protocol.ts'
 import { WatchdogAlertsConsole } from './alerts-console.tsx'
+import { ExecutionEvidenceView } from './execution-evidence-view.tsx'
 
 interface Status {
   now: number; mainUrl: string; pollMs: number; monitor: MonitorStatus | null; retention: RetentionPolicy;
@@ -38,6 +39,8 @@ function useRead<T>(path: string | undefined, revision: number) {
   return state.path === path ? state : { loading: !!path }
 }
 const date = (value?: number | string) => value === undefined ? 'Not yet' : new Date(value).toLocaleString()
+const incidentStatus = (incident: IncidentView) => incident.closedAt !== undefined ? 'Closed' : !incident.assessment ? 'Awaiting assessment'
+  : assessmentIsCurrent(incident) ? `Assessment: ${incident.assessment.finding}` : 'Evidence changed—assessment is historical'
 const PENDING_KEY = 'dsh.watchdog.ack.v1'
 function savedRequest(): Acknowledge | undefined {
   try {
@@ -128,20 +131,23 @@ export function WatchdogConsole() {
       {list.loading && <p role="status">Loading incidents…</p>}{list.error && <p role="alert">{list.error}</p>}
       {list.data?.items.length === 0 && <p>No incidents in this view.</p>}
       <ul>{list.data?.items.map(item => <li key={item.id}><button aria-current={selected === item.id ? 'true' : undefined} onClick={() => select(item.id)}>
-        <strong>{item.observation.title}</strong><span>{item.closedAt !== undefined ? 'Closed' : item.assessment?.finding ?? 'Awaiting assessment'} · {item.observation.stage}</span>
+        <strong>{item.observation.title}</strong><span>{incidentStatus(item)} · {item.observation.stage}</span>
         <small>{item.closedAt !== undefined ? 'Retained history' : item.acknowledged ? 'Acknowledged' : 'Needs acknowledgement'} · {date(item.updatedAt)}</small></button></li>)}</ul>
       <div className="wd-actions">{pages.length > 0 && <button onClick={() => { setCursor(pages.at(-1) || undefined); setPages(pages.slice(0, -1)) }}>Previous incidents</button>}
         {list.data?.cursor && <button onClick={() => { setPages([...pages, cursor ?? '']); setCursor(list.data!.cursor!) }}>More incidents</button>}</div>
     </section><section className="wd-panel" aria-labelledby="detail-title"><h2 id="detail-title">{incident?.observation.title ?? 'Incident evidence'}</h2>
       {!selected && <p>Select an incident to review its evidence and history.</p>}{detail.loading && <p role="status">Loading incident…</p>}{detail.error && <p role="alert">{detail.error}</p>}
-      {incident && <><p className="wd-badge">{incident.closedAt !== undefined ? 'Closed' : incident.assessment?.finding ?? 'Awaiting assessment'}</p>
+      {incident && <><p className="wd-badge">{incidentStatus(incident)}</p>
         <dl className="wd-facts"><div><dt>Task stage</dt><dd>{incident.observation.stage}</dd></div><div><dt>Opened</dt><dd>{date(incident.openedAt)}</dd></div>
-          <div><dt>Evidence updated</dt><dd>{date(incident.updatedAt)}</dd></div><div><dt>Assessment deliveries</dt><dd>{incident.attempts} / 3{incident.attempts >= 3 && !incident.assessment ? ' · limit reached; operator review needed' : ''}</dd></div></dl>
+          <div><dt>Evidence updated</dt><dd>{date(incident.updatedAt)}</dd></div><div><dt>Assessment deliveries</dt><dd>{incident.attempts} / 3{incident.attempts >= 3 && !assessmentIsCurrent(incident) ? ' · limit reached; operator review needed' : ''}</dd></div></dl>
         <h3>Task scope</h3><p className="wd-prewrap">{incident.observation.scope}</p><h3>Latest worker report</h3>
         <p className="wd-prewrap">{incident.observation.report?.summary ?? 'No report observed.'}</p>
         {incident.observation.question && <><h3>Operator answer needed</h3><p className="wd-prewrap">{incident.observation.question}</p></>}
-        <h3>Assessment evidence</h3><p className="wd-prewrap">{incident.assessment?.evidence ?? 'No recorded assessment. Quiet work alone does not prove a stall.'}</p>
-        {incident.intervention && <p>Progress request: {incident.intervention.accepted ? 'accepted' : 'refused'} · {incident.intervention.reason}</p>}
+        <ExecutionEvidenceView evidence={incident.observation.execution} />
+        <h3>{incident.assessment && !assessmentIsCurrent(incident) ? 'Historical assessment' : 'Assessment evidence'}</h3>
+        {incident.assessment && !assessmentIsCurrent(incident) && <p className="wd-warning">Previous finding: {incident.assessment.finding}. This assessment describes earlier evidence; it does not assess the current observations.</p>}
+        <p className="wd-prewrap">{incident.assessment?.evidence ?? 'No recorded assessment. Quiet work alone does not prove a stall.'}</p>
+        {incident.intervention && <p>Progress request{incident.interventionRevision !== incident.revision ? ' based on earlier evidence' : ''}: {incident.intervention.accepted ? 'accepted' : 'refused'} · {incident.intervention.reason}</p>}
         {incident.acknowledgement && <p className="wd-prewrap">{incident.acknowledged ? 'Acknowledged' : 'New evidence since acknowledgement'} at {date(incident.acknowledgement.at)}{incident.acknowledgement.note ? '\n' + incident.acknowledgement.note : ''}</p>}
         {incident.closedAt === undefined && !incident.acknowledged && <form onSubmit={event => { event.preventDefault(); void acknowledge({
           requestId: `wd-${Date.now()}-${crypto.randomUUID()}`, incidentId: incident.id, revision: incident.viewRevision, note: note.trim(),

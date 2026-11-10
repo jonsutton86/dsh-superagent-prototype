@@ -22,6 +22,6 @@ export default defineConfig([
   // Standalone console remains available when the main profile or its UI has stopped.
   { entry: { 'watchdog-ui': 'src/supervision/console-entry.tsx' }, outDir: 'lib', format: 'esm', fixedExtension: false,
     platform: 'browser', target: 'es2022', dts: false, clean: false, plugins: [raw],
-    deps: { alwaysBundle: ['react', 'react-dom', 'react/jsx-runtime', 'react-dom/client', 'scheduler'] },
+    deps: { alwaysBundle: ['react', 'react-dom', 'react/jsx-runtime', 'react-dom/client', 'scheduler', 'zod'] },
     define: { 'process.env.NODE_ENV': JSON.stringify('production') } },
 ])

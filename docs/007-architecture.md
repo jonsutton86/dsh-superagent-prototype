@@ -294,6 +294,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/speculation/model.ts`, `service.ts`, `src/client/speculation.tsx` | Durable speculative allocations, quotas, quiescence, evidence promotion, separate message approval and panel. |
 | `src/index.ts` | The main plugin entry: reads the machine settings, starts the Runtime, and gives it the restart that a save of a Source's account uses |
 | `src/supervision/protocol.ts` | Bounded observation, assessment and intervention schemas shared by independent processes |
+| `src/supervision/execution-evidence.ts` | Pure bounded execution-metadata schema, explicit availability/attribution and unavailable projections |
 | `src/workspace/library-model.ts` | Scoped memory/artifact contracts, immutable provenance and bounded publication/recall schemas |
 | `src/workspace/freshness.ts`, `recall-model.ts`, `recall.ts` | Bounded transitive source inspection, persisted retrieval policy and atomic cumulative allowances with metered graph context |
 | `src/client/recall.tsx` | Recall allowance editing, original-request retries and persisted retrieval history |
@@ -333,6 +334,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/supervision/plugin.ts` | Separate Harness profile/Session lifecycle, restricted tools, scoped inference failures, current-assessment recovery, local console and periodic retention |
 | `src/supervision/http.ts` | Same-origin standalone console assets and bounded operator incident/history/acknowledgement APIs |
 | `src/supervision/console.tsx`, `console-entry.tsx`, `console.css` | Independent operator console, service health, evidence review, durable ambiguous-response retry and paginated history |
+| `src/supervision/execution-evidence-view.tsx` | Read-only execution observations with coverage, attribution, unknown outcomes and activity-versus-progress distinctions |
 | `src/supervision/alert-protocol.ts` | Host-only alert routes, immutable evidence/destination identities and strict receiver receipt protocol |
 | `src/supervision/alert-journal.ts` | Watchdog-database alert intents, dispatch-before-I/O receipts, deduplication, admission limits and bounded retention |
 | `src/supervision/alerts.ts` | Independent authenticated alert routing, conservative unknown outcomes and observation without resend |
@@ -468,6 +470,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/app/views/overview.ts` | The overview: Tickets that need a person, problems, the last day's flow and the Executor's load |
 | `src/executor/dsh.ts` | The DshExecutor, `WorkerSlots`, `ticketExecution`, `inputMessage` and `mandateInstructions` |
 | `src/executor/background.ts` | A worker's background work in DeepSeek Harness, the shell jobs its Session owns (`ctx.jobs`) and its subagents (`ctx.subagents`): `runningJobs`, `untilQuiet`, `killJobs`, `collectJobs`, `stopSubagents`, `stopBackground`, `until`, and `cancelled`, the workers whose turn a stop of their subagents cancelled |
+| `src/executor/evidence.ts` | Synchronous bounded projections of existing registry metadata; excludes raw output and preserves uncertain assignment/lifecycle attribution |
 | `src/infra/commands.ts` | `Commands`, the CLI transport: `run`; `api` and `pages`, limited to the configured repository and validated; `lark` as the bot; `git`. `CliError` carries the code a command's output reports, such as a GitHub HTTP status, and a command that prints nothing fails with how it ended, never with its arguments; `validItems` skips and counts the malformed items of a list |
 | `src/infra/environment.ts` | The agent's process environment: command shims, the git configuration and credential helper, `runAsWorker`, and the checks of the environment and of a Ticket's directory |
 | `src/infra/paths.ts` | The package's root, where packaged files are |
@@ -638,6 +641,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/watchdog-alerts.spec.ts` | Authenticated local receivers, crash/response-loss recovery, no resend, retargeting refusal, source/receipt limits and loopback management |
 | `tests/watchdog-harness.spec.ts` | Opt-in real-model, two-process Harness supervision with abrupt main/watchdog failure, receipt recovery and observed resolution |
 | `tests/watchdog-process-harness.spec.ts`, `tests/fixtures/watchdog-scripted-provider.ts` | Opt-in fresh installed Harness processes with synthetic loopback inference, provider failures/deadlines, real productive output and original receipt recovery; not semantic diagnosis evaluation |
+| `tests/execution-evidence.spec.ts` | Host metadata ownership/coverage, handoffs, unavailable sources, replacement identity, world rotation and read-only exact-assignment receipts |
 | `tests/policy.spec.ts` | Source scope, the gate, the admission table, Mandate revalidation, the Policy version, settings migrations and assessment outcomes |
 | `tests/registry.spec.ts` | `SourceRegistry`: instances, validation, Policy parts, Channels and Thread context |
 | `tests/sources.spec.ts` | The Feishu and GitHub Sources on a `SourceContext`: translation, polls and read positions, the pull request rules, health |
@@ -671,7 +675,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/model-surface.spec.ts` | Everything models read: tools, prompts, skills and inputs, checked against the tool schemas, the execution environment and the glossary, within a size budget per role |
 | `tests/deployment.spec.ts`, `tests/environment.spec.ts`, `tests/index.spec.ts` | The plugin configuration and setup, the agent's process environment, the plugin entry |
 | `tests/service-script.spec.ts` | `scripts/dsh-superagent` against fake `ps`, `tmux` and `dsh` |
-| `tests/client-bundle.spec.ts` | Actual production browser build and factory loading with only declared React modules, rejecting host-only or undeclared imports |
+| `tests/client-bundle.spec.ts` | Actual production browser factory with declared React modules and standalone watchdog entry mounted without a package resolver; rejects host-only or undeclared imports |
 | `tests/launcher.spec.ts` | Persistent installation, real detached process ownership, graceful restart, stop markers, locks, health identity and private browser shortcuts |
 | `tests/endpoint-launcher.spec.ts` | Installed Linux Harness endpoint/coordinator enrollment through native SSH, managed-world activation, confinement and original-job recovery through connection interruption and daemon restarts |
 | `tests/launcher-service.spec.ts` | Foreground supervisor, persistent crash budgets/manual stops, real native service installation/removal, changed-definition refusal, systemd parser and installed-Harness service lifecycle |

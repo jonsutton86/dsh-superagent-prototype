@@ -13,7 +13,12 @@ subsequently saved `ABLIT_KEY` privately in Harness; authenticated catalog acces
 and pinned Fabric operation patterns are recorded in `REFERENCE-TOOLS.md`. This is not completion of the full project.
 The completed-milestone history below remains unchanged.
 
-Current continuation: [078 Supervision failures](078-supervision-failures.md) addresses asynchronous Harness assessment
+Current continuation: [079 Execution observations](079-execution-observations.md) adds bounded host-collected metadata,
+explicit Session/assignment attribution, coherent observation frames and evidence-bound assessment/review without resetting
+the existing delivery budget. Qualification of these edits is pending; the earlier full-suite baseline below does not validate
+them. This continues item 1 and retains the full remaining scope, Harness runtime and optional-provider/default-model boundaries.
+
+Previous continuation: [078 Supervision failures](078-supervision-failures.md) addresses asynchronous Harness assessment
 errors and adds isolated installed-process fault qualification with a local scripted provider. The installed process test
 passed in 66.26 seconds, including a real 30-second productive job and original-receipt restart recovery. Exact runtime/test
 revision `e73c1f3baab3699538a37e88306df8744c64b8c3` passed full macOS (2,173 passed / 25 skipped) and native Linux

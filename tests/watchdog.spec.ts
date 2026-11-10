@@ -1,10 +1,13 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { WatchdogJournal } from '../src/supervision/journal.ts'
 import { WatchdogMonitor, type MonitorOptions } from '../src/supervision/monitor.ts'
 import type { ObservationSet } from '../src/supervision/client.ts'
+import { assessmentDeliveryText, assessmentIsCurrent } from '../src/supervision/protocol.ts'
+import { unavailableExecutionEvidence } from '../src/supervision/execution-evidence.ts'
 
 let directory: string, journal: WatchdogJournal, now: number, snapshot: ObservationSet
 const options: MonitorOptions = { pollMs: 30_000, staleMs: 900_000, reviewEveryMs: 3_600_000, retryMs: 300_000, assessmentTimeoutMs: 90_000 }
@@ -83,6 +86,105 @@ it('reuses an unsent reservation after a delivery crash and caps assessment retr
   expect(journal.open()[0]!.attempts).toBe(3)
   expect(assessor.send).toHaveBeenCalledTimes(4) // One failed flush, then three distinct deliveries.
   expect(journal.status()!.reachable).toBe(true)
+})
+
+it('does not reset a review-cycle budget or turn historical diagnoses into current findings as execution facts change', async () => {
+  const observation = snapshot.tickets[0]!
+  observation.episodeRevision = 'same-task'; observation.execution = unavailableExecutionEvidence('worker', observation.assignmentId)
+  await monitor.poll(); const original = journal.open()[0]!
+  journal.assess({ incidentId: original.id, incidentRevision: original.revision, finding: 'stalled', evidence: 'No useful result yet.' }, now)
+  const acknowledged = journal.acknowledge({ requestId: `wd-${now}-00000000-0000-4000-8000-000000000000`,
+    incidentId: original.id, revision: journal.view(journal.get(original.id)!).viewRevision, note: 'Reviewing the current evidence' }, now)
+  for (let index = 1; index <= 6; index++) {
+    now += options.retryMs
+    observation.revision = `material-${index}`; observation.execution.jobs.outputBytes = index * 100
+    await monitor.poll()
+    const current = journal.open()[0]!
+    expect(current.cycleAt).toBe(original.cycleAt); expect(current.openedAt).toBe(original.openedAt)
+    expect(current.assessment?.incidentRevision).toBe(original.revision); expect(assessmentIsCurrent(current)).toBe(false)
+    expect(current.acknowledgement).toEqual(acknowledged.acknowledgement); expect(journal.view(current).acknowledged).toBe(false)
+    expect(current.attempts).toBe(Math.min(index + 1, 3))
+    expect((await monitor.requestStatus(current.id, current.revision)).reason).toBe('intervention_not_allowed')
+  }
+  expect(assessor.send).toHaveBeenCalledTimes(3); expect(client.intervene).not.toHaveBeenCalled(); expect(assessor.cancel).not.toHaveBeenCalled()
+  const beforeRestart = journal.open()[0]!
+  journal.close(); journal = new WatchdogJournal(join(directory, 'watchdog.sqlite')); monitor = create()
+  await monitor.poll(); expect(journal.open()[0]!.attempts).toBe(3); expect(assessor.send).toHaveBeenCalledTimes(3)
+  expect(journal.assess({ incidentId: original.id, incidentRevision: original.revision, finding: 'stalled', evidence: 'Old facts' }, now).accepted).toBe(false)
+  expect(journal.assess({ incidentId: beforeRestart.id, incidentRevision: beforeRestart.revision, finding: 'progressing', evidence: 'Verified output is advancing.' }, now).accepted).toBe(true)
+  expect(assessmentIsCurrent(journal.open()[0]!)).toBe(true)
+  expect(journal.history(original.id).items.filter(entry => entry.kind === 'assessed')).toHaveLength(2)
+  // The pre-existing timed review policy remains the explicit renewal boundary; activity did not move it forward.
+  now = original.cycleAt + options.reviewEveryMs; await monitor.poll()
+  expect(journal.open()[0]!.attempts).toBe(1); expect(journal.open()[0]!.cycleAt).toBe(now)
+  expect(assessor.send).toHaveBeenCalledTimes(4)
+})
+
+it('retries an unconfirmed assessment with its original ID and exact body after material evidence changes', async () => {
+  snapshot.tickets[0]!.episodeRevision = 'same-task'
+  assessor.send.mockRejectedValueOnce(new Error('queue response lost'))
+  await monitor.poll(); const original = journal.open()[0]!, [id, text] = assessor.send.mock.calls[0]!
+  expect(original.delivery?.text).toBe(text)
+  snapshot.tickets[0]!.revision = 'new-execution-facts'; now += options.pollMs
+  await monitor.poll(); const current = journal.open()[0]!
+  expect(current.revision).not.toBe(original.revision); expect(current.attempts).toBe(1)
+  expect(assessor.send.mock.calls[1]).toEqual([id, text])
+  expect(current.delivery).toMatchObject({ id, sent: true, text, incidentRevision: original.revision,
+    observation: { revision: original.observation.revision } })
+  expect(journal.assess({ incidentId: original.id, incidentRevision: original.revision, finding: 'stalled', evidence: 'Old response' }, now).accepted).toBe(false)
+  now += options.retryMs; await monitor.poll()
+  expect(assessor.send.mock.calls[2]![0]).not.toBe(id)
+  expect(assessor.send.mock.calls[2]![1]).toBe(assessmentDeliveryText(journal.open()[0]!))
+  expect(journal.open()[0]!.attempts).toBe(2)
+})
+
+it('keeps an old progress-request receipt on its original revision while denying a new action from stale assessment', async () => {
+  snapshot.tickets[0]!.episodeRevision = 'same-task'
+  await monitor.poll(); const original = stalled(), result = await monitor.requestStatus(original.id, original.revision)
+  snapshot.tickets[0]!.revision = 'new-execution-facts'; now += options.pollMs; await monitor.poll()
+  const current = journal.open()[0]!
+  expect(current.intervention).toEqual(result); expect(current.interventionRevision).toBe(original.revision)
+  expect(await monitor.requestStatus(original.id, original.revision)).toEqual(result)
+  expect((await monitor.requestStatus(current.id, current.revision)).reason).toBe('intervention_not_allowed')
+  expect(client.intervene).toHaveBeenCalledOnce()
+})
+
+it('pins a late progress-request result to its old evidence after concurrent material change', async () => {
+  snapshot.tickets[0]!.episodeRevision = 'same-task'; await monitor.poll(); const original = stalled()
+  const pending = Promise.withResolvers<{ accepted: boolean; reason: string }>(); client.intervene.mockReturnValueOnce(pending.promise)
+  const requested = monitor.requestStatus(original.id, original.revision)
+  snapshot.tickets[0]!.revision = 'changed-before-response'; now += options.pollMs; await monitor.poll()
+  pending.resolve({ accepted: true, reason: 'status_requested' }); await requested
+  expect(journal.open()[0]!.interventionRevision).toBe(original.revision)
+  expect(journal.open()[0]!.revision).not.toBe(original.revision)
+  expect((await monitor.requestStatus(original.id, original.revision)).accepted).toBe(true)
+  expect(client.intervene).toHaveBeenCalledOnce()
+})
+
+it('migrates schema-three pending deliveries and intervention bases before new execution facts, preserving acknowledgements', async () => {
+  assessor.send.mockRejectedValueOnce(new Error('lost queue response')); await monitor.poll()
+  const original = stalled(), [id, text] = assessor.send.mock.calls[0]!
+  journal.intervention(original.id, original.revision, { accepted: true, reason: 'status_requested' }, now)
+  const input = { requestId: `wd-${now}-00000000-0000-4000-8000-000000000001`, incidentId: original.id,
+    revision: journal.view(journal.get(original.id)!).viewRevision, note: 'Original evidence reviewed' }
+  const receipt = journal.acknowledge(input, now), legacy = journal.get(original.id)!
+  journal.close()
+  const old = new DatabaseSync(join(directory, 'watchdog.sqlite'))
+  const { incidentRevision: _basis, observation: _observation, text: _text, ...delivery } = legacy.delivery!
+  const { interventionRevision: _intervention, ...record } = legacy
+  old.prepare('UPDATE incidents SET data=? WHERE id=?').run(JSON.stringify({ ...record, delivery }), original.id)
+  old.exec('PRAGMA user_version=3;'); old.close()
+  journal = new WatchdogJournal(join(directory, 'watchdog.sqlite')); monitor = create()
+  expect(journal.get(original.id)!.delivery).toMatchObject({ id, text, incidentRevision: original.revision })
+  expect(journal.get(original.id)!.interventionRevision).toBe(original.revision)
+  expect(journal.acknowledge(input, now)).toEqual(receipt); expect(journal.view(journal.get(original.id)!).acknowledged).toBe(true)
+  // Old ticket hash becomes the episode identity on first contact with the new main-service protocol.
+  snapshot.tickets[0]!.episodeRevision = original.observation.revision
+  snapshot.tickets[0]!.revision = 'material-facts-on-upgrade'; now += options.pollMs; await monitor.poll()
+  expect(assessor.send.mock.calls[1]).toEqual([id, text]); expect(journal.open()[0]!.attempts).toBe(1)
+  expect(journal.acknowledge(input, now)).toEqual(receipt); expect(journal.view(journal.open()[0]!).acknowledged).toBe(false)
+  const check = new DatabaseSync(join(directory, 'watchdog.sqlite'))
+  expect(check.prepare('PRAGMA user_version').get()!.user_version).toBe(4); check.close()
 })
 
 it('reassesses unchanged long-running work only on its bounded review interval', async () => {

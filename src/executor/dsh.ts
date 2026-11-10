@@ -23,6 +23,8 @@ import type { HealthEntry } from '../infra/health.ts'
 import type { Speculation } from '../speculation/service.ts'
 import type { SpeculationRun } from '../speculation/model.ts'
 import { cancelled, collectJob, killJobs, runningJobs, stopBackground, stopSubagents, until, untilQuiet } from './background.ts'
+import { collectExecutionEvidence, type ExecutionEvidenceInput } from './evidence.ts'
+import { EXECUTION_EVIDENCE_LIMIT, emptyRemoteExecutionEvidence, unavailableExecutionEvidence, type ExecutionEvidence } from '../supervision/execution-evidence.ts'
 
 const now = (): string => new Date().toISOString()
 /** Returns the worker session ID (`worker-<ticketId>`) for a ticket. */
@@ -510,6 +512,30 @@ export class DshExecutor implements Executor {
   }
   private relay({ id, text }: { id: string; text: string }): void { this.host.sessions.relay(id, text) }
   private remoteFor(ticket: Ticket): RemoteWorkspace | undefined { return this.host.environments ? this.host.environments.remoteFor(ticket) : this.host.remote }
+  /** Bounded observation only: loading a Session or probing the endpoint would change the execution being supervised. */
+  executionEvidence(ticket: Ticket): ExecutionEvidence {
+    const assignmentId = latestAssignment(ticket)?.id ?? null, sessionId = workerSessionId(ticket.id)
+    const current = this.host.store.tickets.get(ticket.id)
+    if (!current || (latestAssignment(current)?.id ?? null) !== assignmentId) return unavailableExecutionEvidence(sessionId, assignmentId)
+    const cap = (value: number) => Math.min(EXECUTION_EVIDENCE_LIMIT, Math.max(0, value))
+    const result = collectExecutionEvidence({ sessionId, assignmentId,
+      agents: { get: id => this.host.context.agents.get(id as SessionId), list: () => this.host.context.agents.list() },
+      jobs: () => this.host.context.get('jobs') as ReturnType<ExecutionEvidenceInput['jobs']>,
+      handedOff: this.left.get(ticket.id)?.jobs ?? new Set<string>(),
+      executor: { availability: 'available', provenance: 'process-local', retrying: assignmentId !== null && this.resuming.has(assignmentId),
+        turnRetryAttempts: cap(assignmentId ? this.transient.get(assignmentId) ?? 0 : 0),
+        launchRetryAttempts: cap(assignmentId ? this.transient.get(`launch:${assignmentId}`) ?? 0 : 0),
+        settling: this.settling.has(ticket.id), preparing: this.preparingRepositories.has(ticket.id), stopping: this.stopping.has(ticket.id),
+        knownHandedOffJobs: this.left.get(ticket.id)?.jobs.size ?? 0 },
+      remoteEffects: () => {
+        const remote = this.remoteFor(current)
+        const expectedWorld = current.execution?.environment?.world
+        if (!assignmentId || !remote && !expectedWorld) return emptyRemoteExecutionEvidence('not_applicable')
+        return remote && expectedWorld ? remote.world.executionEvidence(current.id, assignmentId, expectedWorld) : emptyRemoteExecutionEvidence()
+      } })
+    const after = this.host.store.tickets.get(ticket.id)
+    return after && (latestAssignment(after)?.id ?? null) === assignmentId ? result : unavailableExecutionEvidence(sessionId, assignmentId)
+  }
   private async launch(ticket: Ticket, assignment: Assignment): Promise<void> {
     const remote = this.remoteFor(ticket)
     if (!remote) return this.launchOwned(ticket, assignment)

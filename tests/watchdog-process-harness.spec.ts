@@ -101,6 +101,11 @@ it.runIf(process.env.DSH_WATCHDOG_PROCESS_QUALIFICATION === '1')('keeps installe
       incident = status.incidents.find((value: any) => value.observation.id === item.id)
       expect(incident?.assessment?.finding).toBe('progressing'); expect(status.monitor.modelError).toBeUndefined()
       expect(incident.intervention).toBeUndefined(); expect(incident.observation.stage).toBe('working')
+      expect(incident.observation.execution).toMatchObject({ assignmentId: incident.observation.assignmentId,
+        session: { availability: 'available', attribution: 'session', assignmentAttribution: 'unknown' },
+        jobs: { availability: 'available', attribution: 'session', assignmentAttribution: 'unknown', lifecycleAttribution: 'unknown' } })
+      expect(incident.observation.execution.jobs.counts.running).toBeGreaterThanOrEqual(1)
+      expect(incident.observation.execution.assignmentId).toBe((await api('main', `tickets/${item.id}`)).assignments.at(-1).id)
     }, { timeout: 15000, interval: 100 })
     const acknowledgement = { requestId: `wd-${Date.now()}-${randomUUID()}`, incidentId: incident.id, revision: incident.viewRevision, note: 'Reviewed original synthetic runtime evidence.' }
     const receipt = await api('watch', 'acknowledgements', acknowledgement), originalDelivery = incident.delivery.id

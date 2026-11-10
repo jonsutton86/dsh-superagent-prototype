@@ -10,6 +10,7 @@ import { sourceSkills } from './context.ts'
 import type { ModelCatalog } from '@deepseek-ai/dsh-api-session-controller/types'
 import type { Supervision } from '../supervision/service.ts'
 import { InterventionSchema } from '../supervision/protocol.ts'
+import { SupervisionSnapshotError } from '../supervision/service.ts'
 import { PromptConflict, SKILL_NAME, SKILL_PREFIX, TEAM_SECTIONS, builtInBase, builtInParts, defaultPrompts, savePrompts, type Prompts }
   from './prompts.ts'
 import { policyVersion } from '../policy.ts'
@@ -139,6 +140,7 @@ export function sameOrigin(req: Pick<IncomingMessage, 'headers'>, port: number):
 }
 /** Maps errors to HTTP status codes and structured payloads that the panel localizes in the interface language. */
 function failure(error: unknown): [number, Record<string, unknown>] {
+  if (error instanceof SupervisionSnapshotError) return [error.status, { error: error.code }]
   if (error instanceof z.ZodError) {
     const issues = error.issues.map(issue => ({ path: issue.path.join('.'), message: issue.message }))
     return [400, { error: `Invalid settings: ${issues.map(issue => issue.path).join(', ')}`, issues }]
@@ -500,7 +502,7 @@ export function registerHttp(ctx: Context, runtime: HttpHost): () => void {
           const supervisor = runtime.supervision
           if (!supervisor?.authorized(req.headers.authorization)) { json(res, 403, { error: 'Watchdog authentication required' }); return }
           if (req.method === 'GET' && url.pathname === '/orchestrator/api/supervision') {
-            json(res, 200, supervisor.snapshot(offset.parse(url.searchParams.get('offset') ?? 0))); return
+            json(res, 200, supervisor.snapshot(offset.parse(url.searchParams.get('offset') ?? 0), url.searchParams.get('version') ?? undefined)); return
           }
           if (req.method === 'POST' && url.pathname === '/orchestrator/api/supervision/intervene') {
             const input = InterventionSchema.parse(await readBody(req, 4096)); runtime.authorizeMutation?.()

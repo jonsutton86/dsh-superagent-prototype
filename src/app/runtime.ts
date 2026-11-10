@@ -337,7 +337,8 @@ export class Runtime extends Service implements SourceHost {
           }
         } })
       this.supervision = new Supervision({ store, engine, stateDir: machine.stateDir,
-        configured: () => setup.configured() && !this.closing() && !this.lifetime.aborted, health: () => this.health })
+        configured: () => setup.configured() && !this.closing() && !this.lifetime.aborted, health: () => this.health,
+        executionEvidence: ticket => this.executor.executionEvidence(ticket) })
       // Update the `evals` health entry on every pass if an evaluation failed as unavailable within the last hour.
       const evals = board.claim('evals', { state: 'ready', detail: 'No unavailable Eval in the last hour' })
       const evaluateDue = async () => { await speculation.tick(); schedules.tick(); engine.evaluateDue(); evals.set(evalsHealth(store)) }

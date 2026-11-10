@@ -34,6 +34,8 @@ preserves existing providers and default models. [Independent operator alerts](d
 receipt-aware destinations and console recovery without resending uncertain deliveries.
 [Supervision failure qualification](docs/078-supervision-failures.md) records asynchronous assessment failures and checks
 productive work through isolated Harness process faults; model diagnosis quality remains a separate acceptance boundary.
+[Execution observations](docs/079-execution-observations.md) adds bounded host metadata, explicit attribution limits and
+current-evidence checks without increasing the watchdog's assessment budget or recovery authority.
 The workflow below configures the repository-backed mode.
 
 Setup has many steps, so an agent does it with you. Ask your coding agent:

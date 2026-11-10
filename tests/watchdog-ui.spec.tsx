@@ -3,6 +3,8 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import { WatchdogConsole } from '../src/supervision/console.tsx'
+import { ExecutionEvidenceView } from '../src/supervision/execution-evidence-view.tsx'
+import { emptyRemoteExecutionEvidence, type ExecutionEvidence } from '../src/supervision/execution-evidence.ts'
 import { watchdogServer } from './fixtures/watchdog.ts'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -33,6 +35,23 @@ function connect(loseFirst = false) {
     return response
   })
   return requests
+}
+function execution(): ExecutionEvidence {
+  return { version: 1, assignmentId: 'assignment-one',
+    session: { id: 'session-one', availability: 'available', state: 'running', attribution: 'session', assignmentAttribution: 'unknown' },
+    jobs: { availability: 'available', attribution: 'session', assignmentAttribution: 'unknown', lifecycleAttribution: 'unknown',
+      coverage: 'complete', sampled: 0, sampleRevision: 'a'.repeat(64), counts: { running: 0, stopping: 0, completed: 0, killed: 0, failed: 0, unknown: 0 },
+      handedOff: { running: 0, stopping: 0 }, outputBytes: 0 },
+    subagents: { availability: 'available', attribution: 'observed-session-lineage', assignmentAttribution: 'unknown', coverage: 'loaded-only',
+      sampled: 0, sampleRevision: 'b'.repeat(64), truncated: false, counts: { running: 0, idle: 0, unknown: 0 } },
+    executor: { availability: 'available', provenance: 'process-local', retrying: false, turnRetryAttempts: 0, launchRetryAttempts: 0,
+      settling: false, preparing: false, stopping: false, knownHandedOffJobs: 0 },
+    remoteEffects: emptyRemoteExecutionEvidence('not_applicable') }
+}
+async function mountEvidence(value?: ExecutionEvidence) {
+  if (!container) { container = document.createElement('div'); document.body.append(container) }
+  else await act(async () => root?.unmount())
+  root = createRoot(container); await act(async () => root!.render(<ExecutionEvidenceView evidence={value} />))
 }
 
 it('reviews an incident during a main outage and replays an unconfirmed acknowledgement after remount against changed evidence', async () => {
@@ -96,4 +115,105 @@ it('pages incidents and history without treating a changed cursor as an empty su
   await click('Refresh'); await click('Older events')
   await waitFor(() => expect(text()).toContain('Newer events'))
   expect(container!.querySelector('footer')!.textContent).toContain('Open incidents are retained')
+})
+
+it('distinguishes missing observations from available zero counts and non-remote assignments', async () => {
+  await mountEvidence()
+  expect(text()).toContain('Execution observations are unavailable in this snapshot.')
+  const value = execution()
+  value.session.availability = 'unavailable'; value.jobs.availability = 'unavailable'; value.jobs.coverage = 'unavailable'
+  value.subagents.availability = 'unavailable'; value.subagents.coverage = 'unavailable'
+  value.executor.availability = 'unavailable'
+  value.remoteEffects = emptyRemoteExecutionEvidence()
+  await mountEvidence(value)
+  expect(text()).toContain('Session jobs unavailable. Counts and output activity are unknown.')
+  expect(text()).toContain('Subagent observations unavailable. Counts are unknown.')
+  expect(text()).toContain('Remote operation observations unavailable.')
+  expect([...container!.querySelectorAll('caption')].map(item => item.textContent)).toEqual(['Observed work'])
+  expect(text()).toContain('Coordinator activity unavailable. Retry counts and work state are unknown.')
+  expect(text()).not.toContain('Preparing workNo')
+  expect(text()).not.toContain('Observed output bytes'); expect(text()).not.toContain('0 job records observed')
+  await mountEvidence(execution())
+  expect(text()).toContain('0 job records observed'); expect(text()).toContain('Observed output bytes0')
+  expect(text()).toContain('Remote operations do not apply to this assignment.')
+  expect(text()).not.toContain('Unknown outcome0')
+  const unknownOutput = execution(); unknownOutput.jobs.outputBytes = null
+  await mountEvidence(unknownOutput)
+  expect(text()).toContain('0 job records observed'); expect(text()).toContain('Observed output bytesUnknown')
+  expect(text()).not.toContain('Observed output bytes0')
+})
+
+it('shows bounded Session activity separately from assignment outcomes, escaping identifiers and omitting raw details', async () => {
+  const value = execution()
+  value.session.id = '<img src=x onerror=alert(1)>'
+  value.assignmentId = '<script>assignment</script>'
+  value.jobs.sampled = 256; value.jobs.coverage = 'partial'; value.jobs.counts.running = 256
+  value.jobs.handedOff.running = 3; value.jobs.handedOff.stopping = 1; value.jobs.outputBytes = 1234
+  value.subagents.sampled = 256; value.subagents.counts.running = 256; value.subagents.truncated = true
+  value.remoteEffects = { ...emptyRemoteExecutionEvidence('available'), coverage: 'partial', sampled: 2,
+    phases: { pending: 0, accepted: 1, started: 0, settled: 0, refused: 0, unknown: 1 },
+    quiescence: { confirmed: 0, unconfirmed: 1, unknown: 1 }, outcomes: { succeeded: 0, failed: 0, signalled: 0, unknown: 2 } }
+  Object.assign(value.jobs, { command: 'DO_NOT_RENDER_COMMAND', path: '/DO_NOT_RENDER_PATH', labels: ['DO_NOT_RENDER_LABEL'] })
+  await mountEvidence(value)
+  expect(container!.querySelector('img')).toBeNull(); expect(container!.querySelector('script')).toBeNull()
+  expect(text()).toContain('<img src=x onerror=alert(1)>'); expect(text()).toContain('<script>assignment</script>')
+  expect(text()).toContain('Assignment and execution-attempt attribution are unknown.')
+  expect(text()).toContain('Attributed to this task assignment. 2 operations observed')
+  expect(text()).toContain('Partial snapshot · limit 256 records.')
+  expect(text()).toContain('Loaded subagents only: 256 observed · more records omitted.')
+  expect(text()).toContain('Unloaded subagents are not covered.')
+  expect(text()).toContain('Handed-off jobs running3'); expect(text()).toContain('Unknown outcome2')
+  expect(text()).toContain('Not confirmed stopped1'); expect(text()).toContain('Stopped state unknown1')
+  expect(text()).toContain('Activity alone does not prove useful progress.')
+  expect(text()).not.toContain('DO_NOT_RENDER')
+})
+
+it('marks prior assessments and interventions as historical when current execution evidence changes', async () => {
+  host = await watchdogServer(); connect()
+  Object.assign(host.snapshot.tickets[0]!, { execution: execution(), episodeRevision: 'ticket-one', revision: 'execution-base' })
+  host.journal.reconcile(host.snapshot, host.now + 1, 1000, 3600000)
+  const incident = host.journal.open()[0]!
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const reserved = host.journal.reserve(incident.id, host.now + 2 + attempt * 1000, 1000)!
+    host.journal.delivered(incident.id, reserved.delivery!.id)
+  }
+  host.journal.assess({ incidentId: incident.id, incidentRevision: incident.revision, finding: 'progressing', evidence: 'Earlier work appeared to progress.' }, host.now + 3003)
+  host.journal.intervention(incident.id, incident.revision, { accepted: true, reason: 'status_requested' }, host.now + 3004)
+  host.snapshot.tickets[0]!.execution!.jobs.counts.failed = 1; host.snapshot.tickets[0]!.execution!.jobs.sampled = 1
+  host.snapshot.tickets[0]!.revision = 'execution-changed'
+  host.journal.reconcile(host.snapshot, host.now + 3005, 1000, 3600000)
+  await mount(); await click('Prepare release evidence')
+  await waitFor(() => expect(text()).toContain('Historical assessment'))
+  expect(container!.querySelector('.wd-list li span')!.textContent).toContain('Evidence changed—assessment is historical')
+  expect(container!.querySelector('.wd-badge')!.textContent).toBe('Evidence changed—assessment is historical')
+  expect(text()).toContain('limit reached; operator review needed')
+  expect(text()).toContain('Earlier work appeared to progress.'); expect(text()).toContain('it does not assess the current observations')
+  expect(text()).toContain('Progress request based on earlier evidence: accepted')
+  expect(text()).toContain('Job statesRunning0Stopping0Completed0Killed0Failed1')
+  const current = host.journal.get(incident.id)!
+  host.journal.assess({ incidentId: current.id, incidentRevision: current.revision, finding: 'blocked', evidence: 'The current observation includes a failed job.' }, host.now + 3006)
+  await click('Refresh')
+  await waitFor(() => expect(container!.querySelector('.wd-badge')!.textContent).toBe('Assessment: blocked'))
+  expect(text()).not.toContain('limit reached; operator review needed')
+  expect([...container!.querySelectorAll('h3')].some(item => item.textContent === 'Historical assessment')).toBe(false)
+})
+
+it('retains an unconfirmed acknowledgement identity across an execution evidence refresh', async () => {
+  host = await watchdogServer(); const requests = connect(true)
+  Object.assign(host.snapshot.tickets[0]!, { execution: execution(), episodeRevision: 'ticket-one', revision: 'execution-base' })
+  host.journal.reconcile(host.snapshot, host.now + 1, 1000, 3600000)
+  await mount(); await click('Prepare release evidence')
+  await waitFor(() => expect(text()).toContain('0 job records observed'))
+  await click('Acknowledge evidence'); await waitFor(() => expect(text()).toContain('Response lost after commit'))
+  const pending = sessionStorage.getItem('dsh.watchdog.ack.v1')
+  host.snapshot.tickets[0]!.execution!.jobs.outputBytes = 10
+  host.snapshot.tickets[0]!.revision = 'execution-output-changed'
+  host.journal.reconcile(host.snapshot, host.now + 2, 1000, 3600000)
+  await click('Refresh'); await waitFor(() => expect(text()).toContain('Observed output bytes10'))
+  expect(sessionStorage.getItem('dsh.watchdog.ack.v1')).toBe(pending)
+  expect(container!.querySelector<HTMLButtonElement>('button[type=submit]')!.disabled).toBe(true)
+  await click('Retry acknowledgement'); await waitFor(() => expect(text()).toContain('Evidence acknowledged.'))
+  expect(requests).toHaveLength(2); expect(requests[0]).toBe(requests[1])
+  await waitFor(() => expect(text()).toContain('New evidence since acknowledgement'))
+  expect(host.journal.counts().unacknowledged).toBe(1)
 })

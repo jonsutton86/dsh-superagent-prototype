@@ -9,6 +9,7 @@ import { registerHttp, type HttpHost } from '../src/app/http.ts'
 import { Supervision } from '../src/supervision/service.ts'
 import { SupervisionClient } from '../src/supervision/client.ts'
 import type { Intervention } from '../src/supervision/protocol.ts'
+import { unavailableExecutionEvidence, type ExecutionEvidence } from '../src/supervision/execution-evidence.ts'
 import type { Ticket } from '../src/core/index.ts'
 import { feishu, startRuntime } from './fixtures/host.ts'
 
@@ -22,8 +23,9 @@ const ticket = (id = 't1'): Ticket => ({ id, title: 'Implement a bounded watchdo
   createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' })
 const command = (requestId = 'request'): Intervention => ({ requestId, action: 'request_status', instance: supervisor.instance,
   ticketId: 't1', revision: supervisor.snapshot().tickets[0]!.revision })
-const make = () => new Supervision({ store, engine: { note }, stateDir: directory, configured: () => configured,
-  health: () => ({ runtime: { state: 'ready', detail: 'Ready' } }) })
+const make = (executionEvidence?: (ticket: Ticket) => ExecutionEvidence, now?: () => number) =>
+  new Supervision({ store, engine: { note }, stateDir: directory, configured: () => configured,
+    health: () => ({ runtime: { state: 'ready', detail: 'Ready' } }), executionEvidence }, now)
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'superagent-supervision-')); store = new Store(join(directory, 'orchestrator.sqlite'))
   store.tickets.save(ticket()); configured = true; note.mockReset().mockImplementation(() => store.tickets.get('t1')!)
@@ -131,8 +133,89 @@ it('collects consistent bounded pages and refuses a changed snapshot', async () 
   const { client } = await serve()
   expect((await client.observe()).tickets).toHaveLength(101)
   const original = supervisor.snapshot.bind(supervisor)
-  vi.spyOn(supervisor, 'snapshot').mockImplementation(offset => ({ ...original(offset), ...(offset ? { version: 'changed' } : {}) }))
+  vi.spyOn(supervisor, 'snapshot').mockImplementation((offset, version) => ({ ...original(offset, version), ...(offset ? { version: 'changed' } : {}) }))
   await expect(client.observe()).rejects.toThrow('changed during pagination')
+})
+
+it('freezes dynamic execution evidence across pages but rechecks current evidence before intervention', async () => {
+  for (let index = 2; index <= 101; index++) store.tickets.save(ticket(`t${index}`))
+  let bytes = 10
+  supervisor = make(ticket => ({ ...unavailableExecutionEvidence(`worker-${ticket.id}`, ticket.assignments.at(-1)!.id),
+    jobs: { ...unavailableExecutionEvidence().jobs, availability: 'available', coverage: 'complete', outputBytes: bytes } }))
+  const first = supervisor.snapshot(), request: Intervention = { requestId: 'evidence-before-change', instance: supervisor.instance,
+    ticketId: 't1', action: 'request_status', revision: first.tickets[0]!.revision }
+  bytes = 20
+  const second = supervisor.snapshot(100, first.version)
+  expect(second.version).toBe(first.version); expect(second.total).toBe(101)
+  expect(second.tickets[0]!.execution!.jobs.outputBytes).toBe(10)
+  expect(supervisor.intervene(request)).toEqual({ accepted: false, reason: 'observation_changed' })
+  const fresh = supervisor.snapshot()
+  expect(fresh.tickets[0]!.execution!.jobs.outputBytes).toBe(20)
+  expect(fresh.tickets[0]!.episodeRevision).toBe(first.tickets[0]!.episodeRevision)
+  expect(fresh.tickets[0]!.revision).not.toBe(first.tickets[0]!.revision)
+  const { client } = await serve()
+  expect((await client.observe()).tickets).toHaveLength(101)
+  expect(note).not.toHaveBeenCalled()
+})
+
+it('expires and bounds transport frames, rejects incomplete paging and detaches cached evidence from callers', () => {
+  for (let index = 2; index <= 101; index++) store.tickets.save(ticket(`t${index}`))
+  let now = Date.parse('2026-11-10T12:00:00Z')
+  supervisor = make(undefined, () => now)
+  const first = supervisor.snapshot(); first.tickets[0]!.title = 'Caller mutation'
+  expect(supervisor.snapshot(0, first.version).tickets[0]!.title).not.toBe('Caller mutation')
+  expect(() => supervisor.snapshot(100)).toThrow('supervision_frame_required')
+  expect(() => supervisor.snapshot(1, first.version)).toThrow('invalid_supervision_offset')
+  expect(() => supervisor.snapshot(200, first.version)).toThrow('invalid_supervision_offset')
+  const second = supervisor.snapshot(); supervisor.snapshot()
+  expect(() => supervisor.snapshot(100, first.version)).toThrow('supervision_frame_expired')
+  now += 15000
+  expect(() => supervisor.snapshot(100, second.version)).toThrow('supervision_frame_expired')
+  const restarted = make()
+  expect(() => restarted.snapshot(100, second.version)).toThrow('supervision_frame_expired')
+})
+
+it('uses material facts rather than sampling clocks and makes malformed or misattributed evidence explicitly unavailable', () => {
+  let now = Date.parse('2026-11-10T12:00:00Z')
+  const evidence = unavailableExecutionEvidence('worker-t1', 't1-a1')
+  const collect = vi.fn<() => ExecutionEvidence>(() => evidence)
+  supervisor = make(collect, () => now)
+  const first = supervisor.snapshot(); now += 1000
+  expect(supervisor.snapshot().tickets[0]!.revision).toBe(first.tickets[0]!.revision)
+  for (const bad of [{ ...evidence, assignmentId: 'old-assignment' }, { ...evidence, session: { ...evidence.session, id: 'foreign-session' } },
+    { ...evidence, jobs: { ...evidence.jobs, rawCommand: 'private-canary' } }]) {
+    collect.mockReturnValueOnce(bad as ExecutionEvidence)
+    const current = supervisor.snapshot().tickets[0]!
+    expect(current.execution).toEqual(evidence)
+    expect(JSON.stringify(current)).not.toContain('private-canary')
+  }
+  collect.mockImplementationOnce(() => { throw new Error('private-canary') })
+  expect(supervisor.snapshot().tickets[0]!.execution).toEqual(evidence)
+})
+
+it('refuses an expired frame over HTTP and incomplete totals before any reconciliation', async () => {
+  for (let index = 2; index <= 101; index++) store.tickets.save(ticket(`t${index}`))
+  let now = Date.parse('2026-11-10T12:00:00Z'); supervisor = make(undefined, () => now)
+  const { client, url, headers } = await serve(), first = supervisor.snapshot()
+  now += 15000
+  expect((await fetch(`${url}/orchestrator/api/supervision?offset=100&version=${first.version}`, { headers })).status).toBe(410)
+  const original = supervisor.snapshot.bind(supervisor)
+  vi.spyOn(supervisor, 'snapshot').mockImplementation((offset, version) => {
+    const page = original(offset, version)
+    return offset ? { ...page, tickets: [], nextOffset: null } : page
+  })
+  await expect(client.observe()).rejects.toThrow('Incomplete supervision snapshot')
+})
+
+it('refuses oversized complete frames before exposing a partial view', () => {
+  const collect = vi.fn(() => unavailableExecutionEvidence('worker-t1', 't1-a1'))
+  supervisor = make(collect)
+  const open = vi.spyOn(store.tickets, 'open').mockReturnValue(Array.from({ length: 10001 }, () => ticket()))
+  expect(() => supervisor.snapshot()).toThrow('supervision_snapshot_capacity')
+  expect(collect).not.toHaveBeenCalled(); open.mockRestore()
+  supervisor = new Supervision({ store, engine: { note }, stateDir: directory, configured: () => true,
+    health: () => Object.fromEntries(Array.from({ length: 600 }, (_, index) => [`source-${index}`, { state: 'ready' as const, detail: 'x'.repeat(2000) }])) })
+  expect(() => supervisor.snapshot()).toThrow('supervision_snapshot_capacity')
 })
 
 it('refuses credential forwarding, non-loopback targets, and oversized responses', async () => {

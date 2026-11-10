@@ -3,7 +3,7 @@ import { constants, closeSync, fstatSync, openSync, readFileSync } from 'node:fs
 import type { WatchdogJournal } from './journal.ts'
 import { AlertReceiverReceiptSchema, AlertRoutesSchema, alertDestinationHash, alertHash, alertView,
   type AlertCandidate, type AlertList, type AlertRecord, type AlertRoute, type AlertView } from './alert-protocol.ts'
-import { WatchdogOperatorError } from './protocol.ts'
+import { assessmentIsCurrent, WatchdogOperatorError } from './protocol.ts'
 
 /** Incident content is explicitly untrusted data; service errors use fixed text instead of leaking exception bodies. */
 function candidates(journal: WatchdogJournal): AlertCandidate[] {
@@ -11,16 +11,17 @@ function candidates(journal: WatchdogJournal): AlertCandidate[] {
   for (const incident of journal.open()) {
     if (journal.view(incident).acknowledged) continue
     const observation = incident.observation
+    const assessment = assessmentIsCurrent(incident) ? incident.assessment : undefined
     const finding = observation.stage === 'person/answer' ? 'operator_answer_needed'
       : ['person/blocked', 'person/failed'].includes(observation.stage) ? observation.stage.slice(7)
-        : incident.assessment && incident.assessment.finding !== 'progressing' ? incident.assessment.finding
-          : !incident.assessment && incident.attempts >= 3 ? 'assessment_delivery_limit_reached' : undefined
+        : assessment && assessment.finding !== 'progressing' ? assessment.finding
+          : !assessment && incident.attempts >= 3 ? 'assessment_delivery_limit_reached' : undefined
     if (!finding) continue
     result.push({ subjectId: `incident:${incident.id}`, incidentId: incident.id, evidenceKey: journal.view(incident).viewRevision,
       title: observation.title.slice(0, 500), finding, observedAt: incident.updatedAt,
       evidence: (finding === 'assessment_delivery_limit_reached'
         ? 'Three assessment deliveries were reserved without a recorded assessment. An assessment may still be running; review current status.'
-        : observation.question ?? incident.assessment?.evidence ?? observation.report?.summary ?? 'Operator review is required.').slice(0, 2000) })
+        : observation.question ?? assessment?.evidence ?? observation.report?.summary ?? 'Operator review is required.').slice(0, 2000) })
   }
   const status = journal.status()
   if (status && !status.reachable && status.error !== 'Awaiting first observation') result.push({

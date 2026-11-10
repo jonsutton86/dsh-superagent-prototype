@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { fingerprint, timestamp } from './journal.ts'
 import { EffectOwner, RemoteError, Rpc, type RpcInput, type RemoteJob, type RemoteOperation } from './protocol.ts'
 import { OwnershipError, OwnershipStamp } from '../ownership/protocol.ts'
+import { EXECUTION_EVIDENCE_LIMIT, emptyRemoteExecutionEvidence, type RemoteExecutionEvidence } from '../supervision/execution-evidence.ts'
 
 export interface ExecutionReceipt {
   id: string; world: string; grantId: string; epoch: number; fingerprint: string; owner: EffectOwner
@@ -53,6 +54,32 @@ export class ExecutionEffects {
     const items = this.db.prepare(`SELECT value FROM execution_effect${where} ORDER BY json_extract(value, '$.createdAt') DESC, id DESC LIMIT ? OFFSET ?`)
       .all(...args, limit, offset).map(row => JSON.parse(String(row.value)) as ExecutionReceipt)
     return { items, total, nextOffset: offset + items.length < total ? offset + items.length : null }
+  }
+  /** Fixed-size metadata from this existing journal; never observes or repeats a remote operation. */
+  executionEvidence(ticketId: string, assignmentId: string, world: string): RemoteExecutionEvidence {
+    if (this.closed) return emptyRemoteExecutionEvidence()
+    const rows = this.db.prepare(`SELECT id, json_extract(value, '$.phase') AS phase,
+      json_extract(value, '$.quiescent') AS quiescent, json_extract(value, '$.outcome.exitCode') AS exitCode,
+      json_type(value, '$.outcome.signal') AS signalType
+      FROM execution_effect WHERE json_extract(value, '$.owner.ticketId')=?
+      AND json_extract(value, '$.owner.kind')='assignment' AND json_extract(value, '$.owner.assignmentId')=?
+      AND json_extract(value, '$.world')=? ORDER BY id LIMIT ?`).all(ticketId, assignmentId, world, EXECUTION_EVIDENCE_LIMIT + 1)
+    const result = emptyRemoteExecutionEvidence(); result.availability = 'available'
+    result.coverage = rows.length > EXECUTION_EVIDENCE_LIMIT ? 'partial' : 'complete'
+    result.sampleRevision = fingerprint(rows.slice(0, EXECUTION_EVIDENCE_LIMIT))
+    for (const row of rows.slice(0, EXECUTION_EVIDENCE_LIMIT)) {
+      result.sampled++
+      const phase = row.phase
+      if (phase === 'pending' || phase === 'accepted' || phase === 'started' || phase === 'settled' || phase === 'refused' || phase === 'unknown') result.phases[phase]++
+      else result.phases.unknown++
+      result.quiescence[row.quiescent === 1 ? 'confirmed' : row.quiescent === 0 ? 'unconfirmed' : 'unknown']++
+      if (phase !== 'settled' || row.quiescent !== 1) result.outcomes.unknown++
+      else if (row.signalType === 'text') result.outcomes.signalled++
+      else if (row.exitCode === 0) result.outcomes.succeeded++
+      else if (typeof row.exitCode === 'number') result.outcomes.failed++
+      else result.outcomes.unknown++
+    }
+    return result
   }
   pending(limit?: number): ExecutionReceipt[] {
     const sql = "SELECT value FROM execution_effect WHERE json_extract(value, '$.quiescent') IS NOT 1 ORDER BY coalesce(json_extract(value, '$.observedAt'), ''), id"

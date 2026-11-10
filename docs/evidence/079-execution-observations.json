@@ -1,0 +1,157 @@
+{
+  "kind": "supervision-execution-observation-evidence",
+  "capturedAt": "2026-11-10T19:35:23.262923+00:00",
+  "workingTreeBase": "cd3cde92e5e6177fa8eb9d38fb7c607d89f64f8d",
+  "reaBaseline": {
+    "revision": "cd3cde92e5e6177fa8eb9d38fb7c607d89f64f8d",
+    "tool": "rea-agents@6.8.0",
+    "parentEvidenceId": "ev_3dce4ec952c32dab936307e4ca8ed14a2736e7d812c89fc8a36f94e063cc43e8",
+    "sourceArtifactSha256": "86b45cbe7ec18e15c614cbaeb04d65212b759913becd0f92bd5c6bacec11be03",
+    "bundleSha256": "72c302f15d3cd6af9b0494eacb6ebb0446370637c52fd617625aa21748830773",
+    "selectedFiles": [
+      "executor/dsh.ts",
+      "executor/background.ts",
+      "app/sessions.ts",
+      "remote/effects.ts",
+      "remote/world.ts"
+    ],
+    "sourceDigests": {
+      "executor/dsh.ts": "090994ae4f8e7b0e09d138482a99e5a5043b4d6051ab5e6c09d5b6800517b108",
+      "executor/background.ts": "60b98302d412426cda7df12ed69d750183f60fb00ac802a01ae2c963cfc79420",
+      "app/sessions.ts": "0da3946172c2a93755b58b417cd690c72b7758bef1f5fb549b0cd6793eebc074",
+      "remote/effects.ts": "5a5f25e71b3904cde988ba661418fd6549d771ec7dcac815aaee8989c57b6e5f",
+      "remote/world.ts": "15211dc09cdf73fce54f56122911abd724282b6ad0f0d88e36a685dc345cba82"
+    },
+    "parsed": 5,
+    "parseFailures": 0,
+    "excluded": 311,
+    "applicationUnknowns": 311,
+    "semanticUnknowns": 7502,
+    "coverage": "partial",
+    "limitation": "Static observations establish selected source contracts, not full application semantics or runtime outcomes."
+  },
+  "installedHarness": {
+    "version": "0.2.1-rc.3",
+    "sourceDigests": {
+      "dsh-jobs/lib/types/view.d.ts": "d5ea61cf5f40b61b6f9673b944b5769f9509b0d02d18c9316bc8dca76b685d6b",
+      "dsh-jobs/lib/types/types.d.ts": "dfa69379032dfb95461e9e06e1a88181f12be005129b3540f78eea015fe4dcb1",
+      "dsh-jobs-local/lib/index.js": "cecdc8a766f62b28999ffff574008d34a39e276d91c4cc648f10ccb18afbed34",
+      "dsh-tool-bash/lib/index.js": "a1215d7bcaf82c0755be48321ef6bb45075f1cb33296d6263009e9d10fd596f6",
+      "dsh-subagent/lib/types/index.d.ts": "bc0a78235eeb39586769204d70ed8a69cb2a26fe2893cb716b142455c9d705a5"
+    },
+    "observedContracts": [
+      "Loaded worker Sessions can survive assignment changes.",
+      "Public jobs expose ownerSession, not assignment or original Agent lifecycle; unowned jobs also appear.",
+      "Job lifecycle recording can fail without preventing the job, so absent events do not prove absence.",
+      "ExecutionEffects already persists trusted assignment and world before dispatch; its filtered metadata projection reuses that authority."
+    ]
+  },
+  "codegraph": {
+    "tool": "@colbymchenry/codegraph@1.6.2",
+    "baselineSync": "completed before investigation; ignored derived index",
+    "finalSync": {
+      "changedFiles": 24,
+      "nodes": 1073,
+      "resolvedPendingReferences": 700,
+      "unresolved": 67,
+      "coverage": "derived static context; not a runtime trace"
+    }
+  },
+  "review": {
+    "fabricRevision": "de0b72766db0436b6c1887bb75768cb3960e67e5",
+    "patterns": [
+      "review_design",
+      "review_code"
+    ],
+    "evidenceWrapperVersion": 1,
+    "boundaries": [
+      "Session attribution is not assignment attribution.",
+      "Missing observations are unknown, not zero.",
+      "Metadata activity is not successful or useful work.",
+      "Material evidence updates do not reset per-cycle delivery budgets.",
+      "Pending assessment deliveries and old operator receipts retain original evidence and IDs.",
+      "No additional persistence tier, endpoint probe, output read or recovery authority."
+    ]
+  },
+  "qualification": {
+    "status": "focused and visual passed; full committed-revision qualification pending",
+    "focused": {
+      "passed": 101,
+      "files": 10,
+      "seconds": 1.48
+    },
+    "installedProcessBeforeBrowserBuildFix": {
+      "passed": 1,
+      "seconds": 66.46,
+      "logSha256": "007e0233bfbcb4152cf212689826feafbf5584ad0a03103c69a067f0de11b079",
+      "limitation": "Actual Harness worker metadata and restart tests; preceded standalone UI bundle fix."
+    },
+    "browserBundle": {
+      "passed": 2,
+      "seconds": 0.664,
+      "logSha256": "c1cba30330e51744a1a4be65cd1a0d2856279a860ac774144e969ef2ef6d8d1c",
+      "method": "Production browser builds mounted with only declared React factory modules / no standalone external package resolver."
+    },
+    "browser": {
+      "name": "Chrome",
+      "fixture": "synthetic isolated same-origin production watchdog HTTP/journal and built UI",
+      "found": "Unresolved zod import prevented initial standalone startup.",
+      "correction": "Bundle zod into standalone entry and add actual entry execution regression.",
+      "observed": [
+        "Current metadata and session/assignment attribution limits visible.",
+        "Partial remote operation phases, outcomes and quiescence remain separate.",
+        "Earlier diagnosis, progress request and acknowledgement visibly historical.",
+        "Disconnected observations explicitly unavailable with unknown counts."
+      ],
+      "newPageConsoleErrors": 0,
+      "acknowledgementSubmitted": false,
+      "fixtureStopped": true,
+      "temporaryStateRemoved": true,
+      "fixtureSha256": "2d038d34f037d617cf8f56868fa566321dfca5490304f0415e0013654f30480d",
+      "uiBundleSha256": "4b0d3351a7dd3df415a2b8d2e6003fc39b0ca4cf2072e5a4c5e2822d8cd4114d"
+    },
+    "finalFocused": {
+      "passed": 8,
+      "files": 2,
+      "seconds": 0.676,
+      "typecheck": "passed",
+      "scope": "documentation and actual browser bundles after standalone dependency fix"
+    }
+  },
+  "boundaries": {
+    "runtime": "DeepSeek Harness retained",
+    "defaultModel": "deepseek-official/deepseek-flash unchanged",
+    "liveProviderInference": false,
+    "existingAppDeployment": false,
+    "liveOperatorAlerts": false,
+    "semanticDiagnosisQuality": "not established by scripted inference",
+    "fullProjectComplete": false
+  },
+  "sourceDigests": {
+    "src/app/http.ts": "4f18453ce38921b1e690a8eb0e203749610d3cd7e34239625b5ac540940520d2",
+    "src/app/runtime.ts": "51a1f6a4a8c45e6da52585fea06895ebeaa0e4b63455381c16b638426e441b93",
+    "src/executor/dsh.ts": "3302106887ce834b0ea53a6c00a967a615d4ecb0248ed9d09912520a868fe788",
+    "src/executor/evidence.ts": "4b7b23f9b156605cc2daf2bef93f5c07f1c8918de6faf5bf5c9d201cdf40a511",
+    "src/remote/effects.ts": "6f21d031120c9166b8556d72ad1b2a7dee41ade756c8d26d1ac7b74ed856838a",
+    "src/remote/world.ts": "6cc84d4f545923348039243ec1353743ff3ce4ad20a7e89202476a598b3563cb",
+    "src/supervision/alerts.ts": "31f4579df679528ca99c0b0fc59d3b9c75d880618dc759e89459bbd64036adcc",
+    "src/supervision/client.ts": "81f4bba5a1144b90b89da0fdf95e3eda874d5e0bb83d26ef2bc6a13e2519943f",
+    "src/supervision/console.css": "d0689a7a209d3130c894c698b0bc7bd21289805cf3c46ff5a787cac61246cd50",
+    "src/supervision/console.tsx": "583fd02680b55a33af53ce9f4cbee99028f0f200ed9cd9ef858bcd4e8c273c62",
+    "src/supervision/execution-evidence-view.tsx": "427b8ad1e36ee0057e04d4f261428a9157769f664f59e6fe1a123d5c0cc8df00",
+    "src/supervision/execution-evidence.ts": "c78548e9107a19aed697b4e99b6136f194354f6ae0a0ed9274dc496d2890da8e",
+    "src/supervision/journal.ts": "1369ab6e17b928c18905dc35d9beb117b8fde586b8670d7ca61d761cee2d169f",
+    "src/supervision/monitor.ts": "fbeab4e64f283aaf0ad66c5655dcbae628424db5bc7892bfdefc12d6af26e80e",
+    "src/supervision/plugin.ts": "49c28e8264bd9e68ce3b58fbf6737712b6be75d70e2bec6c07228f04816f365a",
+    "src/supervision/protocol.ts": "f979c28b01fc85324704b154c818753e9dbc788f48d6b7b776242e9feff948c3",
+    "src/supervision/service.ts": "d0a4087c48eb5c215fb4c5d95a7e1881082f1b8c8b81c5a2b7fa345a53db3404",
+    "tests/client-bundle.spec.ts": "121ae4f688d721de29d505dfdb24be4686f5957ecb47c28602e488fecbcb99f0",
+    "tests/execution-evidence.spec.ts": "74db8978eec25c7231bea1f302f3700b7ab5f7c79a6e9e8b3d878fef46b9b3e3",
+    "tests/supervision.spec.ts": "28599f92f09d26db94f8e626c90f94f2ad29fd3adf65a0c79dd4d99ff2d0c07a",
+    "tests/watchdog-alerts.spec.ts": "582ac3a558069ae5ddf803b19d82ce4b1efbac2f5ab0a587e4ffc367149f4c49",
+    "tests/watchdog-process-harness.spec.ts": "33788b4b54a7331950fd421ae3de7cb7874ea4a8c001bb15d7211ac7d508a003",
+    "tests/watchdog-ui.spec.tsx": "19b6db83e97652e38502ff8ddf6563d124a27b11c44b7e7f88e7ef65efb757fe",
+    "tests/watchdog.spec.ts": "6dcefb114affc4a5e9586fe99ac0309ad02abc9cb2c51e360926d5eb6678b27b",
+    "tsdown.config.ts": "13d9aa45bcb328a838dc5ef4c7cf22cb9d0e4e01c7ddaf8a17ec3fff1d87fc88"
+  }
+}

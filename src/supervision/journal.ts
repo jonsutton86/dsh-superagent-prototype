@@ -7,13 +7,14 @@ import { key } from '../core/index.ts'
 import { AlertJournal } from './alert-journal.ts'
 import type { ObservationSet } from './client.ts'
 import type { Assessment, InterventionResult, Observation } from './protocol.ts'
-import { ACK_WINDOW_MS, AcknowledgeSchema, WatchdogOperatorError, type Acknowledge, type Acknowledgement,
+import { ACK_WINDOW_MS, AcknowledgeSchema, assessmentDeliveryText, assessmentIsCurrent, WatchdogOperatorError, type Acknowledge, type Acknowledgement,
   type AcknowledgementReceipt, type IncidentFilter, type Page, type RetentionPolicy } from './protocol.ts'
 
 export interface Incident {
   id: string; revision: string; instance: string; observation: Observation; openedAt: number; cycleAt: number;
-  updatedAt: number; closedAt?: number; attempts: number; delivery?: { id: string; at: number; sent: boolean };
-  assessment?: Assessment; intervention?: InterventionResult;
+  updatedAt: number; closedAt?: number; attempts: number;
+  delivery?: { id: string; at: number; sent: boolean; incidentRevision: string; observation: Observation; text: string };
+  assessment?: Assessment; intervention?: InterventionResult; interventionRevision?: string;
   viewRevision?: string; acknowledgement?: Acknowledgement;
 }
 export interface IncidentView extends Incident { viewRevision: string; acknowledged: boolean }
@@ -36,7 +37,7 @@ export class WatchdogJournal {
     try {
       this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;')
       const version = this.db.prepare('PRAGMA user_version').get()!.user_version as number
-      if (version > 3) throw new Error(`Unsupported watchdog schema ${version}`)
+      if (version > 4) throw new Error(`Unsupported watchdog schema ${version}`)
       this.db.exec(`CREATE TABLE IF NOT EXISTS incidents (id TEXT PRIMARY KEY, closed INTEGER NOT NULL, data TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS monitor (id INTEGER PRIMARY KEY CHECK(id=1), data TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS audit (seq INTEGER PRIMARY KEY, at INTEGER NOT NULL, kind TEXT NOT NULL, incident TEXT, data TEXT NOT NULL);
@@ -46,8 +47,20 @@ export class WatchdogJournal {
         CREATE TABLE IF NOT EXISTS acknowledgements (id TEXT PRIMARY KEY, expires INTEGER NOT NULL, request TEXT NOT NULL, result TEXT NOT NULL);
         CREATE INDEX IF NOT EXISTS acknowledgements_expiry ON acknowledgements(expires);
         CREATE INDEX IF NOT EXISTS audit_incident ON audit(incident, seq);
-        CREATE INDEX IF NOT EXISTS incident_closed ON incidents(closed);
-        PRAGMA user_version=3;`)
+        CREATE INDEX IF NOT EXISTS incident_closed ON incidents(closed);`)
+      this.atomic(() => {
+        for (const row of this.db.prepare(`SELECT id, data FROM incidents WHERE
+          (json_extract(data, '$.delivery') IS NOT NULL AND (json_extract(data, '$.delivery.text') IS NULL
+            OR json_extract(data, '$.delivery.observation') IS NULL OR json_extract(data, '$.delivery.incidentRevision') IS NULL))
+          OR (json_extract(data, '$.intervention') IS NOT NULL AND json_extract(data, '$.interventionRevision') IS NULL)`).all()) {
+          const incident = JSON.parse(String(row.data)) as Incident
+          this.freezeDelivery(incident)
+          if (incident.intervention) incident.interventionRevision ??= incident.revision
+          // Filling known historical bases must not invalidate an existing operator acknowledgement.
+          this.db.prepare('UPDATE incidents SET data=? WHERE id=?').run(JSON.stringify(incident), row.id!)
+        }
+        this.db.exec('PRAGMA user_version=4;')
+      })
       this.alerts = new AlertJournal(this.db, (at, kind, incident, data) => this.event(at, kind, incident, data))
     } catch (error) { this.db.close(); throw error }
   }
@@ -55,6 +68,13 @@ export class WatchdogJournal {
     this.db.exec('BEGIN IMMEDIATE')
     try { const value = work(); this.db.exec('COMMIT'); return value }
     catch (error) { this.db.exec('ROLLBACK'); throw error }
+  }
+  private freezeDelivery(incident: Incident): void {
+    if (!incident.delivery) return
+    incident.delivery.incidentRevision ??= incident.revision
+    incident.delivery.observation ??= structuredClone(incident.observation)
+    incident.delivery.text ??= assessmentDeliveryText({ id: incident.id, revision: incident.delivery.incidentRevision,
+      observation: incident.delivery.observation })
   }
   private save(incident: Incident, evidenceChanged = true): void {
     if (evidenceChanged) incident.viewRevision = randomUUID()
@@ -103,8 +123,17 @@ export class WatchdogJournal {
         if (snapshot.paused || !snapshot.configured || (!working && !blocked)) continue
         const id = key(`watchdog:${observation.id}:${observation.assignmentId ?? 'queued'}`), previous = this.get(id)
         seen.add(id)
-        if (previous && previous.closedAt === undefined && previous.observation.revision === observation.revision
-          && previous.instance === snapshot.instance && now - previous.cycleAt < reviewEveryMs) continue
+        const sameCycle = previous && previous.closedAt === undefined && previous.instance === snapshot.instance
+          && (previous.observation.episodeRevision ?? previous.observation.revision) === (observation.episodeRevision ?? observation.revision)
+          && now - previous.cycleAt < reviewEveryMs
+        if (sameCycle) {
+          if (previous.observation.revision === observation.revision) continue
+          this.freezeDelivery(previous)
+          previous.observation = observation; previous.revision = randomUUID(); previous.updatedAt = now
+          // Material activity changes evidence, not the task/review-cycle delivery budget or original dispatched identities.
+          this.save(previous); this.event(now, 'evidence_changed', id, previous)
+          continue
+        }
         const incident: Incident = { id, revision: randomUUID(), instance: snapshot.instance,
           observation, openedAt: previous?.closedAt === undefined ? previous?.openedAt ?? now : now,
           cycleAt: now, updatedAt: now, attempts: 0, ...(previous?.acknowledgement ? { acknowledgement: previous.acknowledgement } : {}) }
@@ -120,11 +149,12 @@ export class WatchdogJournal {
   reserve(id: string, now: number, retryMs: number): Incident | undefined {
     return this.atomic(() => {
       const incident = this.get(id)
-      if (!incident || incident.closedAt !== undefined || incident.assessment) return
+      if (!incident || incident.closedAt !== undefined || assessmentIsCurrent(incident)) return
       if (incident.delivery && !incident.delivery.sent) return incident
       if (incident.attempts >= 3 || (incident.delivery && now - incident.delivery.at < retryMs)) return
       incident.attempts++
-      incident.delivery = { id: key(`${id}:${incident.revision}:${incident.attempts}`), at: now, sent: false }
+      incident.delivery = { id: key(`${id}:${incident.revision}:${incident.attempts}`), at: now, sent: false,
+        incidentRevision: incident.revision, observation: structuredClone(incident.observation), text: assessmentDeliveryText(incident) }
       this.save(incident, incident.attempts === 3); this.event(now, 'delivery_reserved', id, incident.delivery)
       return incident
     })
@@ -141,7 +171,7 @@ export class WatchdogJournal {
       const incident = this.get(assessment.incidentId)
       if (!incident || incident.closedAt !== undefined || incident.revision !== assessment.incidentRevision)
         return { accepted: false, reason: 'incident_changed' }
-      if (incident.assessment) return { accepted: false, reason: 'already_assessed' }
+      if (assessmentIsCurrent(incident)) return { accepted: false, reason: 'already_assessed' }
       incident.assessment = assessment; incident.updatedAt = now; this.save(incident)
       this.event(now, 'assessed', incident.id, assessment)
       return { accepted: true, reason: 'assessment_recorded' }
@@ -151,8 +181,8 @@ export class WatchdogJournal {
     this.atomic(() => {
       const incident = this.get(id)
       this.event(now, 'intervention', id, { revision, result })
-      if (incident?.revision !== revision) return
-      incident.intervention = result; incident.updatedAt = now; this.save(incident)
+      if (!incident || (incident.intervention && incident.interventionRevision !== revision && incident.revision !== revision)) return
+      incident.intervention = result; incident.interventionRevision = revision; incident.updatedAt = now; this.save(incident)
     })
   }
   recent(limit = 100) {

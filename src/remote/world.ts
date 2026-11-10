@@ -6,6 +6,7 @@ import { inside } from './journal.ts'
 import { RemoteError, Rpc, type EndpointIdentity, type GrantReceipt, type RemoteGrant, type RevocationReceipt, type EffectOwner } from './protocol.ts'
 import { WorldJournal, worldBinding, type WorldRecord } from './world-journal.ts'
 import { ownershipReady } from '../ownership/runtime.ts'
+import { emptyRemoteExecutionEvidence, type RemoteExecutionEvidence } from '../supervision/execution-evidence.ts'
 import { requiresOwnership } from '../ownership/protocol.ts'
 import { RemoteCommandScope } from './subprocess.ts'
 
@@ -200,6 +201,12 @@ export class RemoteWorld {
   effects(ticketId?: string, offset = 0, limit = 50) { return this.journal.effects.list(ticketId, offset, limit) }
   /** Original-ID host observation without a paginated search or a replacement dispatch. */
   executionReceipt(id: string) { return this.journal.effects.get(id) }
+  /** Read saved exact-assignment receipts without consulting the endpoint or refreshing polling timestamps. */
+  executionEvidence(ticketId: string, assignmentId: string, expectedWorld: string): RemoteExecutionEvidence {
+    return this.record && !this.closed && worldBinding(this.record.endpointId, this.record.grant) === expectedWorld
+      ? this.journal.effects.executionEvidence(ticketId, assignmentId, expectedWorld)
+      : emptyRemoteExecutionEvidence()
+  }
   quiescent(ticketId: string): boolean { return this.journal.effects.quiescent(ticketId) }
   /** Bounded read-only reconciliation; missing or conflicting receipts remain unknown, without automatic replacement dispatch. */
   async refreshEffects(): Promise<void> {

@@ -40,14 +40,17 @@ export class SupervisionClient {
     const deadline = AbortSignal.timeout(10_000)
     const first = await this.request('', SnapshotSchema, undefined, deadline), tickets = [...first.tickets]
     let offset = first.nextOffset, pages = 1
+    if (offset !== null && offset !== tickets.length) throw new Error('Supervision pagination is not contiguous')
     while (offset !== null) {
       if (pages++ >= 100) throw new Error('Supervision snapshot exceeds 100 pages; no incidents reconciled')
-      const page = await this.request(`?offset=${offset}`, SnapshotSchema, undefined, deadline)
+      const page = await this.request(`?offset=${offset}&version=${encodeURIComponent(first.version)}`, SnapshotSchema, undefined, deadline)
       if (page.instance !== first.instance || page.version !== first.version || page.paused !== first.paused
-        || page.configured !== first.configured) throw new Error('Supervision changed during pagination; retry next poll')
+        || page.configured !== first.configured || page.total !== first.total) throw new Error('Supervision changed during pagination; retry next poll')
       if (page.nextOffset !== null && page.nextOffset <= offset) throw new Error('Supervision pagination did not advance')
+      if (page.nextOffset !== null && page.nextOffset !== offset + page.tickets.length) throw new Error('Supervision pagination is not contiguous')
       tickets.push(...page.tickets); offset = page.nextOffset
     }
+    if (first.total !== undefined && tickets.length !== first.total) throw new Error('Incomplete supervision snapshot; no incidents reconciled')
     if (new Set(tickets.map(ticket => ticket.id)).size !== tickets.length) throw new Error('Duplicate supervision observation')
     const { nextOffset: _, ...snapshot } = first
     return { ...snapshot, tickets }
