@@ -15,8 +15,12 @@ The completed-milestone history below remains unchanged.
 
 Current continuation: [079 Execution observations](079-execution-observations.md) adds bounded host-collected metadata,
 explicit Session/assignment attribution, coherent observation frames and evidence-bound assessment/review without resetting
-the existing delivery budget. Qualification of these edits is pending; the earlier full-suite baseline below does not validate
-them. This continues item 1 and retains the full remaining scope, Harness runtime and optional-provider/default-model boundaries.
+the existing delivery budget. Exact runtime/test revision `418bb6de16e546058557191e4068e77f2b6e7174` passed full macOS
+(2,200 passed / 25 skipped) and native Linux (2,213 / 14), typecheck and seven builds on both. Native service/SSH checks
+passed 16 with one skip on macOS and all 30 on Linux. Installed watchdog, publisher and provider-adapter fixtures ran on both.
+Chrome exposed and verified the fix for an unresolved standalone `zod` import, now covered by the actual built-entry test.
+`docs/evidence/079-qualification.json` records the exact scope and successful CI run. This continues item 1 and retains the
+full remaining scope, Harness runtime and optional-provider/default-model boundaries; it does not deploy the user app.
 
 Previous continuation: [078 Supervision failures](078-supervision-failures.md) addresses asynchronous Harness assessment
 errors and adds isolated installed-process fault qualification with a local scripted provider. The installed process test
@@ -235,7 +239,7 @@ not a claim that the prototype already ships every feature or that the article s
 | Full duplex | Harness job/subagent services, `src/executor/background.ts`, `src/app/delivery.ts`, remote receipts, durable assignment/tool ownership, receipt-only restart recovery and operator cancellation | Broader long-running job, process-failure and cross-host acceptance |
 | Compute/state separation | SQLite Store; Harness Session checkpoints, held import, checkpoint-bound claimant replacement, revision-bound receipt audits, authenticated held receipt application, consumed-input proof, core Engine graph reconciliation, built-in cursor/inbound receipts, mission/plan/schedule authority and artifact/check/review/completion evidence verification; authenticated private installation, relocated bindings, Session-prefix-preserving Runtime activation/restart, generated managed/dedicated launch profiles and repeated recovery cycles; ownership authority, endpoint handoff fencing, shared Runtime/pool/provider lifecycle and independently fenced artifact/mission delivery with directed inbound replies | Other product-extension state, broader inbound discovery/admission and repository integration, clean-host and cross-machine failover qualification |
 | Remote environments | Paired local/remote providers, authenticated leased grants, durable revocation, mission/Session binding, endpoint-owned versioned credentials, remote profile and artifact/restart qualification, operator enrollment/reconciliation, generated profiles, managed world pool, exact per-action selection, prepared-host endpoint launcher, configured cgroup limits/usage receipts, owned delegated services, pinned managed SSH transport native Ubuntu ARM64 kernel/Harness/service qualification and pinned remote repository preparation | Broader OS/CPU and physical/cloud qualification, privileged host-user setup, managed machine/fleet provisioning and broader/reverse transport, independent remote branch/PR publication and broader Git provisioning, disk quotas, per-workspace aggregate allocation and cross-host acceptance |
-| Watchdog | Independent Harness assessor and journal, standalone incident console, evidence-bound operator review/replay, bounded retention, receipt-aware alerts and actual-model main/watchdog process-failure recovery; current inference-failure qualification in 078 | Live alert destination acceptance, broader diagnosis/productive-job quality, cross-host/process-failure acceptance, richer progress evidence and separately authorized recovery policies |
+| Watchdog | Independent Harness assessor and journal, standalone incident console, evidence-bound operator review/replay, bounded retention, receipt-aware alerts and actual-model main/watchdog process-failure recovery; inference-failure qualification in 078 and bounded host execution metadata with coherent evidence revisions in 079 | Live alert destination acceptance, broader diagnosis/productive-job quality, cross-host/process-failure acceptance, unattended endurance and narrow audited recovery policies |
 | Delivery | Reports and PR binding/closure; content-addressed artifacts, stale mission-review invalidation, reviewed artifacts and plan-authorized mission replies with independent receipts; exact participant/task inbound listeners; versioned checks, original assignment/environment bindings, host-captured file/Git snapshots, original-job evidence, selected-check acceptance/publication, explicit-commit PR reviews, plan-bound PR result targets and fresh all-action mission completion | CI/branch-policy and merge integration, continuous freshness, broader inbound discovery/admission, remote branch/PR publication and broader Git provisioning, and speculative quality evaluation |
 | Operator control | Existing web panel, settings, pause/retry/stop, scoped usage/limits/prices and reconciliation, local/remote environment status and revocation, endpoint enrollment/reconciliation and private profile generation | Supervision, broader workload budgets and evidence surfaces |
 
@@ -1032,10 +1036,15 @@ still need evaluation. Increment 077 adds receipt-aware alert routing and consol
 and broader diagnosis quality remain open before calling the operational experience complete.
 Increment 078 addresses asynchronous assessment errors and qualifies provider faults, a real 30-second productive job and
 original receipt recovery in isolated installed Harness processes. Its scripted model cannot establish semantic diagnosis
-quality or overnight endurance. Source `e73c1f3` passed full macOS/native Linux suites and installed-process qualification;
-richer host-collected progress evidence and narrow audited recovery policies remain implementation work in this item.
-Process restarts or task retries require their own narrow,
-audited recovery policies; they must not be inferred from arbitrary worker text.
+quality or overnight endurance. Source `e73c1f3` passed full macOS/native Linux suites and installed-process qualification.
+Increment 079 adds bounded host job/subagent/coordinator/remote-receipt observations, explicit unknown attribution, immutable
+transport frames and evidence-bound assessments without renewing delivery budgets. Source `418bb6d` passed full macOS/native
+Linux suites, installed-process checks and actual browser startup. Richer observations do not establish useful progress.
+Narrow audited recovery policies remain implementation work. The existing launcher already owns bounded process-absence
+restart; the next proposed increment makes the existing executor transient-provider continuation budget and original delivery
+identity durable, with exact Agent/assignment/world fencing. This is a source-derived implementation choice, not an
+article-prescribed protocol or permission to deploy automatic task retries. Process restarts or new-assignment retries require
+their own narrow audited policies; they must not be inferred from arbitrary worker text.
 
 ### 2. Compute/state/environment contracts and remote execution — whole-profile mission integration implemented
 

@@ -74,7 +74,7 @@
     ]
   },
   "qualification": {
-    "status": "focused and visual passed; full committed-revision qualification pending",
+    "status": "full exact-revision macOS and native Linux qualification passed",
     "focused": {
       "passed": 101,
       "files": 10,
@@ -116,7 +116,9 @@
       "seconds": 0.676,
       "typecheck": "passed",
       "scope": "documentation and actual browser bundles after standalone dependency fix"
-    }
+    },
+    "testedRevision": "418bb6de16e546058557191e4068e77f2b6e7174",
+    "finalReceipt": "079-qualification.json"
   },
   "boundaries": {
     "runtime": "DeepSeek Harness retained",

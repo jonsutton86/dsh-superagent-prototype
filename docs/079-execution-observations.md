@@ -91,7 +91,13 @@ acknowledgement boundary. The temporary synthetic server was stopped and its sta
 did not expose this startup fault.
 
 The compact source, method and browser evidence is in [the evidence record](evidence/079-execution-observations.json).
-Full exact-revision platform qualification is pending; earlier full-suite passes do not validate this change.
+Runtime/test revision `418bb6de16e546058557191e4068e77f2b6e7174` passed full macOS qualification (2,200 passed,
+25 skipped; 257.96 seconds) and hosted native Linux qualification (2,213 passed, 14 skipped; 303.17 seconds), with typecheck
+and seven builds on both. Native service/SSH checks passed 16 with one skip on macOS, and all 30 on Linux. Installed
+watchdog, repository publisher and provider-adapter fixtures were enabled on both; Linux logs confirm each ran and passed.
+The built standalone browser regression ran after the dependency fix. [The qualification receipt](evidence/079-qualification.json)
+records source/archive identity, platform versions, log digests and the successful automatic push workflow.
+Linux jsdom tests emitted nonfatal React scheduling warnings; this is not a warning-free-log claim.
 
 Representative real-model diagnosis quality, unattended-duration evaluation, live alert destination acceptance and narrow
 audited recovery policies remain open in supervision. The rest of the full architecture remains in the implementation tracker.
