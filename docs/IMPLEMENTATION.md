@@ -7,6 +7,8 @@ drills passed, including executor-pause persistence through removal/reinstallati
 seconds. The existing user app stayed running. Local `pnpm check` passed typechecking, six builds and 2,011 tests
 (22 skipped; 145.74 seconds). Linux user-manager/boot qualification,
 actual logout/reboot/power-loss acceptance, cross-host deployment, supervised upgrades and packaging remain open.
+Runtime revision `017f880a00b7176ad71a6f4bd7917c25b4e3784c` is pushed. GitHub again refused native workflow dispatch
+with HTTP 422 (Actions disabled), despite its repository permissions endpoint reporting enabled; the cause is unresolved.
 
 [067 Managed endpoint launch](067-managed-endpoint-launch.md) adds a Linux endpoint role to the persistent launcher:
 pinned Harness installation, separated control/workspace directories, native confinement readiness, persisted endpoint and

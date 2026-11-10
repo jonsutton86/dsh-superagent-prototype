@@ -103,7 +103,10 @@ Process-level tests exercise actual fixture servers: crash/restart with preserve
 replacement, duplicate-supervisor refusal, live unhealthy-process preservation, bounded retry holds, failed-start holds,
 graceful shutdown and timeout without a forced kill. Definition tests inspect both platform formats and verify that
 synthetic provider secrets are absent. Linux additionally runs the native `systemd-analyze --user verify` parser when
-available in the supported CI environment; native Linux execution remains pending while repository Actions is disabled.
+available in the supported CI environment; native Linux execution remains pending. For pushed runtime revision
+`017f880a00b7176ad71a6f4bd7917c25b4e3784c`, explicit workflow dispatch again returned HTTP 422, "Actions has been disabled
+for this repository." The repository permissions endpoint separately reports `enabled: true`, so the underlying cause of
+that dispatch refusal is not established. No native Linux result is claimed from either setting or earlier successful runs.
 
 The opt-in `DSH_NATIVE_SERVICE_QUALIFICATION=1` test actually installs and removes an isolated native user service, kills its
 fixture Harness process, observes recovery, preserves manual stop and refuses a changed definition without stopping its
