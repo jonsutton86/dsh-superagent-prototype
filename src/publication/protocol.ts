@@ -4,6 +4,7 @@ import { OwnershipStamp } from '../ownership/protocol.ts'
 import { InventoryPage, InventoryRequest, ReceiptRequest } from '../ownership/inventory.ts'
 import { EvidenceSeal } from '../verification/review-model.ts'
 import { PullBinding } from './pull-model.ts'
+import { RepositoryRpc } from './repository-model.ts'
 
 export const PUBLICATION_PATH = '/publication/v1'
 export const PublicationId = z.string().uuid()
@@ -54,6 +55,7 @@ export const ConversationPage = z.object({ destination: BaseDestination.shape.id
   items: z.array(ConversationMessage).max(10), next: z.string().min(1).max(4096).optional() }).strict()
 export type ConversationPage = z.infer<typeof ConversationPage>
 export const PublicationRpc = z.discriminatedUnion('op', [
+  ...RepositoryRpc,
   InventoryRequest, ReceiptRequest,
   z.object({ op: z.literal('recovery.destination'), revision: InventoryPage.shape.revision,
     destination: BaseDestination.shape.id, destinationHash: Digest }).strict(),
@@ -68,7 +70,7 @@ export const PublicationRpc = z.discriminatedUnion('op', [
 ])
 export type PublicationRpc = z.infer<typeof PublicationRpc>
 export const PublicationIdentity = z.object({ protocol: z.literal(1), id: PublicationId,
-  capabilities: z.object({ artifactEvidence: z.literal(true), pullReviews: z.literal(true).optional() }).strict().optional(),
+  capabilities: z.object({ artifactEvidence: z.literal(true), pullReviews: z.literal(true).optional(), repositories: z.literal(true).optional() }).strict().optional(),
   ownership: z.object({ authorityId: z.string().uuid(), coordinatorId: z.string(), resourceId: z.string() }).strict() }).strict()
 export type PublicationIdentity = z.infer<typeof PublicationIdentity>
 export const DestinationView = z.union(destinationShapes.map(shape => shape.extend({ hash: Digest }).strict()))

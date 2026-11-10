@@ -1,5 +1,11 @@
 # Article implementation tracker
 
+**PAUSED — unfinished work saved on 2026-11-10 (America/New_York).** The current branch also contains an incomplete
+independent repository publisher. This is a preservation checkpoint, not completion of milestone 075 or the full project.
+The [paused-work handoff](WIP-REPOSITORY-PUBLICATION.md) records the source changes, checks that preceded the final edits,
+untested changes and remaining integration/qualification work. Resume implementation only when the owner requests it.
+The completed-milestone history below remains unchanged.
+
 [074 Reviewed repository exports](074-repository-exports.md) adds exact-history Git bundles from managed task checkouts,
 selected host checks and a fresh post-transfer capture, resumable checkpointed chunks, download/retry/cancel controls and
 read-only recovery validation. It preserves original commits and binary objects. Independent branch/PR publication,

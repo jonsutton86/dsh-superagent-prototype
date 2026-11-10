@@ -7,9 +7,9 @@ const revision = z.string().regex(/^[a-f0-9]{32}$/), digest = z.string().regex(/
 export const InventoryRequest = z.object({ op: z.literal('recovery.inventory'), revision: revision.optional(), offset: z.number().int().min(0).max(50_000).default(0) }).strict()
 export type InventoryRequest = z.infer<typeof InventoryRequest>
 export const ReceiptRequest = z.object({ op: z.literal('recovery.receipt'), revision,
-  kind: z.enum(['command', 'mutation', 'publication']), id: z.string().min(1).max(300) }).strict()
+  kind: z.enum(['command', 'mutation', 'publication', 'repository-publication', 'repository-transfer']), id: z.string().min(1).max(300) }).strict()
 export type ReceiptRequest = z.infer<typeof ReceiptRequest>
-export const InventoryItem = z.object({ kind: z.enum(['command', 'mutation', 'grant', 'credential', 'publication', 'destination']), id: z.string().min(1).max(300),
+export const InventoryItem = z.object({ kind: z.enum(['command', 'mutation', 'grant', 'credential', 'publication', 'destination', 'repository-publication', 'repository-transfer', 'repository-destination']), id: z.string().min(1).max(300),
   requestHash: digest, phase: z.string().min(1).max(40), settled: z.boolean(), resultHash: digest.optional(),
   grantId: z.string().max(100).optional(), epoch: z.number().int().positive().optional(), ownership: OwnershipStamp.optional() }).strict()
 export type InventoryItem = z.infer<typeof InventoryItem>

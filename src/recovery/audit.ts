@@ -151,7 +151,7 @@ export async function auditCheckpointReceipts(options: AuditCheckpointReceipts):
             for (const item of page.items) {
               if (++count > 100_000 || seen.has(key(item))) throw new Error('Recovery inventory exceeds its bound or repeats an item')
               seen.add(key(item)); const saved = wanted.get(key(item))
-              if (!saved) { if (['command', 'mutation', 'publication'].includes(item.kind)) issue('unrecorded_effect', client.id, item); continue }
+              if (!saved) { if (['command', 'mutation', 'publication', 'repository-publication', 'repository-transfer'].includes(item.kind)) issue('unrecorded_effect', client.id, item); continue }
               const revoked = saved.revoked && item.kind === 'grant' && item.phase === 'disabled' && item.epoch === saved.epoch! + 1
               const different = !revoked && (item.requestHash !== saved.requestHash || saved.epoch !== undefined && item.epoch !== saved.epoch)
                 || saved.grantId !== undefined && item.grantId !== saved.grantId || saved.phase !== undefined && item.phase !== saved.phase

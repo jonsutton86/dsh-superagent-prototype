@@ -1,5 +1,7 @@
 # dsh-superagent
 
+> **Development paused — unfinished checkpoint (2026-11-10).** This feature branch includes incomplete repository branch/PR publication work saved for continuity. It is not a completed or validated release. See the [paused-work handoff](docs/WIP-REPOSITORY-PUBLICATION.md) for the exact validation boundary and remaining work. The last completed increment is 074 at commit `e29fa1026738e3369aa4a1113fcbd314d793178d`.
+
 > **Research prototype for reference only, not an official DeepSeek product.** This code grew out of our team's day-to-day development work, with much of the engineering done by coding agents. Treat it as research code, not production-ready software. It may still contain bugs, and its coding style and engineering practices may be inconsistent. Review and adapt it before using it in your own environment.
 >
 > We have adapted it for publication, so it is not identical to our internal version or the implementation described in *Exploring Super-agent Design: Towards a More Autonomous Agent System*. Some designs discussed in the article are directions for future development and are not implemented in this prototype.

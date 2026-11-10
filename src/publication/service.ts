@@ -8,12 +8,17 @@ import { PublicationProviders } from './providers.ts'
 import { ResourceInventory } from '../ownership/inventory.ts'
 import { freshSeal } from '../verification/reviews.ts'
 import { PullBinding, PullObservation, matchesPullEvidence } from './pull-model.ts'
+import { RepositoryDestinationConfig, RepositoryReceipt, RepositoryTransferReceipt } from './repository-model.ts'
+import { RepositoryJournal, repositoryUncertain } from './repository-journal.ts'
+import { RepositoryPublisher } from './repository-publisher.ts'
+import type { RepositoryAdapter } from './repository-provider.ts'
 
-export interface PublicationServiceConfig { stateDir: string; ownership: ResourceOwnershipConfig; destinations: DestinationConfig[] }
+export interface PublicationServiceConfig { stateDir: string; ownership: ResourceOwnershipConfig; destinations: DestinationConfig[]; repositories?: RepositoryDestinationConfig[] }
 /** Independently fenced publication host. Unknown outcomes block ownership handoff until actual observation or administrator reconciliation. */
 export class PublicationService {
   readonly journal: PublicationJournal
   readonly gate: OwnershipGate
+  readonly repositories: RepositoryPublisher
   private readonly inventory: ResourceInventory
   private readonly destinations = new Map<string, DestinationConfig>()
   private readonly lifetime = new AbortController()
@@ -21,7 +26,7 @@ export class PublicationService {
   private readonly working = new Set<string>()
   private readonly pending = new Set<Promise<unknown>>()
   private stopping?: Promise<void>
-  constructor(readonly config: PublicationServiceConfig, private readonly adapter: PublicationAdapter = new PublicationProviders()) {
+  constructor(readonly config: PublicationServiceConfig, private readonly adapter: PublicationAdapter = new PublicationProviders(), repositoryAdapter?: RepositoryAdapter) {
     this.journal = new PublicationJournal(config.stateDir, error => this.lifetime.abort(error))
     try {
       for (const input of config.destinations) {
@@ -29,21 +34,32 @@ export class PublicationService {
         if (this.destinations.has(value.id)) throw new Error('Publication destination IDs must be unique')
         this.destinations.set(value.id, value)
       }
-      if (!this.destinations.size || this.destinations.size > 100) throw new Error('Configure 1–100 publication destinations')
+      const repositoryDestinations = (config.repositories ?? []).map(value => RepositoryDestinationConfig.parse(value))
+      if (new Set(repositoryDestinations.map(value => value.id)).size !== repositoryDestinations.length) throw new Error('Repository destination IDs must be unique')
+      if (!this.destinations.size && !repositoryDestinations.length || this.destinations.size + repositoryDestinations.length > 100) throw new Error('Configure 1–100 publication destinations')
       const { authorityId, coordinatorId, resourceId } = config.ownership
       this.journal.bind({ authorityId, coordinatorId, resourceId }, [...this.destinations.values()].map(({ credentialFile: _, ...value }) => Destination.parse(value)))
+      const repositories = new RepositoryJournal(this.journal.db, repositoryDestinations.map(({ credentialFile: _, ...value }) => value))
+      this.repositories = new RepositoryPublisher(repositories, repositoryDestinations, { gate: () => this.gate, signal: this.lifetime.signal }, repositoryAdapter)
       this.inventory = new ResourceInventory(this.journal.db, [
+        { kind: 'repository-destination', table: 'repository_destination', project: value => ({ kind: 'repository-destination', id: value.id,
+          requestHash: fingerprint(value), phase: 'configured', settled: true }) },
+        { kind: 'repository-transfer', table: 'repository_transfer', project: value => ({ kind: 'repository-transfer', id: value.id,
+          requestHash: value.hash, phase: value.phase, settled: true, ownership: value.ownership, resultHash: value.bundle.sha256 }), observe: value => RepositoryTransferReceipt.parse(value) },
+        { kind: 'repository-publication', table: 'repository_publication', project: ({ request, receipt }) => ({ kind: 'repository-publication', id: receipt.id,
+          requestHash: fingerprint(request), phase: receipt.phase, settled: !repositoryUncertain(receipt.phase) && receipt.phase !== 'preparing',
+          ownership: receipt.ownership, resultHash: fingerprint({ branch: receipt.branchResult ?? null, pull: receipt.pullResult ?? null }) }), observe: ({ receipt }) => RepositoryReceipt.parse(receipt) },
         { kind: 'destination', table: 'publication_destination', project: value => ({ kind: 'destination', id: value.id,
           requestHash: fingerprint(value), phase: 'configured', settled: true }) },
         { kind: 'publication', table: 'publication_receipt', project: ({ request, receipt }) => ({ kind: 'publication', id: receipt.id,
           requestHash: fingerprint(Publication.parse(request)), phase: receipt.phase, settled: !['accepted', 'started', 'unknown'].includes(receipt.phase),
           ownership: receipt.ownership, resultHash: fingerprint(receipt.external ? ExternalReceipt.parse(receipt.external) : null) }),
           observe: ({ receipt }) => PublicationReceipt.parse(receipt) },
-      ])
+      ], ['repository_transfer_chunk'])
       this.gate = new OwnershipGate(config.ownership, {
         floor: () => { const value = this.journal.meta('floor'); return value ? JSON.parse(value) as OwnershipFloor : undefined },
-        remember: value => this.journal.meta('floor', JSON.stringify(value)), fence: keep => this.journal.fence(keep),
-        quiescent: keep => !this.lifetime.signal.aborted && this.calls === 0 && !this.working.size && !this.journal.unsettled().some(item =>
+        remember: value => this.journal.meta('floor', JSON.stringify(value)), fence: keep => { this.journal.fence(keep); repositories.fence(keep) },
+        quiescent: keep => !this.lifetime.signal.aborted && this.calls === 0 && !this.working.size && !this.repositories.busy && !repositories.unsettled() && !this.journal.unsettled().some(item =>
           !(keep && item.receipt.phase === 'accepted' && sameOwner(keep, item.receipt.ownership))),
       })
     } catch (error) { this.journal.close(); throw error }
@@ -51,7 +67,7 @@ export class PublicationService {
   start(report: (error: unknown) => void = () => {}): void { this.gate.start(report) }
   identity(): PublicationIdentity {
     const { authorityId, coordinatorId, resourceId } = this.config.ownership
-    return { protocol: 1, id: this.journal.id, capabilities: { artifactEvidence: true, pullReviews: true }, ownership: { authorityId, coordinatorId, resourceId } }
+    return { protocol: 1, id: this.journal.id, capabilities: { artifactEvidence: true, pullReviews: true, repositories: true }, ownership: { authorityId, coordinatorId, resourceId } }
   }
   private destination(id: string) {
     const value = this.destinations.get(id)
@@ -70,6 +86,7 @@ export class PublicationService {
     return pending
   }
   private async dispatch(principal: 'admin' | 'client', request: PublicationRpc, proof?: string): Promise<unknown> {
+    if (request.op.startsWith('repository.')) return this.repositories.rpc(principal, request, proof)
     switch (request.op) {
       case 'identity': return this.identity()
       case 'recovery.destination': {
@@ -78,7 +95,7 @@ export class PublicationService {
         if (fingerprint(metadata) !== request.destinationHash) throw new PublicationError(409, 'destination_changed', 'Publication destination changed')
         const validate = () => {
           this.lifetime.signal.throwIfAborted(); this.inventory.assertRevision(request.revision)
-          if (this.calls || this.working.size || this.journal.unsettled().length) throw new PublicationError(409, 'recovery_busy', 'Publication service must be quiescent for recovery')
+          if (this.calls || this.working.size || this.journal.unsettled().length || this.repositories.busy || this.repositories.journal.unsettled()) throw new PublicationError(409, 'recovery_busy', 'Publication service must be quiescent for recovery')
         }
         validate()
         if (!this.adapter.check) throw new PublicationError(409, 'configuration_unavailable', 'Publication provider cannot verify its configuration')
@@ -93,7 +110,7 @@ export class PublicationService {
       case 'recovery.receipt': {
         if (principal !== 'admin') throw new PublicationError(403, 'admin_required', 'Independent publication administrator required')
         const { id, ownership } = this.identity()
-        const identity = { id, kind: 'publication' as const, ...ownership }, quiescent = this.calls === 0 && !this.working.size && !this.journal.unsettled().length
+        const identity = { id, kind: 'publication' as const, ...ownership }, quiescent = this.calls === 0 && !this.working.size && !this.journal.unsettled().length && !this.repositories.busy && !this.repositories.journal.unsettled()
         return request.op === 'recovery.inventory' ? this.inventory.page(request, identity, quiescent) : this.inventory.receipt(request, identity, quiescent)
       }
       case 'destinations': return [...this.destinations.values()].map(({ credentialFile: _, ...value }) => ({ ...value, hash: fingerprint(value) }))
@@ -187,6 +204,6 @@ export class PublicationService {
     }
   }
   close(): Promise<void> {
-    return this.stopping ??= (async () => { this.lifetime.abort(); this.gate.close(); await Promise.allSettled([...this.pending]); this.journal.close() })()
+    return this.stopping ??= (async () => { this.lifetime.abort(); this.gate.close(); await Promise.allSettled([...this.pending]); await this.repositories.close(); this.journal.close() })()
   }
 }
