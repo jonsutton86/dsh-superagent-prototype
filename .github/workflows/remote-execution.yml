@@ -37,4 +37,10 @@ jobs:
         run: |
           pnpm typecheck
           pnpm build
-          DSH_REMOTE_ISOLATION=1 DSH_ENDPOINT_LAUNCHER_QUALIFICATION=1 pnpm test
+          sudo systemd-run --wait --pipe --collect --service-type=exec \
+            --unit="agentic-qualification-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --uid="$(id -u)" --property='Delegate=cpu memory pids' \
+            --property="WorkingDirectory=$PWD" --setenv="PATH=$PATH" \
+            --setenv=DSH_REMOTE_ISOLATION=1 --setenv=DSH_ENDPOINT_LAUNCHER_QUALIFICATION=1 \
+            --setenv="DSH_ENDPOINT_QUALIFICATION_CLI=$DSH_ENDPOINT_QUALIFICATION_CLI" \
+            /bin/bash "$PWD/tests/fixtures/resource-qualification.sh" pnpm test

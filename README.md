@@ -17,6 +17,8 @@ For a prepared Linux execution host, the [endpoint role](docs/067-managed-endpoi
 persistent identity and private enrollment details for the coordinator's Environments page.
 The [service supervisor](docs/068-service-supervision.md) adds optional macOS login and Linux user/boot services,
 bounded process recovery and persistent manual stops while preserving the existing Harness installation.
+Prepared cgroup v2 hosts can configure [worker resource limits](docs/069-execution-resources.md) with durable usage receipts;
+native Linux qualification and automatic service delegation remain pending.
 The workflow below configures the repository-backed mode.
 
 Setup has many steps, so an agent does it with you. Ask your coding agent:

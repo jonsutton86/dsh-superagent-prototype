@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import type { EndpointAction, EndpointCatalog, EndpointRegistration, OperatorCommand, RemoteProfileView } from '../environments/endpoint-model.ts'
 import type { EndpointCredential, RemoteGrant } from '../remote/protocol.ts'
+import type { ResourceUsage } from '../remote/resource-model.ts'
 import { usePoll } from './api.ts'
 import { Button } from './controls.tsx'
 import { usePanel } from './provider.tsx'
@@ -61,6 +62,12 @@ function EndpointCard({ record, changed }: { record: EndpointRegistration; chang
   return <article className="dt-mission-card">
     <h4>{record.name}</h4><p><code>{record.url}</code> · <code>{record.id}</code></p>
     <p>{record.identity.confinement} · {t('endpoint.revision', { revision: record.revision })}</p>
+    {record.identity.resources && <div><strong>{t('endpoint.resourceLimits')}</strong>
+      {(['pool', 'command'] as const).map(kind => { const limit = record.identity.resources!.policy[kind]
+        return <p key={kind}>{t(kind === 'pool' ? 'endpoint.resourcePool' : 'endpoint.resourceCommand',
+          { cpu: limit.cpuPercent / 100, memory: limit.memoryBytes / 1024 ** 2, processes: limit.processes })}</p>
+      })}
+    </div>}
     <RegistrationForm record={record} changed={changed} />
     <Button aria-expanded={open} onClick={() => setOpen(!open)}>{t(open ? 'endpoint.close' : 'endpoint.manage')}</Button>
     {open && <EndpointDetails record={record} />}
@@ -151,15 +158,25 @@ function Catalog({ data, submit, busy }: { data: EndpointCatalog; submit: Submit
     <h4>{t('endpoint.effects')}</h4>
     {data.jobs.items.map(job => <article className="dt-mission-card" key={job.id}><p><code>{job.id}</code> · {job.phase} · {job.grantId} / {job.epoch}</p>
       <p>{t(job.quiescent ? 'execution.stopped' : 'execution.active')}</p>
+      {job.resources && <ResourceReceipt value={job.resources} />}
       {!job.quiescent && <Button disabled={busy} onClick={() => submit({ op: 'job.cancel', id: job.id })}>{t('execution.cancel')}</Button>}
       {job.phase === 'unknown' && !job.reconciled && <Reconcile kind="job" id={job.id} submit={submit} busy={busy} />}
       {job.reconciled && <p>{job.reconciled.note}</p>}
     </article>)}
     {data.operations.items.map(operation => <article className="dt-mission-card" key={operation.id}><p><code>{operation.id}</code> · {operation.kind} · {operation.phase}</p>
+      {operation.resources && <ResourceReceipt value={operation.resources} />}
       {operation.phase === 'unknown' && !operation.reconciled && <Reconcile kind="operation" id={operation.id} submit={submit} busy={busy} />}
       {operation.reconciled && <p>{operation.reconciled.note}</p>}
     </article>)}
   </>
+}
+function ResourceReceipt({ value }: { value: ResourceUsage }) {
+  const { t } = usePanel()
+  return <div><p>{t('endpoint.resourceUsage', { cpu: value.cpuMicroseconds === null ? '—' : (value.cpuMicroseconds / 1_000_000).toFixed(3),
+    oom: value.oomKills ?? '—', pids: value.processLimitEvents ?? '—' })}</p>
+    {!!value.throttledPeriods && <p>{t('endpoint.resourceThrottled')}</p>}
+    {!value.complete && <p className="dt-hint">{t('endpoint.resourceIncomplete')}</p>}
+  </div>
 }
 function AdministrationReceipt({ record, endpoint, changed }: { record: OperatorCommand; endpoint: string; changed: () => void }) {
   const { call, t } = usePanel(), command = useOperatorCommand(changed), [profile, setProfile] = useState<RemoteProfileView>()

@@ -372,6 +372,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/remote/journal.ts` | Independent single-writer SQLite state, HMAC credentials, intent deduplication, output offsets and restart uncertainty |
 | `src/remote/endpoint.ts`, `http.ts` | Authenticated execution admission, lease expiry, process supervision, mutation serialization and browser-request refusal |
 | `src/remote/isolation.ts`, `filesystem-runner.ts`, `fs-worker.ts` | Linux bubblewrap process worlds and standalone confined filesystem operations |
+| `src/remote/resource-model.ts`, `resources.ts`, `resource-worker.ts` | Pinned cgroup v2 pool/process-tree limits, pre-exec enforcement, whole-tree cancellation, kernel usage receipts and population-aware reconciliation |
 | `src/verification/model.ts`, `snapshot.ts`, `snapshot-worker.ts`, `runner.ts` | Bounded host-captured file/Git manifests, private copied inputs, revision-pinned checks, output digests and quiescence-bound cleanup through Harness |
 | `src/verification/git-tree.ts` | Canonical Git blob/tree reconstruction from captured bytes and modes, independent of index and local objects |
 | `src/verification/contracts.ts`, `definitions.ts` | Strict operator-authored check contracts, immutable versions, scope/worker authority, durable command receipts and metadata limits |
@@ -571,6 +572,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/voice.spec.ts`, `tests/voice-ui.spec.tsx` | Speech lifecycle contracts, real local qualification, and microphone/draft/playback/cancellation DOM flows |
 | `tests/local-execution.spec.ts` | General local missions without accounts, filesystem/process probes, mode mismatch, local prompts and GitHub exclusion |
 | `tests/remote.spec.ts` | Real Harness/HTTP execution, acknowledgement loss, lease fencing, sibling command concurrency, delayed catalog observations, uncertain recovery, confined-helper semantics, output backpressure and opt-in native Linux qualification |
+| `tests/remote-resources.spec.ts` | Resource policy/control contracts, kernel-interface fixture, durable endpoint policy/reconciliation and opt-in native CPU, memory/OOM, process-limit and restart qualification |
 | `tests/remote-harness.spec.ts` | Opt-in installed Harness qualification with a configured model, remote artifacts, restart, maintenance-plugin checkpoint/import/reservation and ownership-authority process handoff |
 | `tests/recovery.spec.ts` | Official JSONL round trips, exclusive ownership, corruption/cancellation refusal, fork imports, held restore, original reservation retries, competing restores and preserved remote receipts |
 | `tests/recovery-audit.spec.ts` | Real HTTP receipt inventories, late effects, original observations, revoked worlds, missing/mismatched resources, revision races, restart, cancellation, authenticated receipt preparation, interruption/retry, tamper refusal, historical administrative and lost-revocation recovery, credential binding comparison and retained restore holds |

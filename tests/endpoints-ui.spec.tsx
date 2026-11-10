@@ -9,6 +9,7 @@ import { en } from '../src/client/locales.ts'
 import { translator } from './fixtures/panel.tsx'
 import { startRuntime } from './fixtures/host.ts'
 import { remoteFixture } from './fixtures/remote.ts'
+import type { ResourceStatus } from '../src/remote/resource-model.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
 let root: Root | undefined, container: HTMLDivElement | undefined
@@ -27,8 +28,9 @@ async function enter(label: string, value: string, within: ParentNode = containe
   const prototype = input instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype
   await act(async () => { Object.getOwnPropertyDescriptor(prototype, 'value')!.set!.call(input, value); input.dispatchEvent(new Event('input', { bubbles: true })) })
 }
-async function fixture() {
+async function fixture(resources?: ResourceStatus) {
   const h = await remoteFixture(cleanup), host = await startRuntime(undefined, { executionMode: 'local', noAccounts: true })
+  if (resources) vi.spyOn(h.endpoint, 'identity').mockReturnValue({ ...h.endpoint.identity(), resources })
   cleanup.push(() => host.stop())
   const nativeFetch = globalThis.fetch, requests: { method: string; path: string; body?: unknown }[] = []
   let lose = false
@@ -52,6 +54,22 @@ async function fixture() {
   await vi.waitFor(() => expect(button('Create workspace grant')).toBeTruthy())
   return Object.assign(h, { host, requests, loseOperatorResponse: () => { lose = true } })
 }
+
+it('shows configured resource limits and kernel-derived command receipts without claiming current usage from registration metadata', async () => {
+  const policy = { cgroupRoot: '/private/delegated', pool: { cpuPercent: 200, memoryBytes: 1024 ** 3, processes: 128 },
+    command: { cpuPercent: 100, memoryBytes: 256 * 1024 ** 2, processes: 32 } }
+  const h = await fixture({ kind: 'linux-cgroup-v2', policy, ready: true, memoryBytes: 10, processes: 1, activeScopes: 1 })
+  expect(container!.textContent).toContain('Pool: 2 CPUs · 1024 MiB RAM · 128 processes')
+  expect(container!.textContent).toContain('Per command: 1 CPUs · 256 MiB RAM · 32 processes')
+  expect(container!.textContent).not.toContain('/private/delegated')
+  const at = new Date().toISOString()
+  h.endpoint.journal.saveJob({ id: 'quota-receipt', grantId: h.enrolled.grant.id, epoch: 1, revision: 1, fingerprint: 'proof', phase: 'settled',
+    createdAt: at, updatedAt: at, request: { ...h.spawn('true'), requestId: 'quota-receipt' }, cancelRequested: false, quiescent: true,
+    resources: { scopes: 1, complete: true, cpuMicroseconds: 1500000, throttledPeriods: 2, oomKills: 1, processLimitEvents: 3 } })
+  await click('Refresh')
+  await vi.waitFor(() => expect(container!.textContent).toContain('CPU time 1.500 s · Out-of-memory kills 1 · Process-limit refusals 3'))
+  expect(container!.textContent).toContain('CPU throttling was observed')
+})
 
 it('registers an endpoint, preserves a lost submission ID and generates an inspectable profile without exposing credentials', async () => {
   const h = await fixture()

@@ -17,12 +17,15 @@ import { ResourceInventory } from '../ownership/inventory.ts'
 import { worldBinding } from './world-journal.ts'
 import { runCapturedCheck, discardSnapshot } from '../verification/runner.ts'
 import { snapshotReservation } from '../verification/model.ts'
+import type { CgroupResources } from './resources.ts'
 
 export interface EndpointHost {
   filesystem: FileSystem; subprocess: SubprocessRuntime; isolation: ExecutionIsolation; stateDir: string; root: string
   allowedEnv?: string[]; outputMaxBytes?: number; maxRunning?: number; shutdownMs?: number
   commandHelper?: string
   snapshotHelper?: string
+  resources?: CgroupResources
+  resourceHelper?: string
   ownership?: ResourceOwnershipConfig
   report?(error: unknown): void
   filesystemRpc?(grant: RemoteGrant, request: RpcRequest, signal: AbortSignal): Promise<unknown>
@@ -69,6 +72,12 @@ export class RemoteEndpoint {
         remember: value => { this.journal.db.prepare('INSERT INTO endpoint_meta VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('ownership-floor', JSON.stringify(value)) },
         fence: keep => this.fenceOwnership(keep), quiescent: keep => this.ownershipQuiescent(keep),
       })
+      const resourcePolicy = this.journal.db.prepare('SELECT value FROM endpoint_meta WHERE key=?').get('resource-policy')?.value
+      if (resourcePolicy && String(resourcePolicy) !== JSON.stringify(host.resources?.policy))
+        throw new Error('Persisted endpoint resource limits cannot be removed or replaced')
+      if (host.resources && !resourcePolicy && (this.journal.jobs().some(job => !job.quiescent)
+        || this.journal.operations().some(item => item.phase === 'started' || item.phase === 'unknown' && !item.reconciled)))
+        throw new Error('Reconcile existing endpoint effects before adding resource enforcement')
       if (binding && !saved) this.journal.db.prepare('INSERT INTO endpoint_meta VALUES (?,?)').run('ownership-binding', JSON.stringify(binding))
       this.inventory = new ResourceInventory(this.journal.db, [
         { kind: 'credential', table: 'remote_credential', project: value => ({ kind: 'credential', id: value.id,
@@ -95,6 +104,9 @@ export class RemoteEndpoint {
   async start(): Promise<void> {
     this.root = await realpath(this.host.root)
     const control = await realpath(this.host.stateDir)
+    for (const helper of [this.host.resourceHelper, this.host.commandHelper, this.host.snapshotHelper]) {
+      if (helper && inside(this.root, await realpath(helper))) throw new Error('Trusted execution helpers must be outside endpoint workspaces')
+    }
     if (this.host.ownership) {
       const credential = await realpath(this.host.ownership.credentialFile)
       if (inside(this.root, credential) || ['/usr', '/bin', '/sbin', '/lib', '/lib64', '/etc', '/dev', '/proc'].some(path => inside(path, credential)))
@@ -104,8 +116,10 @@ export class RemoteEndpoint {
       throw new Error('Endpoint workspaces must use a dedicated data directory outside system runtime mounts')
     if (['/usr', '/bin', '/sbin', '/lib', '/lib64', '/etc', '/dev', '/proc'].some(path => inside(path, control)))
       throw new Error('Endpoint control state must be outside system runtime mounts')
+    this.host.resources?.start(this.journal.id)
     await verifyLocalWorkspace(this.root, this.host.subprocess, this.lifetime.signal, this.host.filesystem)
     if (this.host.isolation.name === 'linux-bubblewrap') await this.verifyIsolation(control)
+    if (this.host.resources) this.journal.db.prepare('INSERT OR IGNORE INTO endpoint_meta VALUES (?,?)').run('resource-policy', JSON.stringify(this.host.resources.policy))
     this.initialized = true
     this.sweep()
     this.timer = setInterval(() => this.sweep(), 250); this.timer.unref()
@@ -120,14 +134,14 @@ export class RemoteEndpoint {
       operations: ['fs.read', 'fs.write', 'process.spawn'], enabled: true, epoch: 1, revision: 1, leaseUntil: Date.now() + 15_000, createdAt: at, updatedAt: at }
     let handle: SubprocessHandle | undefined
     try {
-      await this.host.filesystemRpc(grant, { op: 'fs.write', requestId: nonce, path: 'proof', content: nonce, expected: { kind: 'createIfAbsent' } }, signal)
+      await this.filesystem(grant, { op: 'fs.write', requestId: nonce, path: 'proof', content: nonce, expected: { kind: 'createIfAbsent' } }, signal)
       const argv = await this.host.isolation.wrap(['/bin/sh', '-c', '[ ! -e "$1" ] && cat proof', 'dsh-isolation-proof', control], root, root, false, signal)
       handle = this.host.subprocess.spawn({ argv, cwd: root, graceMs: 1000, signal,
         stdio: { stdin: 'ignore', stdout: { maxBytes: 1024 }, stderr: { maxBytes: 4096 } } })
       const outcome = await handle.done
       if (outcome.exitCode !== 0 || !await handle.waitForExit(signal) || handle.collected.stdout!.readFrom(0).text !== nonce)
         throw new Error('Execution namespace proof failed: control state must be hidden and filesystem/process views must match')
-      if (await this.host.filesystemRpc(grant, { op: 'fs.read', path: 'proof' }, signal) !== nonce) throw new Error('Confined filesystem proof failed')
+      if (await this.filesystem(grant, { op: 'fs.read', path: 'proof' }, signal) !== nonce) throw new Error('Confined filesystem proof failed')
     } finally {
       handle?.terminate()
       if (!handle || await handle.waitForExit(AbortSignal.timeout(2000)).catch(() => false)) await rm(root, { recursive: true, force: true })
@@ -135,6 +149,7 @@ export class RemoteEndpoint {
   }
   identity(): EndpointIdentity {
     return { protocol: 1, id: this.journal.id, platform: process.platform, confinement: this.host.isolation.name,
+      ...(this.host.resources ? { resources: this.host.resources.status() } : {}),
       ...(this.host.ownership ? { ownership: { authorityId: this.host.ownership.authorityId, coordinatorId: this.host.ownership.coordinatorId, resourceId: this.host.ownership.resourceId } } : {}),
       capabilities: { filesystem: true, process: true, terminal: false, interactiveStdin: false, controlChannel: false, outputWindow: MAX_WINDOW, effectOwnership: true, administration: true,
         ...(this.host.snapshotHelper ? { snapshotVerification: true as const } : {}),
@@ -325,10 +340,11 @@ export class RemoteEndpoint {
   private enqueue(id: string): void {
     if (this.pending.has(id) || this.closing) return
     const running = Promise.resolve().then(async () => {
-      if (!this.ownership) return this.launch(id)
+      const launch = () => this.host.resources ? this.host.resources.run('job:' + id, () => this.launch(id)) : this.launch(id)
+      if (!this.ownership) return launch()
       try {
         const guard = await this.ownership.resume(this.journal.job(id).ownership)
-        await this.ownershipScope.run(guard, () => this.launch(id))
+        await this.ownershipScope.run(guard, launch)
       } catch (error) {
         if (this.closed) return
         const job = this.journal.job(id)
@@ -373,7 +389,11 @@ export class RemoteEndpoint {
       if (this.closed) return
       job = this.journal.job(id); job.phase = 'settled'; job.outcome = outcome; this.journal.saveJob(job)
       const quiescent = await handle.waitForExit(this.lifetime.signal)
-      if (!this.closed) { job = this.journal.job(id); job.quiescent = quiescent; this.journal.saveJob(job) }
+      if (!this.closed) {
+        job = this.journal.job(id); job.quiescent = quiescent
+        job.resources = this.host.resources?.takeUsage('job:' + id)
+        this.journal.saveJob(job)
+      }
       if (quiescent) this.live.delete(id)
     } catch (error) {
       if (this.closed) return
@@ -406,6 +426,7 @@ export class RemoteEndpoint {
       if (this.closed) return
       job = this.journal.job(id); job.phase = result.quiescent ? 'settled' : 'unknown'; job.quiescent = result.quiescent
       job.verification = result.evidence; job.outcome = result.outcome; job.error = result.problem
+      job.resources = this.host.resources?.takeUsage('job:' + id)
       this.journal.saveJob(job)
     } catch (error) {
       if (this.closed) return
@@ -454,7 +475,7 @@ export class RemoteEndpoint {
     if (this.ownershipScope.getStore()) operation.ownership = this.ownershipScope.getStore()!.stamp
     this.journal.saveOperation(operation)
     try {
-      if (this.host.filesystemRpc) operation.value = await this.host.filesystemRpc(grant, request, this.signal(grant)) as RemoteOperation['value']
+      if (this.host.filesystemRpc) operation.value = await this.filesystem(grant, request, this.signal(grant)) as RemoteOperation['value']
       else if (request.op === 'fs.write') operation.value = await this.host.filesystem.writeText(target, request.content,
         request.expected?.kind === 'replaceIfVersion' ? { ...request.expected, version: FsVersion(request.expected.version) } : request.expected, this.signal(grant))
       else operation.value = await this.host.filesystem.editText(target, request, request.expected ? { version: FsVersion(request.expected.version) } : undefined, this.signal(grant))
@@ -463,7 +484,10 @@ export class RemoteEndpoint {
       operation.error = { code: error instanceof FsError ? error.code : 'operation_unknown', message: message(error).slice(0, 4000) }
       operation.phase = error instanceof FsError && !['FS_IO_ERROR', 'FS_ABORTED'].includes(error.code) ? 'settled' : 'unknown'
     }
-    if (!this.closed) this.journal.saveOperation(operation)
+    if (!this.closed) {
+      operation.resources = this.host.resources?.takeUsage('operation:' + operation.id)
+      this.journal.saveOperation(operation)
+    }
     return operation
   }
   async rpc(principal: Principal, input: unknown, ownershipProof?: string): Promise<unknown> {
@@ -527,10 +551,10 @@ export class RemoteEndpoint {
         const all = request.op === 'grant.list' ? this.journal.grants() : request.op === 'operation.list' ? this.journal.operations() : this.journal.jobs()
         const page = all.slice(request.offset, request.offset + 100)
         // Administrative catalogs must not transport argv, stdin, env, output or file-edit payloads, even before coordinator projection.
-        const items = request.op === 'job.catalog' ? (page as RemoteJob[]).map(({ id, grantId, epoch, phase, createdAt, updatedAt, cancelRequested, quiescent, reconciled }) =>
-          ({ id, grantId, epoch, phase, createdAt, updatedAt, cancelRequested, quiescent, reconciled }))
-          : request.op === 'operation.list' ? (page as RemoteOperation[]).map(({ id, grantId, epoch, kind, phase, at, reconciled }) =>
-            ({ id, grantId, epoch, kind, phase, at, reconciled })) : page
+        const items = request.op === 'job.catalog' ? (page as RemoteJob[]).map(({ id, grantId, epoch, phase, createdAt, updatedAt, cancelRequested, quiescent, reconciled, resources }) =>
+          ({ id, grantId, epoch, phase, createdAt, updatedAt, cancelRequested, quiescent, reconciled, resources }))
+          : request.op === 'operation.list' ? (page as RemoteOperation[]).map(({ id, grantId, epoch, kind, phase, at, reconciled, resources }) =>
+            ({ id, grantId, epoch, kind, phase, at, reconciled, resources })) : page
         return { items, nextOffset: request.offset + 100 < all.length ? request.offset + 100 : null }
       }
       case 'credential.list': this.admin(principal); return this.credentials.list(request.offset)
@@ -573,6 +597,7 @@ export class RemoteEndpoint {
         if (request.op === 'job.reconcile') {
           this.admin(principal)
           if (job.phase !== 'unknown') throw new RemoteError(409, 'not_unknown', 'Only unknown commands need reconciliation')
+          if (this.host.resources?.hasLive('job:' + job.id)) throw new RemoteError(409, 'resource_not_quiescent', 'The command still has a populated kernel resource group')
           job.quiescent = true; job.reconciled = { at: timestamp(), note: request.note }
         }
         if (request.op === 'job.cancel') {
@@ -592,6 +617,7 @@ export class RemoteEndpoint {
           const digest = fingerprint({ principal, request }), replay = this.journal.receipt<string>(request.requestId, digest)
           if (replay) return this.journal.operation(replay)
           if (operation.phase !== 'unknown') throw new RemoteError(409, 'not_unknown', 'Only unknown mutations need reconciliation')
+          if (this.host.resources?.hasLive('operation:' + operation.id)) throw new RemoteError(409, 'resource_not_quiescent', 'The mutation still has a populated kernel resource group')
           operation.reconciled = { at: timestamp(), note: request.note }
           this.journal.atomic(() => { this.journal.saveOperation(operation); this.journal.remember(request.requestId, digest, operation.id); this.journal.audit({ action: request.op, operation: operation.id, note: request.note }) })
         }
@@ -610,7 +636,7 @@ export class RemoteEndpoint {
       }
       default: {
         const grant = this.grant(principal, 'fs.read'), fs = this.host.filesystem, signal = this.signal(grant)
-        if (this.host.filesystemRpc) { await this.verifyRoot(grant); return this.host.filesystemRpc(grant, request, signal) }
+        if (this.host.filesystemRpc) { await this.verifyRoot(grant); return this.filesystem(grant, request, signal) }
         if (request.op === 'fs.lstat') {
           const path = resolve(request.cwd ?? grant.root, request.path)
           if (!inside(grant.root, path)) throw new FsError('Path is outside the granted workspace', 'FS_SANDBOX_DENIED')
@@ -635,6 +661,10 @@ export class RemoteEndpoint {
       }
     }
   }
+  private filesystem(grant: RemoteGrant, request: RpcRequest, signal: AbortSignal): Promise<unknown> {
+    const run = () => this.host.filesystemRpc!(grant, request, signal)
+    return this.host.resources ? this.host.resources.run(request.op === 'fs.write' || request.op === 'fs.edit' ? 'operation:' + request.requestId : 'read', run) : run()
+  }
   stop(): Promise<void> { return this.stopping ??= this.close() }
   private async close(): Promise<void> {
     this.closing = true; if (this.timer) clearInterval(this.timer)
@@ -654,6 +684,6 @@ export class RemoteEndpoint {
       timer.addEventListener('abort', finish, { once: true })
       void Promise.allSettled([this.adminQueue, this.fileQueue, ...this.pending.values(), ...this.snapshotCleanup.values()]).then(finish)
     })
-    this.closed = true; this.journal.close()
+    this.closed = true; this.host.resources?.close(); this.journal.close()
   }
 }

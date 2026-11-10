@@ -3,6 +3,7 @@ import { lstatSync, realpathSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import type { Store } from '../app/store.ts'
 import { RemoteClient } from '../remote/client.ts'
+import { ResourceUsageSchema } from '../remote/resource-model.ts'
 import { fingerprint, inside } from '../remote/journal.ts'
 import { RemoteError, type EndpointCredential, type EndpointIdentity, type GrantReceipt, type RemoteGrant, type RemoteJob, type RemoteOperation } from '../remote/protocol.ts'
 import { EnvironmentError } from './model.ts'
@@ -26,10 +27,10 @@ interface EndpointHost { store: Store; stateDir: string; lifetime: AbortSignal; 
   restoreRegistration?(record: Registration): Registration;
   publicationConfig?: PublicationConnection; workerRoots(): string[] }
 const stamp = () => new Date().toISOString()
-const jobView = ({ id, grantId, epoch, phase, createdAt, updatedAt, cancelRequested, quiescent, reconciled }: EndpointJob): EndpointJob =>
-  ({ id, grantId, epoch, phase, createdAt, updatedAt, cancelRequested, quiescent, reconciled })
-const operationView = ({ id, grantId, epoch, kind, phase, at, reconciled }: EndpointOperation): EndpointOperation =>
-  ({ id, grantId, epoch, kind, phase, at, reconciled })
+const jobView = ({ id, grantId, epoch, phase, createdAt, updatedAt, cancelRequested, quiescent, reconciled, resources }: EndpointJob): EndpointJob =>
+  ({ id, grantId, epoch, phase, createdAt, updatedAt, cancelRequested, quiescent, reconciled, ...(resources ? { resources: ResourceUsageSchema.parse(resources) } : {}) })
+const operationView = ({ id, grantId, epoch, kind, phase, at, reconciled, resources }: EndpointOperation): EndpointOperation =>
+  ({ id, grantId, epoch, kind, phase, at, reconciled, ...(resources ? { resources: ResourceUsageSchema.parse(resources) } : {}) })
 
 /** Single-owner control plane. Remote mutations are journaled before dispatch and retried only under their original binding. */
 export class Endpoints {

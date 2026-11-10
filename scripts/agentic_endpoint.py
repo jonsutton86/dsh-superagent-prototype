@@ -48,13 +48,30 @@ def private_bytes(path, maximum=4096):
 
 
 def configuration(value):
-    if not isinstance(value, dict) or set(value) - {'allowedEnv', 'maxRunning', 'outputMaxBytes', 'ownership'}:
-        raise RuntimeError('Endpoint configuration accepts only allowedEnv, maxRunning, outputMaxBytes and ownership.')
+    if not isinstance(value, dict) or set(value) - {'allowedEnv', 'maxRunning', 'outputMaxBytes', 'ownership', 'resources'}:
+        raise RuntimeError('Endpoint configuration accepts only allowedEnv, maxRunning, outputMaxBytes, ownership and resources.')
     result = {'allowedEnv': value.get('allowedEnv', []), 'maxRunning': value.get('maxRunning', 8), 'outputMaxBytes': value.get('outputMaxBytes', 8388608)}
     if not isinstance(result['allowedEnv'], list) or len(result['allowedEnv']) > 100 or not all(isinstance(name, str) and re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]{0,99}', name) for name in result['allowedEnv']):
         raise RuntimeError('Endpoint allowedEnv must be a bounded list of environment variable names.')
     if type(result['maxRunning']) is not int or not 1 <= result['maxRunning'] <= 32 or type(result['outputMaxBytes']) is not int or not 65536 <= result['outputMaxBytes'] <= 67108864:
         raise RuntimeError('Endpoint limits require 1–32 running commands and 64 KiB–64 MiB retained output per stream.')
+    if 'resources' in value:
+        resources = value['resources']
+        if not isinstance(resources, dict) or set(resources) != {'cgroupRoot', 'pool', 'command'}:
+            raise RuntimeError('Resource policy requires cgroupRoot, pool and command limits.')
+        path = resources['cgroupRoot']
+        if not isinstance(path, str) or len(path) > 4096 or not Path(path).is_absolute() or any(char in path for char in '\x00\n\r'):
+            raise RuntimeError('Resource cgroupRoot must be an absolute delegated cgroup path.')
+        limits = {}
+        bounds = {'cpuPercent': (1, 6400), 'memoryBytes': (67108864, 1099511627776), 'processes': (16, 65536)}
+        for kind in ('pool', 'command'):
+            current = resources[kind]
+            if not isinstance(current, dict) or set(current) != set(bounds) or any(type(current[key]) is not int or not low <= current[key] <= high for key, (low, high) in bounds.items()):
+                raise RuntimeError('Resource budgets require bounded integer cpuPercent, memoryBytes and processes.')
+            limits[kind] = {key: current[key] for key in bounds}
+        if any(limits['command'][key] > limits['pool'][key] for key in bounds):
+            raise RuntimeError('Command resource limits cannot exceed the shared worker pool.')
+        result['resources'] = {'cgroupRoot': path, **limits}
     if 'ownership' in value:
         owner = value['ownership']
         keys = {'url', 'authorityId', 'coordinatorId', 'resourceId', 'credentialFile', 'timeoutMs'}
@@ -126,8 +143,16 @@ def health(root, installation, no_redirect):
         expected = installation['endpointConfig'].get('ownership')
         if result.get('ownership') != ({key: expected[key] for key in ('authorityId', 'coordinatorId', 'resourceId')} if expected else None):
             return None
+        expected_resources = installation['endpointConfig'].get('resources')
+        observed_resources = result.get('resources')
+        if expected_resources:
+            if not isinstance(observed_resources, dict) or observed_resources.get('kind') != 'linux-cgroup-v2' or observed_resources.get('ready') is not True or observed_resources.get('policy') != expected_resources:
+                return None
+        elif observed_resources is not None:
+            return None
         return {'health': {'runtime': {'state': 'ready'}}, 'setup': {'machine': {'stateDir': str(root / 'state')}, 'problem': None},
-                'endpoint': {'id': identity, 'protocol': 1, 'platform': 'linux', 'confinement': 'linux-bubblewrap'}, 'adminHash': fingerprint}
+                'endpoint': {'id': identity, 'protocol': 1, 'platform': 'linux', 'confinement': 'linux-bubblewrap',
+                             **({'resources': observed_resources} if expected_resources else {})}, 'adminHash': fingerprint}
     except (OSError, ValueError, TypeError, KeyError, AttributeError, RuntimeError, sqlite3.Error):
         return None
 
@@ -141,4 +166,6 @@ def enrollment(root, installation, current):
             'transport': 'For another host, use an authenticated tunnel or HTTPS and transport the credential into a private file on the coordinator.'}
     if 'ownership' in installation['endpointConfig']:
         result['ownership'] = {key: installation['endpointConfig']['ownership'][key] for key in ('authorityId', 'coordinatorId', 'resourceId')}
+    if 'resources' in installation['endpointConfig']:
+        result['resources'] = current['endpoint']['resources']
     return result

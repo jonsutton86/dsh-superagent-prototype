@@ -13,7 +13,7 @@ beforeEach(() => {
   cli = join(root, 'fake harness.cjs'); copyFileSync(resolve('tests/fixtures/launcher.cjs'), cli); chmodSync(cli, 0o700)
   checkout = join(root, 'built checkout'); mkdirSync(join(checkout, 'lib'), { recursive: true })
   writeFileSync(join(checkout, 'package.json'), JSON.stringify({ name: 'dsh-superagent' }))
-  for (const name of ['index.js', 'client.js', 'remote-endpoint.js', 'remote-fs-worker.js', 'remote-command-worker.js', 'verification-snapshot-worker.js']) writeFileSync(join(checkout, 'lib', name), 'export {}\n')
+  for (const name of ['index.js', 'client.js', 'remote-endpoint.js', 'remote-fs-worker.js', 'remote-command-worker.js', 'remote-resource-worker.js', 'verification-snapshot-worker.js']) writeFileSync(join(checkout, 'lib', name), 'export {}\n')
 })
 afterEach(async () => {
   for (const directory of installations.splice(0).reverse()) {
@@ -150,6 +150,14 @@ it('does not signal a running instance while another operation holds its lock', 
     expect(existsSync(join(directory, 'manually-stopped'))).toBe(false)
   } finally { holder.stdin.end(); await closed }
   expect((await state(directory)).process).toEqual(before.process)
+})
+
+it('requires the configured resource policy and ready kernel boundary in endpoint health', async () => {
+  const result = await new Promise<{ error: Error | null; stdout: string; stderr: string }>(resolveResult => execFile('python3',
+    [resolve('tests/fixtures/resource-launcher.py'), resolve('scripts/agentic_endpoint.py'), root],
+    (error, stdout, stderr) => resolveResult({ error, stdout, stderr })))
+  expect(result.error, result.stderr).toBeNull()
+  expect(result.stdout.trim()).toBe('Resource health contract passed')
 })
 
 it.runIf(process.platform !== 'linux')('refuses endpoint installation on an unsupported host without creating an installation', async () => {

@@ -56,10 +56,10 @@ refer to the same environment. Remote access requires authentication; do not exp
 | Personas and skills | Immutable versioned definitions, model preferences, optional-tool guards, embedded skills, management UI, reviewed per-action assignment and worker/descendant resume binding; contract in `021-personas.md` | Multi-workspace ownership, stronger per-capability execution boundaries, role-quality evaluations and catalog retention |
 | Schedules and reflection | Versioned schedules, durable occurrences, timezone/DST, missed-run/run/open limits, scoped model budgets, bounded automatic reflection snapshots, reviewed memory/plan/new-mission proposals and operator UI (`044-scheduled-reflection.md`) | Reflection quality and long-horizon evaluation, broader provider budget acceptance, retention/scaling, multi-workspace ownership and broader deployment acceptance |
 | Usage and budgets | Worker concurrency, schedule run/open-mission reservations, managed Harness call/token ledger, versioned estimated pricing, scoped call/token/spend reservations, reconciliation and operator UI (`042-usage-budgets.md`); speculative reservation/promotion integration (`045-speculative-preparation.md`) | Broader provider/adapter acceptance, invoice import, metadata generation binding, non-token fees, retention and multi-workspace ownership |
-| Models and connectors | Harness configuration, optional GitHub/Feishu, local grants, authenticated remote transport, paired Harness services, persistent remote authority/revocation and native Linux namespace/cancellation CI, whole-profile and per-action world binding, durable command/file ownership and operator receipts, endpoint-owned versioned credentials, real model artifact/restart qualification, endpoint enrollment/reconciliation and independent managed worlds | Managed endpoint/runtime launch, cross-host deployment qualification and connector scope |
+| Models and connectors | Harness configuration, optional GitHub/Feishu, local grants, authenticated remote transport, paired Harness services, persistent remote authority/revocation and native Linux namespace/cancellation CI, whole-profile and per-action world binding, durable command/file ownership and operator receipts, endpoint-owned versioned credentials, real model artifact/restart qualification, endpoint enrollment/reconciliation, independent managed worlds, prepared-host endpoint launch and configured cgroup limits/usage receipts | Native launcher/resource qualification, automatic service delegation, managed machine/fleet and transport, disk quotas, per-workspace aggregate allocation, cross-host deployment qualification and connector scope |
 | Voice | Local/HTTP speech adapters, explicit local/cloud modes, editable dictation, reply playback, interruption, durable request/restart handling and text fallback (`062-voice.md`) | Browser/microphone acceptance, cloud-provider qualification, streaming/realtime sessions, long-reply chunking, speech billing and receipt maintenance |
 | Supervision and recovery | Independent watchdog console, evidence review receipts, bounded history/retention and real-model process-failure recovery; encrypted checkpoints/held Session import, checkpoint-bound claimant replacement, configuration/receipt/input validation, core Engine/connector/mission/plan/schedule authority and artifact/check/review/completion evidence checks, authenticated held receipt application, ownership authority, endpoint and artifact/mission publication fencing and owned Runtime/dedicated/managed provider lifecycle | Remaining product authority graphs, deployment binding/remapping, broader inbound connector/repository integration, clean-host activation/failover, alert routing, diagnosis quality and broader live failure tests |
-| Whole-product qualification | Deterministic unit, API/DOM flows, actual Harness restarts, live local model/tool, inbox and planner-to-execution missions; persistent local launcher (`066-persistent-launcher.md`), production browser-factory regression coverage and operator-confirmed browser startup | Full browser/desktop journeys and layout, broader provider acceptance, clean-host backup/restore drills, accessibility, login/boot services, supported upgrades and desktop packaging |
+| Whole-product qualification | Deterministic unit, API/DOM flows, actual Harness restarts, live local model/tool, inbox and planner-to-execution missions; persistent local launcher (`066-persistent-launcher.md`), production browser-factory regression coverage, operator-confirmed browser startup and optional service supervision with native macOS lifecycle drills (`068-service-supervision.md`) | Full browser/desktop journeys and layout, broader provider acceptance, clean-host backup/restore drills, accessibility, Linux user-manager/boot and actual logout/reboot/power-loss service qualification, supported upgrades and desktop packaging |
 
 ## Missions increment
 
@@ -148,7 +148,8 @@ remain outstanding.
 The durable memory/artifact increment is described in `011-library.md`; its application-level scope boundary does not
 replace the article's isolated execution environments. It uses the existing SQLite database and Harness tool registration.
 
-1. Managed endpoint/machine deployment and runtime launch, remote repository workflows and resource quotas. Keep the existing
+1. Managed machine/fleet and transport setup, native endpoint/resource qualification, automatic service delegation,
+   remote repository workflows, disk quotas and per-workspace aggregate allocation. Keep the existing
    paired process/filesystem, grant, ownership and host-verification boundaries throughout the supported setup path.
 2. Clean-host checkpoint restore and failover: deployment/path remapping, credential/identity rotation and abrupt host-loss
    drills that preserve Harness Sessions, world authority and original effect receipts. Same-host installed recovery is
@@ -744,5 +745,14 @@ passed with persisted executor pause through removal/reinstallation; eight focus
 existing user app remained running. Local `pnpm check` passed typechecking, six builds and 2,011 tests (22 skipped;
 145.74 seconds). Native Linux user-manager/boot qualification and actual logout/reboot/power-loss acceptance remain
 outstanding, alongside the rest of the full architecture.
-Automatic machine/fleet provisioning, managed transport, broader resource quotas, cross-host qualification and the rest of
-the full architecture remain open. This daemon installer does not substitute for those requirements.
+Execution resource enforcement is implemented in `069-execution-resources.md`: optional cgroup v2 worker-pool and
+per-process-tree CPU, memory/swap and process/thread ceilings; pre-exec entry, whole-tree cancellation, population-aware
+quiescence/reconciliation and pinned restart policy. Kernel usage receipts reach the operator UI, and launcher health checks
+the configured resource boundary. Focused local integration passed 32 tests with three native/platform cases skipped;
+these simulated-kernel checks do not establish native enforcement. The real-kernel qualification is added but not yet run.
+Final local `pnpm check` passed TypeScript, seven builds and 2,022 tests (23 skipped; 128.63 seconds). The existing app
+remained running, ready and unpaused. Rejected resource policy changes leave ownership binding unchanged.
+
+Automatic machine/fleet provisioning, managed transport, automatic cgroup delegation/boot setup, disk quotas,
+per-workspace aggregate allocation, supported policy migration, cross-host qualification and the rest of the full
+architecture remain open. These increments do not substitute for those requirements.

@@ -141,7 +141,7 @@ def initialize(root, args):
         checkout = Path(args.checkout or CHECKOUT).expanduser().resolve()
         role = args.role or 'workspace'
         package = json.loads((checkout / 'package.json').read_text())
-        required = ('index.js', 'client.js') + (('remote-endpoint.js', 'remote-fs-worker.js', 'remote-command-worker.js', 'verification-snapshot-worker.js') if role == 'endpoint' else ())
+        required = ('index.js', 'client.js') + (('remote-endpoint.js', 'remote-fs-worker.js', 'remote-command-worker.js', 'remote-resource-worker.js', 'verification-snapshot-worker.js') if role == 'endpoint' else ())
         if package.get('name') != 'dsh-superagent' or not all((checkout / 'lib' / name).is_file() for name in required):
             raise RuntimeError('Select a built dsh-superagent checkout; run pnpm install --frozen-lockfile and pnpm build there first.')
         if role == 'endpoint':

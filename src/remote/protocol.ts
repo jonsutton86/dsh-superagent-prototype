@@ -4,6 +4,7 @@ import type { FsEditOutcome, FsWriteOutcome } from '@deepseek-ai/dsh-fs'
 import type { OwnershipStamp } from '../ownership/protocol.ts'
 import { InventoryPage, InventoryRequest, ReceiptRequest } from '../ownership/inventory.ts'
 import { VerificationJob, type CheckEvidence } from '../verification/model.ts'
+import type { ResourceStatus, ResourceUsage } from './resource-model.ts'
 
 export const REMOTE_VERSION = 1
 export const RPC_PATH = '/execution/v1'
@@ -92,6 +93,7 @@ export interface GrantReceipt { grant: RemoteGrant; credential?: string }
 export interface RevocationReceipt { grantId: string; epoch: number; at: string; quiescent: boolean }
 export interface EndpointIdentity {
   protocol: 1; id: string; platform: string; confinement: string
+  resources?: ResourceStatus
   ownership?: { authorityId: string; coordinatorId: string; resourceId: string }
   capabilities: { filesystem: true; process: true; terminal: false; interactiveStdin: false; controlChannel: false; outputWindow: number; effectOwnership?: true; credentialBindings?: true; administration?: true; snapshotVerification?: true }
 }
@@ -100,6 +102,7 @@ export interface RemoteJob {
   phase: 'accepted' | 'started' | 'settled' | 'unknown'; createdAt: string; updatedAt: string
   request: Extract<RpcRequest, { op: 'job.spawn' }>; cancelRequested: boolean; quiescent: boolean | null
   credentials?: CredentialBinding[]
+  resources?: ResourceUsage
   verification?: CheckEvidence
   ownership?: OwnershipStamp
   outcome?: { exitCode: number | null; signal: string | null }; error?: string; reconciled?: { at: string; note: string }
@@ -107,6 +110,7 @@ export interface RemoteJob {
 export interface RemoteOperation {
   id: string; grantId: string; epoch: number; fingerprint: string; kind: string
   owner?: EffectOwner
+  resources?: ResourceUsage
   ownership?: OwnershipStamp
   phase: 'started' | 'settled' | 'unknown'; value?: FsWriteOutcome | FsEditOutcome
   error?: { code: string; message: string }; at: string
