@@ -89,6 +89,20 @@ export class PublicationService {
     if (request.op.startsWith('repository.')) return this.repositories.rpc(principal, request, proof)
     switch (request.op) {
       case 'identity': return this.identity()
+      case 'recovery.repository-destination': {
+        if (principal !== 'client') throw new PublicationError(403, 'client_required', 'The coordinator publication credential is required')
+        const validate = () => {
+          this.lifetime.signal.throwIfAborted(); this.inventory.assertRevision(request.revision)
+          if (this.calls || this.working.size || this.journal.unsettled().length || this.repositories.busy || this.repositories.journal.unsettled())
+            throw new PublicationError(409, 'recovery_busy', 'Publication service must be quiescent for recovery')
+        }
+        validate()
+        await this.repositories.checkDestination(request.destination, request.destinationHash, AbortSignal.any([this.lifetime.signal, AbortSignal.timeout(30_000)]))
+        validate()
+        const { id, ownership } = this.identity()
+        return PublicationConfigurationObservation.parse({ revision: request.revision, identity: { id, kind: 'publication', ...ownership },
+          destination: request.destination, destinationHash: request.destinationHash, account: true, target: true, quiescent: true })
+      }
       case 'recovery.destination': {
         if (principal !== 'client') throw new PublicationError(403, 'client_required', 'The coordinator publication credential is required')
         const destination = this.destination(request.destination), { credentialFile: _, ...metadata } = destination

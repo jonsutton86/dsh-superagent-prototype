@@ -22,7 +22,7 @@ import { ExecutionEffects, type ExecutionReceipt } from '../remote/effects.ts'
 import { fingerprint, inside } from '../remote/journal.ts'
 import type { WorldRecord } from '../remote/world-journal.ts'
 import { PublicationClient } from '../publication/client.ts'
-import { ExternalReceipt, Publication, PublicationReceipt } from '../publication/protocol.ts'
+import { ExternalReceipt, Publication, PublicationReceipt, PublicationError } from '../publication/protocol.ts'
 import { withVerifiedStagedCheckpoint } from './checkpoint.ts'
 import type { RecoveryIntent } from './ownership.ts'
 import type { AuditCheckpointReceipts, ReceiptAudit } from './audit.ts'
@@ -41,6 +41,7 @@ import { verifyRegistryState, type RegistryStateVerification } from './registrie
 import { verifyContextState, type ContextStateVerification } from './context.ts'
 import { verifyBudgetState, type BudgetStateVerification } from './budgets.ts'
 import { verifyPublicationState, type PublicationStateVerification } from './publications.ts'
+import { reconcileRepositoryPublications } from './repository-publications.ts'
 
 export interface PrepareCheckpointReceipts extends AuditCheckpointReceipts { requestId: string; auditId: string; persistence: SessionPersistence; inference: RecoveryInferenceHost; sources: RecoverySourceHost }
 export interface ReceiptPreparation {
@@ -148,6 +149,14 @@ export async function prepareCheckpointReceipts(options: PrepareCheckpointReceip
         throw new Error('Prepared recovery receipt does not match its audited original intent')
       return value
     }
+    const repositoryReceipt = async (resourceId: string, kind: ReceiptRequest['kind'], id: string, requestHash: string, missingAllowed: boolean) => {
+      try { return await receipt(resourceId, kind, id, requestHash) }
+      catch (error) {
+        // ResourceInventory checks the requested revision before reporting absence. Final validation pins it again.
+        if (missingAllowed && error instanceof PublicationError && error.status === 404 && error.code === 'receipt_missing') return undefined
+        throw error
+      }
+    }
     await validate()
     return withVerifiedSessionBackend(options.persistence, archive, manifest.sessions as unknown as SessionArchive[], signal, async (sessionBackend, recheckSessions) => {
       const sourceCheck = sourceConfigurationCheck(options.sources, db, signal), sourceConfiguration = sourceCheck.verify()
@@ -161,7 +170,7 @@ export async function prepareCheckpointReceipts(options: PrepareCheckpointReceip
       const worlds: WorldRecord[] = []
       let configurationChecks: WorldConfigurationCheck[] = []
       let controlChecks: ControlConfigurationCheck[] = [], controlConfiguration: ControlConfigurationVerification
-      const staging = await mkdtemp(join(root, '.prepare-')), applied = { commands: 0, mutations: 0, publications: 0 }
+      const staging = await mkdtemp(join(root, '.prepare-')), applied: ReceiptImage['applied'] = { commands: 0, mutations: 0, publications: 0 }
       try {
         const storePath = join(staging, 'orchestrator.sqlite'); await backup(db, storePath); await chmod(storePath, 0o600)
         for (const file of manifest.files.filter(file => file.kind !== 'store')) { signal.throwIfAborted(); await copyFile(join(archive, file.member), join(staging, file.member)) }
@@ -244,6 +253,8 @@ export async function prepareCheckpointReceipts(options: PrepareCheckpointReceip
             }
             applied.publications++
           }
+          const repositories = await reconcileRepositoryPublications(store.db, repositoryReceipt, signal)
+          if (repositories) applied.repositoryPublications = repositories
           stateGraph = await reconcileStateGraph(store.db, signal)
           connectorState = await verifyConnectorState(store.db, signal)
           workspaceState = await verifyWorkspaceState(store.db, signal)

@@ -8,7 +8,8 @@ import { credentialDigest, privateCredential } from '../environments/endpoint-fi
 import { OwnershipClient } from '../ownership/client.ts'
 import { OwnershipError, OwnershipView } from '../ownership/protocol.ts'
 import { PublicationClient } from '../publication/client.ts'
-import { DestinationView, PublicationConfigurationObservation, PublicationError } from '../publication/protocol.ts'
+import { DestinationView, PublicationConfigurationObservation, PublicationError, PublicationIdentity } from '../publication/protocol.ts'
+import { RepositoryDestinationView } from '../publication/repository-model.ts'
 import { fingerprint, inside } from '../remote/journal.ts'
 import type { AuditCheckpointReceipts, ReceiptAudit } from './audit.ts'
 import { ConfigurationMismatch } from './configuration.ts'
@@ -63,20 +64,30 @@ export function controlConfigurationChecks(options: Pick<AuditCheckpointReceipts
       throw new ConfigurationMismatch('configuration_mismatch')
     try {
       publisherCredential(); publisher ??= new PublicationClient(connection)
-      const destinations = z.array(DestinationView).min(1).max(100).parse(await publisher.call({ op: 'destinations' }, signal))
+      const identity = PublicationIdentity.parse(await publisher.call({ op: 'identity' }, signal))
+      if (fingerprint({ id: identity.id, kind: 'publication', ...identity.ownership }) !== fingerprint(resource.identity))
+        throw new ConfigurationMismatch('configuration_mismatch')
+      const destinations = z.array(DestinationView).max(100).parse(await publisher.call({ op: 'destinations' }, signal))
+      const repositories = identity.capabilities?.repositories
+        ? z.array(RepositoryDestinationView).max(100).parse(await publisher.call({ op: 'repository.destinations' }, signal)) : []
+      if (destinations.length + repositories.length < 1 || destinations.length + repositories.length > 100)
+        throw new ConfigurationMismatch('configuration_mismatch')
       if (new Set(destinations.map(destination => destination.id)).size !== destinations.length) throw new Error('Publication destination catalog repeats an identity')
-      for (const { hash, ...destination } of destinations) {
+      if (new Set(repositories.map(destination => destination.id)).size !== repositories.length) throw new Error('Repository destination catalog repeats an identity')
+      for (const entry of [...destinations.map(destination => ({ destination, op: 'recovery.destination' as const })),
+        ...repositories.map(destination => ({ destination, op: 'recovery.repository-destination' as const }))]) {
+        const { hash, ...destination } = entry.destination
         if (fingerprint(destination) !== hash) throw new ConfigurationMismatch('configuration_mismatch')
-        const observed = PublicationConfigurationObservation.parse(await publisher.call({ op: 'recovery.destination',
+        const observed = PublicationConfigurationObservation.parse(await publisher.call({ op: entry.op,
           revision: resource.revision, destination: destination.id, destinationHash: hash }, signal))
         if (observed.revision !== resource.revision || fingerprint(observed.identity) !== fingerprint(resource.identity)
           || observed.destination !== destination.id || observed.destinationHash !== hash) throw new ConfigurationMismatch('configuration_mismatch')
       }
-      publisherCredential(); signal.throwIfAborted(); return destinations.length
+      publisherCredential(); signal.throwIfAborted(); return destinations.length + repositories.length
     } catch (error) {
       if (error instanceof PublicationError && ([401, 403].includes(error.status) || ['configuration_unavailable', 'recovery_busy'].includes(error.code)))
         throw new ConfigurationMismatch('configuration_unavailable')
-      if (error instanceof PublicationError && ['destination_changed', 'destination_missing'].includes(error.code)) throw new ConfigurationMismatch('configuration_mismatch')
+      if (error instanceof PublicationError && ['destination_changed', 'destination_missing', 'repository_destination_missing'].includes(error.code)) throw new ConfigurationMismatch('configuration_mismatch')
       throw error
     }
   } })

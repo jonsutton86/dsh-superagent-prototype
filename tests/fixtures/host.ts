@@ -28,6 +28,7 @@ import type { CoordinatorOwnershipConfig } from '../../src/ownership/lease.ts'
 import type { PublicationConnection } from '../../src/publication/client.ts'
 import type { VoiceConfig } from '../../src/voice/model.ts'
 import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
+import { Session, SessionId } from '@deepseek-ai/dsh-session'
 
 export const MEMBER = 'ou_alice'
 export const CHAT = 'oc_team'
@@ -144,6 +145,7 @@ export function subagentRuntime(agents: Map<string, FakeAgent>) {
 
 /** @param seed - writes to the database before the Runtime opens it, such as records an earlier version stored. */
 export async function startRuntime(seed?: (store: Store) => void, options: { executionMode?: 'local' | 'repository'; noAccounts?: boolean; managed?: boolean; ownership?: CoordinatorOwnershipConfig; publication?: PublicationConnection; voice?: VoiceConfig; attachments?: AttachmentStore;
+  captureSessions?: Map<string, Session>;
   remote?: { world: RemoteWorld; filesystem: FileSystem; subprocess: SubprocessRuntime } } = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'orchestrator-host-'))
   const AGENT = join(directory, 'agent-gh'), BOT = join(directory, 'lark-bot')
@@ -203,7 +205,10 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
         const queued = starts ? inbox.nextTurn.splice(0, 1) : []
         for (const message of [...inbox.nextStep.splice(0), ...queued]) {
           ctx.emit('agent/inbox/claimed', { agent, message, turn } as never)
-          if (!cut) ctx.emit('session/event', session as never, { type: 'user/message', data: message } as never)
+          if (!cut) {
+            options.captureSessions?.get(sessionId)?.append('user/message', message, { surfaceOp: 'append' })
+            ctx.emit('session/event', session as never, { type: 'user/message', data: message } as never)
+          }
         }
       }
       steps.set(sessionId, () => { take(false) })
@@ -219,7 +224,10 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
         turn++
         take(true)
       })
-      const session = { id: sessionId, header: { id: sessionId, cwd: workspaceId, agentPreset }, snapshotEvents: () => [], requestHeader: () => undefined, append: vi.fn() }
+      const session = options.captureSessions ? Session.create(SessionId(sessionId), [],
+        { ...Session.create(SessionId(sessionId)).header, cwd: workspaceId, agentPreset })
+        : { id: sessionId, header: { id: sessionId, cwd: workspaceId, agentPreset }, snapshotEvents: () => [], requestHeader: () => undefined, append: vi.fn() }
+      if (options.captureSessions) options.captureSessions.set(sessionId, session as Session)
       let status = 'idle'
       const idle: (() => void)[] = []
       // A cancel drops the inbox unless kept, and the turn it stops ends a moment later, which DSH says.

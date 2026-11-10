@@ -12,6 +12,7 @@ import { RepositoryProcessUnsettled, RepositoryPreparationError } from './reposi
 import { repositoryPullBody, type RepositoryAdapter, type PreparedRepositoryBranch } from './repository-provider.ts'
 
 interface Host { gate(): OwnershipGate; signal: AbortSignal }
+/** Owns the publisher's immutable branch/PR journal and fenced private imports. */
 export class RepositoryPublisher {
   readonly destinations = new Map<string, RepositoryDestinationConfig>()
   private readonly working = new Set<string>()
@@ -24,6 +25,13 @@ export class RepositoryPublisher {
   }
   get busy() { return this.working.size > 0 }
   catalog() { return [...this.destinations.values()].map(({ credentialFile: _, ...value }) => ({ ...value, hash: fingerprint(value) })) }
+  /** Read-only account/target proof; recovery checks the independent inventory around this call. */
+  async checkDestination(id: string, hash: string, signal: AbortSignal): Promise<void> {
+    const destination = this.destination(id, hash)
+    if (!this.adapter) throw new PublicationError(409, 'configuration_unavailable', 'Repository provider cannot verify its configuration')
+    try { await this.adapter.check(destination, signal) }
+    catch { throw new PublicationError(409, 'configuration_unavailable', 'Repository account or destination configuration is unavailable') }
+  }
   private destination(id: string, hash?: string) {
     const value = this.destinations.get(id)
     if (!value) throw new PublicationError(404, 'repository_destination_missing', 'Repository publication destination not found')

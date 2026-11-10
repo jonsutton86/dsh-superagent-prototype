@@ -5,7 +5,9 @@ import { randomUUID } from 'node:crypto'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { RepositoryTransferReceipt } from './repository-model.ts'
 
+/** An original child process has no confirmed exit; retain its import and refuse external adoption. */
 export class RepositoryProcessUnsettled extends Error {}
+/** Sanitized import stage/category without command output, provider response or credential bytes. */
 export class RepositoryPreparationError extends Error {}
 export interface RepositoryGitTransport { url: string; caFile?: string }
 const PROGRAM = String.raw`
@@ -24,6 +26,7 @@ try {
 }catch{process.stderr.write('dsh-repository-error:'+failure+'\n');process.exitCode=1;}
 `
 const ASKPASS = '#!/bin/sh\ncase "$1" in *Username*) printf "%s\\n" x-access-token ;; *Password*) printf "%s\\n" "$DSH_GIT_AUTH" ;; *) exit 1 ;; esac\n'
+/** Materialize and verify an immutable bundle with the paired Harness provider before any external push. */
 export class RepositoryGit {
   private quiescent = true
   private constructor(private readonly subprocess: SubprocessRuntime, readonly directory: string, private readonly node: string,

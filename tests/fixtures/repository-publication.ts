@@ -36,10 +36,10 @@ export async function repositoryPublicationFixture(cleanup: (() => Promise<unkno
     transferHash: fingerprint(transfer), title: 'Reviewed change', body: 'Original result', draft: true, checks: [selection] }
   // Contract seals stand in for coordinator-produced evidence; export integration tests qualify actual check capture separately.
   const evidence = (): EvidenceSeal[] => {
-    const now = new Date().toISOString()
+    const clock = Date.now(), now = new Date(clock).toISOString()
     return [{ selection, artifact, check: { id: randomUUID(), version: 1, hash: 'b'.repeat(64) }, snapshotHash: 'c'.repeat(64),
       execution: { binding: 'd'.repeat(64), assignmentId: 'assignment', sessionId: 'worker' }, repository: { commit: head, tree, contentTree: tree, statusHash: hash(Buffer.alloc(0)) },
-      confinement: 'linux-bubblewrap', checkedAt: now, capture: { id: randomUUID(), capturedAt: now, finishedAt: now }, validUntil: new Date(Date.now() + 60000).toISOString() }]
+      confinement: 'linux-bubblewrap', checkedAt: now, capture: { id: randomUUID(), capturedAt: now, finishedAt: now }, validUntil: new Date(clock + 60000).toISOString() }]
   }
   let posts = 0, losePull = false, refusePull = false, account = 'agent-bot', targetId = 20, beforePost: (() => Promise<void>) | undefined
   const pulls: Record<string, any>[] = []
@@ -105,7 +105,7 @@ export async function repositoryPublicationFixture(cleanup: (() => Promise<unkno
   const prepare = () => client.call<{ prepared: boolean; receipt: RepositoryReceipt }>({ op: 'repository.prepare', publication })
   const publish = () => client.call<RepositoryReceipt>({ op: 'repository.publish', publication, evidence: evidence() })
   return { authority, owner, directory, ctx, git, bytes, transfer, publication, destination, evidence, upload, prepare, publish, client, admin, config, adapter,
-    get service() { return service }, pulls, get posts() { return posts }, connection,
+    get service() { return service }, pulls, get posts() { return posts }, connection, providerOrigin: origin,
     losePull: () => { losePull = true }, refusePull: (value: boolean) => { refusePull = value },
     account: (value: string) => { account = value }, targetId: (value: number) => { targetId = value },
     beforePost: (value?: () => Promise<void>) => { beforePost = value }, loseReply: (marker: string) => { loseResponse = marker },

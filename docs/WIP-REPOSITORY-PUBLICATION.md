@@ -1,5 +1,8 @@
 # Paused work: independent repository publication
 
+Historical snapshot: the owner explicitly resumed implementation on 2026-11-10. The pause below describes checkpoint
+`5c487b6`; current progress and validation are in [the publication contract](075-repository-publication.md).
+
 **Status: INCOMPLETE / NOT RELEASE-READY / PROJECT PAUSED.**
 
 Saved on 2026-11-10 (America/New_York) at the owner's request to preserve unfinished work on GitHub.

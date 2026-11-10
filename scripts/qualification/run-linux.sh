@@ -15,6 +15,8 @@ sudo -n systemd-run --wait --pipe --collect --service-type=exec \
   --unit="$agentic_qa_unit" --uid="$(id -u)" --property='Delegate=cpu memory pids' \
   --property="WorkingDirectory=$PWD" --setenv="PATH=$PATH" --setenv=NO_COLOR=1 \
   --setenv=DSH_REMOTE_ISOLATION=1 --setenv=DSH_ENDPOINT_LAUNCHER_QUALIFICATION=1 --setenv=DSH_SSH_TRANSPORT_QUALIFICATION=1 \
+  --setenv=DSH_PUBLICATION_HARNESS_QUALIFICATION=1 \
+  --setenv="DSH_ABLITERATION_ADAPTER_PACKAGE=${DSH_ABLITERATION_ADAPTER_PACKAGE:-}" \
   --setenv="DSH_ENDPOINT_QUALIFICATION_CLI=$DSH_ENDPOINT_QUALIFICATION_CLI" \
   /bin/bash "$PWD/tests/fixtures/resource-qualification.sh" pnpm test --maxWorkers=4
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"

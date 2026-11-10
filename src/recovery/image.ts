@@ -13,7 +13,8 @@ export const ReceiptImage = z.object({ version: z.literal(1), requestId: z.strin
   recovery: RecoveryReservation, epoch: z.number().int().nonnegative(), executionOwnership: z.literal(false),
   resources: z.array(z.object({ identity: InventoryPage.shape.identity, revision: InventoryPage.shape.revision,
     total: InventoryPage.shape.total, quiescent: z.literal(true) }).strict()).max(257),
-  applied: z.object({ commands: z.number().int().nonnegative(), mutations: z.number().int().nonnegative(), publications: z.number().int().nonnegative() }).strict(),
+  applied: z.object({ commands: z.number().int().nonnegative(), mutations: z.number().int().nonnegative(), publications: z.number().int().nonnegative(),
+    repositoryPublications: z.number().int().nonnegative().optional() }).strict(),
   files: z.array(z.object({ member: z.string().regex(/^(?:orchestrator\.sqlite|[a-z0-9-]+\.bin)$/),
     kind: z.enum(['store', 'world', 'session']), bytes: z.number().int().nonnegative().max(2 ** 40), sha256: digest,
     binding: digest.optional() }).strict()).min(1).max(20000),
@@ -73,7 +74,9 @@ export const ReceiptImage = z.object({ version: z.literal(1), requestId: z.strin
     withdrawn: z.number().int().nonnegative(), receipts: z.number().int().nonnegative(), sent: z.number().int().nonnegative(),
     unresolved: z.number().int().nonnegative(), missingOutbox: z.number().int().nonnegative(), legacyApprovals: z.number().int().nonnegative(),
     legacyDestinations: z.number().int().nonnegative(), legacyGrantRequests: z.number().int().nonnegative(), legacyPlanBindings: z.number().int().nonnegative(),
-    legacyReviewSeals: z.number().int().nonnegative(), digest }).strict().optional(),
+    legacyReviewSeals: z.number().int().nonnegative(), repositories: z.number().int().nonnegative().optional(), repositoryApprovals: z.number().int().nonnegative().optional(),
+    repositoryTransfers: z.number().int().nonnegative().optional(), repositoryReceipts: z.number().int().nonnegative().optional(),
+    repositoryUnresolved: z.number().int().nonnegative().optional(), digest }).strict().optional(),
 }).strict()
 export type ReceiptImage = z.infer<typeof ReceiptImage>
 const envelope = z.object({ manifest: ReceiptImage, mac: digest }).strict()

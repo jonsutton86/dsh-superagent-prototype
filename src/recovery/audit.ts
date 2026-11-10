@@ -22,6 +22,8 @@ import { ConfigurationMismatch, worldConfigurations, verifyWorldConfiguration, t
 import { controlConfigurationChecks, type ControlConfigurationCheck } from './control.ts'
 import type { z } from 'zod'
 import { withVerifiedStagedCheckpoint } from './checkpoint.ts'
+import { WorkspaceRepositoryPublication } from '../publication/repository-runtime-model.ts'
+import { repositoryPublicationExpected } from './repository-publications.ts'
 
 export interface AuditCheckpointReceipts {
   checkpoint: string; keyFile: string; destination: string; authority: OwnershipConnection & { coordinatorId: string };
@@ -120,6 +122,11 @@ export async function auditCheckpointReceipts(options: AuditCheckpointReceipts):
             ...(item.receipt?.external ? { resultHash: fingerprint(ExternalReceipt.parse(item.receipt.external)) } : {}) })
           add(publication.serviceId, { kind: 'destination', id: intent.destination, requestHash: intent.destinationHash })
         }
+        for (const original of rows<unknown>(db, 'workspace_repository_publication')) {
+          const item = WorkspaceRepositoryPublication.parse(original)
+          if (!publication || item.serviceId !== publication.serviceId) throw new Error('Repository publication lacks its original service binding')
+          for (const expected of repositoryPublicationExpected(item)) add(publication.serviceId, expected)
+        }
         const clients: { id: string; kind: 'endpoint' | 'publication'; call(request: InventoryRequest): Promise<unknown>;
           administration?(request: z.infer<typeof AdministrationRead> | z.infer<typeof RevocationRead>): Promise<unknown> }[] = options.endpoints.map(config => {
           const client = new RemoteClient(config, undefined, undefined, pin(config.credentialFile))
@@ -158,7 +165,7 @@ export async function auditCheckpointReceipts(options: AuditCheckpointReceipts):
                 || saved.resultHash !== undefined && item.resultHash !== saved.resultHash
                 || saved.ownership && (!item.ownership || !sameOwner(item.ownership, saved.ownership))
                 || saved.attempts && (!item.ownership || !saved.attempts.some(owner => sameOwner(owner, item.ownership!)))
-              const effect = ['command', 'mutation', 'publication'].includes(item.kind)
+              const effect = ['command', 'mutation', 'publication', 'repository-publication', 'repository-transfer'].includes(item.kind)
               if (different || effect && (!item.ownership || item.ownership.coordinatorId !== options.authority.coordinatorId || item.ownership.epoch > report.epoch))
                 issue('receipt_mismatch', client.id, item)
               else if (!item.settled) issue('effect_unsettled', client.id, item)

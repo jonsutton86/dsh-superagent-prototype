@@ -51,6 +51,7 @@ import type { CoordinatorOwnership } from '../ownership/lease.ts'
 import { OwnershipError } from '../ownership/protocol.ts'
 import type { Publications } from '../publication/runtime.ts'
 import type { RepositoryExports } from '../publication/repository-exports.ts'
+import type { RepositoryPublications } from '../publication/repository-runtime.ts'
 import { PublicationError } from '../publication/protocol.ts'
 import type { ChannelPublications } from '../publication/channels.ts'
 import type { ConversationInbox } from '../publication/inbound.ts'
@@ -68,6 +69,7 @@ export interface HttpHost {
   readonly ownership?: Pick<CoordinatorOwnership, 'status'>
   readonly publications?: Publications
   readonly repositoryExports?: RepositoryExports
+  readonly repositoryPublications?: RepositoryPublications
   readonly channelPublications?: ChannelPublications
   readonly conversations?: ConversationInbox
   authorizeMutation?(): void
@@ -256,7 +258,19 @@ function routes(runtime: HttpHost): Routes {
     if (!runtime.repositoryExports) throw new WorkspaceError(409, 'Repository export is unavailable')
     return runtime.repositoryExports
   }
+  const repositoryPublications = () => {
+    if (!runtime.repositoryPublications) throw new WorkspaceError(409, 'Repository publication is unavailable')
+    return runtime.repositoryPublications
+  }
   return {
+    'GET repository-publication/destinations': () => runtime.repositoryPublications?.destinations() ?? { configured: false, items: [] },
+    'GET repository-exports/:id/publications': ({ params }) => repositoryPublications().list(params.id),
+    'POST repository-exports/:id/publications': async ({ params, body }) => repositoryPublications().prepare(params.id, await body()),
+    'GET repository-publications/:id': ({ params }) => repositoryPublications().get(params.id),
+    'POST repository-publications/:id/retry': ({ params }) => repositoryPublications().retry(params.id),
+    'POST repository-publications/:id/publish': async ({ params, body }) => repositoryPublications().publish(params.id, await body()),
+    'POST repository-publications/:id/refresh': ({ params }) => repositoryPublications().refresh(params.id),
+    'POST repository-publications/:id/cancel': ({ params }) => repositoryPublications().cancel(params.id),
     'GET library/:id/repository-exports': ({ params }) => repositoryExports().list(params.id),
     'POST library/:id/repository-exports': async ({ params, body }) => repositoryExports().prepare(params.id, await body()),
     'GET repository-exports/:id': ({ params }) => repositoryExports().get(params.id),
@@ -475,7 +489,7 @@ export function registerHttp(ctx: Context, runtime: HttpHost): () => void {
       if (!sameOrigin(req, ctx.webServer.port)) { json(res, 403, { error: 'Same-origin management request required' }); return }
       try {
         // Receipt refresh writes observations locally but never sends an execution or cancellation intent.
-        const observation = req.method === 'POST' && /^\/orchestrator\/api\/(?:execution|tickets\/[^/]+\/execution|worlds\/[^/]+\/execution|publications\/[^/]+|deliveries\/[^/]+|verification\/[^/]+)\/refresh$/.test(url.pathname)
+        const observation = req.method === 'POST' && /^\/orchestrator\/api\/(?:execution|tickets\/[^/]+\/execution|worlds\/[^/]+\/execution|publications\/[^/]+|repository-publications\/[^/]+|deliveries\/[^/]+|verification\/[^/]+)\/refresh$/.test(url.pathname)
         const mutation = req.method !== 'GET' && req.method !== 'HEAD' && !observation
         if (mutation) runtime.authorizeMutation?.()
         if (runtime.ownership && req.method === 'GET' && url.pathname === '/orchestrator/api/state') {

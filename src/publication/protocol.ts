@@ -59,6 +59,8 @@ export const PublicationRpc = z.discriminatedUnion('op', [
   InventoryRequest, ReceiptRequest,
   z.object({ op: z.literal('recovery.destination'), revision: InventoryPage.shape.revision,
     destination: BaseDestination.shape.id, destinationHash: Digest }).strict(),
+  z.object({ op: z.literal('recovery.repository-destination'), revision: InventoryPage.shape.revision,
+    destination: BaseDestination.shape.id, destinationHash: Digest }).strict(),
   z.object({ op: z.literal('identity') }).strict(), z.object({ op: z.literal('destinations') }).strict(),
   z.object({ op: z.literal('publish'), publication: Publication }).strict(),
   z.object({ op: z.literal('pull.inspect'), destination: BaseDestination.shape.id, destinationHash: Digest }).strict(),

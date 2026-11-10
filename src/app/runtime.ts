@@ -60,6 +60,7 @@ import { Reflections } from '../workspace/reflection.ts'
 import { Speculation } from '../speculation/service.ts'
 import { Usage } from '../usage/service.ts'
 import { UsageRuntime } from '../usage/runtime.ts'
+import { installAbliterationGuard } from '../providers/abliteration-guard.ts'
 import { Inbox } from '../workspace/inbox.ts'
 import { Library } from '../workspace/library.ts'
 import { Environments } from '../environments/service.ts'
@@ -71,6 +72,7 @@ import { openRuntimeOwnership, assertOwnership, ownershipReady } from '../owners
 import type { CoordinatorOwnership } from '../ownership/lease.ts'
 import { Publications } from '../publication/runtime.ts'
 import { RepositoryExports } from '../publication/repository-exports.ts'
+import { RepositoryPublications } from '../publication/repository-runtime.ts'
 import { ChannelPublications } from '../publication/channels.ts'
 import { ConversationInbox } from '../publication/inbound.ts'
 import { Verification } from '../verification/service.ts'
@@ -121,6 +123,7 @@ export class Runtime extends Service implements SourceHost {
   readonly ownership?: CoordinatorOwnership
   readonly publications: Publications
   readonly repositoryExports: RepositoryExports
+  readonly repositoryPublications: RepositoryPublications
   readonly channelPublications: ChannelPublications
   readonly conversations: ConversationInbox
   readonly ready: Promise<void>
@@ -226,6 +229,10 @@ export class Runtime extends Service implements SourceHost {
       this.publications = new Publications({ store, library, verification, reviews, ownership: this.ownership, connection: machine.publication, lifetime: this.lifetime,
         preparationProblem: (ticketId, assignmentId) => runtime.speculation?.publicationProblem(ticketId, assignmentId),
         roots: () => [executionRoot(store.settings(), machine.stateDir, world?.grant.root), ...this.worlds.list().items.map(item => item.root)] })
+      this.repositoryPublications = new RepositoryPublications({ store, exports: this.repositoryExports, reviews, ownership: this.ownership,
+        connection: machine.publication, lifetime: this.lifetime,
+        authorize: () => { this.ownership?.proof(); this.lifetime.throwIfAborted(); if (this.paused()) throw new Error('Coordinator is paused') },
+        roots: () => [executionRoot(store.settings(), machine.stateDir, world?.grant.root), ...this.worlds.list().items.map(item => item.root)] })
       const personas = this.personas = new Personas(store, async model => { await resolveRoleModel(ctx, model) })
       const workspace = this.workspace = new Workspace(store, () => runtime.engine, () => !this.paused() && !this.closing(),
         id => library.evidenceRevision(id), ticket => environments.allows(ticket.execution?.environment), reference => personas.snapshot(reference), reference => environments.select(reference),
@@ -254,6 +261,7 @@ export class Runtime extends Service implements SourceHost {
       const board = this.board
       const accounting = new UsageRuntime(ctx, store, usage, masterId, this.lifetime, board.claim('usage', { state: 'starting', detail: 'Model accounting is starting' }))
       this.disposers.push(() => accounting.dispose())
+      this.disposers.push(installAbliterationGuard(ctx))
       const effects = this.effects = new Effects(store, board)
       const sources = this.sources = new SourceRegistry(() => store.settings(), board, kind => {
         // Sync source member lists once startup completes when a source plugin loads dynamically.
@@ -435,7 +443,7 @@ export class Runtime extends Service implements SourceHost {
     const { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, sourceLinks, setup, passes } = this
     return { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, get ready() { return runtime.ready }, sourceLinks, remoteRoot: this.remoteWorkspace?.world.grant.root,
       ownership: this.ownership, authorizeMutation: () => { this.ownership?.proof(); this.lifetime.throwIfAborted() },
-      publications: this.publications, repositoryExports: this.repositoryExports, voice: this.voice, attachments: this.attachments,
+      publications: this.publications, repositoryExports: this.repositoryExports, repositoryPublications: this.repositoryPublications, voice: this.voice, attachments: this.attachments,
       verification: this.verification,
       verificationReviews: this.verificationReviews,
       channelPublications: this.channelPublications,
@@ -455,6 +463,7 @@ export class Runtime extends Service implements SourceHost {
     const ownership = this.ownership?.close()
     try {
       await reviews; await verification
+      await this.repositoryPublications.stop()
       await this.repositoryExports.stop()
       await this.voice.stop()
       await this.attachments.stop()

@@ -19,6 +19,7 @@ import type { Mission } from '../workspace/model.ts'
 import type { PlanVersion } from '../workspace/plan-model.ts'
 import { StateReader, stateAt as at, stateId as id, statePositive as positive, stateObject as object } from './reader.ts'
 import { verifyRepositoryExports } from './repository-exports.ts'
+import { verifyRepositoryPublications, type RepositoryPublicationState } from './repository-publications.ts'
 
 const grantSchema = z.object({ id: PublicationId, missionId: PublicationId, revision: positive, planVersion: positive,
   enabled: z.boolean(), createdAt: at, revokedAt: at.optional(), destination: DestinationView.optional() }).strict()
@@ -43,7 +44,7 @@ const originalMessage = ({ id, channel, text, kind, ticketId }: OutboundMessage)
 const terminal = (receipt: PublicationReceipt) => !['accepted', 'started', 'unknown'].includes(receipt.phase)
 const orderedChecks = (checks: z.infer<typeof CheckSelections>) => [...checks].sort((a, b) => a.runId.localeCompare(b.runId))
 
-export interface PublicationStateVerification {
+export interface PublicationStateVerification extends RepositoryPublicationState {
   version: 1; records: number; artifacts: number; checkedArtifacts: number; seals: number; pullReviews: number; deliveryGrants: number;
   revokedGrants: number; deliveries: number; withdrawn: number; receipts: number; sent: number; unresolved: number; missingOutbox: number;
   legacyApprovals: number; legacyDestinations: number; legacyGrantRequests: number; legacyPlanBindings: number; legacyReviewSeals: number; digest: string
@@ -53,6 +54,7 @@ export interface PublicationStateVerification {
 export async function verifyPublicationState(db: DatabaseSync, signal: AbortSignal, settled = false): Promise<PublicationStateVerification> {
   const r = new StateReader(db, signal, 'publications')
   await verifyRepositoryExports(r)
+  const repositoryState = await verifyRepositoryPublications(r, settled)
   let artifacts = 0, checkedArtifacts = 0, seals = 0, pullReviews = 0, revokedGrants = 0, deliveries = 0, withdrawn = 0,
     receipts = 0, sent = 0, unresolved = 0, missingOutbox = 0, legacyApprovals = 0, legacyDestinations = 0, legacyGrantRequests = 0,
     legacyPlanBindings = 0, legacyReviewSeals = 0
@@ -225,5 +227,5 @@ export async function verifyPublicationState(db: DatabaseSync, signal: AbortSign
     if (value.withdrawn) withdrawn++; deliveries++
   }
   return { version: 1, records: r.records, artifacts, checkedArtifacts, seals, pullReviews, deliveryGrants: grants.size, revokedGrants, deliveries,
-    withdrawn, receipts, sent, unresolved, missingOutbox, legacyApprovals, legacyDestinations, legacyGrantRequests, legacyPlanBindings, legacyReviewSeals, digest: r.digest() }
+    withdrawn, receipts, sent, unresolved, missingOutbox, legacyApprovals, legacyDestinations, legacyGrantRequests, legacyPlanBindings, legacyReviewSeals, ...repositoryState, digest: r.digest() }
 }

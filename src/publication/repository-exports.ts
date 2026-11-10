@@ -9,6 +9,7 @@ import { WorkspaceError } from '../workspace/model.ts'
 import { RemoteError, type RemoteJob } from '../remote/protocol.ts'
 import { PrepareRepositoryExport, RepositoryExportRecord, REPOSITORY_EXPORT_LIMITS as L, type RepositoryExportView } from './repository-export-model.ts'
 import { exportDirectory, repositoryExportJob } from './repository-export-job.ts'
+import { repositoryChunks } from './repository-chunks.ts'
 
 interface Host { store: Store; verification: Verification; reviews: VerificationReviews; lifetime: AbortSignal;
   member(binding: string): ManagedWorld; authorize(): void; preparationProblem?(ticketId: string, assignmentId: string): string | undefined }
@@ -44,6 +45,20 @@ export class RepositoryExports {
       .map(row => view(RepositoryExportRecord.parse(JSON.parse(String(row.value))))) }
   }
   get(id: string) { return view(this.record(id)) }
+  /** Retained authority for a separate publication intent. Fresh dispatch also rechecks its original source. */
+  publication(id: string, current = false) {
+    const record = this.record(id)
+    if (record.phase !== 'ready' || !record.bundle || !record.evidence) throw new WorkspaceError(409, 'Prepare the reviewed repository export first')
+    if (current) {
+      this.authorize()
+      const { member: _, ...selected } = this.selected(record.artifactId, record.request)
+      for (const key of ['source', 'world', 'head', 'tree', 'directory', 'ticketId', 'assignmentId'] as const)
+        if (fingerprint(selected[key]) !== fingerprint(record[key])) throw new WorkspaceError(409, 'Original repository export binding changed')
+    }
+    this.verify(record)
+    return { exportId: id, fingerprint: record.fingerprint, artifact: { id: record.artifactId, revision: record.request.revision, hash: record.request.hash },
+      source: record.source.url, bundle: record.bundle, checks: record.request.checks }
+  }
   private selected(artifactId: string, request: PrepareRepositoryExport) {
     const bindings = request.checks.map(check => this.host.verification.approval(check.runId, check))
     const original = this.host.verification.get(request.checks[0]!.runId), repository = bindings[0]!.repository
@@ -133,18 +148,9 @@ export class RepositoryExports {
   }
   private *chunks(record: RepositoryExportRecord): Generator<Buffer> {
     const bundle = record.bundle; if (!bundle || record.received !== bundle.bytes) throw new WorkspaceError(409, 'Repository bundle is incomplete')
-    if (this.host.store.db.prepare('SELECT 1 FROM repository_export_chunk WHERE id=? AND offset<0 LIMIT 1').get(record.id))
-      throw new WorkspaceError(409, 'Repository export chunks differ from their original receipts')
-    const next = this.host.store.db.prepare(`SELECT offset,substr(data,1,${L.chunk + 1}) AS data,hash FROM repository_export_chunk WHERE id=? AND offset>=? ORDER BY offset LIMIT 1`)
-    const hash = createHash('sha256'); let offset = 0
-    for (;;) {
-      const row = next.get(record.id, offset); if (!row) break
-      const data = Buffer.from(row.data as Uint8Array)
-      if (row.offset !== offset || !data.length || data.length > L.chunk || offset + data.length > bundle.bytes || sha256(data) !== row.hash)
-        throw new WorkspaceError(409, 'Repository export chunks differ from their original receipts')
-      offset += data.length; hash.update(data); yield data
-    }
-    if (offset !== bundle.bytes || hash.digest('hex') !== bundle.sha256) throw new WorkspaceError(409, 'Repository export digest differs from its original receipt')
+    yield* repositoryChunks(this.host.store.db, 'repository_export_chunk', record.id, bundle, kind => {
+      throw new WorkspaceError(409, kind === 'digest' ? 'Repository export digest differs from its original receipt' : 'Repository export chunks differ from their original receipts')
+    })
   }
   private verify(record: RepositoryExportRecord) { for (const _ of this.chunks(record)) { /* bounded ordered verification */ } }
   download(id: string) {
@@ -154,9 +160,15 @@ export class RepositoryExports {
   }
   async cancel(id: string) {
     this.authorize()
+    this.assertUnreferenced(id)
     if (this.cancelling.has(id)) throw new WorkspaceError(409, 'Repository export cancellation is being observed')
     this.cancelling.add(id)
     try { return await this.cancelOriginal(id) } finally { this.cancelling.delete(id) }
+  }
+  private assertUnreferenced(id: string) {
+    if (this.host.store.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='workspace_repository_publication'").get()
+      && this.host.store.db.prepare("SELECT 1 FROM workspace_repository_publication WHERE json_extract(value,'$.exportId')=? LIMIT 1").get(id))
+      throw new WorkspaceError(409, 'This export is retained by a repository publication; inspect its original receipt')
   }
   private async cancelOriginal(id: string) {
     const active = this.pending.get(id)
@@ -172,6 +184,7 @@ export class RepositoryExports {
     }
     this.authorize()
     this.host.store.atomic(() => {
+      this.assertUnreferenced(id)
       record.phase = 'cancelled'; delete record.evidence; delete record.problem; this.save(record)
       this.host.store.db.prepare('DELETE FROM repository_export_chunk WHERE id=?').run(id)
     })

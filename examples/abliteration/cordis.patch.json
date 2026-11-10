@@ -1,0 +1,60 @@
+[
+  {
+    "id": "llm-pi-ai",
+    "config": {
+      "providers": {
+        "abliteration": {
+          "displayName": "Abliteration",
+          "apiKeyEnv": "ABLIT_KEY",
+          "api": "openai-completions",
+          "baseURL": "https://api.abliteration.ai/v1",
+          "reasoning": "low",
+          "compat": {
+            "supportsDeveloperRole": false,
+            "maxTokensField": "max_tokens"
+          },
+          "retryPolicy": {
+            "mode": "normal",
+            "maxRetries": 0
+          },
+          "timeoutMs": 60000,
+          "streamIdleTimeoutMs": 30000,
+          "requestImageMaxBytes": 1048576,
+          "maxRequestImageBytes": 8388608,
+          "models": [
+            {
+              "id": "abliterated-model",
+              "name": "Abliterated Model",
+              "contextWindow": 262144,
+              "maxTokens": 8192,
+              "input": [
+                "text",
+                "image"
+              ],
+              "reasoningEfforts": {
+                "low": "low",
+                "medium": "medium",
+                "high": "high"
+              }
+            },
+            {
+              "id": "abliterated-model-large-flash",
+              "name": "Abliterated Large Flash",
+              "contextWindow": 1048576,
+              "maxTokens": 8192,
+              "input": [
+                "text",
+                "image"
+              ],
+              "reasoningEfforts": {
+                "low": "low",
+                "medium": "medium",
+                "high": "high"
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+]

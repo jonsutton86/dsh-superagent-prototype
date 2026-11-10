@@ -1,9 +1,15 @@
 # Article implementation tracker
 
-**PAUSED — unfinished work saved on 2026-11-10 (America/New_York).** The current branch also contains an incomplete
-independent repository publisher. This is a preservation checkpoint, not completion of milestone 075 or the full project.
-The [paused-work handoff](WIP-REPOSITORY-PUBLICATION.md) records the source changes, checks that preceded the final edits,
-untested changes and remaining integration/qualification work. Resume implementation only when the owner requests it.
+**RESUMED — 2026-11-10 (America/New_York), explicitly authorized by the owner.** Work resumed from checkpoint
+`5c487b6729acd0ac931499d5fd6844a647cc8304`. The [publication contract and evidence record](075-repository-publication.md)
+documents codegraph/REA analysis and the newly executed baseline: typechecking and 42 focused tests passed on that exact
+checkpoint. Targeted boundaries, coordinator/UI integration, encrypted recovery and installed-Harness publication now have
+passing focused checks. Full macOS/native Linux qualification of the final committed revision follows.
+The [saved handoff](WIP-REPOSITORY-PUBLICATION.md) is historical; its pause is superseded by the owner's resume instruction.
+[076 Optional Abliteration provider](076-abliteration-provider.md) adds an opt-in Harness route, two models, retained persona
+selection, image/output guards and a metadata-only smoke command. Local installed-adapter wire checks pass; no ABLIT_KEY
+exists, so authenticated live access remains unverified. Existing model defaults remain unchanged. Codegraph/REA evidence
+and pinned Fabric operation patterns are recorded in `REFERENCE-TOOLS.md`. This is not completion of the full project.
 The completed-milestone history below remains unchanged.
 
 [074 Reviewed repository exports](074-repository-exports.md) adds exact-history Git bundles from managed task checkouts,

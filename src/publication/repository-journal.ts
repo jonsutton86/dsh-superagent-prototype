@@ -7,10 +7,12 @@ import { fingerprint, timestamp } from '../remote/journal.ts'
 import { PublicationError } from './protocol.ts'
 import { REPOSITORY_EXPORT_LIMITS as L } from './repository-export-model.ts'
 import { RepositoryTransfer, RepositoryTransferReceipt, RepositoryPublication, RepositoryReceipt, type RepositoryDestination } from './repository-model.ts'
+import { repositoryChunks } from './repository-chunks.ts'
 
 export interface RepositoryIntent { request: RepositoryPublication; receipt: RepositoryReceipt }
 export const repositoryUncertain = (phase: RepositoryReceipt['phase']) => ['branch_started', 'pull_started', 'unknown'].includes(phase)
 const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex')
+/** Independent original-intent transfer and branch/PR receipts in the existing publication database. */
 export class RepositoryJournal {
   constructor(readonly db: DatabaseSync, destinations: RepositoryDestination[]) {
     db.exec(`CREATE TABLE IF NOT EXISTS repository_destination (id TEXT PRIMARY KEY,value TEXT NOT NULL);
@@ -68,17 +70,9 @@ export class RepositoryJournal {
   }
   *chunks(value: RepositoryTransferReceipt): Generator<Buffer> {
     if (value.phase === 'cancelled' || value.received !== value.bundle.bytes) throw new PublicationError(409, 'transfer_incomplete', 'Repository transfer is incomplete')
-    const next = this.db.prepare(`SELECT offset,substr(data,1,${L.chunk + 1}) AS data,hash FROM repository_transfer_chunk WHERE id=? AND offset>=? ORDER BY offset LIMIT 1`)
-    if (this.db.prepare('SELECT 1 FROM repository_transfer_chunk WHERE id=? AND offset<0 LIMIT 1').get(value.id)) throw new PublicationError(409, 'bundle_changed', 'Repository transfer bytes changed')
-    let offset = 0; const digest = createHash('sha256')
-    for (;;) {
-      const row = next.get(value.id, offset); if (!row) break
-      const bytes = Buffer.from(row.data as Uint8Array)
-      if (row.offset !== offset || !bytes.length || bytes.length > L.chunk || offset + bytes.length > value.bundle.bytes || hash(bytes) !== row.hash)
-        throw new PublicationError(409, 'bundle_changed', 'Repository transfer bytes changed')
-      offset += bytes.length; digest.update(bytes); yield bytes
-    }
-    if (offset !== value.bundle.bytes || digest.digest('hex') !== value.bundle.sha256) throw new PublicationError(409, 'bundle_changed', 'Repository transfer digest changed')
+    yield* repositoryChunks(this.db, 'repository_transfer_chunk', value.id, value.bundle, kind => {
+      throw new PublicationError(409, 'bundle_changed', kind === 'digest' ? 'Repository transfer digest changed' : 'Repository transfer bytes changed')
+    })
   }
   finish(id: string) { const value = this.transfer(id); for (const _ of this.chunks(value)) { /* stream verification */ } if (value.phase !== 'ready') { value.phase = 'ready'; this.saveTransfer(value) } return value }
   cancel(id: string, ownership: OwnershipStamp) {

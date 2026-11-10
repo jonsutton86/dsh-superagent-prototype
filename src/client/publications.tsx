@@ -10,6 +10,7 @@ import { ArtifactCheckPicker, EvidenceReviewStatus } from './verification.tsx'
 import type { CheckSelection } from '../verification/review-model.ts'
 import type { PullObservation } from '../publication/pull-model.ts'
 import { useOperatorCommand } from './operator-command.ts'
+import { RepositoryPublicationCard } from './repository-publications.tsx'
 
 /** Exact artifact/destination review, durable publication receipts and same-intent recovery. */
 export function PublicationCard({ record }: { record: LibraryRead }) {
@@ -55,6 +56,7 @@ function RepositoryExportCard({ record }: { record: LibraryRead }) {
       {item.phase === 'ready' && <Button disabled={downloading || command.busy} onClick={() => { void download(item.id) }}>{t('repositoryExport.download')}</Button>}
       {item.phase === 'held' && <Button disabled={command.busy || !!command.retry} onClick={() => { void command.run({ retry: item.id }, () => call('POST repository-exports/:id/retry', { id: item.id })) }}>{t('repositoryExport.resume')}</Button>}
       {item.phase !== 'cancelled' && <Button disabled={command.busy || !!command.retry} onClick={() => { void command.run({ cancel: item.id }, () => call('POST repository-exports/:id/cancel', { id: item.id })) }}>{t('repositoryExport.cancel')}</Button>}
+      {(item.phase === 'ready' || item.phase === 'cancelled') && <RepositoryPublicationCard exported={item} current={current} />}
     </article>)}
   </section>
 }

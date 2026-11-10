@@ -29,6 +29,8 @@ import type { ActivateWorldInput, RevokeWorldInput, WorldList, WorldView } from 
 import type { EndpointCatalog, EndpointCommandInput, EndpointList, EndpointRegistration, OperatorCommand, RegisterEndpointInput, RemoteProfileView } from '../environments/endpoint-model.ts'
 import type { ApprovePublication, PublicationRecord } from '../publication/runtime.ts'
 import type { PrepareRepositoryExport, RepositoryExportView } from '../publication/repository-export-model.ts'
+import type { PrepareRepositoryPublication, ApproveRepositoryPublication, RepositoryPublicationView } from '../publication/repository-runtime-model.ts'
+import type { RepositoryDestinationView } from '../publication/repository-model.ts'
 import type { PullObservation } from '../publication/pull-model.ts'
 import type { DestinationView } from '../publication/protocol.ts'
 import type { ChannelDelivery, ConfigureDelivery, MissionDelivery } from '../publication/channels.ts'
@@ -51,6 +53,14 @@ export interface Api {
   'GET repository-exports/:id': { response: RepositoryExportView }
   'POST repository-exports/:id/retry': { response: RepositoryExportView }
   'POST repository-exports/:id/cancel': { response: RepositoryExportView }
+  'GET repository-publication/destinations': { response: { configured: boolean; items: import('zod').infer<typeof RepositoryDestinationView>[] } }
+  'GET repository-exports/:id/publications': { response: { items: RepositoryPublicationView[] } }
+  'POST repository-exports/:id/publications': { body: PrepareRepositoryPublication; response: RepositoryPublicationView }
+  'GET repository-publications/:id': { response: RepositoryPublicationView }
+  'POST repository-publications/:id/retry': { response: RepositoryPublicationView }
+  'POST repository-publications/:id/publish': { body: ApproveRepositoryPublication; response: RepositoryPublicationView }
+  'POST repository-publications/:id/refresh': { response: RepositoryPublicationView }
+  'POST repository-publications/:id/cancel': { response: RepositoryPublicationView }
   'GET uploads': { response: AttachmentCapabilities }
   'POST uploads': { body: BeginUploadInput; response: UploadView }
   'GET uploads/:id': { response: UploadView }

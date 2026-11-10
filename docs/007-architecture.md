@@ -411,8 +411,17 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/publication/repository-export-program.ts` | Endpoint-confined exact-history Git bundle helper with clean-source, ancestry and durable-byte verification |
 | `src/publication/repository-export-job.ts` | Original-ID paired job observation, exact intent verification and bounded bundle metadata |
 | `src/publication/repository-exports.ts` | Reviewed resumable bundle staging, atomic chunks, fresh source seals, cancellation and verified downloads |
+| `src/publication/repository-chunks.ts` | Shared bounded complete-bundle integrity iterator, preserving independent stores and error contracts |
+| `src/publication/repository-model.ts`, `repository-runtime-model.ts` | Browser-safe private service and workspace repository intent, approval and receipt contracts |
+| `src/publication/repository-journal.ts` | Independent transfer chunks, immutable publication requests, dispatch boundaries and restart holds in the existing publisher journal |
+| `src/publication/repository-git.ts` | Paired Harness subprocess private imports, object/bundle verification and create-only branch push |
+| `src/publication/repository-provider.ts` | Fixed-origin GitHub identity checks and exact branch/PR publication and observation |
+| `src/publication/repository-publisher.ts` | Separate branch/PR dispatch, fresh evidence and ownership fencing, cache/cancellation and unknown-outcome recovery |
+| `src/publication/repository-runtime.ts`, `repository-observation.ts` | Coordinator export/destination intents, resumable private preparation, explicit fresh approval, receipt validation and original-ID recovery |
+| `src/providers/abliteration-config.ts`, `abliteration-guard.ts`, `abliteration-smoke.ts` | Optional Harness provider configuration, provider-specific history/image/output limits and bounded metadata-only connection check |
 | `src/publication/plugin.ts` | Dedicated loopback Harness publication service with independent account credentials |
 | `src/client/publications.tsx` | Complete artifact and destination review, delivery status and original-intent recovery controls |
+| `src/client/repository-publications.tsx` | Exact repository/commit/PR review, private preparation, fresh approval, original-response recovery and cancellation controls |
 | `src/client/mission-delivery.tsx`, `destinations.ts` | Mission reply consent, immutable destination display and original delivery recovery controls |
 | `src/client/mission-inbound.tsx` | Participant/task authorization, original-intent retry, incoming receipt display, polling/rescan and listener pause |
 | `src/app/setup.ts` | Setup, and `setupChanged`, whether a save changes a field setup reads |
@@ -517,6 +526,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/recovery/budgets.ts` | Recorded model liabilities, original accounting lineage and speculative policy/approval evidence without release |
 | `src/recovery/publications.ts` | Original artifact approvals/checks, delivery grant histories, exact Outbox subjects and independent publication outcomes before and after receipt application |
 | `src/recovery/repository-exports.ts` | Read-only original repository/check/review bindings and bounded streaming verification of checkpointed bundle chunks |
+| `src/recovery/repository-publications.ts` | Retained repository export/owner/approval authority, expected inventories and revision-bound held receipt application |
 | `src/verification/evidence.ts` | Shared pure predicates for completed host checks and immutable evidence bindings |
 | `src/recovery/sources.ts` | Actual passive source catalog and authenticated settings qualification with repeated registration/default checks |
 | `src/recovery/crypto.ts` | Private inputs, separate key files and streaming authenticated checkpoint encryption |
@@ -560,6 +570,13 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/worlds-ui.spec.tsx` | Lost activation/revocation replies, preserved revisions, exact-generation selection and receipt routing |
 | `tests/remote-repository.spec.ts` | Authenticated HTTPS Git preparation, pinned task branches, continued commits, cancellation, unknown/original receipts and recovery validation |
 | `tests/repository-exports.spec.ts` | Independent exact-commit bundle reconstruction, partial-transfer restart, source races, lost acknowledgements, cancellation and recovery corruption rejection |
+| `tests/repository-publication.spec.ts`, `tests/repository-publication-boundaries.spec.ts` | Real local Git push and simulated GitHub API, response loss, ownership/cancellation/capacity races, substituted receipts and private import failures |
+| `tests/repository-workspace.spec.ts` | Owned coordinator, real host checks and exact-history export through independent private preparation and explicit publication |
+| `tests/repository-publications-ui.spec.tsx` | Rendered repository review and fresh consent, original-ID response-loss recovery, unknown outcomes and cancellation confirmation |
+| `tests/recovery-repository-publications.spec.ts` | Repository intent/export/evidence graph validation, audited missing-private-work handling, receipt substitution and read-only destination verification |
+| `tests/repository-publisher-harness.spec.ts` | Opt-in actual installed Harness publisher activation, paired Git execution, retained transfer/restart and uncertain PR observation using only local transports |
+| `tests/abliteration-provider.spec.ts` | Opt-in route/default preservation, provider-specific request guards, catalog smoke behavior and pinned model selection |
+| `tests/abliteration-harness.spec.ts`, `tests/fixtures/abliteration-harness.mjs` | Opt-in real installed Harness OpenAI adapter against loopback streaming/tool/image/catalog contracts with synthetic credentials |
 | `tests/stage.spec.ts` | The Ticket stages, row by row |
 | `tests/supervision.spec.ts` | Real HTTP transport, token authentication, stale commands, transactional receipts and existing worker delivery integration |
 | `tests/library.spec.ts` | Library restart/replay, atomic rollback, scoping, provenance, integrity, freshness, review invalidation and Runtime/API integration |

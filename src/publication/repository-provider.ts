@@ -21,6 +21,7 @@ const Pull = z.looseObject({ id: integer, number: integer, html_url: z.string(),
   head: branch, base: branch, draft: z.boolean(), state: z.enum(['open', 'closed']), merged: z.boolean().optional(), merged_at: z.string().nullable().optional() })
 export const repositoryPullBody = (request: RepositoryPublication, transfer: RepositoryTransferReceipt) =>
   `${request.body}\n\nReviewed commit: \`${transfer.bundle.head}\`\n\n<!-- dsh-repository:${request.id}:${fingerprint(request)}:${transfer.bundle.sha256} -->`
+/** Fixed GitHub origins, pinned account/repository identities and original-result observation. */
 export class GithubRepositoryPublication implements RepositoryAdapter {
   private readonly pins = new Map<string, string>()
   private readonly root: string
