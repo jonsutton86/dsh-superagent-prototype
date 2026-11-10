@@ -716,5 +716,7 @@ now lives in `src/role-model.ts`; the browser explicitly bundles Zod and loads w
 production-bundle factory regression check catches this class of failure independently of source-level component tests.
 Focused validation passed 342 tests and typechecking; local `pnpm check` passed typechecking, six builds and 2,004 tests
 (16 skipped; 129.91 seconds). Authenticated HTTP confirms the running app serves the repaired
-bundle; a hard refresh replaces its cached predecessor. This repairs module loading without claiming visual browser
-acceptance or completion of the remaining architecture.
+bundle; a hard refresh replaces its cached predecessor. Exact repair revision
+`e889f97871d1cab9ce8f8df8d348ccad03b954dd` passed native Linux / Node 24 typechecking, six builds and 2,012 tests
+(10 skipped; 293.71 seconds) in [run 42725936622](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42725936622).
+This repairs module loading without claiming visual browser acceptance or completion of the remaining architecture.

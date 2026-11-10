@@ -7,8 +7,11 @@ and executes its actual factory with only the three declared React modules avail
 and typechecking; the running authenticated app serves the exact repaired bundle, which loads in that constrained factory
 check. Earlier served-bundle retrieval alone did not establish successful plugin activation. Existing immutable browser
 resource caching requires a hard refresh after this live development rebuild. Local `pnpm check` passed typechecking,
-all six builds and 2,004 tests (16 skipped; 129.91 seconds). Native Linux validation and actual visual browser acceptance
-remain separate evidence.
+all six builds and 2,004 tests (16 skipped; 129.91 seconds). Exact repair revision
+`e889f97871d1cab9ce8f8df8d348ccad03b954dd` passed native Linux / Node 24 typechecking, six builds and 2,012 tests
+(10 skipped; 293.71 seconds) in [run 42725936622](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42725936622).
+Actual visual browser acceptance remains separate evidence. On macOS, the cache-bypassing refresh is Option-Command-R
+in Safari and Shift-Command-R in Chrome; the running user app was not restarted.
 
 [066 Persistent launcher](066-persistent-launcher.md) adds a private macOS/Linux source-checkout installation with pinned
 Harness, resumable profile setup, persistent coordinator/Session/attachment paths, detached start and graceful stop/restart,
