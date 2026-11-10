@@ -17,8 +17,11 @@ Current continuation: [081 Supervision evaluation](081-supervision-evaluation.md
 fresh installed Harness profiles, the production watchdog contract and versioned synthetic observations. Reports separate
 accepted assessments from completed turns, coverage from label agreement, preferred diagnoses from abstention, and known
 usage from unavailable usage. Private traces retain original in-flight case identities; invalidated builds are not scored.
-Deterministic loopback qualification is being completed. Real-model quality, manual evidence review and unattended-duration
-acceptance remain open; existing model defaults and the optional Abliteration route are unchanged.
+Exact runtime/test revision `6c15b194a3ca982e840fb1be30f71b79b30f81b2` passed full macOS (2,282 passed / 25 skipped)
+and hosted native Linux (2,295 / 14), typecheck and seven builds on both. Native service/SSH checks passed 16 with one skip
+on macOS and all 30 on Linux. All five installed Harness boundaries ran on both platforms; the automatic push workflow
+succeeded. `docs/evidence/081-qualification.json` records the tested scope. Real-model quality, manual evidence review and
+unattended-duration acceptance remain open; existing model defaults and the optional Abliteration route are unchanged.
 
 Previous continuation: [080 Bounded worker recovery](080-worker-recovery.md) consolidates provider retries in Harness,
 removes terminal worker continuation turns, preserves launch backoff and unknown dispatch identities in the existing effect
@@ -1061,8 +1064,11 @@ Increment 080 consolidates native provider retry authority in Harness, replacing
 with a terminal failed hold. It preserves launch failures/backoff and unknown dispatch identities in the existing queue,
 and bounds automatic host-restart replacements using saved assignment history. Source inspection showed that retaining
 the extra continuation loop would duplicate Harness retry ownership. Its guide records the evidence and qualification
-status. Real-model diagnosis quality, unattended endurance, live alerts, further narrow recovery policies and cross-host
-quiescence/isolation acceptance remain open.
+status. Increment 081 adds an explicit installed-Harness evaluation CLI, 16 versioned synthetic cases, private retained
+attempt evidence and separate coverage, preferred-diagnosis, abstention and operational-control metrics. Provider failures,
+incomplete turns, unknown usage and unsettled cases cannot inflate completed-assessment results. It is qualified against a
+scripted loopback provider; manual evidence review and real-model diagnosis quality remain open alongside unattended
+endurance, live alerts, further narrow recovery policies and cross-host quiescence/isolation acceptance.
 
 ### 2. Compute/state/environment contracts and remote execution — whole-profile mission integration implemented
 

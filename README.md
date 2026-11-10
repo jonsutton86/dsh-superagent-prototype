@@ -40,7 +40,8 @@ passed 2,237 macOS and 2,250 Linux tests, typecheck, seven builds and native ser
 model or deploy the app.
 
 [Supervision evaluation](docs/081-supervision-evaluation.md) adds an explicit isolated Harness evaluation CLI, curated cases,
-private retained traces and coverage/abstention metrics. Real-model diagnosis quality still requires evidence review.
+private retained traces and coverage/abstention metrics. Revision `6c15b19` passed 2,282 macOS and 2,295 Linux tests,
+typecheck, seven builds and native service checks. Real-model diagnosis quality still requires evidence review.
 
 [Execution observations](docs/079-execution-observations.md) adds bounded host metadata, explicit attribution limits and
 current-evidence checks without increasing the watchdog's assessment budget or recovery authority.

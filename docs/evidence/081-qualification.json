@@ -1,0 +1,208 @@
+{
+  "kind": "increment-081-qualification",
+  "capturedAt": "2026-11-10T21:08:57.065790+00:00",
+  "testedRevision": "6c15b194a3ca982e840fb1be30f71b79b30f81b2",
+  "sourceArchiveSha256": "bb4017a544a19defce6e2e1987493f8f276a4b0b3a62e1cf81a6526ac1d6166e",
+  "macOS": {
+    "os": "Darwin27.2.0 arm64",
+    "node": "25.9.0",
+    "pnpm": "11.25.0",
+    "typecheck": "passed",
+    "builds": 7,
+    "full": {
+      "passed": 2282,
+      "skipped": 25,
+      "filesPassed": 165,
+      "filesSkipped": 4,
+      "seconds": 316.69
+    },
+    "installedHarness": "0.2.1-rc.3",
+    "publicationHarnessEnabled": true,
+    "abliterationInstalledAdapterEnabled": true,
+    "watchdogProcessHarnessEnabled": true,
+    "executorRecoveryHarnessEnabled": true,
+    "supervisionEvaluationHarnessEnabled": true,
+    "logs": {
+      "full": {
+        "file": "/tmp/dsh-081-macos-full.log",
+        "sha256": "365de6514e1cd16e84ed1f5bfb46eea2c38e5962f58521690cd96b995622d81b"
+      },
+      "typecheck": {
+        "file": "/tmp/dsh-081-macos-typecheck.log",
+        "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+      },
+      "build": {
+        "file": "/tmp/dsh-081-macos-build.log",
+        "sha256": "fdcd4fb4e849661153d0d6401fae4ad2b7cca8fe4509600144c9dafab52a4b69"
+      },
+      "native": {
+        "file": "/tmp/dsh-081-macos-native.log",
+        "sha256": "5a191ba5715a3fa56c05f864a8d35a0be5053c217f2cdba79071cc9bd413f182"
+      }
+    },
+    "nativeServices": {
+      "passed": 16,
+      "skipped": 1,
+      "filesPassed": 2,
+      "seconds": 24.7
+    }
+  },
+  "linux": {
+    "schema": 1,
+    "status": "passed",
+    "revision": "6c15b194a3ca982e840fb1be30f71b79b30f81b2",
+    "repository": "jonsutton86/dsh-superagent-prototype",
+    "branch": "feat/full-superagent-architecture",
+    "run": {
+      "id": 42900828660,
+      "url": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42900828660",
+      "event": "push",
+      "attempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "createdAt": "2026-11-10T21:00:52Z",
+      "startedAt": "2026-11-10T21:00:52Z",
+      "completedAt": "2026-11-10T21:07:09Z",
+      "jobId": 130126011608,
+      "jobStartedAt": "2026-11-10T21:00:59Z",
+      "jobCompletedAt": "2026-11-10T21:07:08Z",
+      "jobDurationSeconds": 369,
+      "jobHeadSha": "6c15b194a3ca982e840fb1be30f71b79b30f81b2"
+    },
+    "platform": {
+      "os": "Ubuntu 22.04.5 LTS",
+      "architecture": "x64",
+      "runnerImage": "ubuntu-22.04",
+      "runnerImageVersion": "20261101.347.1",
+      "runnerVersion": "2.338.2",
+      "node": "24.22.2",
+      "npm": "11.19.1",
+      "effectivePnpm": "11.7.0",
+      "installedPnpmBootstrap": "11.25.0",
+      "pnpmExplanation": "Repository packageManager pin selects 11.7.0; preparation logs explicitly report pnpm v11.7.0.",
+      "harness": "0.2.1-rc.3"
+    },
+    "validation": {
+      "typecheck": "passed",
+      "buildsPassed": 7,
+      "fullSuite": {
+        "filesPassed": 166,
+        "filesSkipped": 3,
+        "testsPassed": 2295,
+        "testsSkipped": 14,
+        "durationSeconds": 269.87
+      },
+      "nativeServicesAndSsh": {
+        "filesPassed": 3,
+        "filesSkipped": 0,
+        "testsPassed": 30,
+        "testsSkipped": 0,
+        "durationSeconds": 18.09
+      },
+      "finalNativeSuites": {
+        "transport-launcher.spec.ts": {
+          "testsPassed": 8,
+          "testsSkipped": 0,
+          "durationMilliseconds": 4868
+        },
+        "delegated-service.spec.ts": {
+          "testsPassed": 13,
+          "testsSkipped": 0,
+          "durationMilliseconds": 12794
+        },
+        "launcher-service.spec.ts": {
+          "testsPassed": 9,
+          "testsSkipped": 0,
+          "durationMilliseconds": 17938
+        }
+      }
+    },
+    "requiredBoundaryTests": {
+      "supervisionEvaluationInstalledHarness": {
+        "testsPassed": 1,
+        "testsSkipped": 0,
+        "durationMilliseconds": 48693,
+        "fileTestsPassed": 4,
+        "fileDurationMilliseconds": 48705,
+        "evidence": "tests/supervision-evaluation-harness.spec.ts: qualifies actual isolated watchdog assessment, limits, usage and incomplete outcomes using only a loopback provider passed, not skipped"
+      },
+      "executorRecoveryInstalledHarness": {
+        "testsPassed": 1,
+        "testsSkipped": 0,
+        "durationMilliseconds": 20357,
+        "fileTestsPassed": 1,
+        "fileDurationMilliseconds": 20359,
+        "evidence": "tests/executor-recovery-harness.spec.ts: uses native installed Harness request retries then holds the failed worker without an outer continuation passed, not skipped"
+      },
+      "watchdogInstalledProcesses": {
+        "testsPassed": 1,
+        "testsSkipped": 0,
+        "durationMilliseconds": 69826,
+        "fileTestsPassed": 1,
+        "fileDurationMilliseconds": 69828,
+        "evidence": "tests/watchdog-process-harness.spec.ts: keeps installed supervision observable through provider faults while a real productive worker finishes once passed, not skipped"
+      },
+      "repositoryPublisherInstalledHarness": {
+        "testsPassed": 1,
+        "testsSkipped": 0,
+        "durationMilliseconds": 70676,
+        "fileTestsPassed": 1,
+        "fileDurationMilliseconds": 70677,
+        "evidence": "tests/repository-publisher-harness.spec.ts: preserves credentialed repository uploads and original publication outcomes in the installed Harness across process restarts passed, not skipped"
+      },
+      "abliterationInstalledAdapter": {
+        "testsPassed": 1,
+        "testsSkipped": 0,
+        "durationMilliseconds": 417,
+        "fileTestsPassed": 1,
+        "fileDurationMilliseconds": 419,
+        "evidence": "tests/abliteration-harness.spec.ts: qualifies the installed Harness OpenAI adapter on a loopback server with synthetic credentials passed, not skipped"
+      }
+    },
+    "flags": [
+      "DSH_REMOTE_ISOLATION=1",
+      "DSH_ENDPOINT_LAUNCHER_QUALIFICATION=1",
+      "DSH_SSH_TRANSPORT_QUALIFICATION=1",
+      "DSH_PUBLICATION_HARNESS_QUALIFICATION=1",
+      "DSH_WATCHDOG_PROCESS_QUALIFICATION=1",
+      "DSH_EXECUTOR_RECOVERY_QUALIFICATION=1",
+      "DSH_SUPERVISION_EVALUATION_QUALIFICATION=1",
+      "DSH_ABLITERATION_ADAPTER_PACKAGE=installed pinned Harness adapter",
+      "DSH_DELEGATED_SERVICE_QUALIFICATION=1",
+      "DSH_NATIVE_SERVICE_QUALIFICATION=1",
+      "DSH_INSTALLED_SERVICE_QUALIFICATION=1"
+    ],
+    "evidence": {
+      "logFile": "/tmp/dsh-081-hosted-qualification.log",
+      "logSha256": "2473a5f0e1e5cde442ebfb90483415c5ba419977833abdacfd49fc5ccb33c02f",
+      "workflowSha256": "3224eb775d738fb9798b8fa9fe16220912b0611a241c39eb1d8aac64eb3351c6",
+      "sourceArchiveSha256": "bb4017a544a19defce6e2e1987493f8f276a4b0b3a62e1cf81a6526ac1d6166e",
+      "runMetadataFile": "/tmp/dsh-081-hosted-run.json",
+      "jobsMetadataFile": "/tmp/dsh-081-hosted-jobs.json"
+    },
+    "scope": {
+      "modelTraffic": "Only loopback/scripted provider qualification and synthetic credentials; no live paid model request",
+      "deployment": false,
+      "supervisionSemanticDiagnosisQuality": "Not claimed: installed evaluation pipeline and limits were tested with scripted inference, not a live-model semantic benchmark",
+      "cleanHostCrossMachineFailover": "Not claimed by these tests",
+      "additionalDispatches": 0
+    },
+    "annotations": [
+      "SHA-pinned checkout/setup-node v4 actions declare Node20; GitHub forced their action runtime to Node24. Workflow succeeded without changing action pins.",
+      "Some jsdom UI tests emitted React act scheduling warnings; their assertions and the complete job passed. This is not a claim of warning-free logs."
+    ]
+  },
+  "boundaries": {
+    "runtime": "DeepSeek Harness retained; production watchdog is the evaluated runtime",
+    "defaultModel": "deepseek-official/deepseek-flash unchanged",
+    "abliteration": "Optional route remains configured and opt-in; live inference not dispatched; evaluation-credit confirmation pending",
+    "existingAppDeployment": "Not started, restarted or reconfigured",
+    "quality": "16 curated cases and scoring implemented; scripted integration tests do not establish real-model diagnosis quality; manual evidence review remains pending",
+    "usage": "Model attempts are stream admissions, not billed requests. Missing and synthetic all-zero failure usage remain unknown; unsettled cases invalidate run-wide token totals.",
+    "recovery": "Original case intent and trace retained; existing output directory never replayed; this CLI is not a durable process-recovery service",
+    "liveOperatorAlerts": "Not configured or sent",
+    "cleanHostRecovery": "Fresh installed-Harness profiles tested; physical cross-host failover not qualified",
+    "longRunningDuration": "Short bounded fixtures; overnight endurance not claimed",
+    "fullProject": "Incomplete; tracker requirements remain open"
+  }
+}

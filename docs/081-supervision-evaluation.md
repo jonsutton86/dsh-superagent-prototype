@@ -120,7 +120,15 @@ builds passed. A separate installed-Harness preflight passed four checks in 37.5
 summary correction passed focused tests and will be included in the full committed-source run. Both full and selected CLI
 plans executed without model traffic.
 
-Final committed-source macOS/Linux qualification is pending. Passing a deterministic provider fixture verifies execution
-and accounting, not real-model diagnostic quality. Manual rubric review, live-model evaluation, long unattended workloads,
+Exact runtime/test revision `6c15b194a3ca982e840fb1be30f71b79b30f81b2` passed full macOS qualification (2,282 passed,
+25 skipped; 316.69 seconds) and hosted native Linux qualification (2,295 passed, 14 skipped; 269.87 seconds), with typecheck
+and seven builds on both platforms. Native service/SSH qualification passed 16 with one skip on macOS and all 30 on Linux.
+Installed evaluation, watchdog, publisher, executor-recovery and provider-adapter fixtures were enabled on both platforms;
+Linux logs confirm all five ran and passed. The new installed evaluation took 48.693 seconds on Linux. The automatic push
+workflow succeeded without a duplicate dispatch. [The qualification receipt](evidence/081-qualification.json) records the
+source/archive identity, platform versions, log digests and CI result.
+
+Passing a deterministic provider fixture verifies execution and accounting, not real-model diagnostic quality.
+Manual rubric review, live-model evaluation, long unattended workloads,
 operator alert acceptance, cross-host recovery and the remaining full architecture stay open. No existing app is deployed,
 restarted or reconfigured by this increment.
