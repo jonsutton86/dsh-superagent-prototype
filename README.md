@@ -45,8 +45,8 @@ typecheck, seven builds and native service checks. Real-model diagnosis quality 
 
 [Sustained supervision qualification](docs/082-supervision-endurance.md) adds explicit, isolated endurance runs with
 native completion wakeups, checked output history and process cleanup. Revision `59497bc` passed 2,290 macOS and 2,303 Linux
-tests, typecheck, seven builds, native service checks and the two-minute installed boundary. The eight-hour run remains
-pending. It uses only scripted loopback model traffic.
+tests, typecheck, seven builds, native service checks and the two-minute installed boundary. The eight-hour run began on
+November 10; its result remains pending. It uses only scripted loopback model traffic.
 
 [Execution observations](docs/079-execution-observations.md) adds bounded host metadata, explicit attribution limits and
 current-evidence checks without increasing the watchdog's assessment budget or recovery authority.

@@ -1,0 +1,29 @@
+{
+  "kind": "increment-082-eight-hour-run",
+  "recordedAt": "2026-11-10T22:19:16.749903+00:00",
+  "runId": "c19b8b93-7b7d-41a6-a4fb-3d63c156f41a",
+  "stateAtObservation": "running",
+  "stageAtObservation": "watchdog_assessment_recovery",
+  "startedAt": "2026-11-10T22:17:34.631Z",
+  "heartbeatAtObservation": "2026-11-10T22:19:09.887Z",
+  "requestedSeconds": 28800,
+  "chunks": 24,
+  "chunkSeconds": 1200,
+  "sourceCheckpoint": "527e0eeedb81b449520ce496218d3373b71c55a7",
+  "testedRuntimeRevision": "59497bc31932d1073ca44e872d454a7a6347d938",
+  "sourceCleanAtSnapshot": true,
+  "snapshotManifestSha256": "f7178bf73c345b9c4b60c25743bf4570b465d050e3a16ffbe7dc9e407d63eefd",
+  "observed": {
+    "startedChunks": 1,
+    "completedChunks": 0,
+    "providerErrorsExercised": 1,
+    "providerHangsExercised": 1,
+    "assessment": "current",
+    "providerFailures": []
+  },
+  "privateContinuation": ".artifacts/increment-082/live-endurance.json",
+  "privateReport": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/endurance/082-20261110T2218-527e0ee/report.json",
+  "qualification": "In progress at the recorded observation. No eight-hour result, final output integrity or final quiescence is claimed.",
+  "recovery": "Inspect original live process/session and retained report; never infer liveness or success from this saved status or elapsed deadline. Never repeat using this output directory.",
+  "isolation": "Copied runtime and dependencies; synthetic loopback provider only. Existing app/default model unchanged. Owned caffeinate prevents idle sleep while this runner lives."
+}

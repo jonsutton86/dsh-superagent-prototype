@@ -19,7 +19,8 @@ independently checked output history and cancellation/quiescence evidence. Exact
 `59497bc31932d1073ca44e872d454a7a6347d938` passed full macOS (2,290 passed / 25 skipped) and native Linux (2,303 / 14),
 typecheck, seven builds and all six installed Harness boundaries. Native checks passed 16 with one skip on macOS and 30 on
 Linux. The first macOS attempt exposed an evaluation trace/status classification race; it is fixed with controlled regression
-evidence. `docs/evidence/082-qualification.json` records both attempts. The actual eight-hour run remains pending. The original five-second job wait and
+evidence. `docs/evidence/082-qualification.json` records both attempts. The eight-hour run began at 22:17:34 UTC on November 10 from an isolated clean `527e0ee` snapshot; its result remains
+pending. `docs/evidence/082-endurance-run.json` identifies the original retained run. The original five-second job wait and
 thirty-minute idle-job limit remain unchanged. This is synthetic local endurance tooling, not semantic model-quality or
 cross-host acceptance. The next recovery defect is a reproduced local stop boundary: replacement dispatch can proceed after
 a timed-out wait while the prior job is still running. Its original-operation hold must be fixed and qualified separately.

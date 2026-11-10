@@ -131,6 +131,13 @@ seconds. Both completed exactly two native wakes and two nonwaiting output reads
 and confirmed process-group absence for normal completion and cancellation. No eight-hour result is claimed yet. The final receipt must identify the exact tested revision, observed start/end and duration, coverage gaps, faults actually exercised, output
 verification, process cleanup and platform. An in-progress run remains in progress even if its plan or deadline has elapsed.
 
+The eight-hour run started at **2026-11-10 22:17:34 UTC** from clean checkpoint `527e0ee`, whose runtime/test sources
+match qualified revision `59497bc`. Its private runtime/dependency snapshot is sealed independently of later checkout edits.
+The [run observation](evidence/082-endurance-run.json) records its original identity and private report location. At that
+observation the first twenty-minute chunk was active and the injected provider error/hang had recovered to a current
+assessment. It remains an in-progress run, not completed duration evidence. Follow the original process and retained report;
+do not relaunch it or infer success from elapsed time.
+
 Real-model diagnosis quality, manual evidence review, live operator alert acceptance, active-job crash recovery,
 cross-host failover and the remaining full Agentic OS architecture remain open. No running user app is deployed or restarted
 by this tooling, and no new model-provider spend is incurred.
