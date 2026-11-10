@@ -132,6 +132,9 @@ reconnects, and verifies a single invocation and the original job receipt throug
 the SSH server prerequisite and enables native transport qualification. That Linux/Harness drill remains unrun while
 repository Actions is disabled. A real SSH connection to a local fixture on macOS does not qualify Linux execution,
 physical cross-host networking, reboot, prolonged network partitions or clean-host failover.
+Runtime/test revision `219d3ae22c553902033e9f13c418099a2f751fd1` is pushed to `feat/full-superagent-architecture`.
+GitHub returned zero workflow runs for that SHA; explicit dispatch returned HTTP 422, "Actions has been disabled for this
+repository." Native Linux acceptance remains pending; previous successful revisions do not qualify this increment.
 
 Cloud/fleet provisioning, guided administrative bootstrap and credential transfer/rotation, reverse transport for an
 otherwise unreachable ownership authority, supported host/path migration, broader network/reboot qualification, disk quotas,

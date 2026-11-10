@@ -9,6 +9,8 @@ transport, physical cross-host/reboot acceptance, disk quotas and the remaining 
 Local `pnpm check` passed typechecking, seven builds and 2,039 tests (25 skipped; 129.37 seconds). The combined native
 macOS service / pinned Harness / SSH run passed 16 tests (one skipped; 21.72 seconds). The existing app remained ready
 and unpaused, and all temporary native services and SSH fixtures were removed.
+Runtime/test revision `219d3ae22c553902033e9f13c418099a2f751fd1` is pushed. GitHub returned no workflow runs for the exact
+SHA and again rejected explicit dispatch with HTTP 422 (Actions disabled); native Linux acceptance remains pending.
 
 [070 Delegated endpoint service](070-delegated-endpoint-service.md) adds service-budget initialization, pinned user-unit
 topology, automatic control/worker subgroups and supervisor-mediated durable Start/Restart. Stop cancels pending startup;
