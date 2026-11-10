@@ -331,6 +331,11 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/supervision/client.ts` | Authenticated loopback transport, bounded responses, consistent pagination and restart fencing |
 | `src/supervision/journal.ts` | Independent SQLite incident history, assessment reservations, operator review receipts, consistent pages and bounded retention |
 | `src/supervision/monitor.ts` | Continuous monitoring, bounded semantic assessments, timeout cancellation, sanitized delivery failures and incident reconciliation |
+| `src/supervision/assessment-contract.ts` | Shared production watchdog prompt, tool contracts and compiled-contract digest for isolated evaluation |
+| `src/supervision/evaluation.ts` | Strict curated evaluation schemas, conservative scoring, abstention/coverage metrics and unknown-aware usage |
+| `src/supervision/evaluation-cases.ts` | Versioned synthetic observations and separate manual evidence rubrics without model-visible expectations |
+| `src/supervision/evaluation-runner.ts` | Explicit installed-Harness evaluation, isolated profiles, original case intents, private reports and artifact verification |
+| `src/supervision/evaluation-probe.ts` | Evaluation-only admission gate, exact Session attempt/stream limits and fsynced metadata trace |
 | `src/supervision/plugin.ts` | Separate Harness profile/Session lifecycle, restricted tools, scoped inference failures, current-assessment recovery, local console and periodic retention |
 | `src/supervision/http.ts` | Same-origin standalone console assets and bounded operator incident/history/acknowledgement APIs |
 | `src/supervision/console.tsx`, `console-entry.tsx`, `console.css` | Independent operator console, service health, evidence review, durable ambiguous-response retry and paginated history |
@@ -636,6 +641,10 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/remote-credentials.spec.ts` | Private import validation, environment/file bindings, secret-free provider argv and receipts, rotation/rebind, restart, tamper refusal and native Linux mounts/cancellation |
 | `tests/execution-receipts-ui.spec.tsx` | Rendered receipt pagination, separate outcome/quiescence and same-ID cancellation retry after an ambiguous response |
 | `tests/watchdog.spec.ts` | Independent journal recovery, assessment budgets, service outages, bounded interventions and concurrent polling |
+| `tests/supervision-evaluation.spec.ts` | Coverage/label/preferred-diagnosis scoring, unknown usage and accepted-assessment versus completed-turn boundaries |
+| `tests/supervision-evaluation-cases.spec.ts` | Curated observations, production incident reservation, expectation isolation and initial-outage control |
+| `tests/supervision-evaluation-probe.spec.ts` | Exact Session limits, contract mismatch, partial usage, bounded streams and metadata-only trace |
+| `tests/supervision-evaluation-harness.spec.ts`, `tests/fixtures/supervision-evaluation-provider.ts` | Opt-in real installed Harness evaluation using loopback scripted inference, failures, cancellation and retained evidence |
 | `tests/watchdog-runtime.spec.ts` | Independent Cordis/Harness composition with simulated inference: restricted tools, scoped errors, evidence-bound recovery, Session creation, state ownership and shutdown |
 | `tests/watchdog-console.spec.ts`, `tests/fixtures/watchdog.ts` | Journal migration, review fencing/replay, consistent pages, bounded retention and real HTTP access controls |
 | `tests/watchdog-ui.spec.tsx` | Rendered standalone console, outage evidence, response-loss retry after remount, stale review refusal and pagination |

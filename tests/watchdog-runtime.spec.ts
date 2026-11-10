@@ -251,3 +251,18 @@ it('keeps observations and assessor deadlines running while a receiver is slow, 
   expect(host.agents.values().next().value!.cancel).toHaveBeenCalled()
   await host.watchdog.stop(); expect(aborted).toBe(true); expect(sends).toBe(1)
 })
+
+it('refuses an evaluation Session before creation when its required probe failed or is missing', async () => {
+  const { watchdogContractDigest } = await import('../src/supervision/assessment-contract.ts')
+  const host = harness({ evaluationContract: watchdogContractDigest() })
+  await expect(host.watchdog.start()).rejects.toThrow('evaluation guard')
+  expect(host.controller.create).not.toHaveBeenCalled()
+  expect(host.delivered).toHaveLength(0)
+})
+it('refuses an incompatible evaluation guard without changing normal watchdog configuration', async () => {
+  const { watchdogContractDigest } = await import('../src/supervision/assessment-contract.ts')
+  const host = harness({ evaluationContract: watchdogContractDigest() })
+  host.ctx.reflect.provide('superagentEvaluationGate', { authorize: () => false })
+  await expect(host.watchdog.start()).rejects.toThrow('evaluation guard')
+  expect(host.controller.create).not.toHaveBeenCalled()
+})

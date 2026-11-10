@@ -13,7 +13,14 @@ subsequently saved `ABLIT_KEY` privately in Harness; authenticated catalog acces
 and pinned Fabric operation patterns are recorded in `REFERENCE-TOOLS.md`. This is not completion of the full project.
 The completed-milestone history below remains unchanged.
 
-Current continuation: [080 Bounded worker recovery](080-worker-recovery.md) consolidates provider retries in Harness,
+Current continuation: [081 Supervision evaluation](081-supervision-evaluation.md) adds an explicit operator CLI using
+fresh installed Harness profiles, the production watchdog contract and versioned synthetic observations. Reports separate
+accepted assessments from completed turns, coverage from label agreement, preferred diagnoses from abstention, and known
+usage from unavailable usage. Private traces retain original in-flight case identities; invalidated builds are not scored.
+Deterministic loopback qualification is being completed. Real-model quality, manual evidence review and unattended-duration
+acceptance remain open; existing model defaults and the optional Abliteration route are unchanged.
+
+Previous continuation: [080 Bounded worker recovery](080-worker-recovery.md) consolidates provider retries in Harness,
 removes terminal worker continuation turns, preserves launch backoff and unknown dispatch identities in the existing effect
 journal, and caps automatic host-restart replacements from assignment history. Coordinator schema 12 holds unconfirmed
 launches, including after explicit task retirement. Source-derived fences and the console expose the recovery limits.

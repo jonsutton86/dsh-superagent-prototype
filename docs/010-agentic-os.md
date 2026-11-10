@@ -157,8 +157,9 @@ workflows remain open. These increments do not qualify deployment or complete th
    and narrow audited recovery policies. Independent observation and the incident console exist; `078-supervision-failures.md`
    qualifies provider faults and a 30-second productive job in installed Harness processes. Bounded host-collected execution
    metadata, coherent snapshots and evidence-bound assessment/review are implemented and qualified in `079-execution-observations.md`.
-   These checks do not establish semantic quality or overnight reliability. The next proposed recovery increment preserves the
-   existing executor continuation policy while making its budget and delivery identity durable; it grants no new watchdog action.
+   These checks do not establish semantic quality or overnight reliability. `080-worker-recovery.md` consolidates provider
+   retries in Harness and retains unknown launch identities; `081-supervision-evaluation.md` adds isolated installed-Harness
+   evaluations with separate coverage, abstention and manual-review metrics. Live-model quality and endurance remain open.
 2. **Compute/state/environment contracts:** guided managed machine/fleet setup, broader/reverse transport, native endpoint/resource/
    delegated-service qualification and host-user setup, broader remote repository workflows, disk quotas and per-workspace
    aggregate allocation. Preserve paired process/filesystem, grant, ownership and host-verification boundaries.

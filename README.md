@@ -39,6 +39,9 @@ their original identities and limits automatic host-restart replacements using s
 passed 2,237 macOS and 2,250 Linux tests, typecheck, seven builds and native service checks. It does not change the default
 model or deploy the app.
 
+[Supervision evaluation](docs/081-supervision-evaluation.md) adds an explicit isolated Harness evaluation CLI, curated cases,
+private retained traces and coverage/abstention metrics. Real-model diagnosis quality still requires evidence review.
+
 [Execution observations](docs/079-execution-observations.md) adds bounded host metadata, explicit attribution limits and
 current-evidence checks without increasing the watchdog's assessment budget or recovery authority.
 The workflow below configures the repository-backed mode.
