@@ -24,6 +24,8 @@ import urllib.request
 import uuid
 import webbrowser
 import agentic_endpoint
+import agentic_service
+from contextlib import contextmanager
 
 CHECKOUT = Path(__file__).resolve().parent.parent
 HARNESS_VERSION = '0.2.1-rc.3'
@@ -76,6 +78,16 @@ def private_log(path):
         os.close(descriptor)
         raise RuntimeError('Logs must be owner-only regular files.')
     return os.fdopen(descriptor, 'ab')
+
+
+@contextmanager
+def operation(root):
+    with private_log(root / 'operation.lock') as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise agentic_service.Busy('Another operation is already controlling this installation.') from None
+        yield
 
 
 def environment(root):
@@ -259,11 +271,14 @@ def status(root, installation):
               'setup': {'code': setup.get('code'), 'place': setup.get('place')} if setup else None}
     if installation['role'] == 'endpoint':
         result['endpoint'] = (state or {}).get('endpoint')
+    result['supervision'] = agentic_service.snapshot(root, sys.modules[__name__])
     print(json.dumps(result))
     return 1 if not ready else 3 if setup else 2 if errors else 0
 
 
 def launch(root, installation, args):
+    if getattr(args, 'shutting_down', lambda: False)():
+        raise RuntimeError('Supervisor shutdown requested; launch skipped.')
     if args.respect_stop and (root / 'manually-stopped').exists():
         print('Intentional stop is active; automatic recovery skipped.')
         return 0
@@ -304,6 +319,8 @@ def launch(root, installation, args):
     (root / 'manually-stopped').unlink(missing_ok=True)
     deadline = time.monotonic() + args.timeout
     while time.monotonic() < deadline:
+        if getattr(args, 'shutting_down', lambda: False)():
+            raise RuntimeError('Supervisor shutdown requested during startup.')
         process = single(root, installation)
         if process:
             save(root / 'process.json', process)
@@ -393,7 +410,8 @@ def access(root, installation, opening=False):
 def main():
     default = Path.home() / 'Library' / 'Application Support' / 'Agentic OS' if sys.platform == 'darwin' else Path(os.environ.get('XDG_DATA_HOME', str(Path.home() / '.local' / 'share'))) / 'agentic-os'
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=('init', 'start', 'status', 'stop', 'restart', 'access', 'open', 'enrollment'))
+    parser.add_argument('action', choices=('init', 'start', 'status', 'stop', 'restart', 'access', 'open', 'enrollment',
+                                         'supervise', 'service-install', 'service-status', 'service-remove'))
     parser.add_argument('--directory', help='Private installation directory; defaults to your persistent application-data folder.')
     parser.add_argument('--role', choices=('workspace', 'endpoint'), help='Select the workspace or Linux execution-endpoint role and default directory.')
     parser.add_argument('--endpoint-config', help='init only: private JSON file containing endpoint limits and optional ownership binding.')
@@ -404,11 +422,16 @@ def main():
     parser.add_argument('--timeout', type=float, default=60, help='Startup health timeout in seconds; expiry never kills the process.')
     parser.add_argument('--stop-timeout', type=float, default=300, help='Graceful stop timeout in seconds; never force-kill.')
     parser.add_argument('--respect-stop', action='store_true', help='start/restart: honor an intentional stop marker.')
+    parser.add_argument('--restart-delay', type=float, default=10, help='supervise/service-install: minimum seconds between automatic starts (default 10).')
+    parser.add_argument('--restart-limit', type=int, default=5, help='supervise/service-install: maximum automatic starts per window (default 5).')
+    parser.add_argument('--restart-window', type=float, default=600, help='supervise/service-install: rolling start budget in seconds (default 600).')
     args = parser.parse_args()
     if args.action != 'init' and any(value is not None for value in (args.checkout, args.dsh, args.profile, args.port, args.endpoint_config)):
         parser.error('Installation settings apply only to init; use --directory to select an existing installation.')
     if not 0 < args.timeout <= 3600 or not 0 < args.stop_timeout <= 3600:
         parser.error('Timeouts must be positive and at most 3600 seconds.')
+    if not 0.1 <= args.restart_delay <= 3600 or not 1 <= args.restart_limit <= 20 or not 1 <= args.restart_window <= 86400:
+        parser.error('Restart delay must be 0.1–3600 seconds, limit 1–20, and window 1–86400 seconds.')
     if args.role == 'endpoint':
         default = default.with_name(default.name + (' Endpoint' if sys.platform == 'darwin' else '-endpoint'))
         if args.action == 'init':
@@ -421,18 +444,25 @@ def main():
         agentic_endpoint.validate_directory(root)
     os.umask(0o077)
     private_directory(root)
-    with private_log(root / 'operation.lock') as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            raise RuntimeError('Another operation is already controlling this installation.') from None
+    if args.action == 'status':
+        installation = manifest(root)
+        if args.role and args.role != installation['role']:
+            raise RuntimeError('The selected installation has a different role; it was not changed.')
+        return status(root, installation)
+    if args.action == 'supervise' or args.action.startswith('service-'):
+        installation = manifest(root)
+        if args.role and args.role != installation['role']:
+            raise RuntimeError('The selected installation has a different role; it was not changed.')
+        api = sys.modules[__name__]
+        if args.action == 'supervise':
+            return agentic_service.supervise(root, args, api)
+        return agentic_service.manage(root, args, api)
+    with operation(root):
         if args.action == 'init':
             return initialize(root, args)
         installation = manifest(root)
         if args.role and args.role != installation['role']:
             raise RuntimeError('The selected installation has a different role; it was not changed.')
-        if args.action == 'status':
-            return status(root, installation)
         if args.action == 'enrollment':
             if installation['role'] != 'endpoint':
                 raise RuntimeError('Enrollment details are only available for execution endpoints.')
@@ -450,7 +480,12 @@ def main():
             return 0
         if args.action in ('stop', 'restart'):
             stop(root, installation, args, args.action == 'stop')
-        return launch(root, installation, args) if args.action in ('start', 'restart') else 0
+        if args.action in ('start', 'restart'):
+            result = launch(root, installation, args)
+            if not args.respect_stop:
+                agentic_service.reset(root, sys.modules[__name__])
+            return result
+        return 0
 
 
 if __name__ == '__main__':

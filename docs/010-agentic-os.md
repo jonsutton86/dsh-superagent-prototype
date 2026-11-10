@@ -158,8 +158,8 @@ replace the article's isolated execution environments. It uses the existing SQLi
 4. Retrieval/reflection quality and long-horizon evaluation, broader provider accounting, realtime/streaming voice and
    microphone/cloud-speech acceptance. Speculative reservations/expiry/promotion and basic speech adapters are implemented;
    their broader operational acceptance and remaining interfaces still need work.
-5. Supervision alerts/quality and incident integration, complete browser/desktop user journeys, accessibility, login/boot
-   services, supported upgrades and packaging. Record supported provider/OS combinations and audit every row above before
+5. Supervision alerts/quality and incident integration, complete browser/desktop user journeys, accessibility, Linux boot
+   and real logout/reboot service acceptance, supported upgrades and packaging. Record supported provider/OS combinations and audit every row above before
    declaring the full goal achieved.
 
 Local environment increment: `015-execution-environments.md` records paired filesystem/process verification, persisted task grants,
@@ -736,5 +736,13 @@ qualification cases skipped). Local `pnpm check` passed typechecking, six builds
 Installed-Harness Linux validation is pending: no checks exist for runtime revision
 `8de414a1465ff1cdb38d2d9e9beaed6e16c5e1b8`, and explicit workflow dispatch returned HTTP 422 because GitHub Actions
 is disabled for the repository. Earlier successful Linux runs do not qualify this new launcher.
+
+Service supervision is implemented in `068-service-supervision.md`: optional launchd/systemd user services, a single
+foreground supervisor, durable automatic-start budgets/holds and manual stops, live unhealthy-process preservation,
+exact-process graceful shutdown and owned-service removal. The actual macOS service-manager and installed Harness drills
+passed with persisted executor pause through removal/reinstallation; eight focused tests passed in 22.32 seconds. The
+existing user app remained running. Local `pnpm check` passed typechecking, six builds and 2,011 tests (22 skipped;
+145.74 seconds). Native Linux user-manager/boot qualification and actual logout/reboot/power-loss acceptance remain
+outstanding, alongside the rest of the full architecture.
 Automatic machine/fleet provisioning, managed transport, broader resource quotas, cross-host qualification and the rest of
 the full architecture remain open. This daemon installer does not substitute for those requirements.

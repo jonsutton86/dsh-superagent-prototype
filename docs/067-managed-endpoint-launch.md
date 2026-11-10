@@ -99,6 +99,6 @@ this new endpoint launcher. Enable repository Actions or run the opt-in qualific
 treating the installed endpoint/coordinator drill as verified.
 
 This implements endpoint installation and daemon lifecycle on a prepared Linux host. Automatic cloud-machine provisioning,
-fleet capacity management, managed tunnel/TLS setup, login/boot services, CPU/memory/disk quotas, cross-host qualification,
+fleet capacity management, managed tunnel/TLS setup, native Linux boot-service qualification, CPU/memory/disk quotas, cross-host qualification,
 credential rotation, repository preparation and clean-host recovery remain in the full architecture. Passing a same-host
 native endpoint/coordinator drill does not establish those separate deployment guarantees.

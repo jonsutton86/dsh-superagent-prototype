@@ -65,8 +65,9 @@ also leaves a still-running process intact; inspect `status` and the private log
 is 60 seconds and graceful stop timeout is 300 seconds; `--timeout` and `--stop-timeout` can change them up to one hour.
 
 An explicit `start` or `restart` clears the intentional-stop marker. `start --respect-stop` and `restart --respect-stop`
-preserve it for a future supervisor. This increment does not register launchd/systemd services or start at login/boot.
-After reboot, run `start` manually. Automatic crash recovery, supervised upgrades and desktop packaging remain open.
+preserve it for a supervisor. This original increment supplies manual lifecycle control; the later
+`068-service-supervision.md` adds opt-in launchd/systemd services and bounded automatic process recovery.
+Without that service installation, run `start` manually after reboot. Supervised upgrades and desktop packaging remain open.
 
 ## Private access and files
 

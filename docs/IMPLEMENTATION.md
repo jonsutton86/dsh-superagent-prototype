@@ -1,5 +1,13 @@
 # Article implementation tracker
 
+[068 Service supervision](068-service-supervision.md) adds a foreground supervisor, persistent automatic-start budget and
+manual-stop/hold semantics, plus owned per-user launchd/systemd installation, status and removal. It preserves live
+unhealthy processes and graceful-stop timeouts rather than forcing a restart. Actual macOS service-manager and pinned-Harness
+drills passed, including executor-pause persistence through removal/reinstallation; eight focused checks passed in 22.32
+seconds. The existing user app stayed running. Local `pnpm check` passed typechecking, six builds and 2,011 tests
+(22 skipped; 145.74 seconds). Linux user-manager/boot qualification,
+actual logout/reboot/power-loss acceptance, cross-host deployment, supervised upgrades and packaging remain open.
+
 [067 Managed endpoint launch](067-managed-endpoint-launch.md) adds a Linux endpoint role to the persistent launcher:
 pinned Harness installation, separated control/workspace directories, native confinement readiness, persisted endpoint and
 credential fingerprints, private enrollment metadata and graceful lifecycle control. Existing ownership bindings and

@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 // A real detached process for launcher lifecycle tests; no provider or external network calls.
 const fs = require('node:fs'), path = require('node:path'), http = require('node:http')
-const fixture = process.env.DSH_LAUNCHER_FIXTURE
-if (!fixture) throw new Error('DSH_LAUNCHER_FIXTURE is required')
+const fixture = process.env.DSH_LAUNCHER_FIXTURE || path.dirname(fs.realpathSync(process.argv[1]))
 const args = process.argv.slice(2), value = flag => args[args.indexOf(flag) + 1]
 if (args.includes('--version')) { console.log('0.2.1-rc.3'); process.exit(0) }
 const profile = path.join(process.env.DSH_HOME, 'profiles', value('--profile') || 'agentic-os')
