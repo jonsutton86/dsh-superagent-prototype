@@ -10,6 +10,8 @@ Final local `pnpm check` passed typechecking, seven builds and 2,032 tests (24 s
 control/native macOS service run passed 18 tests (two skipped; 21.56 seconds), and the existing app stayed ready and
 unpaused. Stop records a unique durable marker before cancelling auxiliary requests, so a corrupt request cannot prevent
 graceful Stop and restoration of an older pending request cannot override a newer stop.
+Runtime/test revision `020c6b988e5deb13837deb6074f41da391d96ded` is pushed. GitHub returned no runs for the exact SHA;
+explicit workflow dispatch again returned HTTP 422 (Actions disabled). Native Linux acceptance remains pending.
 
 [069 Execution resources](069-execution-resources.md) adds configured Linux cgroup v2 pool/process-tree limits for CPU,
 memory/swap and processes/threads, trusted pre-exec entry, whole-tree cancellation and kernel population checks. The endpoint

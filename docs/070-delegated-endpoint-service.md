@@ -116,6 +116,9 @@ the Harness PID's kernel group, confined execution and usage receipts, endpoint 
 Restart, manual-stop preservation, service removal/reinstallation and explicit Start afterward. It removes its own unit
 and private fixture after successful drainage. The Linux workflow prepares an ephemeral user manager and enables this
 test after the complete native suite. This new qualification has not run while GitHub Actions dispatch remains unavailable.
+Runtime/test revision `020c6b988e5deb13837deb6074f41da391d96ded` is pushed to `feat/full-superagent-architecture`.
+GitHub returned zero workflow runs for that exact SHA; explicit dispatch returned HTTP 422, "Actions has been disabled
+for this repository." Native Linux acceptance remains pending, and older successful runs do not qualify these changes.
 
 Actual Linux user-manager/controller behavior, logout/reboot/power loss, cross-machine recovery, supported policy/path
 migrations, disk quotas, workspace aggregate allocation, cloud/fleet and tunnel setup, supported upgrades and the remaining
