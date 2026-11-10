@@ -645,6 +645,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/supervision-evaluation-cases.spec.ts` | Curated observations, production incident reservation, expectation isolation and initial-outage control |
 | `tests/supervision-evaluation-probe.spec.ts` | Exact Session limits, contract mismatch, partial usage, bounded streams and metadata-only trace |
 | `tests/supervision-evaluation-harness.spec.ts`, `tests/fixtures/supervision-evaluation-provider.ts` | Opt-in real installed Harness evaluation using loopback scripted inference, failures, cancellation and retained evidence |
+| `tests/supervision-endurance-harness.spec.ts`, `tests/fixtures/supervision-endurance-provider.mjs` | Plan/output guards and opt-in sustained real-worker Harness qualification with watchdog faults, restart, exact output and cancellation quiescence |
 | `tests/watchdog-runtime.spec.ts` | Independent Cordis/Harness composition with simulated inference: restricted tools, scoped errors, evidence-bound recovery, Session creation, state ownership and shutdown |
 | `tests/watchdog-console.spec.ts`, `tests/fixtures/watchdog.ts` | Journal migration, review fencing/replay, consistent pages, bounded retention and real HTTP access controls |
 | `tests/watchdog-ui.spec.tsx` | Rendered standalone console, outage evidence, response-loss retry after remount, stale review refusal and pagination |

@@ -26,7 +26,7 @@ watchdog configuration leaves this optional contract unset and preserves its exi
 ## Curated cases and honest metrics
 
 Suite version 1 contains 16 synthetic cases: 15 assessment cases and one initial observation-outage operational control.
-Cases cover permission and human-input waits, terminal failure, scope drift, productive long-running work, unavailable or
+Cases cover permission and human-input waits, terminal failure, scope drift, observations of long-running work, unavailable or
 uncertain execution facts, and misleading output activity. Paired cases keep task identities opaque. Only observations enter
 the model's context; case names, expected findings and reviewer rubrics remain outside it.
 

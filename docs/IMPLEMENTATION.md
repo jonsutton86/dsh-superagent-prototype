@@ -13,7 +13,15 @@ subsequently saved `ABLIT_KEY` privately in Harness; authenticated catalog acces
 and pinned Fabric operation patterns are recorded in `REFERENCE-TOOLS.md`. This is not completion of the full project.
 The completed-milestone history below remains unchanged.
 
-Current continuation: [081 Supervision evaluation](081-supervision-evaluation.md) adds an explicit operator CLI using
+Current continuation: [082 Sustained supervision qualification](082-supervision-endurance.md) adds a plan-first operator
+runner with private runtime snapshots, native background-job wakeups, bounded sequential jobs under one assignment,
+independently checked output history and cancellation/quiescence evidence. The asynchronous two-minute preflight passed;
+final exact-revision qualification and the actual eight-hour run remain pending. The original five-second job wait and
+thirty-minute idle-job limit remain unchanged. This is synthetic local endurance tooling, not semantic model-quality or
+cross-host acceptance. The next recovery defect is a reproduced local stop boundary: replacement dispatch can proceed after
+a timed-out wait while the prior job is still running. Its original-operation hold must be fixed and qualified separately.
+
+Previous continuation: [081 Supervision evaluation](081-supervision-evaluation.md) adds an explicit operator CLI using
 fresh installed Harness profiles, the production watchdog contract and versioned synthetic observations. Reports separate
 accepted assessments from completed turns, coverage from label agreement, preferred diagnoses from abstention, and known
 usage from unavailable usage. Private traces retain original in-flight case identities; invalidated builds are not scored.
@@ -1069,6 +1077,10 @@ attempt evidence and separate coverage, preferred-diagnosis, abstention and oper
 incomplete turns, unknown usage and unsettled cases cannot inflate completed-assessment results. It is qualified against a
 scripted loopback provider; manual evidence review and real-model diagnosis quality remain open alongside unattended
 endurance, live alerts, further narrow recovery policies and cross-host quiescence/isolation acceptance.
+Increment 082 adds isolated endurance tooling that preserves production job limits and uses native job-completion wakeups
+across bounded chunks. Its final exact-revision qualification and eight-hour duration acceptance remain pending. A controlled
+Runtime reproduction also confirms an ordinary-retry stop boundary: a replacement and queued input may dispatch while the
+old job is still running after its stop wait expires. Repairing that boundary is the next recovery implementation item.
 
 ### 2. Compute/state/environment contracts and remote execution — whole-profile mission integration implemented
 

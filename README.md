@@ -43,6 +43,10 @@ model or deploy the app.
 private retained traces and coverage/abstention metrics. Revision `6c15b19` passed 2,282 macOS and 2,295 Linux tests,
 typecheck, seven builds and native service checks. Real-model diagnosis quality still requires evidence review.
 
+[Sustained supervision qualification](docs/082-supervision-endurance.md) adds explicit, isolated endurance runs with
+native completion wakeups, checked output history and process cleanup. The two-minute asynchronous preflight passed;
+final exact-revision qualification and the eight-hour run are pending. It uses only scripted loopback model traffic.
+
 [Execution observations](docs/079-execution-observations.md) adds bounded host metadata, explicit attribution limits and
 current-evidence checks without increasing the watchdog's assessment budget or recovery authority.
 The workflow below configures the repository-backed mode.
