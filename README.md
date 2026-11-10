@@ -18,7 +18,9 @@ persistent identity and private enrollment details for the coordinator's Environ
 The [service supervisor](docs/068-service-supervision.md) adds optional macOS login and Linux user/boot services,
 bounded process recovery and persistent manual stops while preserving the existing Harness installation.
 Prepared cgroup v2 hosts can configure [worker resource limits](docs/069-execution-resources.md) with durable usage receipts;
-native Linux qualification and automatic service delegation remain pending.
+native Linux qualification remains pending.
+The [delegated endpoint service](docs/070-delegated-endpoint-service.md) now prepares its own worker cgroups and routes
+Start/Restart through the supervisor on a properly delegated Linux user manager; native Linux acceptance is pending.
 The workflow below configures the repository-backed mode.
 
 Setup has many steps, so an agent does it with you. Ask your coding agent:

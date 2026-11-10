@@ -25,6 +25,7 @@ import uuid
 import webbrowser
 import agentic_endpoint
 import agentic_service
+import agentic_delegation
 from contextlib import contextmanager
 
 CHECKOUT = Path(__file__).resolve().parent.parent
@@ -118,6 +119,8 @@ def manifest(root, ready=True):
             raise RuntimeError('Endpoint installation identity is incomplete.')
         if 'endpointId' in value and (str(uuid.UUID(value['endpointId'])) != value['endpointId'] or not re.fullmatch(r'[a-f0-9]{64}', value['adminHash'])):
             raise RuntimeError('Invalid endpoint installation identity.')
+    if value.get('delegation') is not None:
+        agentic_delegation.validate(value, agentic_service.service_identity(root)['label'])
     return value
 
 
@@ -130,8 +133,18 @@ def initialize(root, args):
                      'cli': str(Path(args.dsh).expanduser().resolve()) if args.dsh else None}
         if any(item is not None and item != value[key] for key, item in requested.items()):
             raise RuntimeError('Existing installation differs from the requested settings; it was not changed.')
-        if args.endpoint_config and agentic_endpoint.configuration(read_json(Path(args.endpoint_config).expanduser())) != value.get('endpointConfig'):
-            raise RuntimeError('Existing endpoint configuration differs; it was not changed.')
+        if args.endpoint_config:
+            requested_config = read_json(Path(args.endpoint_config).expanduser())
+            if args.service_resources and value.get('delegation'):
+                if 'resources' in requested_config:
+                    raise RuntimeError('Explicit resources cannot be combined with service resource budgets.')
+                requested_config = {**requested_config, 'resources': {'cgroupRoot': value['delegation']['workerRoot'], **read_json(Path(args.service_resources).expanduser())}}
+            if agentic_endpoint.configuration(requested_config) != value.get('endpointConfig'):
+                raise RuntimeError('Existing endpoint configuration differs; it was not changed.')
+        if args.service_resources:
+            budgets = read_json(Path(args.service_resources).expanduser())
+            if not value.get('delegation') or budgets != {key: value['endpointConfig']['resources'][key] for key in ('pool', 'command')}:
+                raise RuntimeError('Existing service resource settings differ; they were not changed.')
         if value.get('phase') == 'ready':
             print(json.dumps({'installed': True, 'directory': str(root), 'profile': value['profile']}))
             return 0
@@ -146,8 +159,8 @@ def initialize(root, args):
             raise RuntimeError('Select a built dsh-superagent checkout; run pnpm install --frozen-lockfile and pnpm build there first.')
         if role == 'endpoint':
             agentic_endpoint.require_host()
-        elif args.endpoint_config:
-            raise RuntimeError('--endpoint-config requires --role endpoint.')
+        elif args.endpoint_config or args.service_resources:
+            raise RuntimeError('--endpoint-config and --service-resources require --role endpoint.')
         profile, port = args.profile or ('agentic-endpoint' if role == 'endpoint' else 'agentic-os'), args.port or (3084 if role == 'endpoint' else 3083)
         if not PROFILE_NAME.fullmatch(profile) or not 1024 <= port <= 65535:
             raise RuntimeError('Use a valid profile name and a port between 1024 and 65535.')
@@ -155,7 +168,14 @@ def initialize(root, args):
         value = {'schema': 1, 'root': str(root), 'phase': 'preparing', 'profile': profile, 'port': port,
                  'checkout': str(checkout), 'cli': cli, 'version': HARNESS_VERSION, 'externalCli': bool(args.dsh), 'profileIntent': False, 'role': role}
         if role == 'endpoint':
-            value['endpointConfig'] = agentic_endpoint.configuration(read_json(Path(args.endpoint_config).expanduser()) if args.endpoint_config else {})
+            config = read_json(Path(args.endpoint_config).expanduser()) if args.endpoint_config else {}
+            if args.service_resources:
+                budgets = read_json(Path(args.service_resources).expanduser())
+                if not isinstance(config, dict) or 'resources' in config or not isinstance(budgets, dict) or set(budgets) != {'pool', 'command'}:
+                    raise RuntimeError('--service-resources requires pool/command budgets and cannot replace explicit endpoint resources.')
+                value['delegation'] = agentic_delegation.plan(root, agentic_service.service_identity(root)['label'])
+                config = {**config, 'resources': {'cgroupRoot': value['delegation']['workerRoot'], **budgets}}
+            value['endpointConfig'] = agentic_endpoint.configuration(config)
         save(path, value)
     if value['role'] == 'endpoint':
         agentic_endpoint.require_host()
@@ -205,7 +225,7 @@ def initialize(root, args):
     value['phase'] = 'ready'
     save(path, value)
     print(json.dumps({'installed': True, 'directory': str(root), 'profile': value['profile'], 'version': HARNESS_VERSION,
-                      'role': value['role'], 'next': 'Start the endpoint, then use enrollment to export private connection metadata.' if value['role'] == 'endpoint' else 'Configure a provider privately in Harness Settings → Models after starting.'}))
+                      'role': value['role'], 'next': 'Run service-install, then check status and enrollment.' if value.get('delegation') else 'Start the endpoint, then use enrollment to export private connection metadata.' if value['role'] == 'endpoint' else 'Configure a provider privately in Harness Settings → Models after starting.'}))
     return 0
 
 
@@ -272,6 +292,9 @@ def status(root, installation):
     if installation['role'] == 'endpoint':
         result['endpoint'] = (state or {}).get('endpoint')
     result['supervision'] = agentic_service.snapshot(root, sys.modules[__name__])
+    if installation.get('delegation'):
+        result['delegation'] = installation['delegation']
+        result['serviceStart'] = agentic_service.start_request(root, sys.modules[__name__])
     print(json.dumps(result))
     return 1 if not ready else 3 if setup else 2 if errors else 0
 
@@ -282,6 +305,8 @@ def launch(root, installation, args):
     if args.respect_stop and (root / 'manually-stopped').exists():
         print('Intentional stop is active; automatic recovery skipped.')
         return 0
+    if installation.get('delegation'):
+        agentic_delegation.process_inside(installation['delegation'], {'pid': os.getpid()})
     read_json(root / 'launch.json')
     if installation['role'] == 'endpoint':
         agentic_endpoint.require_host()
@@ -294,6 +319,8 @@ def launch(root, installation, args):
     if hashlib.sha256((root / 'launch.json').read_bytes()).hexdigest() != installation.get('launchHash'):
         raise RuntimeError('The generated launch patch was changed; restore the reviewed patch before starting.')
     process = single(root, installation)
+    if installation.get('delegation'):
+        agentic_delegation.process_inside(installation['delegation'], process)
     child = None
     if not process:
         # Port conflicts are not evidence that this installation is already running.
@@ -343,7 +370,12 @@ def launch(root, installation, args):
 def stop(root, installation, args, intentional=True):
     process = single(root, installation)
     if intentional:
-        atomic(root / 'manually-stopped', time.strftime('%Y-%m-%dT%H:%M:%S%z') + '\n')
+        atomic(root / 'manually-stopped', time.strftime('%Y-%m-%dT%H:%M:%S%z') + ' ' + str(uuid.uuid4()) + '\n')
+        try:
+            agentic_service.cancel_start(root, sys.modules[__name__])
+        except (OSError, ValueError, KeyError, TypeError, RuntimeError):
+            # A corrupt auxiliary request must not prevent Stop. The new marker fences any restored old request.
+            pass
     if process:
         descriptor = None
         try:
@@ -415,6 +447,7 @@ def main():
     parser.add_argument('--directory', help='Private installation directory; defaults to your persistent application-data folder.')
     parser.add_argument('--role', choices=('workspace', 'endpoint'), help='Select the workspace or Linux execution-endpoint role and default directory.')
     parser.add_argument('--endpoint-config', help='init only: private JSON file containing endpoint limits and optional ownership binding.')
+    parser.add_argument('--service-resources', help='init only: pool/command resource-budget JSON for an owned Linux systemd endpoint service.')
     parser.add_argument('--checkout', help='init only: built checkout to install; defaults to this checkout.')
     parser.add_argument('--dsh', help='init only: existing pinned Harness CLI; otherwise install it privately.')
     parser.add_argument('--profile', help='init only: Harness profile name (default agentic-os or agentic-endpoint).')
@@ -426,7 +459,7 @@ def main():
     parser.add_argument('--restart-limit', type=int, default=5, help='supervise/service-install: maximum automatic starts per window (default 5).')
     parser.add_argument('--restart-window', type=float, default=600, help='supervise/service-install: rolling start budget in seconds (default 600).')
     args = parser.parse_args()
-    if args.action != 'init' and any(value is not None for value in (args.checkout, args.dsh, args.profile, args.port, args.endpoint_config)):
+    if args.action != 'init' and any(value is not None for value in (args.checkout, args.dsh, args.profile, args.port, args.endpoint_config, args.service_resources)):
         parser.error('Installation settings apply only to init; use --directory to select an existing installation.')
     if not 0 < args.timeout <= 3600 or not 0 < args.stop_timeout <= 3600:
         parser.error('Timeouts must be positive and at most 3600 seconds.')
@@ -457,6 +490,8 @@ def main():
         if args.action == 'supervise':
             return agentic_service.supervise(root, args, api)
         return agentic_service.manage(root, args, api)
+    if args.action in ('start', 'restart') and manifest(root).get('delegation'):
+        return agentic_service.request_start(root, args, sys.modules[__name__])
     with operation(root):
         if args.action == 'init':
             return initialize(root, args)

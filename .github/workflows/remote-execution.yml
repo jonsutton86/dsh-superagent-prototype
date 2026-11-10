@@ -44,3 +44,15 @@ jobs:
             --setenv=DSH_REMOTE_ISOLATION=1 --setenv=DSH_ENDPOINT_LAUNCHER_QUALIFICATION=1 \
             --setenv="DSH_ENDPOINT_QUALIFICATION_CLI=$DSH_ENDPOINT_QUALIFICATION_CLI" \
             /bin/bash "$PWD/tests/fixtures/resource-qualification.sh" pnpm test
+      - name: Qualify delegated user-service endpoint with pinned Harness
+        run: |
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          sudo install -d -m 0755 "/run/systemd/system/user@$(id -u).service.d"
+          printf '[Service]\nDelegate=cpu memory pids\n' | sudo tee "/run/systemd/system/user@$(id -u).service.d/90-agentic-qualification.conf" >/dev/null
+          sudo systemctl daemon-reload
+          sudo loginctl enable-linger "$(id -un)"
+          # This is a disposable CI runner. Restart only its test user manager after changing delegation.
+          sudo systemctl restart "user@$(id -u).service"
+          systemctl --user show init.scope --property=ControlGroup --value
+          DSH_DELEGATED_SERVICE_QUALIFICATION=1 pnpm exec vitest run tests/delegated-service.spec.ts
