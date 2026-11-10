@@ -733,6 +733,8 @@ Managed endpoint launch is implemented in `067-managed-endpoint-launch.md`: a pr
 pinned Harness endpoint, verify native confinement and its persisted identity, export private enrollment metadata and
 restart without replacing authority or effect receipts. Local focused checks passed 25 tests (three platform/native
 qualification cases skipped). Local `pnpm check` passed typechecking, six builds and 2,005 tests (19 skipped; 136.55 seconds).
-Installed-Harness Linux validation is pending.
+Installed-Harness Linux validation is pending: no checks exist for runtime revision
+`8de414a1465ff1cdb38d2d9e9beaed6e16c5e1b8`, and explicit workflow dispatch returned HTTP 422 because GitHub Actions
+is disabled for the repository. Earlier successful Linux runs do not qualify this new launcher.
 Automatic machine/fleet provisioning, managed transport, broader resource quotas, cross-host qualification and the rest of
 the full architecture remain open. This daemon installer does not substitute for those requirements.

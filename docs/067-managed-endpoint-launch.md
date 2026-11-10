@@ -92,7 +92,11 @@ activates a managed world, runs a native confined command, checks filesystem acc
 world identity through both daemon restarts. It requires no model credential or external publication. Native CI installs
 the pinned Harness and runs this test with the full confinement suite. Local focused checks passed 25 tests (three
 platform/native cases skipped). Local `pnpm check` passed typechecking, all six builds and 2,005 tests (19 skipped;
-139 passing test files and four skipped; 136.55 seconds). Native installed-Harness results are pending.
+139 passing test files and four skipped; 136.55 seconds). Native installed-Harness results are pending. The pushed runtime
+revision is `8de414a1465ff1cdb38d2d9e9beaed6e16c5e1b8`; GitHub lists no checks for that commit, and an explicit workflow
+dispatch returned HTTP 422, "Actions has been disabled for this repository." Earlier successful Linux runs do not qualify
+this new endpoint launcher. Enable repository Actions or run the opt-in qualification on a prepared Linux host before
+treating the installed endpoint/coordinator drill as verified.
 
 This implements endpoint installation and daemon lifecycle on a prepared Linux host. Automatic cloud-machine provisioning,
 fleet capacity management, managed tunnel/TLS setup, login/boot services, CPU/memory/disk quotas, cross-host qualification,
