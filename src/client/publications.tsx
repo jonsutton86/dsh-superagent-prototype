@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { LibraryRead } from '../workspace/library-model.ts'
 import type { ApprovePublication, PublicationRecord } from '../publication/runtime.ts'
 import { usePoll } from './api.ts'
@@ -9,9 +9,56 @@ import { destinationLabel } from './destinations.ts'
 import { ArtifactCheckPicker, EvidenceReviewStatus } from './verification.tsx'
 import type { CheckSelection } from '../verification/review-model.ts'
 import type { PullObservation } from '../publication/pull-model.ts'
+import { useOperatorCommand } from './operator-command.ts'
 
 /** Exact artifact/destination review, durable publication receipts and same-intent recovery. */
 export function PublicationCard({ record }: { record: LibraryRead }) {
+  return <>{record.execution?.environment?.world && <RepositoryExportCard key={record.id} record={record} />}<DeliveryCard record={record} /></>
+}
+function RepositoryExportCard({ record }: { record: LibraryRead }) {
+  const { call, t } = usePanel(), [checks, setChecks] = useState<CheckSelection[]>([]), [downloadError, setDownloadError] = useState('')
+  const receipts = usePoll(() => call('GET library/:id/repository-exports', { id: record.id }), [call, record.id])
+  const command = useOperatorCommand(() => { void receipts.reload() }), transfer = useRef<AbortController>(), [downloading, setDownloading] = useState(false)
+  useEffect(() => () => transfer.current?.abort(), [])
+  const current = !record.archived && !record.expired && !record.superseded && !record.conflicted && !record.staleSources.length && record.freshness?.status === 'current'
+  const prepare = () => {
+    const body = { revision: record.revision, hash: record.hash, checks: [...checks].sort((a, b) => a.runId.localeCompare(b.runId)) }
+    void command.run({ artifactId: record.id, ...body }, requestId => call('POST library/:id/repository-exports', { id: record.id, body: { ...body, requestId } }))
+  }
+  const download = async (id: string) => {
+    if (transfer.current) return
+    const abort = transfer.current = new AbortController(); setDownloading(true); setDownloadError('')
+    try {
+      const response = await fetch(`/orchestrator/api/repository-exports/${id}/download`, { headers: { 'x-orchestrator-request': '1' }, signal: abort.signal })
+      if (!response.ok) throw new Error(t('repositoryExport.unavailable'))
+      const bytes = await response.blob(); abort.signal.throwIfAborted()
+      const url = URL.createObjectURL(bytes), anchor = document.createElement('a')
+      anchor.href = url; anchor.download = `repository-${id}.bundle`; document.body.append(anchor); anchor.click(); anchor.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (failure) { if (!abort.signal.aborted) setDownloadError(errorText(failure)) }
+    finally { if (!abort.signal.aborted) setDownloading(false); if (transfer.current === abort) transfer.current = undefined }
+  }
+  return <section className="dt-publications" aria-label={t('repositoryExport.title')}>
+    <h3>{t('repositoryExport.title')}</h3><p>{t('repositoryExport.intro')}</p>
+    {(command.error || receipts.error || downloadError) && <p role="alert" className="dt-error">{command.error || receipts.error?.message || downloadError}</p>}
+    {command.retry && <Button disabled={command.busy} onClick={() => { void command.retry?.() }}>{t('repositoryExport.retryRequest')}</Button>}
+    <details><summary>{t('repositoryExport.prepare')}</summary>
+      <ArtifactCheckPicker artifactId={record.id} selected={checks} onChange={setChecks} disabled={command.busy || !!command.retry || !current} />
+      <Button disabled={command.busy || !!command.retry || !checks.length || !current} onClick={prepare}>{t('repositoryExport.prepare')}</Button>
+    </details>
+    {receipts.data?.items.map(item => <article className="dt-mission-card" key={item.id}>
+      <p role="status">{t(`repositoryExport.phase.${item.phase}`)}</p><p>{item.source.url}</p>
+      <dl><dt>{t('repositoryExport.base')}</dt><dd><code>{item.source.commit}</code></dd><dt>{t('repositoryExport.head')}</dt><dd><code>{item.head}</code></dd></dl>
+      {item.problem && <p>{item.problem}</p>}
+      {item.bundle && <p>{item.received.toLocaleString()} / {item.bundle.bytes.toLocaleString()} {t('repositoryExport.bytes')}<code>{item.bundle.sha256}</code></p>}
+      {item.evidence && <PublicationEvidence id={item.id} />}
+      {item.phase === 'ready' && <Button disabled={downloading || command.busy} onClick={() => { void download(item.id) }}>{t('repositoryExport.download')}</Button>}
+      {item.phase === 'held' && <Button disabled={command.busy || !!command.retry} onClick={() => { void command.run({ retry: item.id }, () => call('POST repository-exports/:id/retry', { id: item.id })) }}>{t('repositoryExport.resume')}</Button>}
+      {item.phase !== 'cancelled' && <Button disabled={command.busy || !!command.retry} onClick={() => { void command.run({ cancel: item.id }, () => call('POST repository-exports/:id/cancel', { id: item.id })) }}>{t('repositoryExport.cancel')}</Button>}
+    </article>)}
+  </section>
+}
+function DeliveryCard({ record }: { record: LibraryRead }) {
   const { call, t } = usePanel()
   const catalog = usePoll(() => call('GET publication/destinations'), [call])
   const receipts = usePoll(() => call('GET library/:id/publications', { id: record.id }), [call, record.id])

@@ -18,6 +18,7 @@ import type { LibraryRecord } from '../workspace/library-model.ts'
 import type { Mission } from '../workspace/model.ts'
 import type { PlanVersion } from '../workspace/plan-model.ts'
 import { StateReader, stateAt as at, stateId as id, statePositive as positive, stateObject as object } from './reader.ts'
+import { verifyRepositoryExports } from './repository-exports.ts'
 
 const grantSchema = z.object({ id: PublicationId, missionId: PublicationId, revision: positive, planVersion: positive,
   enabled: z.boolean(), createdAt: at, revokedAt: at.optional(), destination: DestinationView.optional() }).strict()
@@ -51,6 +52,7 @@ export interface PublicationStateVerification {
 /** Check before applying receipts, then require settled local/independent outcomes in the final signed image. */
 export async function verifyPublicationState(db: DatabaseSync, signal: AbortSignal, settled = false): Promise<PublicationStateVerification> {
   const r = new StateReader(db, signal, 'publications')
+  await verifyRepositoryExports(r)
   let artifacts = 0, checkedArtifacts = 0, seals = 0, pullReviews = 0, revokedGrants = 0, deliveries = 0, withdrawn = 0,
     receipts = 0, sent = 0, unresolved = 0, missingOutbox = 0, legacyApprovals = 0, legacyDestinations = 0, legacyGrantRequests = 0,
     legacyPlanBindings = 0, legacyReviewSeals = 0

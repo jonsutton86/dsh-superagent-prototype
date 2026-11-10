@@ -407,6 +407,10 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/publication/inbound.ts` | Exact participant/task listeners, independently fenced provider reads, durable cursors and atomic directed admission with native-message deduplication |
 | `src/publication/http.ts`, `client.ts` | Private pinned HTTP transport, bounded payloads and original-ID dispatch without automatic retries |
 | `src/publication/runtime.ts` | Operator artifact approval, persistent intents, duplicate guard and receipt recovery after ownership loss |
+| `src/publication/repository-export-model.ts` | Browser-safe original-source/check export contracts, bundle digests and capacity bounds |
+| `src/publication/repository-export-program.ts` | Endpoint-confined exact-history Git bundle helper with clean-source, ancestry and durable-byte verification |
+| `src/publication/repository-export-job.ts` | Original-ID paired job observation, exact intent verification and bounded bundle metadata |
+| `src/publication/repository-exports.ts` | Reviewed resumable bundle staging, atomic chunks, fresh source seals, cancellation and verified downloads |
 | `src/publication/plugin.ts` | Dedicated loopback Harness publication service with independent account credentials |
 | `src/client/publications.tsx` | Complete artifact and destination review, delivery status and original-intent recovery controls |
 | `src/client/mission-delivery.tsx`, `destinations.ts` | Mission reply consent, immutable destination display and original delivery recovery controls |
@@ -512,6 +516,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/recovery/context.ts` | Original reflection snapshots/proposals/read charges and cumulative recall reservations in held images |
 | `src/recovery/budgets.ts` | Recorded model liabilities, original accounting lineage and speculative policy/approval evidence without release |
 | `src/recovery/publications.ts` | Original artifact approvals/checks, delivery grant histories, exact Outbox subjects and independent publication outcomes before and after receipt application |
+| `src/recovery/repository-exports.ts` | Read-only original repository/check/review bindings and bounded streaming verification of checkpointed bundle chunks |
 | `src/verification/evidence.ts` | Shared pure predicates for completed host checks and immutable evidence bindings |
 | `src/recovery/sources.ts` | Actual passive source catalog and authenticated settings qualification with repeated registration/default checks |
 | `src/recovery/crypto.ts` | Private inputs, separate key files and streaming authenticated checkpoint encryption |
@@ -554,6 +559,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/world-pool.spec.ts` | Independent paired worlds, per-action dispatch, revocation/recovery, credential fencing and revoked receipts |
 | `tests/worlds-ui.spec.tsx` | Lost activation/revocation replies, preserved revisions, exact-generation selection and receipt routing |
 | `tests/remote-repository.spec.ts` | Authenticated HTTPS Git preparation, pinned task branches, continued commits, cancellation, unknown/original receipts and recovery validation |
+| `tests/repository-exports.spec.ts` | Independent exact-commit bundle reconstruction, partial-transfer restart, source races, lost acknowledgements, cancellation and recovery corruption rejection |
 | `tests/stage.spec.ts` | The Ticket stages, row by row |
 | `tests/supervision.spec.ts` | Real HTTP transport, token authentication, stale commands, transactional receipts and existing worker delivery integration |
 | `tests/library.spec.ts` | Library restart/replay, atomic rollback, scoping, provenance, integrity, freshness, review invalidation and Runtime/API integration |
@@ -681,6 +687,7 @@ One SQLite file, `<stateDir>/orchestrator.sqlite`, which only the Store opens.
 | `effect` | The effect queue: per kind and key, the payload, its order, failed attempts with the last error, and when it is due | Effects; the schema 11 migration queues what earlier versions kept for the main Session |
 | `outbox` | The receipt of each message for a Channel, by id, with the Ticket it is for and its `status`, `pending`, `sent` or `dropped`, kept so an id is never queued twice; for a dropped message, when and why, as the generated column `dropped`, its time, and a reason code. A message that waits has a `reply` effect, which holds its attempts | The Outbox |
 | `delivery_grant`, `channel_publication` | Historical exact-plan destination consent and original mission message intents/receipts; attempted withdrawals retain unresolved delivery evidence | ChannelPublications |
+| `repository_export`, `repository_export_chunk` | Original reviewed repository transfer intents, immutable bundle metadata and resumable offset/hash-bound binary chunks | RepositoryExports |
 | `conversation_binding`, `conversation_message` | Historical participant/task authority, durable provider cursors, native deduplication and received/unsupported message receipts | ConversationInbox |
 | `mission_pull_target`, `mission_completion` | Immutable PR identities and latest ordered observations; original whole-mission completion commands and per-action review IDs | MissionPulls, MissionCompletions |
 | `workspace_schedule`, `workspace_schedule_version`, `workspace_occurrence`, `workspace_schedule_command` | Versioned standing authorizations, due cursors, lifetime run reservations, immutable occurrence identities and operator command receipts | Schedules |

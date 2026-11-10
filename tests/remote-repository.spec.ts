@@ -9,39 +9,12 @@ import { WorldPool } from '../src/environments/pool.ts'
 import { RepositorySource } from '../src/environments/repository-model.ts'
 import { verifyRegistryState } from '../src/recovery/registries.ts'
 import { runAsWorker } from '../src/infra/environment.ts'
-import { remoteFixture } from './fixtures/remote.ts'
-import { startRuntime } from './fixtures/host.ts'
-import { gitServer } from './fixtures/git-server.ts'
+import { repositoryFixture } from './fixtures/repository.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { vi.unstubAllGlobals(); vi.restoreAllMocks(); for (const close of cleanup.reverse()) await close(); cleanup.length = 0 })
 const rid = () => randomUUID()
-async function fixture() {
-  const server = await gitServer(cleanup), h = await startRuntime(undefined, { executionMode: 'local', noAccounts: true, managed: true })
-  const bindings: { id: string; version: string }[] = []
-  const remote = await remoteFixture(cleanup, { native: process.env.DSH_REMOTE_ISOLATION === '1', beforeEnroll: async endpoint => {
-    for (const [id, variable, bytes, mode] of [['git-token', 'REPOSITORY_TOKEN', server.token, 'env'], ['git-ca', 'GIT_SSL_CAINFO', server.cert, 'file']] as const) {
-      await writeFile(join(endpoint.credentials.imports, id), bytes, { mode: 0o600 })
-      const value = await endpoint.rpc({ role: 'admin' }, { op: 'credential.import', requestId: rid(), id, revision: 0,
-        file: id, variable, mode, reason: 'Private local Git fixture' }) as { id: string; version: string }
-      bindings.push({ id: value.id, version: value.version })
-    }
-  } })
-  if (process.env.DSH_REMOTE_ISOLATION !== '1') vi.spyOn(remote.endpoint, 'identity').mockReturnValue({ ...remote.endpoint.identity(), confinement: 'linux-bubblewrap' })
-  const record = await h.runtime.endpoints.register({ requestId: rid(), endpointId: remote.endpoint.journal.id, url: remote.url,
-    credentialFile: remote.connection.credentialFile, revision: 0, name: 'Repository endpoint' })
-  const command = await h.runtime.endpoints.submit(record.id, { revision: 1, request: { op: 'grant.create', requestId: rid(),
-    owner: 'coordinator', workspace: 'repository', operations: ['fs.read', 'fs.write', 'process.spawn', 'network'], credentials: bindings, leaseMs: 300000 } })
-  cleanup.push(() => h.stop())
-  const activation = { requestId: rid(), endpointId: record.id, commandId: command.id, name: 'Pinned repository',
-    repository: { url: server.url, commit: server.commit, credentialId: 'git-token', username: 'x-access-token' } }
-  const world = await h.runtime.worlds.activate(activation)
-  expect(world.ready, world.problem).toBe(true)
-  const member = h.runtime.worlds.require(world.id)
-  const prepare = (id: string, directory = join(world.root, id)) => member.world.withOwner({ kind: 'assignment', ticketId: id,
-    assignmentId: 'assignment-' + id, sessionId: 'worker-' + id, callId: 'prepare-' + id, tool: 'workspace-prepare' }, () => {}, () => member.workspace.prepareRepository(directory, id))
-  return { h, remote, server, activation, world, member, prepare }
-}
+const fixture = () => repositoryFixture(cleanup)
 
 it.each(['https://user:secret@example.com/source.git', 'https://example.com/source.git?token=secret', 'file:///tmp/source', 'ssh://example.com/source', 'https://example.com/source#branch'])('rejects unpinned or credential-bearing repository source %s', url => {
   expect(RepositorySource.safeParse({ url, commit: 'a'.repeat(40) }).success).toBe(false)

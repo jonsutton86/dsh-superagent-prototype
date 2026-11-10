@@ -291,6 +291,11 @@ const ticketOf = (id: string) =>
 const SourceSave = z.object({ enabled: z.boolean(), config: z.unknown() })
 
 const ROUTES: { [K in keyof Api]: Route<K> } = {
+  'GET library/:id/repository-exports': { answer: () => ({ items: [] }) },
+  'POST library/:id/repository-exports': { body: true, answer: () => refuse(409, 'Repository export fixture not configured') },
+  'GET repository-exports/:id': { answer: () => refuse(404, 'Repository export not found') },
+  'POST repository-exports/:id/retry': { answer: () => refuse(404, 'Repository export not found') },
+  'POST repository-exports/:id/cancel': { answer: () => refuse(404, 'Repository export not found') },
   'GET uploads': { answer: () => ({ available: false, fileBytes: 67108864, chunkBytes: 262144, perMessage: 8, messageBytes: 134217728 }) },
   'POST uploads': { body: true, answer: () => refuse(409, 'Attachment fixture not configured') },
   'GET uploads/:id': { answer: () => refuse(404, 'Upload not found') },

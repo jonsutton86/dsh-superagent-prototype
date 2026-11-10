@@ -28,6 +28,7 @@ import type { ArchivePersonaInput, CreatePersonaInput, PersonaList, PersonaRecor
 import type { ActivateWorldInput, RevokeWorldInput, WorldList, WorldView } from '../environments/pool-model.ts'
 import type { EndpointCatalog, EndpointCommandInput, EndpointList, EndpointRegistration, OperatorCommand, RegisterEndpointInput, RemoteProfileView } from '../environments/endpoint-model.ts'
 import type { ApprovePublication, PublicationRecord } from '../publication/runtime.ts'
+import type { PrepareRepositoryExport, RepositoryExportView } from '../publication/repository-export-model.ts'
 import type { PullObservation } from '../publication/pull-model.ts'
 import type { DestinationView } from '../publication/protocol.ts'
 import type { ChannelDelivery, ConfigureDelivery, MissionDelivery } from '../publication/channels.ts'
@@ -45,6 +46,11 @@ type Delivery = 'injected' | 'pending'
 import type { VoiceCapabilities, VoiceReceipt, TranscribeInput, SpeakInput } from '../voice/model.ts'
 import type { AttachmentCapabilities, BeginUploadInput, UploadChunkInput, UploadView } from '../attachments/model.ts'
 export interface Api {
+  'GET library/:id/repository-exports': { response: { items: RepositoryExportView[] } }
+  'POST library/:id/repository-exports': { body: PrepareRepositoryExport; response: RepositoryExportView }
+  'GET repository-exports/:id': { response: RepositoryExportView }
+  'POST repository-exports/:id/retry': { response: RepositoryExportView }
+  'POST repository-exports/:id/cancel': { response: RepositoryExportView }
   'GET uploads': { response: AttachmentCapabilities }
   'POST uploads': { body: BeginUploadInput; response: UploadView }
   'GET uploads/:id': { response: UploadView }

@@ -50,6 +50,7 @@ import type { WorldPool } from '../environments/pool.ts'
 import type { CoordinatorOwnership } from '../ownership/lease.ts'
 import { OwnershipError } from '../ownership/protocol.ts'
 import type { Publications } from '../publication/runtime.ts'
+import type { RepositoryExports } from '../publication/repository-exports.ts'
 import { PublicationError } from '../publication/protocol.ts'
 import type { ChannelPublications } from '../publication/channels.ts'
 import type { ConversationInbox } from '../publication/inbound.ts'
@@ -66,6 +67,7 @@ export interface HttpHost {
   readonly attachments?: Attachments
   readonly ownership?: Pick<CoordinatorOwnership, 'status'>
   readonly publications?: Publications
+  readonly repositoryExports?: RepositoryExports
   readonly channelPublications?: ChannelPublications
   readonly conversations?: ConversationInbox
   authorizeMutation?(): void
@@ -250,7 +252,16 @@ function routes(runtime: HttpHost): Routes {
     if (!runtime.conversations) throw new PublicationError(409, 'not_configured', 'Conversation listeners are unavailable')
     return runtime.conversations
   }
+  const repositoryExports = () => {
+    if (!runtime.repositoryExports) throw new WorkspaceError(409, 'Repository export is unavailable')
+    return runtime.repositoryExports
+  }
   return {
+    'GET library/:id/repository-exports': ({ params }) => repositoryExports().list(params.id),
+    'POST library/:id/repository-exports': async ({ params, body }) => repositoryExports().prepare(params.id, await body()),
+    'GET repository-exports/:id': ({ params }) => repositoryExports().get(params.id),
+    'POST repository-exports/:id/retry': ({ params }) => repositoryExports().retry(params.id),
+    'POST repository-exports/:id/cancel': ({ params }) => repositoryExports().cancel(params.id),
     'GET recall': ({ query }) => runtime.library.recall.state(offset.parse(query.offset), limit(30, 100).parse(query.limit)),
     'PUT recall': async ({ body }) => runtime.library.recall.configure(await body()),
     'GET recall/versions/:version': ({ params }) => runtime.library.recall.configuration(z.coerce.number().int().nonnegative().parse(params.version)),
@@ -486,6 +497,14 @@ export function registerHttp(ctx: Context, runtime: HttpHost): () => void {
         await runtime.ready
         if (mutation) runtime.authorizeMutation?.()
         const attachment = /^\/orchestrator\/api\/uploads\/([0-9a-f-]{36})\/(download|image)$/.exec(url.pathname)
+        const repositoryBundle = /^\/orchestrator\/api\/repository-exports\/([0-9a-f-]{36})\/download$/.exec(url.pathname)
+        if (req.method === 'GET' && repositoryBundle) {
+          if (!runtime.repositoryExports) throw new WorkspaceError(409, 'Repository export is unavailable')
+          const download = runtime.repositoryExports.download(repositoryBundle[1]!)
+          res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': download.value.bundle!.bytes,
+            'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'content-disposition': `attachment; filename="repository-${download.value.id}.bundle"` })
+          await pipeline(Readable.from(download.chunks), res); return
+        }
         if (req.method === 'GET' && attachment) {
           if (!runtime.attachments) throw new UploadError(503, 'Attachments unavailable')
           if (attachment[2] === 'image') {

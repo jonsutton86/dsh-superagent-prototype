@@ -1,5 +1,15 @@
 # Article implementation tracker
 
+[074 Reviewed repository exports](074-repository-exports.md) adds exact-history Git bundles from managed task checkouts,
+selected host checks and a fresh post-transfer capture, resumable checkpointed chunks, download/retry/cancel controls and
+read-only recovery validation. It preserves original commits and binary objects. Independent branch/PR publication,
+provider mutation recovery, CI/merge policy and the rest of the full architecture remain open. Full macOS validation passed
+2,070 tests (25 skipped; 147.95 seconds); native Ubuntu ARM64 passed 2,083 tests (14 skipped; 172.51 seconds), both with
+typechecking and seven builds. Native Linux service/Harness/SSH checks passed 30 tests. The additional authenticated bundle
+download case passed on both systems. The existing app remained ready and unpaused. No live Git provider or model was used.
+After a final negative-offset integrity guard, macOS typechecking, seven builds and 15 focused export/UI/documentation tests
+passed. The full-suite figures precede that small guard; the exact validation boundary is recorded in the increment guide.
+
 [073 Remote repositories](073-remote-repositories.md) adds immutable repository selection to managed worlds and the existing
 mission executor. Endpoint-owned credentials prepare the exact commit on a per-task branch through ordinary confined
 job handles, with original-ID recovery, no-reset retries, cancellation, durable no-replace directory publication and recovery

@@ -70,6 +70,7 @@ import { WorldPool } from '../environments/pool.ts'
 import { openRuntimeOwnership, assertOwnership, ownershipReady } from '../ownership/runtime.ts'
 import type { CoordinatorOwnership } from '../ownership/lease.ts'
 import { Publications } from '../publication/runtime.ts'
+import { RepositoryExports } from '../publication/repository-exports.ts'
 import { ChannelPublications } from '../publication/channels.ts'
 import { ConversationInbox } from '../publication/inbound.ts'
 import { Verification } from '../verification/service.ts'
@@ -119,6 +120,7 @@ export class Runtime extends Service implements SourceHost {
   readonly remoteWorkspace?: RemoteWorkspace
   readonly ownership?: CoordinatorOwnership
   readonly publications: Publications
+  readonly repositoryExports: RepositoryExports
   readonly channelPublications: ChannelPublications
   readonly conversations: ConversationInbox
   readonly ready: Promise<void>
@@ -218,6 +220,9 @@ export class Runtime extends Service implements SourceHost {
         } })
       const reviews = this.verificationReviews = new VerificationReviews({ store, verification, lifetime: this.lifetime,
         authorize: () => { this.ownership?.proof(); this.lifetime.throwIfAborted() } })
+      this.repositoryExports = new RepositoryExports({ store, verification, reviews, lifetime: this.lifetime,
+        member: binding => this.worlds.require(binding), authorize: () => { this.ownership?.proof(); this.lifetime.throwIfAborted(); if (this.paused()) throw new Error('Coordinator is paused') },
+        preparationProblem: (ticketId, assignmentId) => runtime.speculation?.publicationProblem(ticketId, assignmentId) })
       this.publications = new Publications({ store, library, verification, reviews, ownership: this.ownership, connection: machine.publication, lifetime: this.lifetime,
         preparationProblem: (ticketId, assignmentId) => runtime.speculation?.publicationProblem(ticketId, assignmentId),
         roots: () => [executionRoot(store.settings(), machine.stateDir, world?.grant.root), ...this.worlds.list().items.map(item => item.root)] })
@@ -430,7 +435,7 @@ export class Runtime extends Service implements SourceHost {
     const { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, sourceLinks, setup, passes } = this
     return { store, sources, prompts, sessions, settings, engine, executor, machine, masterId, get ready() { return runtime.ready }, sourceLinks, remoteRoot: this.remoteWorkspace?.world.grant.root,
       ownership: this.ownership, authorizeMutation: () => { this.ownership?.proof(); this.lifetime.throwIfAborted() },
-      publications: this.publications, voice: this.voice, attachments: this.attachments,
+      publications: this.publications, repositoryExports: this.repositoryExports, voice: this.voice, attachments: this.attachments,
       verification: this.verification,
       verificationReviews: this.verificationReviews,
       channelPublications: this.channelPublications,
@@ -450,6 +455,7 @@ export class Runtime extends Service implements SourceHost {
     const ownership = this.ownership?.close()
     try {
       await reviews; await verification
+      await this.repositoryExports.stop()
       await this.voice.stop()
       await this.attachments.stop()
       await this.endpoints.stop()

@@ -145,6 +145,10 @@ remain outstanding.
 
 ## Next implementation order
 
+Reviewed repository transfer is implemented in `074-repository-exports.md`: original-history bundles, resumable chunks,
+fresh host review and held-image validation. Independent branch/PR publication remains the next repository integration
+step; exports do not remove the remaining architecture or qualify cloud deployment.
+
 The durable memory/artifact increment is described in `011-library.md`; its application-level scope boundary does not
 replace the article's isolated execution environments. It uses the existing SQLite database and Harness tool registration.
 
