@@ -96,7 +96,9 @@ builds first and runs the suite in a dedicated transient delegated systemd unit 
 `tests/fixtures/resource-qualification.sh`; that script moves only its own process into the control subgroup. It never
 modifies an unrelated process group. Run only on a dedicated test host with the specified controllers and cgroup v2.
 
-New native qualification remains pending while GitHub workflow dispatch reports Actions disabled. Earlier successful
+Runtime revision `bb5f3c0d2af61038f5a671dbbaa39371972d51ba` is pushed to `feat/full-superagent-architecture`. GitHub returned
+no workflow runs for that exact SHA. Explicit `remote-execution.yml` dispatch returned HTTP 422, "Actions has been disabled
+for this repository." New native qualification remains pending. Earlier successful
 Linux revisions do not establish this increment's behavior. Disk/storage quotas, per-workspace aggregate allocation and
 fairness, automated machine/fleet and transport setup, supported budget changes, clean-host restore/failover and the rest
 of the complete architecture remain open.

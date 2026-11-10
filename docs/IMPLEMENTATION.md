@@ -7,6 +7,8 @@ UI; launcher health verifies the configured boundary. Focused local integration 
 cases skipped. Native kernel qualification is pending; explicit simulated-kernel tests are not Linux enforcement evidence.
 Final local `pnpm check` passed TypeScript, seven builds and 2,022 tests (23 skipped; 128.63 seconds). The existing app
 remained ready and unpaused. Invalid resource configuration also cannot persist a new ownership binding.
+Runtime revision `bb5f3c0d2af61038f5a671dbbaa39371972d51ba` is pushed. GitHub returned no workflow runs for the exact SHA,
+and explicit dispatch again returned HTTP 422 (Actions disabled); native acceptance remains pending.
 Disk quotas, per-workspace aggregate allocation, automatic service delegation, cloud fleet/transport, supported policy
 migration and cross-host recovery remain open.
 
