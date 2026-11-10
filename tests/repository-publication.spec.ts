@@ -1,3 +1,5 @@
+import { spawnSync } from 'node:child_process'
+import { RepositoryRef, RepositoryDestinationConfig } from '../src/publication/repository-model.ts'
 import { afterEach, expect, it, vi } from 'vitest'
 import { repositoryPublicationFixture } from './fixtures/repository-publication.ts'
 import type { RepositoryReceipt, RepositoryTransferReceipt } from '../src/publication/repository-model.ts'
@@ -59,3 +61,19 @@ it('resumes original uploaded chunks, refuses changed ranges and validates bundl
   h.service.journal.db.prepare('UPDATE repository_transfer_chunk SET data=? WHERE id=? AND offset=0').run(Buffer.from('corrupt'), h.transfer.id)
   expect((await h.prepare()).prepared).toBe(false); expect(h.git.pushes()).toBe(0); expect(h.posts).toBe(0)
 }, 30000)
+
+// The installed Git executable is the oracle for supported branch-name syntax.
+it.each(['main', 'feat/full-superagent-architecture', 'release/v1.2', 'HEAD',
+  '.hidden', 'topic/.hidden', 'topic..next', 'topic//next', 'topic.lock', 'topic.lock/next',
+  'topic/', 'topic.', '-topic', 'topic space', 'topic~1', 'topic^', 'topic:next',
+  'topic?next', 'topic*next', 'topic[next', 'topic\\next', 'topic@{1}', 'topic\n'])
+('validates repository branch name against Git: %j', name => {
+  const git = spawnSync('git', ['check-ref-format', '--branch', name], { encoding: 'utf8' })
+  expect(git.error).toBeUndefined()
+  expect(RepositoryRef.safeParse(name).success).toBe(git.status === 0)
+})
+
+it('rejects the symbolic HEAD name before constructing a repository destination', () => {
+  expect(RepositoryDestinationConfig.safeParse({ id: 'test', name: 'Test', repository: 'acme/project',
+    repositoryId: 20, baseRef: 'HEAD', login: 'publisher', credentialFile: '/tmp/test-credential' }).success).toBe(false)
+})

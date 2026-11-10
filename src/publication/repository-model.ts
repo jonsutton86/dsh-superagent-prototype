@@ -10,7 +10,7 @@ const id = z.string().uuid(), digest = z.string().regex(/^[a-f0-9]{64}$/), sha =
 const integer = z.number().int().positive().max(Number.MAX_SAFE_INTEGER), at = z.string().datetime()
 const destinationId = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/)
 export const RepositoryRef = z.string().min(1).max(200).regex(/^[A-Za-z0-9][A-Za-z0-9._/-]*$/)
-  .refine(value => !value.includes('..') && !value.includes('//') && !value.endsWith('.') && !value.endsWith('/')
+  .refine(value => value !== 'HEAD' && !value.includes('..') && !value.includes('//') && !value.endsWith('.') && !value.endsWith('/')
     && value.split('/').every(part => !part.startsWith('.') && !part.endsWith('.lock')), 'Use a valid branch name')
 export const RepositoryDestination = z.object({ id: destinationId, name: z.string().trim().min(1).max(160),
   repository: RepositoryName, repositoryId: integer, baseRef: RepositoryRef, login: z.string().regex(/^[A-Za-z0-9-]+$/) }).strict()
