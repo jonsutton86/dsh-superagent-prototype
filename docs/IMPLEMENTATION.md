@@ -1,5 +1,15 @@
 # Article implementation tracker
 
+Browser startup repair: the user observed a real Harness plugin-load failure because persona/reflection schemas imported
+the host Policy, which transitively pulled process execution into the browser bundle. Model selection now lives in a pure
+shared contract and Zod is bundled explicitly. A regression check builds the production client in a temporary directory
+and executes its actual factory with only the three declared React modules available. Focused validation passed 342 tests
+and typechecking; the running authenticated app serves the exact repaired bundle, which loads in that constrained factory
+check. Earlier served-bundle retrieval alone did not establish successful plugin activation. Existing immutable browser
+resource caching requires a hard refresh after this live development rebuild. Local `pnpm check` passed typechecking,
+all six builds and 2,004 tests (16 skipped; 129.91 seconds). Native Linux validation and actual visual browser acceptance
+remain separate evidence.
+
 [066 Persistent launcher](066-persistent-launcher.md) adds a private macOS/Linux source-checkout installation with pinned
 Harness, resumable profile setup, persistent coordinator/Session/attachment paths, detached start and graceful stop/restart,
 current-process ownership, serialized control, intentional-stop markers and authenticated browser shortcuts without token
@@ -7,7 +17,8 @@ output. It preserves existing profile credentials and does not adopt or migrate 
 Process-level launcher/control checks passed 24 tests. A fresh installed-Harness profile passed initialization, duplicate
 start, authenticated access, graceful restart with persisted pause and intentional-stop handling. The existing user app
 remained running. Local `pnpm check` passed typechecking, six builds and 2,003 tests (16 skipped; 133.16 seconds).
-Native Linux qualification is pending.
+Revision `8a8da447eda816ee530e8c1453a72d9915e31f40` passed native Linux / Node 24 typechecking, six builds and 2,011 tests
+(10 skipped; 270.24 seconds) in [run 42724896883](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42724896883).
 Login/boot services, supervised upgrades, desktop packaging and the remaining full architecture stay open.
 
 [065 Guided setup](065-guided-setup.md) adds model and environment guidance, private Harness provider-setup instructions,

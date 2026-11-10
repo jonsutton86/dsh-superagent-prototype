@@ -1,6 +1,6 @@
 /** Immutable persona definitions and references carried by reviewed action plans and execution snapshots. */
 import { z } from 'zod'
-import { RoleModelSchema } from '../policy.ts'
+import { RoleModelSchema } from '../role-model.ts'
 
 export const PersonaRef = z.object({ id: z.string().uuid(), version: z.number().int().positive() }).strict()
 export type PersonaRef = z.infer<typeof PersonaRef>

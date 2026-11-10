@@ -95,7 +95,9 @@ isolated profile passed initialization, duplicate-start identity, authenticated 
 executor pause, intentional-stop handling and final shutdown. The existing user application remained running. The live
 drill made no model calls and does not substitute for inference/recovery qualification. Local `pnpm check` passed
 typechecking, all six builds and 2,003 tests (16 skipped; 138 passing test files and three skipped; 133.16 seconds).
-Native Linux results are recorded in the implementation ledger when completed.
+Revision `8a8da447eda816ee530e8c1453a72d9915e31f40` also passed native Linux / Node 24 typechecking, all six builds and
+2,011 tests (10 skipped; 270.24 seconds) in
+[run 42724896883](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42724896883).
 
 The full architecture in 010 remains active. Supported recovery activation, broader deployment packaging, real browser
 acceptance and long-running operational evidence are separate requirements.

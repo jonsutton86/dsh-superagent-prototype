@@ -705,7 +705,16 @@ private durable paths, resumable profile setup, detached start, graceful stop/re
 intentional-stop markers, serialized controls and authenticated browser shortcuts without printing access tokens.
 Process-level launcher/control checks passed 24 tests. A fresh installed-Harness profile passed initialization, duplicate
 start, authenticated access, graceful restart retaining pause and intentional-stop handling while the user app stayed up.
-Local `pnpm check` passed typechecking, six builds and 2,003 tests (16 skipped; 133.16 seconds); native Linux qualification
-is pending.
+Local `pnpm check` passed typechecking, six builds and 2,003 tests (16 skipped; 133.16 seconds). Revision
+`8a8da447eda816ee530e8c1453a72d9915e31f40` passed native Linux / Node 24 typechecking, six builds and 2,011 tests
+(10 skipped; 270.24 seconds) in [run 42724896883](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42724896883).
 It creates new installations without replacing an existing profile or claiming to migrate its history. Login/boot services,
 automatic crash recovery, supervised upgrades, desktop packaging and the full remaining architecture stay open.
+
+A user-reported browser bootstrap failure exposed host-only imports through the shared persona model schema. The schema
+now lives in `src/role-model.ts`; the browser explicitly bundles Zod and loads with only React platform modules. The new
+production-bundle factory regression check catches this class of failure independently of source-level component tests.
+Focused validation passed 342 tests and typechecking; local `pnpm check` passed typechecking, six builds and 2,004 tests
+(16 skipped; 129.91 seconds). Authenticated HTTP confirms the running app serves the repaired
+bundle; a hard refresh replaces its cached predecessor. This repairs module loading without claiming visual browser
+acceptance or completion of the remaining architecture.
