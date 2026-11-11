@@ -115,7 +115,21 @@ async function start() {
     const register = (tool: Tool) => { own.set(tool.name, tool); return () => own.delete(tool.name) }
     agentCtx.reflect.provide('tools', { register, get: () => undefined, restrict: () => () => {}, guard: () => () => {} })
     agentCtx.reflect.provide('skills', { register: (skill: Skill) => { registered.push(skill); return () => {} } })
-    const section = (spec: { text: Section }) => { sections.set(sessionId, spec.text); return () => {} }
+    // The stop gate's prompt section throws until the replacement assignment is admitted. Keep the
+    // earlier sections; that refusal is the gate, not prompt text.
+    const section = (spec: { text: Section }) => {
+      const previous = sections.get(sessionId)
+      const combined: Section = context => {
+        const prior = previous ? previous(context) : ''
+        try { return prior + spec.text(context) }
+        catch (error) {
+          if (error instanceof Error && /has not been admitted|Ticket ended/.test(error.message)) return prior
+          throw error
+        }
+      }
+      sections.set(sessionId, combined)
+      return () => {}
+    }
     agentCtx.reflect.provide('systemPrompt', { section })
     const inbox = { nextTurn: [] as UserMessage[], nextStep: [] as UserMessage[],
       // A pending message taken out, as DSH's inbox does by its id.
@@ -355,7 +369,7 @@ function failures(): Map<string, string> {
 }
 
 it('collects both roles\' tools, prompts, skills and inputs', () => {
-  expect([...toolsOf('worker').keys()].sort()).toEqual(['orchestrator_ack', 'orchestrator_read', 'orchestrator_report',
+  expect([...toolsOf('worker').keys()].sort()).toEqual(['orchestrator_ack', 'orchestrator_fetch', 'orchestrator_file_read', 'orchestrator_read', 'orchestrator_report',
     'orchestrator_thread_follow',
     'orchestrator_thread_unrelated', 'orchestrator_trigger_handback', 'workspace_attachment_copy', 'workspace_attachment_read', 'workspace_attachments', 'workspace_check_cancel', 'workspace_check_list', 'workspace_check_output',
     'workspace_check_read', 'workspace_check_request', 'workspace_publish', 'workspace_read', 'workspace_search'])
@@ -366,12 +380,15 @@ it('collects both roles\' tools, prompts, skills and inputs', () => {
     expect(toolsOf('orchestrator').has(name)).toBe(false)
   }
   const wheres = new Set(surfaces.map(surface => surface.where))
-  for (const where of ['orchestrator prompt runtime/dispatch', 'worker prompt runtime/work', 'skill dsh-superagent-github', 'skill dsh-superagent-feishu',
+  const required = ['orchestrator prompt runtime/dispatch', 'worker prompt runtime/work', 'skill dsh-superagent-github', 'skill dsh-superagent-feishu',
     'orchestrator prompt runtime/admission', 'orchestrator input candidate', 'orchestrator input worker_attention', 'orchestrator input worker_report',
     'orchestrator input thread_unrelated', 'orchestrator input ticket_ended', 'orchestrator input settings_saved', 'worker input assignment (explicit)',
-    'worker input assignment (inferred)', 'worker input policy-changed', 'worker input resumed', 'worker input status',
-    'worker input recovery', 'worker input note', 'worker input trigger (context)', 'orchestrator input follow_up',
-    'orchestrator input thread_followed', 'orchestrator tool orchestrator_reply error']) expect(wheres).toContain(where)
+    'worker input assignment (inferred)', 'worker input policy-changed', 'worker input status',
+    'worker input note', 'worker input trigger (context)', 'orchestrator input follow_up',
+    'orchestrator input thread_followed', 'orchestrator tool orchestrator_reply error']
+  // A replacement assignment is not delivered while its original stop is still unknown, so the resumed
+  // input and the recovery note stay on the ticket instead of in the worker session.
+  expect(required.filter(where => !wheres.has(where))).toEqual([])
   expect(sessions.refusal).not.toBe('')
 })
 

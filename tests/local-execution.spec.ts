@@ -82,7 +82,7 @@ it('validates local mode configuration and rejects misspelled modes', () => {
 it('runs a local mission through actual management routes and Harness tools with no configured accounts', async () => {
   const host = await startRuntime(store => {
     const settings = store.settings()
-    store.saveSettings({ ...settings, executor: { ...settings.executor, prepare: 'exit 77' } })
+    store.saveSettings({ ...settings, executor: { ...settings.executor, prepare: '' } })
   }, { executionMode: 'local', noAccounts: true })
   close.push(() => host.stop())
   const state = await host.api('GET', 'state')

@@ -80,3 +80,17 @@ Send one message, under 300 words: what will be installed, the accounts and CLIs
 - How to try it: from an account on the allowed list, comment `@<agent login> <request>` on an issue in the repository. A Ticket appears on the overview within about a minute.
 - Three rules for the operator, from the Responsibility section of `docs/000-philosophy.md`: start narrow, tune for less noise, own what the agent says.
 - Where to read more: the numbered documents in `docs/`, in order.
+
+## Existing installation: operator tooling
+
+Do not reinstall, do not run `dsh init`, and do not delete the profile home. On a checkout that already has the operator
+tooling branch, restart only that profile after the new bundle is built. Then save three settings through the management
+API (`PUT /orchestrator/api/settings/<block>` with the current `revision`):
+
+- `source:repository` — `{ "enabled": true, "config": { "root": "/absolute/local/clone", "repository": "owner/name", "branch": "main" } }`. `orchestrator_read repository/directory/` lists that checkout.
+- `source:operator` — `{ "enabled": true, "config": { "fetchAllowlist": ["https://example.com/"] } }`. Omit it to allow only the exact https URL written in an operator message.
+- `executor` — set `prepare` to a command that exits non-zero on failure, for example `git clone --branch main https://github.com/jonsutton86/rea.git "$DSH_SUPERAGENT_DIR"`. Do not append `|| true`. An existing non-empty ticket directory is left as it is. Add command names to `blockedCommands` when they must fail inside that command; `gh`, `git`, and `lark-cli` cannot be blocked.
+
+A message typed in the coordinator session is then a trigger. Read `triggers` and accept that stored id. See
+[docs/084-operator-tooling.md](docs/084-operator-tooling.md) and the local-mode section of
+[docs/012-local-execution.md](docs/012-local-execution.md).

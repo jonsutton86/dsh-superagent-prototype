@@ -31,9 +31,9 @@ async function fixture(publisher = true) {
 it('loads both external source contracts without a coordinator or polling host', async () => {
   const f = await fixture(); await f.ctx.plugin(Github); await f.ctx.plugin(Feishu)
   expect(f.ctx.get('orchestrator')).toBeUndefined()
-  expect(f.catalog.snapshot().contracts.map(contract => contract.kind)).toEqual(['conversation', 'feishu', 'github', 'publication', 'workspace'])
+  expect(f.catalog.snapshot().contracts.map(contract => contract.kind)).toEqual(['conversation', 'feishu', 'github', 'operator', 'publication', 'repository', 'workspace'])
   const check = f.check(), result = check.verify()
-  expect(result).toEqual({ kinds: 5, enabled: 3, inactive: 2, retained: 0, configuration: expect.stringMatching(/^[a-f0-9]{64}$/) })
+  expect(result).toEqual({ kinds: 7, enabled: 5, inactive: 2, retained: 0, configuration: expect.stringMatching(/^[a-f0-9]{64}$/) })
   expect(check.verify()).toEqual(result)
 })
 it('mounts polling only when its coordinator arrives and keeps the passive contract when it leaves', async () => {
@@ -61,8 +61,8 @@ it('derives enabled sources with the same availability rule as the running regis
   const registry = new SourceRegistry(() => f.store.settings(), undefined, undefined,
     id => sourceAvailable({ owned: true, publication: false, local: false }, id))
   for (const contract of contracts) registry.register({ ...contract, title: { en: contract.kind, zh: contract.kind }, description: { en: '', zh: '' }, fields: [], health: [] })
-  expect(registry.instances().filter(instance => instance.enabled).map(instance => instance.id)).toEqual(['workspace'])
-  expect(f.check().verify()).toMatchObject({ kinds: 3, enabled: 1, inactive: 2 })
+  expect(registry.instances().filter(instance => instance.enabled).map(instance => instance.id)).toEqual(['operator', 'repository', 'workspace'])
+  expect(f.check().verify()).toMatchObject({ kinds: 5, enabled: 3, inactive: 2 })
 })
 it('keeps explicitly disabled unknown sources opaque without silently accepting enabled or policy-only missing plugins', async () => {
   const f = await fixture(); f.store.saveSettings({ sources: { retired: { enabled: false, config: { opaque: 'preserved' } } }, policy: { sources: { retired: { allowed: [] } } } })
@@ -83,7 +83,7 @@ it('uses the optional service lookup from a restricted maintenance fiber', async
   const f = await fixture()
   await f.ctx.plugin({ name: 'source-maintenance', apply(ctx: Context) {
     expect(() => ctx.superagentSources).toThrow('without inject')
-    expect(sourceConfigurationCheck(recoverySourceHost(ctx), f.store.db, f.abort.signal).verify().enabled).toBe(3)
+    expect(sourceConfigurationCheck(recoverySourceHost(ctx), f.store.db, f.abort.signal).verify().enabled).toBe(5)
   } })
 })
 it('detects a source unloading and reloading even when its settings and schema are identical', async () => {

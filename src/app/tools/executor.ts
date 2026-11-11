@@ -22,8 +22,9 @@ import { verificationTools } from './verification.ts'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Attachments } from '../../attachments/service.ts'
 import { attachmentTools } from './attachments.ts'
+import { operatorTools, type OperatorToolHost } from './operator-tools.ts'
 
-export interface ExecutorToolsHost {
+export interface ExecutorToolsHost extends OperatorToolHost {
   readonly attachments?: Attachments
   readonly library: Library
   readonly verification?: Verification
@@ -32,7 +33,7 @@ export interface ExecutorToolsHost {
   readonly personas?: Pick<Personas, 'list'>
   readonly worlds?: Pick<WorldPool, 'list'>
   readonly engine: Pick<EngineForExecutor, 'report' | 'reply' | 'markUnrelated' | 'handback' | 'followForContext'>
-  readonly store: Pick<Store, 'tickets' | 'replyStatus' | 'atomic'>
+  readonly store: Pick<Store, 'tickets' | 'triggers' | 'settings' | 'replyStatus' | 'atomic'>
   readonly sessions: Pick<Sessions, 'relay' | 'notify'>
   readonly resources: ResourceHost
   /** GitHub Source context whose pull-request rules govern claiming a reported PR. */
@@ -47,6 +48,7 @@ export function executorTools(host: ExecutorToolsHost, ticket: Ticket, agent?: A
     ...reflection ? [] : libraryTools(host.library, { role: 'worker', ticketId }),
     ...!reflection && host.verification ? verificationTools(host.verification, ticketId) : [],
     ...(reflection ? reflectionTools(host.reflections!, ticketId) : ticket.mandate.actor.source === 'workspace' ? planningTools(host.planning, ticketId, host.personas, host.worlds) : []),
+    ...operatorTools(host, ticket),
     readTool('Read one page of a resource of this ticket that the resource parameter lists. Follow next_offset, and next_resource where a page names one.',
       true, (resource, offset, limit, signal) => readResource(host.resources, resource, offset, limit, ticketId, signal)),
     tool({

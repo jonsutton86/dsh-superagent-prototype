@@ -16,6 +16,8 @@ import { DatabaseSync } from 'node:sqlite'
 import { lockSync } from 'proper-lockfile'
 import { Engine, canStop, key, latestAssignment, reasonText, type EngineForSettings, type ReceiveResult, type Ticket, type Trigger } from '../core/index.ts'
 import { allowedSender, settingsPolicy } from '../policy.ts'
+import { operatorConfig, operatorKind, operatorPolicy, watchOperatorChat } from '../sources/operator.ts'
+import { repositoryKind } from '../sources/repository-profile.ts'
 import { SourceRegistry } from '../sources/registry.ts'
 import { sourceAvailable } from '../sources/contracts.ts'
 import { Commands } from '../infra/commands.ts'
@@ -278,7 +280,7 @@ export class Runtime extends Service implements SourceHost {
         engine: () => runtime.engine, requestPass: () => runtime.passes.request(),
         authorized: ticket => workspace.policy(settingsPolicy(store.settings(), sources)).revalidate(ticket.mandate) && workspace.executionAllowed(ticket) })
       const links: LinkHost = { store, links: this.sourceLinks, commands, sources, lifetime: this.lifetime }
-      this.disposers.push(sources.register(workspace.source))
+      this.disposers.push(sources.register(workspace.source), sources.register(operatorKind), sources.register(repositoryKind))
       if (machine.publication) this.disposers.push(sources.register(this.channelPublications.source), sources.register(this.conversations.source))
       const link = (trigger: Trigger, signal?: AbortSignal) => sourceLink(links, trigger, signal)
       const environment = (ticket: Ticket) => this.ticketEnvironment(ticket)
@@ -313,7 +315,10 @@ export class Runtime extends Service implements SourceHost {
       const outbox = this.outbox = new Outbox({ store, effects, sources, commands, publication: this.channelPublications, paused: () => this.paused(),
         publicationProblem: message => runtime.speculation?.messageProblem(message) })
       const { assessor, executor } = this
-      const policy = () => environments.policy(this.conversations.policy(workspace.policy(settingsPolicy(store.settings(), sources))))
+      const policy = () => {
+        const current = store.settings()
+        return environments.policy(this.conversations.policy(operatorPolicy(workspace.policy(settingsPolicy(current, sources)), current)))
+      }
       const speculation = this.speculation = new Speculation({ store, usage, authorized: ticket => policy().revalidate(ticket.mandate),
         paused: () => this.paused(), capacity: () => store.settings().executor.maxWorkers, busy: id => executor.busy(id),
         quiet: run => executor.quiescence(run), requestPass: () => runtime.passes?.request(),
@@ -357,7 +362,12 @@ export class Runtime extends Service implements SourceHost {
       this.sourceDeps = { store, engine, outbox, commands, sources, get ready() { return runtime.ready },
         get deployment() { return setup.deployment }, configured: () => setup.configured(),
         get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem }, receive: trigger => passes.receive(trigger) }
+      this.disposers.push(watchOperatorChat(ctx, () => this.masterId, trigger => {
+        if (engine.receive(trigger) === 'stored') passes.request()
+      }, message => ctx.logger.warn('dsh-superagent did not store an operator message: %s', message)))
       this.toolHost = { context: ctx, engine, store, prompts, sessions, settings: this.settings, assessor, resources, library, verification, planning: workspace.plans, reflections, personas, worlds: this.worlds, attachments: this.attachments,
+        allowPublicFetch: () => { try { return !this.commands.deployment.github } catch { return false } },
+        fetchAllowlist: () => operatorConfig(store.settings()).fetchAllowlist,
         get github() { return runtime.context({ kind: 'github', health: ['github'] }) },
         requestPass: () => { passes.request() }, sendReplies: () => outbox.sent(),
         quietly: run => { this.quiet++; try { return run() } finally { this.quiet-- } } }

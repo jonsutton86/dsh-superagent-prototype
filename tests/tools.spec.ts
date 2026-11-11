@@ -37,7 +37,9 @@ it('reads bounded repository context through fixed API calls and retains one obs
   const listing = await read('repository/directory/') as { text: string }
   expect(JSON.parse(listing.text).content).toBe('README.md\nsrc')
   const { sessionId } = await h.acceptedTicket(feishu('repo-context', '@bot Review the source'))
-  await expect(h.runTool(sessionId, 'orchestrator_read', { resource: 'repository/file/src/example.ts' })).rejects.toThrow('belongs to the main Session')
+  calls.mockResolvedValue('worker copy')
+  const worker = await h.runTool(sessionId, 'orchestrator_read', { resource: 'repository/file/src/example.ts' }) as { text: string }
+  expect(JSON.parse(worker.text).content).toBe('worker copy')
 })
 
 it('reads the lists, a ticket, a decision, the settings, the prompts and the models as resources', async () => {

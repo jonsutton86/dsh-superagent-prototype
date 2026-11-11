@@ -3,12 +3,13 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mkdir, rmdir, stat } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
 import { key, latestAssignment, latestReport, liveTicket, runningAssignment, threadKey, waitsForPerson } from '../core/index.ts'
 import type { AssessmentOutcome, Assignment, EngineForExecutor, Execution, Executor, Mandate, PolicyEffect, Ticket, TicketInput, Trigger }
   from '../core/index.ts'
 import type { Machine } from '../deployment.ts'
-import { runAsWorker, verifyDirectory, verifyLocalWorkspace } from '../infra/environment.ts'
+import { runAsWorker, verifyDirectory, verifyLocalWorkspace, workerBin } from '../infra/environment.ts'
+import { recordedAttachments, stageAttachments } from '../app/scoped-files.ts'
 import type { Settings } from '../policy.ts'
 import type { Store } from '../app/store.ts'
 import { Later, RetryLaunch, type Effects } from '../app/effects.ts'
@@ -275,7 +276,10 @@ export class DshExecutor implements Executor {
   /**
    * Runs the configured `executor.prepare` command for a new ticket workspace in its parent directory with the ticket's
    * execution environment variables, then verifies the directory as the worker sees it.
-   * A failed prepare command throws `PrepareFailed`, which is not retried automatically; an empty directory it left is removed, a non-empty one kept.
+   * Local mode runs the same command. It runs only when the directory is absent. A non-empty directory left by a failed
+   * command is kept and not overwritten; an empty one is removed so the next assignment can run the command again.
+   * The command's PATH starts with the worker shims, so `DSH_SUPERAGENT_BLOCKED_COMMANDS` fail by name. Let the command
+   * exit non-zero on failure; do not append `|| true`.
    * @throws PrepareFailed with the command's output when the prepare command fails.
    */
   private async prepareDirectory(ticket: Ticket): Promise<void> {
@@ -288,8 +292,9 @@ export class DshExecutor implements Executor {
     }
     await mkdir(dirname(directory), { recursive: true })
     const local = ticket.execution?.mode === 'local'
-    const command = local ? '' : this.host.store.settings().executor.prepare.trim()
-    const env = Object.fromEntries(this.host.environment(ticket).map(variable => [variable.key, variable.value]))
+    const command = this.host.store.settings().executor.prepare.trim()
+    const env: Record<string, string> = Object.fromEntries(this.host.environment(ticket).map(variable => [variable.key, variable.value]))
+    env.PATH = [workerBin(this.host.machine.stateDir), process.env.PATH ?? ''].filter(Boolean).join(delimiter)
     // Enforce a timeout so a hung prepare command (such as on a credential prompt) fails the ticket instead of holding a worker slot indefinitely.
     const signal = AbortSignal.any([this.host.lifetime, AbortSignal.timeout(PREPARE_TIMEOUT_MS)])
     if (command) await runAsWorker(this.host.context.subprocess, ['sh', '-c', command], dirname(directory), signal, env)
@@ -650,6 +655,10 @@ export class DshExecutor implements Executor {
     if (ticket.execution?.mode === 'local') await (remote ? remote.verify(workspace)
       : verifyLocalWorkspace(workspace, this.host.context.subprocess, this.host.lifetime, this.host.context.fs))
       .catch((error: unknown) => { throw new PrepareFailed(`Local task directory is unavailable: ${String(error)}`) })
+    if (!current()) return
+    // An existing non-empty directory was left untouched by prepare. Copies land beside it and do not replace those files.
+    if (!remote) await stageAttachments(workspace, recordedAttachments(this.host.store, ticket))
+      .catch((error: unknown) => { this.host.context.logger.warn('dsh-superagent could not stage an attachment: %s', error instanceof Error ? error.message : String(error)) })
     if (!current()) return
     const sessionId = workerSessionId(ticket.id)
     const agent = await this.host.sessions.ensure(sessionId, workspace, ticket.title, 'worker')

@@ -37,8 +37,24 @@ The default `repository` mode remains compatible with existing installations and
 ## Directories and prompts
 
 Each ticket receives its own directory under the Execution setting's directory, or `<stateDir>/work` by default.
-The saved repository preparation command is retained but disabled and never run in local mode. No Git worktree or
-pull request is required. A GitHub PR number in a local worker report is refused.
+`settings/executor.prepare` runs in local mode the same way it runs for a repository ticket: once, before the worker
+session starts, and only when that ticket's directory does not already exist. A command that fails must exit non-zero.
+Do not append `|| true` or send its errors to `/dev/null`. If the command leaves files behind, that directory is kept
+and later assignments do not run the command again, so a partial checkout is not overwritten. If it leaves the directory
+empty, the empty directory is removed and the next assignment runs the command again. Remove a kept directory yourself
+before expecting a new clone. A typical local checkout is:
+
+```sh
+git clone --branch main https://github.com/jonsutton86/rea.git "$DSH_SUPERAGENT_DIR"
+```
+
+The command's `PATH` starts with the worker shims, so names in `blockedCommands` fail before the worker session exists.
+No Git worktree or pull request is required. A GitHub PR number in a local worker report is refused.
+
+Repository reads use the `repository` source profile (`root`, `repository`, `branch`) instead of the GitHub API.
+`orchestrator_read repository/directory/` with an empty path lists that checkout. Reads stay inside `root`, skip hidden
+names and `node_modules`, and stop at 64 KiB. Without `root`, the read returns: `GitHub is unavailable in local
+execution mode. Use a repository profile for GitHub work.`
 
 Setup and worker launch write a random probe into the assigned filesystem and read it through the configured subprocess
 provider. A mismatch fails setup or launch and removes the probe. This checks that process and filesystem access refer
