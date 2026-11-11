@@ -489,6 +489,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/infra/paths.ts` | The package's root, where packaged files are |
 | `src/infra/text.ts` | Word counts and the chat message limit, `fill` and `sameName` |
 | `src/infra/health.ts` | The `HealthBoard`, every part's health entry, each claimed by its one writer |
+| `src/infra/admission-trace.ts` | Optional ordered trace of worker admission, written only when `DSH_ADMISSION_TRACE` names a file |
 | `src/sources/kind.ts` | The `SourceKind` protocol |
 | `src/sources/registry.ts` | `SourceRegistry` |
 | `src/sources/contracts.ts` | Shared built-in source schemas and owned/local availability rules |

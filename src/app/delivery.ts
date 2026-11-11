@@ -4,6 +4,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { freezeMessage, MessageId, type ContextFormed, type UserMessage } from '@deepseek-ai/dsh-llm'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-persistence'
+import { admissionTrace, traceAgent } from '../infra/admission-trace.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -69,18 +70,24 @@ export class AgentDelivery {
     const seen = await this.history(agent)
     signal.throwIfAborted()
     if (this.ctx.agents.get(agent.id) !== agent) throw new Error('Delivery target was disposed')
+    admissionTrace('delivery.authorize', { agent: traceAgent(agent), mode: typeof mode === 'object' ? 'inject' : mode })
     authorize?.()
+    admissionTrace('delivery.authorized', { agent: traceAgent(agent) })
     const id = messageId(requestId)
     const pending = [...agent.inbox.nextTurn, ...agent.inbox.nextStep].some(message => deliveryId(message) === id)
     if (!seen.ids.has(id) && !pending) {
       const source = typeof mode === 'object' ? { kind: 'dsh-superagent' as const, form: 'notice' as const, summary: mode.inject }
         : { kind: 'dsh-superagent' as const, form: 'relay' as const }
       const message = freezeMessage({ id, role: 'user' as const, content: [{ type: 'text' as const, text }], source })
+      admissionTrace('delivery.enqueue', { agent: traceAgent(agent), mode: typeof mode === 'object' ? 'inject' : mode })
       if (typeof mode === 'object') { agent.inject(message); seen.ids.add(id) }
       else if (mode === 'steer') agent.steer(message)
       else agent.followup(message)
+      admissionTrace('delivery.enqueued', { agent: traceAgent(agent) })
     }
+    admissionTrace('delivery.accept', { agent: traceAgent(agent) })
     accepted?.()
+    admissionTrace('delivery.accepted', { agent: traceAgent(agent) })
     await this.ctx.sessionPersistence.flush()
     return seen.ids.has(id)
   }

@@ -29,6 +29,7 @@ import { EXECUTION_EVIDENCE_LIMIT, emptyRemoteExecutionEvidence, unavailableExec
 import { safeLaunchFailure, safeWorkerFailure, WorkerFailureFence } from './failure.ts'
 import { automaticRestartBudget, isAutomaticRestartInput } from '../core/recovery.ts'
 import { ExecutorStops } from './stops.ts'
+import { admissionTrace } from '../infra/admission-trace.ts'
 
 const now = (): string => new Date().toISOString()
 /** Returns the worker session ID (`worker-<ticketId>`) for a ticket. */
@@ -690,9 +691,18 @@ export class DshExecutor implements Executor {
         ...(read ? { assignment_chars: chars, assignment_read: read } : {}), ...(card ? { trigger: card } : {}),
         ...(batch.length ? { batch } : {}), ...retried })
     const requestId = later ? `assignment:${ticket.id}:${assignment.id}` : first
+    const stateOf = () => this.host.store.tickets.get(ticket.id)?.assignments.find(item => item.id === assignment.id)?.state ?? null
     await this.host.sessions.prompt(sessionId, requestId, text, 'queue',
-      () => { if (!current()) throw new Error('Launch authorization changed before worker delivery'); this.stops.admitted(agent, assignment.id) },
-      () => { this.host.engine.assignmentStarted(ticket.id, assignment.id) })
+      () => {
+        admissionTrace('launch.authorize', { assignmentId: assignment.id, state: stateOf() })
+        if (!current()) throw new Error('Launch authorization changed before worker delivery')
+        this.stops.admitted(agent, assignment.id)
+      },
+      () => {
+        admissionTrace('launch.accepted.before', { assignmentId: assignment.id, state: stateOf() })
+        this.host.engine.assignmentStarted(ticket.id, assignment.id)
+        admissionTrace('launch.accepted.after', { assignmentId: assignment.id, state: stateOf() })
+      })
     this.host.engine.assignmentStarted(ticket.id, assignment.id)
   }
   /** Returns the stored ticket for `agent` when it is a worker session, or undefined otherwise. */
@@ -745,7 +755,10 @@ export class DshExecutor implements Executor {
       const agent = ctx.agents.get(session.id)
       if (!agent || agent.session !== session) return
       const ticket = this.ticketOf(agent), assignment = ticket && latestAssignment(ticket)
-      if (assignment && event.type === 'turn/start') { this.stops.turnStarted(agent, event.data.turn); this.failures.beginTurn(agent, session, assignment.id, event.data.turn) }
+      if (assignment && event.type === 'turn/start') {
+        admissionTrace('session.turn/start', { assignmentId: assignment.id, state: assignment.state, turn: event.data.turn })
+        this.stops.turnStarted(agent, event.data.turn); this.failures.beginTurn(agent, session, assignment.id, event.data.turn)
+      }
       if (assignment && event.type === 'step/start') this.failures.beginStep(agent, session, assignment.id, event.data.turn, event.data.step)
       if (assignment && event.type === 'turn/end') this.failures.endTurn(agent, session, assignment.id, event.data.turn)
       const ticketId = ticketOfSession(session.id)
@@ -759,6 +772,7 @@ export class DshExecutor implements Executor {
     }))
     this.disposers.push(ctx.on('agent/request', ({ agent, turn, step, signal }, next) => {
       const ticket = this.ticketOf(agent), assignment = ticket && latestAssignment(ticket)
+      admissionTrace('agent/request', { assignmentId: assignment?.id ?? null, state: assignment?.state ?? null, turn, allowed: assignment ? this.stops.turnAllowed(agent, assignment.id, turn) : null })
       if (ticket && this.stops.problem(ticket.id)) throw new Error('Original work is not confirmed stopped')
       if (ticket && assignment && !this.stops.turnAllowed(agent, assignment.id, turn)) throw new Error('Original worker turn has no current assignment admission')
       if (ticket && assignment) this.stops.beforeAdmission(ticket.id, assignment.id)

@@ -12,6 +12,7 @@ import { cancelled, killJobs, until } from './background.ts'
 import { StopAttestationRequest, StopAttestationReceiptSchema, StopRecordSchema, stopHeld, stopSummary,
   type StopAttestationReceipt, type StopDetail, type StopRecord } from './stop-model.ts'
 import { readStop, saveStop, stopDigest, stopExecutionDigest, stopHolds, stopScopeDigest } from './stop-store.ts'
+import { admissionTrace, traceAgent } from '../infra/admission-trace.ts'
 export { stopHolds } from './stop-store.ts'
 
 interface Jobs { list(owner: string): readonly { id: string; owner?: string; status: string }[] }
@@ -58,12 +59,16 @@ export class ExecutorStops {
   /** Called at the original worker delivery boundary, never merely when a Session is loaded. */
   admitted(agent: Agent, assignmentId: string): void {
     const ticketId = agent.id.startsWith('worker-') ? agent.id.slice(7) : undefined
+    admissionTrace('stops.admitted', { agent: traceAgent(agent), assignmentId, registered: this.host.context.agents.get(agent.id) === agent })
     if (ticketId) this.beforeAdmission(ticketId, assignmentId)
     admissions.set(agent, { agent, assignmentId, session: agent.session, jobs: this.host.context.get('jobs'), children: this.host.context.get('subagents') })
+    admissionTrace('stops.admitted.recorded', { agent: traceAgent(agent), assignmentId })
   }
   /** Bind a native or delivered turn to the admission that existed when that exact turn began. */
   turnStarted(agent: Agent, turn: number): void {
-    turns.set(agent, { session: agent.session, turn, assignmentId: admissions.get(agent)?.assignmentId })
+    const assignmentId = admissions.get(agent)?.assignmentId
+    admissionTrace('stops.turnStarted', { agent: traceAgent(agent), turn, assignmentId: assignmentId ?? null })
+    turns.set(agent, { session: agent.session, turn, assignmentId })
   }
   turnAllowed(agent: Agent, assignmentId: string, turn: number): boolean {
     const bound = turns.get(agent), admitted = admissions.get(agent)

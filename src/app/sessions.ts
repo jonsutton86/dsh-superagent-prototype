@@ -3,6 +3,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { MessageId } from '@deepseek-ai/dsh-llm'
 import { scopeParentOf } from '@deepseek-ai/dsh-scope'
+import { admissionTrace } from '../infra/admission-trace.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { ApiSessionNotFound } from '@deepseek-ai/dsh-api-session-controller'
 import { dirname } from 'node:path'
@@ -375,8 +376,11 @@ export class Sessions {
       const current = store.tickets.get(ticketId)
       if (!current || !liveTicket(current)) return 'Ticket ended; new work needs a new authorized ticket'
       const assignment = current.assignments.at(-1)
-      if (assignment?.state !== 'running' || descendantAssignment && descendantAssignment !== assignment.id)
+      if (assignment?.state !== 'running' || descendantAssignment && descendantAssignment !== assignment.id) {
+        admissionTrace('sessions.admission', { state: assignment?.state ?? null, descendant: descendantAssignment ?? null, problem: 'not-running' })
         return 'Worker delivery for the current assignment has not been admitted'
+      }
+      admissionTrace('sessions.admission', { state: assignment.state, ok: true })
       if ((current.execution?.persona?.digest ?? 'default') !== (persona?.digest ?? 'default')) return 'The task persona changed; authorize a new run'
       if (this.host.environmentAllowed && !this.host.environmentAllowed(current)) return 'Execution environment authorization is unavailable or revoked'
       const problem = this.host.executionProblem?.(current)
