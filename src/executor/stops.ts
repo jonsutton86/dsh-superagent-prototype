@@ -15,6 +15,12 @@ import { readStop, saveStop, stopDigest, stopExecutionDigest, stopHolds, stopSco
 import { admissionTrace, traceAgent } from '../infra/admission-trace.ts'
 export { stopHolds } from './stop-store.ts'
 
+/** Cordis wraps a tracked service in a new proxy on every read. Identity is the unwrapped service. */
+const serviceIdentity = (value: unknown): unknown => {
+  if (!value || typeof value !== 'object') return value
+  const inner = (value as Record<symbol, unknown>)[Symbol.for('cordis.original')]
+  return inner === undefined ? value : inner
+}
 interface Jobs { list(owner: string): readonly { id: string; owner?: string; status: string }[] }
 interface Children { listChildren(owner: string): Promise<readonly { id: string }[]>; drainChildren(parent: Agent, ids: readonly string[]): Promise<void> }
 interface Binding { agent: Agent; session: Agent['session']; jobs: unknown; children: unknown }
@@ -56,12 +62,24 @@ export class ExecutorStops {
       yield StopRecordSchema.parse(JSON.parse(String(row.value)))
   }
   holds(ticketId: string) { return stopHolds(this.host.store, ticketId) }
+  /** The worker's job and subagent services. An agent without its own context uses the host pair. */
+  private services(agent: Agent): { jobs: unknown; children: unknown } {
+    return agent.ctx?.get
+      ? { jobs: agent.ctx.get('jobs'), children: agent.ctx.get('subagents') }
+      : { jobs: this.host.context.get('jobs'), children: this.host.context.get('subagents') }
+  }
   /** Called at the original worker delivery boundary, never merely when a Session is loaded. */
   admitted(agent: Agent, assignmentId: string): void {
     const ticketId = agent.id.startsWith('worker-') ? agent.id.slice(7) : undefined
-    admissionTrace('stops.admitted', { agent: traceAgent(agent), assignmentId, registered: this.host.context.agents.get(agent.id) === agent })
+    const hostJobs = this.host.context.get('jobs'), hostChildren = this.host.context.get('subagents')
+    const { jobs, children } = this.services(agent)
+    admissionTrace('stops.admitted', {
+      agent: traceAgent(agent), assignmentId, registered: this.host.context.agents.get(agent.id) === agent,
+      hostJobs: traceAgent(hostJobs) ?? null, agentJobs: traceAgent(jobs) ?? null,
+      hostChildren: traceAgent(hostChildren) ?? null, agentChildren: traceAgent(children) ?? null,
+    })
     if (ticketId) this.beforeAdmission(ticketId, assignmentId)
-    admissions.set(agent, { agent, assignmentId, session: agent.session, jobs: this.host.context.get('jobs'), children: this.host.context.get('subagents') })
+    admissions.set(agent, { agent, assignmentId, session: agent.session, jobs, children })
     admissionTrace('stops.admitted.recorded', { agent: traceAgent(agent), assignmentId })
   }
   /** Bind a native or delivered turn to the admission that existed when that exact turn began. */
@@ -76,14 +94,33 @@ export class ExecutorStops {
       && admitted?.assignmentId === assignmentId && admitted.session === agent.session && this.host.context.agents.get(agent.id) === agent
   }
   owns(agent: Agent | undefined, assignmentId: string): boolean {
-    const admitted = agent && admissions.get(agent)
-    return !!agent && !!admitted && admitted.assignmentId === assignmentId && admitted.session === agent.session
-      && admitted.jobs === this.host.context.get('jobs') && admitted.children === this.host.context.get('subagents')
+    if (!agent) return false
+    const admitted = admissions.get(agent)
+    // Compare the worker's own job and subagent services. The host context resolves a different pair, so a host lookup
+    // never matches the services recorded when the worker was admitted.
+    const services = this.services(agent)
+    return !!admitted && admitted.assignmentId === assignmentId && admitted.session === agent.session
+      && serviceIdentity(admitted.jobs) === serviceIdentity(services.jobs)
+      && serviceIdentity(admitted.children) === serviceIdentity(services.children)
       && this.host.context.agents.get(agent.id) === agent
   }
   executionAllowed(agent: Agent, assignmentId: string): boolean {
     const bound = turns.get(agent)
-    return this.owns(agent, assignmentId) && bound?.session === agent.session && bound.assignmentId === assignmentId
+    const admitted = admissions.get(agent)
+    const hostJobs = this.host.context.get('jobs'), hostChildren = this.host.context.get('subagents')
+    const { jobs: agentJobs, children: agentChildren } = this.services(agent)
+    const ok = this.owns(agent, assignmentId) && bound?.session === agent.session && bound.assignmentId === assignmentId
+    admissionTrace('stops.executionAllowed', {
+      agent: traceAgent(agent), assignmentId, ok,
+      boundAssignment: bound?.assignmentId ?? null,
+      admittedAssignment: admitted?.assignmentId ?? null,
+      sessionSame: bound ? bound.session === agent.session : null,
+      admittedSessionSame: admitted ? admitted.session === agent.session : null,
+      admittedJobs: traceAgent(admitted?.jobs) ?? null, hostJobs: traceAgent(hostJobs) ?? null, agentJobs: traceAgent(agentJobs) ?? null,
+      admittedChildren: traceAgent(admitted?.children) ?? null, hostChildren: traceAgent(hostChildren) ?? null, agentChildren: traceAgent(agentChildren) ?? null,
+      registered: this.host.context.agents.get(agent.id) === agent,
+    })
+    return ok
   }
   /** Consume reusable full-stop coverage before any later model/tool/direct-Session work under that same assignment. */
   beforeAdmission(ticketId: string, assignmentId: string): void {

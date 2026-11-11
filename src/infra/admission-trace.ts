@@ -6,8 +6,8 @@ const identities = new WeakMap<object, number>()
 let next = 0
 const started = Date.now()
 
-export function traceAgent(agent: object | undefined): number | undefined {
-  if (!agent) return undefined
+export function traceAgent(agent: unknown): number | undefined {
+  if (!agent || typeof agent !== 'object') return undefined
   const known = identities.get(agent)
   if (known) return known
   const id = ++next

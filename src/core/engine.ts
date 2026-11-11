@@ -175,8 +175,8 @@ export class Engine {
    * The Executor's fact that an Assignment runs; the Inputs that wait for it go out.
    * @throws UserError when the ticket is unknown.
    */
-  assignmentStarted(ticketId: string, assignmentId: string): void {
-    this.repo.atomic(() => { this.assignments.started(ticketId, assignmentId) })
+  assignmentStarted(ticketId: string, assignmentId: string, deliverWaiting = true): void {
+    this.repo.atomic(() => { this.assignments.started(ticketId, assignmentId, deliverWaiting) })
   }
   /**
    * The Executor's fact that Inputs reached the Assignment that runs the ticket, which clears a failed delivery. A fact about

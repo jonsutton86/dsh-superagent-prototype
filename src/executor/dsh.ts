@@ -696,7 +696,12 @@ export class DshExecutor implements Executor {
       () => {
         admissionTrace('launch.authorize', { assignmentId: assignment.id, state: stateOf() })
         if (!current()) throw new Error('Launch authorization changed before worker delivery')
+        // Record the admission first so an unconfirmed stop still refuses the launch. Then mark the assignment
+        // running before the message is queued: the worker prompt guard reads that state during the turn that
+        // the queue starts, which is before this delivery's accepted callback.
         this.stops.admitted(agent, assignment.id)
+        this.host.engine.assignmentStarted(ticket.id, assignment.id, false)
+        admissionTrace('launch.authorize.running', { assignmentId: assignment.id, state: stateOf() })
       },
       () => {
         admissionTrace('launch.accepted.before', { assignmentId: assignment.id, state: stateOf() })

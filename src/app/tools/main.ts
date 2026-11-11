@@ -260,6 +260,11 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
       }).strict()
         .refine(args => (args.block === 'source') === (args.source !== undefined), 'source names the Source instance, with block source only'),
       execute: async args => {
+        // Some models send the block as JSON text. Parse it into the object the schema expects.
+        if (typeof args.value === 'string') {
+          try { args = { ...args, value: JSON.parse(args.value) } }
+          catch (error) { throw new Error(`value is not valid JSON: ${error instanceof Error ? error.message : String(error)}`) }
+        }
         if (args.block === 'pause') return host.settings.pause(z.object({ paused: z.boolean() }).parse(args.value).paused, 'tool')
         // Strip context_delivery since the main Session initiated the save itself.
         const { context_delivery: _delivery, ...saved } = await host.settings.save(args.block === 'source' ? `source:${args.source!}` : args.block,

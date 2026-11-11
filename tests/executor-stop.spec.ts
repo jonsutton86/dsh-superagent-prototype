@@ -49,6 +49,7 @@ it('keeps the original stop after kill wait returns running; observation never r
   const id = f.request(); await f.stops.idle()
   expect(f.stops.detail(id)).toMatchObject({ id, assignmentId: 'original', state: 'unknown', targets: { jobIds: ['job-1'] } })
   expect(f.stops.problem('task')).toBeDefined(); expect(f.jobs.kill).toHaveBeenCalledTimes(1)
+  expect(() => f.stops.admitted(f.agent, 'original')).toThrow('Original work is not confirmed stopped')
   expect(f.request()).toBe(id)
   await f.stops.recheck(id); expect(f.jobs.kill).toHaveBeenCalledTimes(1)
   f.rows[0]!.status = 'completed'
