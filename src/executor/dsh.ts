@@ -8,7 +8,7 @@ import { key, latestAssignment, latestReport, liveTicket, runningAssignment, thr
 import type { AssessmentOutcome, Assignment, EngineForExecutor, Execution, Executor, Mandate, PolicyEffect, Ticket, TicketInput, Trigger }
   from '../core/index.ts'
 import type { Machine } from '../deployment.ts'
-import { runAsWorker, verifyDirectory } from '../infra/environment.ts'
+import { runAsWorker, preparePath, verifyDirectory } from '../infra/environment.ts'
 import type { Settings } from '../policy.ts'
 import type { Store } from '../app/store.ts'
 import { Later, type Effects } from '../app/effects.ts'
@@ -17,6 +17,7 @@ import type { Sessions } from '../app/sessions.ts'
 import { WorktreeNameSchema } from '../app/assessment.ts'
 import { resultRelay } from '../app/notices.ts'
 import type { HealthEntry } from '../infra/health.ts'
+import { stageAttachments, attachmentPaths } from '../app/scoped-files.ts'
 import { cancelled, collectJob, killJobs, runningJobs, stopBackground, stopSubagents, until, untilQuiet } from './background.ts'
 
 const now = (): string => new Date().toISOString()
@@ -248,7 +249,9 @@ export class DshExecutor implements Executor {
     const directory = ticket.execution?.directory ?? ''
     await mkdir(dirname(directory), { recursive: true })
     const command = this.host.store.settings().executor.prepare.trim()
-    const env = Object.fromEntries(this.host.environment(ticket).map(variable => [variable.key, variable.value]))
+    // The worker shim directory is first on PATH, so a blocked command name fails here as it does in a worker shell.
+    const env: Record<string, string> = { PATH: preparePath(this.host.machine.stateDir),
+      ...Object.fromEntries(this.host.environment(ticket).flatMap(variable => variable.value === undefined ? [] : [[variable.key, variable.value]])) }
     // Enforce a timeout so a hung prepare command (such as on a credential prompt) fails the ticket instead of holding a worker slot indefinitely.
     const signal = AbortSignal.any([this.host.lifetime, AbortSignal.timeout(PREPARE_TIMEOUT_MS)])
     if (command) await runAsWorker(this.host.context.subprocess, ['sh', '-c', command], dirname(directory), signal, env)
@@ -436,6 +439,10 @@ export class DshExecutor implements Executor {
       await this.prepareDirectory(ticket)
       if (!current()) return
     }
+    if (!current()) return
+    // Copies of operator attachments live in the ticket directory, which is the file tools' workspace and the shell's cwd.
+    try { stageAttachments(workspace, attachmentPaths(this.host.store, ticket)) }
+    catch (error) { this.host.context.logger.warn('dsh-superagent could not stage attachments for %s: %s', ticket.id, error instanceof Error ? error.message : String(error)) }
     if (!current()) return
     const sessionId = workerSessionId(ticket.id)
     const agent = await this.host.sessions.ensure(sessionId, workspace, ticket.title, 'worker')

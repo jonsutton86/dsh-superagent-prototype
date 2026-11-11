@@ -153,8 +153,9 @@ Setup must succeed before polling or work starts. Overview lists missing require
    git -C /home/me/src/widgets worktree add -b "agent/$DSH_SUPERAGENT_NAME" "$DSH_SUPERAGENT_DIR" "refs/dsh-superagent/$DSH_SUPERAGENT_TICKET"
    ```
 
-   List personal CLIs, such as one signed in to your own account, as blocked commands.
-4. **Prompts.** Set the team sections: the GitHub disclosure line, review bots, the commit author and the auto-merge condition.
+   List personal CLIs, such as one signed in to your own account, as blocked commands. The prepare command runs with `sh` before the worker Session starts, and only when the Ticket directory does not already exist. Its `PATH` starts with the worker shim directory, so a blocked command name fails there too. Saving `prepare` is a panel or management-API change; the main Session's settings tool cannot change it.
+4. **Repository profile and operator chat.** The operator and repository sources are part of dsh-superagent, not extra plugins. Messages typed in the main Session's Web GUI become Triggers. Set the repository source `root` to an absolute checkout of the default branch, plus `repository` (`owner/name`) and `branch`, so `orchestrator_read` can read `repository/file/<path>` and `repository/directory/<path>` without GitHub. On the operator source, `fetchAllowlist` is a list of `{"prefix": "https://…"}` entries for `orchestrator_fetch`, which is refused while the GitHub source names a repository. Neither source stores a token.
+5. **Prompts.** Set the team sections: the GitHub disclosure line, review bots, the commit author and the auto-merge condition.
 
 ### Management API
 
@@ -199,7 +200,7 @@ A refusal has a status and `error`, its English text:
 
 The blocks:
 
-- `source:github`, `source:feishu`: `{"enabled": true, "config": {…}}`. GitHub's config has `repository` and `cli`, and the switches `observeIssues`, `observePulls`, `observeComments` and `observeCi`, off by default, which receive every new Issue, new pull request and comment in the repository and the default branch's CI; Feishu's has `cli`, `chats` as `[{"chatId": "oc_…", "name": "…", "listen": "mentions"}]` (or `"all"`), `directMessages`, and `otherChats` as `"none"` or `"mentions"`.
+- `source:github`, `source:feishu`, `source:operator`, `source:repository`: `{"enabled": true, "config": {…}}`. GitHub's config has `repository` and `cli`, and the switches `observeIssues`, `observePulls`, `observeComments` and `observeCi`, off by default, which receive every new Issue, new pull request and comment in the repository and the default branch's CI; Feishu's has `cli`, `chats` as `[{"chatId": "oc_…", "name": "…", "listen": "mentions"}]` (or `"all"`), `directMessages`, and `otherChats` as `"none"` or `"mentions"`. The operator source has `operatorId` (default `local`) and `fetchAllowlist` as `[{"prefix": "https://…"}]`. The repository source has `root` (an absolute checkout), `repository` (`owner/name`) and `branch`. Changing the operator or repository source does not restart dsh-superagent and does not read a credential.
 - `policy`: `{"rules": […], "sources": {"github": {"allowed": [{"id": "<login>"}], "bots": [{"id": "dependabot[bot]"}]}, "feishu": {"allowed": [{"id": "ou_…", "name": "…"}], "syncChat": "oc_…", "admission": {"oc_…": {"unlistedAddressed": "explicit"}}}}}`. `bots` lists the bots whose messages may become inferred candidates. An `admission` row is keyed by chat id, `other` or `direct` for Feishu, and by `issues`, `pulls`, `comments` or `ci` for GitHub; an unset cell takes its default (see [002 Authorization](002-authorization.md)).
 - `eval`: `mode`, `timeoutSeconds` and `model`.
 - `executor`: `model`, `maxWorkers`, `directory`, `prepare` and `blockedCommands`. The processing pause is a setting of its own, `paused`, which `POST executor/pause` sets.

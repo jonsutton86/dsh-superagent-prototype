@@ -48,9 +48,19 @@ Worker subagents, including nested ones, use DeepSeek Harness's `standard` prese
 
 ### Preparing a Ticket directory
 
-Before the first Assignment, if the Ticket directory does not exist, the prepare command runs once with `sh` in the execution root. It has ten minutes to finish. Without a prepare command, the worker starts in an empty directory.
+Before the first Assignment, if the Ticket directory does not exist, the prepare command runs once with `sh` in the execution root, before the worker Session starts. It has ten minutes to finish. Without a prepare command, the worker starts in an empty directory. A later Assignment reuses the directory and does not run the command again, so a checkout command is not repeated against a directory it already created. The command's `PATH` starts with the worker shim directory, so a name in `DSH_SUPERAGENT_BLOCKED_COMMANDS` fails the same way it does in a worker shell. The command does not change accounts or credentials.
 
 A failed command fails the Ticket and records its output. A retry or a person's message on one of the Ticket's Threads tries preparation again. A typical command uses `git worktree` to create a checkout. A pull request belongs to the Ticket when its branch's last path segment matches the Ticket's short name.
+
+### Operator chat, repository profile and attachments
+
+A message the operator sends in the main Session from the Web GUI is stored as a Trigger on its own thread, with a stable id, before the Session answers it. A file on that message is part of the same Trigger. `orchestrator_route` accepts that id. The operator source is on by default and the person at the Web GUI, `local` unless the source names another id, is an allowed sender of those messages.
+
+`orchestrator_read` `repository/file/<path>` and `repository/directory/<path>` read the repository profile: a local checkout of the default branch named by the `repository` source (`root`, `repository`, `branch`). `repository/directory/` is the checkout root. The read is text only, skips hidden names and `node_modules`, stays inside the checkout, and stops at 64 KiB. It does not run a shell or read credentials. Until `root` is set, and while the GitHub source names no repository, the read answers `GitHub is unavailable in local execution mode. Use a repository profile for GitHub work.`
+
+`orchestrator_fetch` GETs one public https URL when the GitHub source is not configured. The URL must be an https prefix on the operator source's fetch allowlist, or the exact URL written in an operator message the caller may use. It sends no credentials, does not follow a redirect off that set, and returns at most 256 KiB with the URL, status and retrieval time.
+
+`orchestrator_file_read` reads an attached file at the path the attachment service saved, and a file inside a ticket directory. It does not read anything else, and it does not write. When an Assignment starts, those attachment bytes are copied into `attachments/` in the ticket directory, which is the directory the file tools and the shell both use. Only a ticket worker writes, and only inside that directory, through the worker preset's file tools.
 
 ### Concurrency
 
