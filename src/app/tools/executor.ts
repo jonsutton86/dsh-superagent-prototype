@@ -9,6 +9,7 @@ import type { Store } from '../store.ts'
 import { reportRelay, threadFollowedNotice } from '../notices.ts'
 import type { Sessions } from '../sessions.ts'
 import { AcknowledgementSchema, readTool, tool, type Tool } from './tool.ts'
+import { localTools, type LocalToolsHost } from './local.ts'
 
 export interface ExecutorToolsHost {
   readonly engine: Pick<EngineForExecutor, 'report' | 'reply' | 'markUnrelated' | 'handback' | 'followForContext'>
@@ -20,7 +21,7 @@ export interface ExecutorToolsHost {
   sendReplies(): Promise<void>
 }
 
-export function executorTools(host: ExecutorToolsHost, ticket: Ticket): Tool[] {
+export function executorTools(host: ExecutorToolsHost & LocalToolsHost, ticket: Ticket): Tool[] {
   const ticketId = ticket.id
   return [
     readTool('Read one page of a resource of this ticket that the resource parameter lists. Follow next_offset, and next_resource where a page names one.',
@@ -101,5 +102,6 @@ export function executorTools(host: ExecutorToolsHost, ticket: Ticket): Tool[] {
         })
       },
     }),
+    ...localTools(host, ticketId),
   ]
 }

@@ -77,3 +77,13 @@ Send one message, under 300 words: what will be installed, the accounts and CLIs
 - How to try it: from an account on the allowed list, comment `@<agent login> <request>` on an issue in the repository. A Ticket appears on the overview within about a minute.
 - Three rules for the operator, from the Responsibility section of `docs/000-philosophy.md`: start narrow, tune for less noise, own what the agent says.
 - Where to read more: the numbered documents in `docs/`, in order.
+
+## Existing installation
+
+Do not create a new profile, run init, or delete the state directory to pick up a newer build. An installation that is already running keeps its database, sessions and settings. Point the profile's `dsh-superagent` plugin at this checkout (or install the updated bundle the way that installation already loads it) and restart only that process. Then, through the panel or `PUT settings/<block>` on its existing port:
+
+- `source:repository` with `config.root` set to the absolute path of a default-branch checkout, `config.repository` as `owner/name`, and `config.branch`. This is what `orchestrator_read repository/directory/` reads. Leave it unset and, with no GitHub repository configured, that read answers `GitHub is unavailable in local execution mode. Use a repository profile for GitHub work.`
+- `source:operator` with `config.fetchAllowlist` of `{"prefix": "https://…"}` only for public URLs that are not already written in an operator message. `config.operatorId` stays `local` unless the Web GUI operator uses another id.
+- `executor` with `prepare` set to the checkout command, and `blockedCommands` unchanged. The panel or this API can set `prepare`; the main Session's tool cannot. The command runs before a worker starts when the ticket directory does not exist yet, with the worker shim directory first on `PATH`.
+
+No token belongs in these values, in a prompt, or in a source file.

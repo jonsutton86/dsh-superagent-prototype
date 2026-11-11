@@ -117,7 +117,19 @@ export function policyVersion(settings: Settings): string {
   return key(POLICY_REVISION, JSON.stringify({ rules: settings.policy.rules, mode: settings.eval.mode, sources: settings.policy.sources }))
 }
 export function allowedSender(settings: Settings, actor: ActorRef): z.infer<typeof AllowedSchema> | undefined {
-  return settings.policy.sources[actor.source]?.allowed.find(entry => sameName(entry.id, actor.id))
+  const listed = settings.policy.sources[actor.source]?.allowed.find(entry => sameName(entry.id, actor.id))
+  if (listed) return listed
+  // The person at the Web GUI is an allowed sender of their own chat even before the Policy block names them.
+  if (actor.source !== 'operator') return undefined
+  const id = operatorActorId(settings)
+  return id && sameName(actor.id, id) ? { id } : undefined
+}
+/** The Web GUI operator, or undefined while that source is switched off. An unset id is `local`. */
+export function operatorActorId(settings: Settings): string | undefined {
+  const stored = settings.sources.operator
+  if (stored?.enabled === false) return undefined
+  const id = typeof stored?.config.operatorId === 'string' ? stored.config.operatorId.trim() : ''
+  return id || 'local'
 }
 /** Look up `actor` in the Source's `bots` policy list (validated by the Source's kind), whose messages are admitted as inferred candidates at most. */
 export function listedBot(settings: Settings, actor: ActorRef): z.infer<typeof AllowedSchema> | undefined {

@@ -29,6 +29,11 @@ export function sameDirectory(a: string, b: string): boolean {
 export function withoutDirectory(path: string, dir: string): string {
   return path.split(delimiter).filter(entry => !sameDirectory(entry, dir)).join(delimiter)
 }
+/** PATH for a prepare command: the worker shim directory first, so a blocked command name fails as it does in a worker shell. */
+export function preparePath(stateDir: string, path = process.env.PATH ?? ''): string {
+  const bin = workerBin(stateDir)
+  return [bin, withoutDirectory(path, bin)].filter(part => part !== '').join(delimiter)
+}
 
 /**
  * The variables that tell git which repository, work tree and index to act on. A host started inside git, such as by
