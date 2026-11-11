@@ -6,6 +6,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import { threadKey, type Decision, type Thread, type Ticket, type Trigger, type TriggerDisposition } from '../core/index.ts'
 import type { Receipt } from '../app/store.ts'
+import { validateStopAuthority } from '../executor/stop-store.ts'
 
 const id = z.string().min(1).max(4096), text = z.string().max(8 * 1024 * 1024)
 const ids = z.array(id).max(100000).refine(value => new Set(value).size === value.length)
@@ -62,6 +63,7 @@ const schemas = {
     status: z.enum(['pending', 'sent', 'dropped']), dropped: z.looseObject({ at: id, reason: z.enum(['channelGone', 'channelIgnored']) }).optional() }),
 }
 const effectPayload = {
+  stop: z.object({ stopId: id }).strict(),
   assessment: z.object({ triggerId: id }).strict(), launch: z.object({ ticketId: id, assignmentId: id }).strict(),
   delivery: z.object({ ticketId: id }).strict(), reply: z.object({}).strict(), relay: z.object({ text }).strict(),
   notice: z.object({ value: z.record(z.string(), z.unknown()), summary: text }).strict(),
@@ -217,6 +219,10 @@ export async function reconcileStateGraph(db: DatabaseSync, signal: AbortSignal)
       if ((receipt.status === 'dropped') !== !!receipt.dropped) fail('outbox_outcome', receipt.id)
     }
     const retired: { kind: string; key: string }[] = [], sequences = new Set<number>(), queuedReplies = new Set<string>()
+    let stops: ReturnType<typeof validateStopAuthority>
+    try { stops = validateStopAuthority(db, tickets, size => { rows++; bytes += size; budget();
+      if (rows > 250000 || bytes > 512 * 1024 * 1024 || size > 256 * 1024) fail('limit', 'executor_stop') }) }
+    catch { fail('stop_authority', 'executor_stop') }
     let effects = 0
     for (const row of db.prepare('SELECT * FROM effect ORDER BY seq,kind,key').iterate()) {
       budget(); effects++; bytes += Buffer.byteLength(String(row.value))
@@ -230,14 +236,19 @@ export async function reconcileStateGraph(db: DatabaseSync, signal: AbortSignal)
       let value: Record<string, string>
       try { value = schema.parse(JSON.parse(String(row.value))) as Record<string, string> } catch { fail('effect_shape', `${kind}:${key}`) }
       let obsolete = false
-      if (kind === 'launch') {
+      if (kind === 'stop') {
+        const stop = stops!.get(key)
+        if (!stop || key !== value!.stopId) fail('effect_reference', `stop:${key}`)
+        obsolete = stop.state === 'quiet' || stop.state === 'dormant'
+      } else if (kind === 'launch') {
         const ticket = require(tickets, value!.ticketId!, 'launch'), assignment = assignments.get(value!.assignmentId!)
         if (!assignment || assignment.ticket.id !== ticket.id || key !== value!.assignmentId) fail('effect_reference', `launch:${key}`)
         obsolete = row.launch_started !== 1 && (!!ticket.ended || ticket.assignments[assignment.index]!.state !== 'pending')
       } else if (kind === 'delivery') {
         const ticket = require(tickets, value!.ticketId!, 'delivery')
         if (key !== ticket.id) fail('effect_reference', `delivery:${key}`)
-        obsolete = !!ticket.ended || !ticket.undelivered.length || !ticket.assignments.some(item => item.state === 'running')
+        const held = db.prepare("SELECT 1 FROM executor_stop WHERE ticket=? AND state NOT IN ('quiet','dormant') LIMIT 1").get(ticket.id)
+        obsolete = !!ticket.ended || !ticket.undelivered.length || !held && !ticket.assignments.some(item => item.state === 'running')
       } else if (kind === 'assessment') {
         const trigger = require(triggers, value!.triggerId!, 'assessment')
         const evaluation = evaluations.get(key) ?? byEval.get(key)
@@ -279,7 +290,7 @@ export async function reconcileStateGraph(db: DatabaseSync, signal: AbortSignal)
     for (const decision of decisions.values()) { await checkpoint(); indexes.decisionThreads += Number(db.prepare('UPDATE decision SET thread=? WHERE id=? AND thread != ?').run(decision.threadKey, decision.id, decision.threadKey).changes) }
     for (const item of retired) { await checkpoint(); db.prepare('DELETE FROM effect WHERE kind=? AND key=?').run(item.kind, item.key) }
     const digest = createHash('sha256')
-    for (const table of ['trigger', 'disposition', 'thread', 'decision', 'ticket', 'outbox', 'effect', 'trigger_thread']) {
+    for (const table of ['trigger', 'disposition', 'thread', 'decision', 'ticket', 'outbox', 'effect', 'trigger_thread', 'executor_stop', 'executor_stop_control']) {
       digest.update(table + '\n')
       const order = table === 'thread' ? 'key' : table === 'effect' ? 'kind,key' : table === 'trigger_thread' ? 'thread,id' : 'id'
       for (const row of db.prepare(`SELECT * FROM ${table} ORDER BY ${order}`).iterate()) {

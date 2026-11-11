@@ -4,6 +4,7 @@ import type { Store } from '../app/store.ts'
 import type { SourceKind } from '../sources/kind.ts'
 import { workspaceContract } from '../sources/contracts.ts'
 import { workerSessionId } from '../executor/dsh.ts'
+import { stopHold } from '../executor/stop-view.ts'
 import { ActionCommand, AddAction, CreateMission, MissionCommand, WorkspaceError,
   type ActionView, type Mission, type MissionAction, type PreparedMissionCompletion, type MissionEvent, type MissionList, type MissionView, type WorkspaceReview } from './model.ts'
 import { Planning } from './plans.ts'
@@ -109,10 +110,11 @@ export class Workspace {
     const cached = memo.get(action.id)
     if (cached) return cached
     const ticket = action.runs.length ? this.store.tickets.get(action.runs.at(-1)!) : undefined
-    const revision = ticket ? key(JSON.stringify(ticket) + (this.evidenceRevision?.(ticket.id) ?? '')) : undefined
+    const hold = ticket && stopHold(this.store, ticket)
+    const revision = ticket ? key(JSON.stringify(ticket) + (this.evidenceRevision?.(ticket.id) ?? '') + (hold?.revision ?? '')) : undefined
     const currentDefinition = action.owner === 'person' || !ticket || (action.executionRevision ?? 1) === (action.definitionRevision ?? 1)
     const changed = !currentDefinition || !!action.dependencyRevision && action.dependencyRevision !== this.dependencyRevision(action, actions)
-    const accepted = !changed && !!action.accepted && (action.owner === 'person' || (!!ticket?.ended && action.accepted.ticketRevision === revision
+    const accepted = !hold && !changed && !!action.accepted && (action.owner === 'person' || (!!ticket?.ended && action.accepted.ticketRevision === revision
       && (!this.review || this.review.current(ticket.id, action.accepted)) && (!action.pull || this.pulls?.current(action.pull, action.accepted.pull))))
     const dependencies = action.dependsOn.every(id => {
       const dependency = actions.find(item => item.id === id)
@@ -126,11 +128,13 @@ export class Workspace {
         : stage.stage === 'person' || stage.stage === 'idle' ? 'blocked' : 'working'
       if (ticket.ended && (changed || !dependencies)) status = 'outdated'
     }
+    if (hold) status = 'blocked'
     const assignment = ticket && latestAssignment(ticket)
     const result = { ...action, status, ...(action.pull && this.pulls ? { pullState: this.pulls.state(action.pull) } : {}),
       ...(ticket?.ended && this.review ? { review: this.review.requirements(ticket.id) } : {}), ...(ticket ? { ticket: { id: ticket.id, revision: revision!,
       ...(ticket.execution ? { sessionId: workerSessionId(ticket.id) } : {}),
-      summary: assignment?.report?.summary ?? '', retryable: canRetry(ticket), stoppable: canStop(ticket), ended: !!ticket.ended, currentDefinition } } : {}) }
+      summary: assignment?.report?.summary ?? '', retryable: !hold && canRetry(ticket), stoppable: canStop(ticket), ended: !!ticket.ended,
+      currentDefinition, ...(hold ? { stopHold: hold } : {}) } } : {}) }
     memo.set(action.id, result)
     return result
   }

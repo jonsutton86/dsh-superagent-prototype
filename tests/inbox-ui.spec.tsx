@@ -64,6 +64,9 @@ it('starts a task, displays its question, preserves an ambiguous reply retry, an
   const artifact = await host.runTool(item.sessionId!, 'workspace_publish', { requestId: 'brief', kind: 'artifact', title: 'Final briefing',
     summary: 'Brief with sources', content: '# Brief\nSources and findings.' }) as { id: string }
   await host.runTool(item.sessionId!, 'orchestrator_report', { state: 'ready', summary: '<script>window.bad = true</script> Brief ready.', human_action: null })
+  const worker = host.agents.get(item.sessionId!)!
+  worker.status = 'idle'; host.ctx.emit('agent/status', { agent: worker, status: 'idle' } as never)
+  await host.runtime.executor.stops.idle()
   await remount()
   expect(text()).toContain('Ready for review'); expect(container.querySelector('script')).toBeNull()
   expect(host.runtime.workspace.get(item.mission!.id).completed).toBe(0)
@@ -77,6 +80,7 @@ it('keeps stopped conversations read-only and renders the unread/question filter
   host = await startRuntime(undefined, { executionMode: 'local', noAccounts: true })
   const item = host.runtime.inbox.start({ requestId: 'stopped', text: 'A task to stop' })
   await host.runtime.idle(); host.runtime.engine.stopTicket(item.id, 'Stopped by owner')
+  await host.runtime.executor.stops.idle()
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
     const result = await host!.api(init?.method ?? 'GET', String(url).replace('/orchestrator/api/', ''), init?.body ? JSON.parse(String(init.body)) : undefined)
     return new Response(JSON.stringify(result.body), { status: result.status })

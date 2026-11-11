@@ -13,7 +13,13 @@ subsequently saved `ABLIT_KEY` privately in Harness; authenticated catalog acces
 and pinned Fabric operation patterns are recorded in `REFERENCE-TOOLS.md`. This is not completion of the full project.
 The completed-milestone history below remains unchanged.
 
-Current continuation: [082 Sustained supervision qualification](082-supervision-endurance.md) adds a plan-first operator
+Current continuation: [083 Original-worker stop holds](083-stop-quiescence.md) is in integration and qualification. It adds
+canonical original-scope stop records to the main Store, holds replacement/delivery/model/tool admission while termination
+is unknown, and exposes original-ID observation and operator confirmation in the workspace and independent console.
+The installed real-process retry boundary and full platform qualification have not yet run on this increment. No deployment
+to the running user app has occurred. The preceding qualified runtime and ongoing independent endurance run are below.
+
+Previous continuation: [082 Sustained supervision qualification](082-supervision-endurance.md) adds a plan-first operator
 runner with private runtime snapshots, native background-job wakeups, bounded sequential jobs under one assignment,
 independently checked output history and cancellation/quiescence evidence. Exact runtime/test revision
 `59497bc31932d1073ca44e872d454a7a6347d938` passed full macOS (2,290 passed / 25 skipped) and native Linux (2,303 / 14),

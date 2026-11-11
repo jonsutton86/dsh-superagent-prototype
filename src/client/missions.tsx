@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react'
+import { StopHoldNotice } from './stop-recovery.tsx'
 import type { ActionCommandInput, ActionView, MissionView } from '../workspace/model.ts'
 import { usePoll } from './api.ts'
 import { Button } from './controls.tsx'
@@ -158,6 +159,7 @@ function Action({ action, mission, busy, runnable, act, changed }: { action: Act
     <MissionPullCard mission={mission} action={action} changed={changed} />
     {!!dependencies.length && <p className="dt-hint">{t('mission.after', { actions: dependencies.join(', ') })}</p>}
     {ticket?.summary && <blockquote className="dt-mission-prose">{ticket.summary}</blockquote>}
+    {ticket && <StopHoldNotice hold={ticket.stopHold} ticketId={ticket.id} link />}
     {action.status === 'done' && <p className="dt-mission-prose">{action.accepted?.note}</p>}
     {action.accepted && <p>{t(action.accepted.basis === 'checks' ? 'verification.acceptedChecks' : 'verification.acceptedManual')} · {new Date(action.accepted.at).toLocaleString()}</p>}
     <div className="dt-mission-buttons">

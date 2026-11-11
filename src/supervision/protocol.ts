@@ -1,6 +1,7 @@
 /** Shared, bounded supervision protocol; observations and model assessments never convey authority. */
 import { z } from 'zod'
 import { ExecutionEvidenceSchema } from './execution-evidence.ts'
+import { StopHoldViewSchema } from '../executor/stop-view-model.ts'
 
 export const ObservationSchema = z.object({
   id: z.string(), assignmentId: z.string().nullable(), revision: z.string(), title: z.string().max(500),
@@ -8,6 +9,7 @@ export const ObservationSchema = z.object({
   report: z.object({ state: z.string(), summary: z.string().max(2000), at: z.string() }).nullable(),
   question: z.string().max(2000).nullable().optional(),
   episodeRevision: z.string().min(1).max(100).optional(), execution: ExecutionEvidenceSchema.optional(),
+  stopHold: StopHoldViewSchema.optional(),
   canNudge: z.boolean(),
 })
 export const SnapshotSchema = z.object({

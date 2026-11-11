@@ -24,6 +24,7 @@ import type { SpeculationState, SpeculationView, SpeculationConfiguration, SaveS
 import type { RecallState, RecallConfiguration, SaveRecallInput } from '../workspace/recall-model.ts'
 import type { EnvironmentList, EnvironmentView, EnrollEnvironmentInput, EnvironmentCommandInput } from '../environments/model.ts'
 import type { ExecutionReceiptPage } from '../remote/effects.ts'
+import type { StopAttestationRequest, StopAttestationReceipt, StopDetail, StopHoldSummary } from '../executor/stop-model.ts'
 import type { ArchivePersonaInput, CreatePersonaInput, PersonaList, PersonaRecord, PersonaVersion, SavePersonaInput } from '../personas/model.ts'
 import type { ActivateWorldInput, RevokeWorldInput, WorldList, WorldView } from '../environments/pool-model.ts'
 import type { EndpointCatalog, EndpointCommandInput, EndpointList, EndpointRegistration, OperatorCommand, RegisterEndpointInput, RemoteProfileView } from '../environments/endpoint-model.ts'
@@ -196,6 +197,13 @@ export interface Api {
   'POST decisions/:id/dismiss': { response: { dismissed: true } }
   'GET tickets': { query?: Paged & { state?: TicketFilter }; response: TicketListView }
   'GET tickets/:id': { response: TicketPageView }
+  'GET tickets/:id/stops': { query?: { cursor?: string; limit?: number }; response: { items: StopHoldSummary[]; nextCursor: string | null } }
+  'GET tickets/:id/assignments/:assignment/stops/:stop': { response: StopDetail }
+  'POST tickets/:id/assignments/:assignment/stops/:stop/recheck': {
+    body: { expectedRevision: number; executionBindingHash: string; scopeHash: string }; response: { observationRequested: true; current: StopDetail } }
+  'POST tickets/:id/assignments/:assignment/stops/:stop/attest': { body: StopAttestationRequest; response: { receipt: StopAttestationReceipt; current: StopDetail } }
+  'GET tickets/:id/assignments/:assignment/stops/:stop/attestations': { query?: { cursor?: string; limit?: number }; response: { items: StopAttestationReceipt[]; nextCursor: string | null } }
+  'GET tickets/:id/assignments/:assignment/stops/:stop/attestations/:request': { response: { receipt: StopAttestationReceipt | null; current: StopDetail } }
   'POST tickets/:id/retry': { response: { retried: true } }
   'POST tickets/:id/stop': { response: { stopped: true } }
   'POST executor/pause': { body: { paused: boolean }; response: { paused: boolean } }

@@ -476,6 +476,9 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/app/views/overview.ts` | The overview: Tickets that need a person, problems, the last day's flow and the Executor's load |
 | `src/executor/failure.ts` | Typed sanitized failure facts and exact live Agent/Session/assignment/turn/step fencing |
 | `src/executor/dsh.ts` | The DshExecutor, `WorkerSlots`, `ticketExecution`, `inputMessage` and `mandateInstructions` |
+| `src/executor/stop-model.ts`, `stop-store.ts`, `stops.ts` | Original-scope stop authority in the main Store, retained control receipts and execution admission holds |
+| `src/executor/stop-view-model.ts`, `stop-view.ts` | Shared bounded stop-hold projections for task, Inbox, mission and supervision views |
+| `src/client/stop-recovery.tsx` | Original stop inspection, observation-only recheck and retained operator confirmation through response loss |
 | `src/executor/background.ts` | A worker's background work in DeepSeek Harness, the shell jobs its Session owns (`ctx.jobs`) and its subagents (`ctx.subagents`): `runningJobs`, `untilQuiet`, `killJobs`, `collectJobs`, `stopSubagents`, `stopBackground`, `until`, and `cancelled`, the workers whose turn a stop of their subagents cancelled |
 | `src/executor/evidence.ts` | Synchronous bounded projections of existing registry metadata; excludes raw output and preserves uncertain assignment/lifecycle attribution |
 | `src/infra/commands.ts` | `Commands`, the CLI transport: `run`; `api` and `pages`, limited to the configured repository and validated; `lark` as the bot; `git`. `CliError` carries the code a command's output reports, such as a GitHub HTTP status, and a command that prints nothing fails with how it ended, never with its arguments; `validItems` skips and counts the malformed items of a list |
@@ -664,6 +667,10 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/background.spec.ts` | Waiting for a worker's shell jobs and subagents: an end that woke it, and a host that stops |
 | `tests/bundle-patch.spec.ts` | The bundle's patch, read as DeepSeek Harness reads it, and the agent preset of Executor Sessions it defines |
 | `tests/core-recovery.spec.ts`, `tests/executor-failure.spec.ts` | Durable host-restart bounds, held original recovery notes, typed failure facts and lifecycle callback fencing |
+| `tests/executor-stop-harness.spec.ts`, `tests/fixtures/executor-stop-provider.ts`, `tests/fixtures/executor-stop-probe.mjs` | Opt-in installed Harness retry with real bounded worker, injected cancellation uncertainty, original-ID admission holds and independently checked cleanup |
+| `tests/executor-stop.spec.ts`, `tests/fixtures/stop-record.ts` | Original stop lifecycle, admission, recovery and durable proof contracts |
+| `tests/stop-http.spec.ts`, `tests/stop-views.spec.ts` | Original-target HTTP controls and bounded shared stop projections |
+| `tests/stop-recovery-ui.spec.tsx` | Rendered original-request recovery, response-loss remount, stale refusal and storage failure |
 | `tests/executor-recovery-harness.spec.ts`, `tests/fixtures/executor-recovery-provider.ts`, `tests/fixtures/executor-recovery-observer.mjs` | Opt-in fresh installed Harness native retry chain and terminal failed hold beyond the old continuation timer; synthetic loopback only |
 | `tests/effects.spec.ts` | The effect queue: coalescing, limits, retries with backoff, health and shutdown |
 | `tests/passes.spec.ts` | Passes: one at a time, the ones asked for during a pass run as one after it, and the runtime health a failed pass reports |

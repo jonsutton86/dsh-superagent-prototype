@@ -2,6 +2,7 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { key, latestAssignment, ticketStage, hasPendingFollowup, type Ticket } from '../core/index.ts'
 import type { Store } from '../app/store.ts'
 import { workerSessionId } from '../executor/dsh.ts'
+import { stopHold } from '../executor/stop-view.ts'
 import type { Workspace } from './service.ts'
 import type { Library } from './library.ts'
 import { WorkspaceError } from './model.ts'
@@ -68,15 +69,15 @@ export class Inbox {
         }
       } catch (error) { if (!(error instanceof WorkspaceError && error.status === 404)) throw error }
     }
-    const stage = ticketStage(ticket)
+    const stage = ticketStage(ticket), hold = stopHold(this.store, ticket)
     const followup = hasPendingFollowup(ticket)
-    const status: InboxItem['status'] = outdated ? 'outdated' : ticket.attention ? 'question' : followup ? 'working' : ticket.ended
+    const status: InboxItem['status'] = hold ? 'blocked' : outdated ? 'outdated' : ticket.attention ? 'question' : followup ? 'working' : ticket.ended
       ? ['completed', 'merged'].includes(ticket.ended.outcome) ? mission?.current && !reviewed ? 'review' : 'done' : 'stopped'
       : stage.stage === 'person' ? stage.action === 'review' ? 'review' : 'blocked' : stage.stage === 'working' ? 'working' : 'idle'
     // Delivery bookkeeping and a read acknowledgement never create unread work. New messages, reports, questions and state do.
     const revision = key(JSON.stringify({ title: ticket.title, inputs: ticket.inputs.map(input => input.id), report,
       attention: ticket.attention, ended: ticket.ended, assignment: latestAssignment(ticket)?.id, message: activity,
-      evidence: this.library.evidenceRevision(id), status }))
+      evidence: this.library.evidenceRevision(id), stopHold: hold?.revision, status }))
     const seen = this.store.db.prepare('SELECT revision FROM workspace_inbox_read WHERE ticket=?').get(id)
     const at = [ticket.updatedAt, message?.at ?? ''].sort().at(-1)!
     const canReply = !!mission?.current && definitionCurrent && ticket.ended?.by !== 'human' && this.workspace.get(mission.id, false).status === 'active'
@@ -85,7 +86,7 @@ export class Inbox {
     return { id, title: ticket.title, source: origin?.source ?? ticket.mandate.actor.source, at, revision,
       unread: seen?.revision !== revision, status, preview: (ticket.attention?.question || report?.summary || message?.text || origin?.text || '').slice(0, 300),
       ...(ticket.attention ? { question: ticket.attention.question } : {}), ...(ticket.execution ? { sessionId: workerSessionId(id) } : {}),
-      ...(mission ? { mission } : {}), canReply, ...(execution ? { execution: { directory: execution.directory,
+      ...(mission ? { mission } : {}), ...(hold ? { stopHold: hold } : {}), canReply, ...(execution ? { execution: { directory: execution.directory,
         ...(persona ? { persona: { id: persona.id, version: persona.version, digest: persona.digest, name: persona.definition.name,
           model: persona.definition.model, capabilities: persona.definition.capabilities } } : {}),
         ...(grant ? { environment: { grant, description: this.environments?.describe(grant) } } : {}) } } : {}) }

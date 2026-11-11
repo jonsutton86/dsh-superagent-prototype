@@ -1,3 +1,4 @@
+import { stopHold } from '../../executor/stop-view.ts'
 /** Thread list, timeline detail, cross-entity search, and decision list views. */
 import { threadKey, type Thread, type Ticket, type Trigger } from '../../core/index.ts'
 import type { ThreadFilter } from '../api.ts'
@@ -73,7 +74,7 @@ export function search(host: ViewHost, query: string, links: Pick<TextCache, 'en
   const reaches = (ticket: Ticket) => [...(ticket.follows ?? []).map(follow => follow.thread),
     ...view.threadsOf(ticket.id).map(thread => thread.key)]
   const matches = (ticket: Ticket) => reaches(ticket).some(key => named.threads.includes(key)) || ticket.title.toLowerCase().includes(lower)
-  const tickets = store.tickets.list().filter(matches).sort(newestFirst).slice(0, 10).map(ticketSummary)
+  const tickets = store.tickets.list().filter(matches).sort(newestFirst).slice(0, 10).map(ticket => ticketSummary(ticket, stopHold(store, ticket)))
   // Omit automated triggers from threads already included in `threads`.
   const shownThreads = new Set(threads.map(thread => thread.key))
   const item = (trigger: Trigger) => {

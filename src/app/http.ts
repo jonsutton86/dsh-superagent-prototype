@@ -63,6 +63,7 @@ import type { Voice } from '../voice/service.ts'
 import { VoiceError } from '../voice/model.ts'
 import type { Attachments } from '../attachments/service.ts'
 import { UploadError, UPLOAD_LIMITS } from '../attachments/model.ts'
+import type { ExecutorStops } from '../executor/stops.ts'
 
 export interface HttpHost {
   readonly voice?: Voice
@@ -98,7 +99,7 @@ export interface HttpHost {
   readonly sessions: Pick<Sessions, 'status' | 'notify' | 'delivery'>
   readonly settings: Pick<Settings, 'view' | 'save' | 'pause' | 'sync' | 'refreshLabels'>
   readonly engine: EngineForPeople
-  readonly executor: Pick<DshExecutor, 'activeCount'>
+  readonly executor: Pick<DshExecutor, 'activeCount'> & { stops?: Pick<ExecutorStops, 'list' | 'detail' | 'recheck' | 'attest' | 'attestation' | 'attestations'> }
   readonly health: Record<string, Health>
   readonly machine: Machine
   readonly masterId: string
@@ -218,6 +219,13 @@ const SettingsBlockSchema = z.union([z.enum(['policy', 'eval', 'executor']), Sou
 const SaveRequest = z.object({ value: z.unknown(), revision: z.number().int().nonnegative() })
 
 function routes(runtime: HttpHost): Routes {
+  const stops = () => { if (!runtime.executor?.stops) throw new WorkspaceError(409, 'Original stop recovery is unavailable'); return runtime.executor.stops }
+  const originalStop = (params: { id: string; assignment: string; stop: string }) => {
+    const current = stops().detail(params.stop)
+    if (current.ticketId !== params.id || current.assignmentId !== params.assignment) throw new RouteError(404, 'Original stop target not found')
+    return current
+  }
+  const stopPage = z.object({ cursor: z.string().max(200).optional(), limit: z.coerce.number().int().min(1).max(50).default(20) }).strict()
   const usage = () => { if (!runtime.usage) throw new UsageError(409, 'Model accounting is unavailable'); return runtime.usage }
   const schedules = () => { if (!runtime.schedules) throw new WorkspaceError(409, 'Schedules are unavailable'); return runtime.schedules }
   const reflections = () => { if (!runtime.reflections) throw new WorkspaceError(409, 'Reflection is unavailable'); return runtime.reflections }
@@ -444,6 +452,24 @@ function routes(runtime: HttpHost): Routes {
       return ticketList(views(runtime), state, offset, limit)
     },
     'GET tickets/:id': ({ params }) => ticketPage(runtime, params.id),
+    'GET tickets/:id/stops': ({ params, query }) => { ticket(params.id); const page = stopPage.parse(query); return stops().list(params.id, page.cursor, page.limit) },
+    'GET tickets/:id/assignments/:assignment/stops/:stop': ({ params }) => originalStop(params),
+    'POST tickets/:id/assignments/:assignment/stops/:stop/recheck': async ({ params, body }) => {
+      originalStop(params)
+      const request = z.object({ expectedRevision: z.number().int().positive(), executionBindingHash: z.string().regex(/^[a-f0-9]{64}$/),
+        scopeHash: z.string().regex(/^[a-f0-9]{64}$/) }).strict().parse(await body(4096))
+      return { observationRequested: true as const, current: await stops().recheck(params.stop, request) }
+    },
+    'POST tickets/:id/assignments/:assignment/stops/:stop/attest': async ({ params, body }) => {
+      originalStop(params); return stops().attest(params.stop, await body(16384))
+    },
+    'GET tickets/:id/assignments/:assignment/stops/:stop/attestations': ({ params, query }) => {
+      originalStop(params); const page = stopPage.parse(query); return stops().attestations(params.stop, page.cursor, page.limit)
+    },
+    'GET tickets/:id/assignments/:assignment/stops/:stop/attestations/:request': ({ params }) => {
+      const current = originalStop(params)
+      return { receipt: stops().attestation(params.stop, params.request), current }
+    },
     'POST tickets/:id/retry': ({ params }) => { const id = ticket(params.id); runtime.engine.retryTicket(id); return { retried: true } },
     'POST tickets/:id/stop': ({ params }) => { const id = ticket(params.id); runtime.engine.stopTicket(id); return { stopped: true } },
     'POST executor/pause': async ({ body }) => runtime.settings.pause(z.object({ paused: z.boolean() }).parse(await body()).paused, 'panel'),

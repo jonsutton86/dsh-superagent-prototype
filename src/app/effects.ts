@@ -11,6 +11,7 @@ import type { HealthBoard, HealthEntry } from '../infra/health.ts'
 import type { Store } from './store.ts'
 
 export interface EffectPayloads {
+  stop: { stopId: string }
   /** Build an Eval's candidate card and relay it to the main Session; the key is the Eval ID. */
   assessment: { triggerId: string }
   /** Launch a pending Assignment; the key is the Assignment ID. */
@@ -83,6 +84,11 @@ export class Effects {
     const row = this.store.db.prepare('SELECT attempts, due, launch_started FROM effect WHERE kind=? AND key=?').get(kind, key)
     if (row && (row.launch_started !== 0 && row.launch_started !== 1 || kind !== 'launch' && row.launch_started !== 0)) throw new Error('Invalid launch recovery marker')
     return row ? { attempts: Number(row.attempts), due: Number(row.due), launchStarted: row.launch_started === 1 } : undefined
+  }
+  /** A proven admission hold ended; wake its existing intent without replacing identity, payload, attempts or dispatch evidence. */
+  wake(kind: EffectKind, key: string): void {
+    this.store.db.prepare('UPDATE effect SET due=MIN(due,?) WHERE kind=? AND key=?').run(this.now(), kind, key)
+    this.kick()
   }
   /** Persist the launch dispatch boundary before I/O; an unclosed boundary is held after a process loss. */
   beginLaunch(key: string): void {

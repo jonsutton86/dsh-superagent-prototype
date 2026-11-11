@@ -137,6 +137,7 @@ export class Runtime extends Service implements SourceHost {
   private readonly disposers: (() => void)[] = []
   private releaseLock?: () => Promise<void>
   private closingFlag = false
+  private executionOwnershipLost = false
   private initialized = false
   private stopping?: Promise<void>
   private readonly sourceDeps: SourceContextDeps
@@ -287,7 +288,15 @@ export class Runtime extends Service implements SourceHost {
       const sessions = this.sessions = new Sessions({ context: ctx, store, prompts, effects, health: board.claim('models'), masterId,
         attachments: this.attachments,
         lifetime: this.lifetime, remote, worlds: this.worlds, personas, ownership: this.ownership, environmentAllowed: ticket => environments.allows(ticket.execution?.environment),
-        executionProblem: ticket => runtime.speculation?.problem(ticket),
+        executionProblem: ticket => runtime.executor?.stops.problem(ticket.id) ?? runtime.speculation?.problem(ticket),
+        beforeExecution: (ticket, agent) => {
+          const assignment = ticket.assignments.at(-1)
+          if (assignment) {
+            if (agent.id === workerSessionId(ticket.id) && !runtime.executor.stops.executionAllowed(agent, assignment.id))
+              throw new Error('Original worker turn has no current assignment admission')
+            runtime.executor.stops.beforeAdmission(ticket.id, assignment.id)
+          }
+        },
         closing: () => this.closing(), environment,
         tools: (agent, ticket) => ticket ? executorTools(this.toolHost, ticket, agent) : mainTools(this.toolHost, agent) })
       const policyChanged: EngineForSettings['policyChanged'] = (from, to, effects) => { this.engine.policyChanged(from, to, effects) }
@@ -296,6 +305,7 @@ export class Runtime extends Service implements SourceHost {
       this.executor = new DshExecutor({ context: ctx, get engine() { return runtime.engine }, store, effects, health: board.claim('worker'), machine, environments, remote, personas,
         get speculation() { return runtime.speculation },
         lifetime: this.lifetime, sessions, closing: () => this.closing(), paused: () => this.paused(), environment, sourceLink: link,
+        authorizeStopObservation: () => { if (runtime.executionOwnershipLost) throw new Error('Coordinator ownership was lost') },
         repliedTo: trigger => repliedTo({ store, sources }, trigger) })
       this.assessor = new MasterAssessor({ get engine() { return runtime.engine }, commands, get deployment() { return setup.deployment }, effects,
         settings: () => store.settings(), paused: () => this.paused(), threadContext: trigger => sources.threadContext(trigger),
@@ -354,6 +364,8 @@ export class Runtime extends Service implements SourceHost {
       if (this.ownership) {
         const lost = () => {
           if (this.closingFlag) return
+          this.executionOwnershipLost = true
+          this.executor.prepareShutdown()
           this.initialized = false; this.stopped.abort(this.ownership!.signal.reason)
           this.runtimeHealth.set({ state: 'error', detail: 'Coordinator ownership lost; execution is stopped. Restart only after inspecting receipts.', at: now() })
           void this.passes.stop().catch(report)
@@ -459,6 +471,7 @@ export class Runtime extends Service implements SourceHost {
   /** Idempotent stop; concurrent or repeated calls share the same shutdown promise. */
   stop(): Promise<void> { return this.stopping ??= this.shutdown() }
   private async shutdown(): Promise<void> {
+    this.executor.prepareShutdown()
     this.closingFlag = true; const passes = this.passes.stop(), reviews = this.verificationReviews.stop(), verification = this.verification.stop(); this.stopped.abort()
     // Abort an acquisition wait before awaiting any startup-dependent work; loss is terminal for this instance.
     const ownership = this.ownership?.close()

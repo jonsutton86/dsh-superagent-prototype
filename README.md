@@ -48,6 +48,10 @@ native completion wakeups, checked output history and process cleanup. Revision 
 tests, typecheck, seven builds, native service checks and the two-minute installed boundary. The eight-hour run began on
 November 10; its result remains pending. It uses only scripted loopback model traffic.
 
+[Original-worker stop holds](docs/083-stop-quiescence.md) is being integrated and qualified. It preserves the original stop
+scope and blocks replacement work until termination has evidence, with recovery controls for uncertain operator responses.
+This increment has not completed installed-process or full platform qualification and is not deployed to the running app.
+
 [Execution observations](docs/079-execution-observations.md) adds bounded host metadata, explicit attribution limits and
 current-evidence checks without increasing the watchdog's assessment budget or recovery authority.
 The workflow below configures the repository-backed mode.

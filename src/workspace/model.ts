@@ -6,6 +6,7 @@ import type { ScheduleOrigin } from './schedule-model.ts'
 import { CheckSelections, type CheckSelection, type EvidenceSeal } from '../verification/review-model.ts'
 import { PullTargetRef, type MissionPullAcceptance, type MissionPullState } from './pull-model.ts'
 import type { PullBinding } from '../publication/pull-model.ts'
+import type { StopHoldView } from '../executor/stop-view-model.ts'
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/)
 const title = z.string().trim().min(1).max(160)
@@ -51,7 +52,7 @@ export interface Mission {
 export interface MissionEvent { id: number; at: string; kind: string; actionId?: string; text: string }
 export interface ActionView extends MissionAction {
   status: 'todo' | 'waiting' | 'working' | 'blocked' | 'review' | 'stopped' | 'done' | 'outdated'
-  ticket?: { id: string; revision: string; sessionId?: string; summary: string; retryable: boolean; stoppable: boolean; ended: boolean; currentDefinition: boolean }
+  ticket?: { id: string; revision: string; sessionId?: string; summary: string; retryable: boolean; stoppable: boolean; ended: boolean; currentDefinition: boolean; stopHold?: StopHoldView }
   review?: ReviewRequirements
   pullState?: MissionPullState
 }

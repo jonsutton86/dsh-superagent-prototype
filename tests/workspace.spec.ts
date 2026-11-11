@@ -183,6 +183,10 @@ it('runs a workspace action through the real Runtime wiring, Harness adapter, HT
   expect(host.agents.has(sessionId)).toBe(true)
   expect(host.deliveries.mock.calls.some(([delivery]) => delivery.sessionId === sessionId && delivery.text.includes('Inspect the repository'))).toBe(true)
   await host.runTool(sessionId, 'orchestrator_report', { state: 'ready', summary: 'Repository inspected' })
+  expect(host.runtime.workspace.get(m.id).actions[0]!.status).toBe('blocked')
+  const worker = host.agents.get(sessionId)!
+  worker.status = 'idle'; host.ctx.emit('agent/status', { agent: worker, status: 'idle' } as never)
+  await host.runtime.executor.stops.idle()
   const result = await host.api('GET', `missions/${m.id}`)
   expect(result.body).toMatchObject({ actions: [{ status: 'review', ticket: { summary: 'Repository inspected' } }] })
 })

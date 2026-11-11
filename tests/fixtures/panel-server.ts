@@ -461,6 +461,12 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
   'GET tickets': { query: ['state', 'offset', 'limit'], answer: ({ query }) => page(server.tickets[query.state === 'ended' ? 'ended'
     : 'open']) },
   'GET tickets/:id': { answer: ({ params }) => server.ticketDetails[params.id] ?? refuse(404, 'Ticket not found') },
+  'GET tickets/:id/stops': { query: ['cursor', 'limit'], answer: () => ({ items: [], nextCursor: null }) },
+  'GET tickets/:id/assignments/:assignment/stops/:stop': { answer: () => refuse(404, 'Original stop not found') },
+  'POST tickets/:id/assignments/:assignment/stops/:stop/recheck': { body: true, answer: () => refuse(404, 'Original stop not found') },
+  'POST tickets/:id/assignments/:assignment/stops/:stop/attest': { body: true, answer: () => refuse(404, 'Original stop not found') },
+  'GET tickets/:id/assignments/:assignment/stops/:stop/attestations': { query: ['cursor', 'limit'], answer: () => ({ items: [], nextCursor: null }) },
+  'GET tickets/:id/assignments/:assignment/stops/:stop/attestations/:request': { answer: () => refuse(404, 'Original stop not found') },
   'POST tickets/:id/retry': { answer: ({ params }) => {
     const ticket = ticketOf(params.id)
     if (!ticket) return refuse(404, 'Ticket not found')

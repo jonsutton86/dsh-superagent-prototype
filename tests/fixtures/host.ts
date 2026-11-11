@@ -224,7 +224,8 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
         turn++
         ctx.emit('session/event', session as never, { type: 'turn/start', data: { turn } } as never)
         take(true)
-        void ctx.waterfall('agent/request', { agent, turn, step: 1, signal: new AbortController().signal } as never, async () => ({} as never))
+        void Promise.resolve().then(() => ctx.waterfall('agent/request', { agent, turn, step: 1, signal: new AbortController().signal } as never, async () => ({} as never)))
+          .catch(error => { ctx.emit('agent/error', { agent, turn, step: 1, error } as never); agent.status = 'idle'; ctx.emit('agent/status', { agent, status: 'idle' } as never) })
       })
       const session = options.captureSessions ? Session.create(SessionId(sessionId), [],
         { ...Session.create(SessionId(sessionId)).header, cwd: workspaceId, agentPreset })

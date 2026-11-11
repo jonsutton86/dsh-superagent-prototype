@@ -13,6 +13,11 @@ let host: Host | undefined
 const cleanup: (() => void | Promise<unknown>)[] = []
 afterEach(async () => { await host?.stop(); host = undefined; for (const stop of cleanup.splice(0).reverse()) await stop(); vi.restoreAllMocks() })
 async function fixture() { host = await startRuntime(undefined, { executionMode: 'local', noAccounts: true }); return host }
+async function endTurn(h: Host, sessionId: string) {
+  const agent = h.agents.get(sessionId)!
+  agent.status = 'idle'; h.ctx.emit('agent/status', { agent, status: 'idle' } as never)
+  await h.runtime.executor.stops.idle()
+}
 const start = { requestId: 'new-task', text: 'Create a useful briefing', title: 'Briefing' }
 function event(seq: number, text: string, overrides = {}): SessionEvent {
   return { type: 'assistant/message', seq, time: Date.UTC(2026, 10, 8, 12, 0, seq), surfaceOp: 'append', data: { turn: 1, step: seq,
@@ -84,6 +89,7 @@ it('steers once through Engine authorization and refuses stale, disabled and sto
   h.runtime.store.saveSettings(settings)
   h.runtime.engine.stopTicket(first.id, 'Operator stopped')
   expect(() => inbox.reply(first.id, { ...body, requestId: 'stopped', revision: inbox.item(first.id).revision })).toThrow('cannot receive')
+  await h.runtime.executor.stops.idle()
   expect(inbox.start(start).status).toBe('stopped')
   expect(h.runtime.store.tickets.list()).toHaveLength(1)
 })
@@ -139,6 +145,8 @@ it('shows actual mission review state and artifacts, then clears review only aft
   const selection = await check((artifact as { id: string }).id, 'The evidence.')
   expect(h.runtime.inbox.read(item.id, { revision: beforePublication.revision })).toEqual({ marked: false, unread: true })
   await h.runTool(item.sessionId!, 'orchestrator_report', { state: 'ready', summary: 'Brief ready' })
+  expect(h.runtime.inbox.item(item.id).status).toBe('blocked')
+  await endTurn(h, item.sessionId!)
   expect(h.runtime.inbox.list({ filter: 'review' }).items[0]?.id).toBe(item.id)
   const page = (await h.api('GET', `inbox/${item.id}`)).body as unknown as Conversation
   expect(page.artifacts).toContainEqual({ id: (artifact as { id: string }).id, title: 'Brief', kind: 'artifact' })
@@ -157,6 +165,7 @@ it('resumes a reviewed result only for an explicit follow-up and blocks acceptan
   const h = await fixture(), inbox = h.runtime.inbox, item = inbox.start(start)
   await h.runtime.idle()
   await h.runTool(item.sessionId!, 'orchestrator_report', { state: 'ready', summary: 'First brief' })
+  await endTurn(h, item.sessionId!)
   const ready = inbox.item(item.id), mission = h.runtime.workspace.get(item.mission!.id)
   await h.api('POST', 'executor/pause', { paused: true })
   inbox.reply(item.id, { requestId: 'revise', revision: ready.revision, text: 'Please add a concise conclusion to this brief.' })
@@ -178,11 +187,14 @@ it('cancels a paused follow-up without launching or rerouting it after processin
   const h = await fixture(), inbox = h.runtime.inbox, item = inbox.start(start)
   await h.runtime.idle()
   await h.runTool(item.sessionId!, 'orchestrator_report', { state: 'ready', summary: 'First brief' })
+  await endTurn(h, item.sessionId!)
   await h.api('POST', 'executor/pause', { paused: true })
   inbox.reply(item.id, { requestId: 'cancelled-revision', revision: inbox.item(item.id).revision, text: 'Please revise the brief.' })
   const pending = h.runtime.workspace.get(item.mission!.id), action = pending.actions[0]!
   expect((await h.api('GET', `tickets/${item.id}`)).body).toMatchObject({ actions: { stop: true } })
-  const stopped = h.runtime.workspace.act(pending.id, action.id, { requestId: 'cancel-revision', revision: pending.revision, command: 'stop' })
+  h.runtime.workspace.act(pending.id, action.id, { requestId: 'cancel-revision', revision: pending.revision, command: 'stop' })
+  await h.runtime.executor.stops.idle()
+  const stopped = h.runtime.workspace.get(pending.id)
   expect(stopped.actions[0]).toMatchObject({ status: 'stopped', ticket: { stoppable: false } })
   expect(inbox.item(item.id)).toMatchObject({ status: 'stopped', canReply: false })
   await h.api('POST', 'executor/pause', { paused: false })

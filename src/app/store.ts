@@ -9,6 +9,7 @@ import { SettingsSchema, type Settings, type SettingsOrigin, type SettingsSave }
 import { OLDEST_SCHEMA, SCHEMA_VERSION, migrateTo11, tooOld } from './migration.ts'
 import { Versions } from './versions.ts'
 import { storeReads } from './store-read.ts'
+import { initializeStopStore } from '../executor/stop-store.ts'
 
 /** A Trigger's position on its thread timeline, ordered by timestamp and then `id` as tie-breaker. */
 export interface TimelinePlace { at: string; id: string }
@@ -89,11 +90,12 @@ export class Store implements Repositories {
           if (version !== undefined && version < 11) migrateTo11(this)
           const hasLaunchMarker = this.db.prepare("SELECT 1 FROM pragma_table_info('effect') WHERE name='launch_started'").get()
           if (!hasLaunchMarker) {
-            if (version === 12) throw new Error('Missing launch recovery marker')
+            if (version !== undefined && version >= 12) throw new Error('Missing launch recovery marker')
             this.db.exec('ALTER TABLE effect ADD COLUMN launch_started INTEGER NOT NULL DEFAULT 0')
           }
           // Older queues did not distinguish undispatched work from interrupted I/O. Preserve their original IDs as unknown.
           if (version !== undefined && version < 12) this.db.exec("UPDATE effect SET launch_started=1 WHERE kind='launch'")
+          initializeStopStore(this.db, version)
           if (version !== SCHEMA_VERSION) this.set(KV.store.schema, SCHEMA_VERSION)
         })
       } catch (error) {

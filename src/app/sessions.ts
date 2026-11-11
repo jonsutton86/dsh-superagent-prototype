@@ -49,6 +49,7 @@ export interface SessionsHost {
   readonly attachments?: Pick<Attachments, 'list'>
   environmentAllowed?(ticket: Ticket): boolean
   executionProblem?(ticket: Ticket): string | undefined
+  beforeExecution?(ticket: Ticket, agent: Agent): void
   closing(): boolean
   /** Execution environment variables for `ticket`, rendered into its worker's system prompt. */
   environment(ticket: Ticket): Variable[]
@@ -367,17 +368,28 @@ export class Sessions {
     const store = this.host.store
     const parent = scopeParentOf(agent)
     const persona = store.tickets.get(ticketId)?.execution?.persona
+    const descendantAssignment = agent.id === 'worker-' + ticketId ? undefined : store.tickets.get(ticketId)?.assignments.at(-1)?.id
     const remote = this.remoteFor(agent.id, agent)
     const allow = WORK_TOOLS.filter(name => !(remote && name === 'pwsh') && agent.ctx.tools.get(name, parent) && (!persona || !personaDenial(persona, name)))
-    return [agent.ctx.tools.restrict({ allow }), agent.ctx.tools.guard(() => {
+    const admission = () => {
       const current = store.tickets.get(ticketId)
       if (!current || !liveTicket(current)) return 'Ticket ended; new work needs a new authorized ticket'
+      const assignment = current.assignments.at(-1)
+      if (assignment?.state !== 'running' || descendantAssignment && descendantAssignment !== assignment.id)
+        return 'Worker delivery for the current assignment has not been admitted'
       if ((current.execution?.persona?.digest ?? 'default') !== (persona?.digest ?? 'default')) return 'The task persona changed; authorize a new run'
       if (this.host.environmentAllowed && !this.host.environmentAllowed(current)) return 'Execution environment authorization is unavailable or revoked'
       const problem = this.host.executionProblem?.(current)
       if (problem) return problem
-      return this.worldProblem(agent)
-    })]
+      const worldProblem = this.worldProblem(agent)
+      if (worldProblem) return worldProblem
+      this.host.beforeExecution?.(current, agent)
+      return undefined
+    }
+    return [agent.ctx.tools.restrict({ allow }), agent.ctx.tools.guard(admission),
+      agent.ctx.on('agent/request', (_request, next) => { const problem = admission(); if (problem) throw new Error(problem); return next() }),
+      agent.ctx.systemPrompt.section({ name: 'dsh-superagent-original-stop-admission', order: -10002, interpolate: false,
+        text: () => { const problem = admission(); if (problem) throw new Error(problem); return '' } })]
   }
   private assertSavedWorld(id: string): void {
     const saved = this.host.store.get(KV.sessions.world(id)), current = this.remoteFor(id)?.world.status().binding ?? 'local'

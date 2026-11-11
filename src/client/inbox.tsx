@@ -10,6 +10,7 @@ import type { ConversationMessage, InboxFilter, InboxItem, InboxExecutionSelecti
 import { Dictation, SpeakReply, VoiceProvider } from './voice.tsx'
 import { AttachmentCard, AttachmentPicker } from './attachments.tsx'
 import { InboxTaskSettings, InboxExecutionDetails } from './inbox-settings.tsx'
+import { StopHoldNotice } from './stop-recovery.tsx'
 
 function Composer({ send, done, fresh = false, available = true }: {
   send: (text: string, requestId: string, attachments: string[], execution: InboxExecutionSelection) => Promise<InboxItem>; done: (item: InboxItem) => void; fresh?: boolean; available?: boolean
@@ -80,7 +81,7 @@ function ConversationList({ filter, compose }: { filter: InboxFilter; compose: b
     <ul className="dt-inbox-list">{data?.items.map(item => <li key={item.id}>
       <button className="dt-inbox-item" type="button" data-unread={item.unread} onClick={() => navigate({ page: 'inbox', id: item.id })}>
         <span className="dt-inbox-item-head"><strong>{item.title}</strong><span>{t(`inbox.status.${item.status}`)}</span></span>
-        <span className="dt-inbox-preview">{item.preview}</span>
+        <span className="dt-inbox-preview">{item.stopHold ? t('stopHold.title') : item.preview}</span>
         <span className="dt-inbox-item-meta">{item.unread && <b>{t('inbox.unread')}</b>}<span>{item.source}</span><When at={item.at} />
           {item.mission && <span>{item.mission.title}</span>}</span>
       </button></li>)}</ul>
@@ -111,6 +112,7 @@ function ConversationPage({ id }: { id: string }) {
     {!data && !error && <p role="status">{t('loading')}</p>}
     {data && item && <>
       <div className="dt-mission-heading"><h2>{item.title}</h2><span>{t(`inbox.status.${item.status}`)}</span></div>
+      <StopHoldNotice hold={item.stopHold} ticketId={id} link />
       {item.execution && <InboxExecutionDetails execution={item.execution} />}
       <div className="dt-mission-buttons">
         {item.unread && <Button disabled={mark.busy} onClick={() => { void mark.run() }}>{t('inbox.markRead')}</Button>}

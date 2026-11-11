@@ -63,6 +63,9 @@ it('creates, delegates, reviews and completes a mission through rendered forms a
   await vi.waitFor(() => expect(text()).toContain('Working'))
   const mission = host.runtime.workspace.get(route.id!), ticketId = mission.actions[0]!.ticket!.id
   await host.runTool(`worker-${ticketId}`, 'orchestrator_report', { state: 'ready', summary: 'Research brief written with evidence' })
+  const worker = host.agents.get(`worker-${ticketId}`)!
+  worker.status = 'idle'; host.ctx.emit('agent/status', { agent: worker, status: 'idle' } as never)
+  await host.runtime.executor.stops.idle()
   // Remounting proves the view comes from persisted host state rather than optimistic client state.
   await act(async () => { root!.unmount(); root = createRoot(container!); render() })
   await vi.waitFor(() => expect(text()).toContain('Research brief written with evidence'))
@@ -84,6 +87,9 @@ it('offers Stop for a completed ticket with a queued follow-up while archival re
   const item = host.runtime.inbox.start({ requestId: 'queued-ui', text: 'Write a brief' })
   await host.runtime.idle()
   await host.runTool(item.sessionId!, 'orchestrator_report', { state: 'ready', summary: 'Brief ready' })
+  const worker = host.agents.get(item.sessionId!)!
+  worker.status = 'idle'; host.ctx.emit('agent/status', { agent: worker, status: 'idle' } as never)
+  await host.runtime.executor.stops.idle()
   await host.api('POST', 'executor/pause', { paused: true })
   host.runtime.inbox.reply(item.id, { requestId: 'queued-ui-followup', revision: host.runtime.inbox.item(item.id).revision, text: 'Revise the brief' })
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
@@ -99,6 +105,7 @@ it('offers Stop for a completed ticket with a queued follow-up while archival re
   expect(button('Archive')?.disabled).toBe(true)
   expect(button('Accept result')).toBeUndefined()
   await act(async () => { button('Stop')!.click() })
+  await host.runtime.executor.stops.idle()
   await vi.waitFor(() => expect(button('Archive')?.disabled).toBe(false))
   expect(button('Stop')).toBeUndefined()
   expect(host.runtime.inbox.item(item.id)).toMatchObject({ status: 'stopped', canReply: false })

@@ -5,6 +5,7 @@ import { AttachmentIds, type AttachmentView } from '../attachments/model.ts'
 import { PersonaRef, type PersonaDefinition } from '../personas/model.ts'
 import { WorldRef } from '../environments/pool-model.ts'
 import { DefaultEnvironmentRef, type DefaultEnvironmentSelection, type EnvironmentDescription, type ExecutionGrant } from '../environments/model.ts'
+import type { StopHoldView } from '../executor/stop-view-model.ts'
 
 export type InboxFilter = typeof INBOX_FILTERS[number]
 export const InboxQuery = z.object({ filter: z.enum(INBOX_FILTERS).default('all'), q: z.string().trim().max(200).default(''),
@@ -30,6 +31,7 @@ export interface InboxItem {
   preview: string; question?: string; sessionId?: string; canReply: boolean
   mission?: { id: string; title: string; actionId: string; revision: number; current: boolean }
   execution?: InboxExecution
+  stopHold?: StopHoldView
 }
 export interface ConversationMessage {
   id: string; at: string; role: 'person' | 'agent' | 'context' | 'status'; text: string

@@ -117,6 +117,25 @@ it('pages incidents and history without treating a changed cursor as an empty su
   expect(container!.querySelector('footer')!.textContent).toContain('Open incidents are retained')
 })
 
+it('keeps original stop holds visible for ended paused tasks without presenting the pending replacement as active', async () => {
+  host = await watchdogServer(); connect()
+  const observation = host.snapshot.tickets[0]!
+  observation.stage = 'ended'; observation.canNudge = false; observation.revision = 'stop-evidence'
+  observation.stopHold = { held: true, count: 1, revision: 'a'.repeat(64), pendingAssignmentId: 'replacement-waiting', pendingInputs: 2,
+    originals: [{ id: 'original-stop', assignmentId: 'original-assignment', revision: 1, scope: 'all', state: 'unknown', proof: null, legacy: false }], truncated: false }
+  host.snapshot.paused = true
+  host.journal.reconcile(host.snapshot, host.now + 1, 1000, 3600000)
+  await mount(); await click('Prepare release evidence')
+  await waitFor(() => expect(text()).toContain('Original work is not confirmed stopped'))
+  expect(text()).toContain('Original assignment: original-assignment')
+  expect(text()).toContain('Pending replacement: replacement-waiting')
+  expect(text()).toContain('Acknowledgement does not release this hold')
+  await click('Acknowledge evidence')
+  await waitFor(() => expect(host!.journal.counts().unacknowledged).toBe(0))
+  expect(host.journal.open()).toHaveLength(1)
+  expect(host.journal.open()[0]!.observation.canNudge).toBe(false)
+})
+
 it('distinguishes missing observations from available zero counts and non-remote assignments', async () => {
   await mountEvidence()
   expect(text()).toContain('Execution observations are unavailable in this snapshot.')

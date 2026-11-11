@@ -143,6 +143,13 @@ export function WatchdogConsole() {
         <h3>Task scope</h3><p className="wd-prewrap">{incident.observation.scope}</p><h3>Latest worker report</h3>
         <p className="wd-prewrap">{incident.observation.report?.summary ?? 'No report observed.'}</p>
         {incident.observation.question && <><h3>Operator answer needed</h3><p className="wd-prewrap">{incident.observation.question}</p></>}
+        {incident.observation.stopHold && <section className="wd-warning" aria-label="Original work stop hold"><h3>Original work is not confirmed stopped</h3>
+          <p>{incident.observation.stopHold.count} unresolved stop record(s). New execution and queued messages remain held. Acknowledgement does not release this hold.</p>
+          <ul>{incident.observation.stopHold.originals.map(stop => <li key={stop.id}>Original assignment: <code>{stop.assignmentId}</code>
+            {' · '}{stop.scope}{' · '}{stop.state}{stop.legacy ? ' · legacy attribution unknown' : ''}</li>)}</ul>
+          {incident.observation.stopHold.truncated && <p>Additional original stop records are available in the main task details.</p>}
+          {incident.observation.stopHold.pendingAssignmentId && <p>Pending replacement: <code>{incident.observation.stopHold.pendingAssignmentId}</code></p>}
+        </section>}
         <ExecutionEvidenceView evidence={incident.observation.execution} />
         <h3>{incident.assessment && !assessmentIsCurrent(incident) ? 'Historical assessment' : 'Assessment evidence'}</h3>
         {incident.assessment && !assessmentIsCurrent(incident) && <p className="wd-warning">Previous finding: {incident.assessment.finding}. This assessment describes earlier evidence; it does not assess the current observations.</p>}

@@ -6,6 +6,8 @@ import { allowedSender, listedBot } from '../../policy.ts'
 import type { ChannelLink, Localized } from '../../sources/kind.ts'
 import type { SourceRegistry } from '../../sources/registry.ts'
 import { workerSessionId } from '../../executor/dsh.ts'
+import { stopHold } from '../../executor/stop-view.ts'
+import type { StopHoldView } from '../../executor/stop-view-model.ts'
 import type { Store } from '../store.ts'
 import { attribute, markdown, plain, preview, readable } from './text.ts'
 
@@ -115,12 +117,13 @@ function ticketNote(ticket: Ticket, stage: TicketStage): { text: string; error: 
   if ((stage.action !== 'blocked' && stage.action !== 'failed') || !summary) return undefined
   return { text: preview(summary.split('\n')[0]!), error: stage.action === 'failed' }
 }
-export function ticketSummary(ticket: Ticket) {
+export function ticketSummary(ticket: Ticket, hold?: StopHoldView) {
   const stage = ticketStage(ticket)
   const note = ticketNote(ticket, stage)
   const state = liveTicket(ticket) ? 'open' as const : 'ended' as const
   return { id: ticket.id, title: ticket.title, state, ...stage, ...note ? { note } : {},
-    actions: { retry: canRetry(ticket), stop: canStop(ticket) }, strength: ticket.mandate.strength, ended: ticket.ended,
+    actions: { retry: !hold && canRetry(ticket), stop: canStop(ticket) }, strength: ticket.mandate.strength, ended: ticket.ended,
+    ...(hold ? { stopHold: hold } : {}),
     attention: ticket.attention && { ...ticket.attention, question: markdown(ticket.attention.question) },
       assignments: ticket.assignments.length, inputs: ticket.inputs.length, undelivered: ticket.undelivered.length,
     // Every started Assignment of a Ticket runs in its one shared worker Session.
@@ -138,7 +141,7 @@ export function threadFacts(store: Store, thread: Thread) {
   return { key: thread.key, source: thread.ref.source, title: threadTitle(store, thread), ...url ? { url } : {}, facts: (thread.meta.facts ?? {}) as ThreadFacts }
 }
 export type ThreadFactsView = ReturnType<typeof threadFacts>
-export const ticketLine = (view: Snapshot, ticket: Ticket) => ({ ...ticketSummary(ticket),
+export const ticketLine = (view: Snapshot, ticket: Ticket) => ({ ...ticketSummary(ticket, stopHold(view.store, ticket)),
   threads: view.threadsOf(ticket.id).map(thread => threadFacts(view.store, thread)) })
 export function threadTitle(store: Pick<Store, 'read'>, thread: Thread): string {
   const label = attribute(thread.meta.label)

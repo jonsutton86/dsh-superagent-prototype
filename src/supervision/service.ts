@@ -9,6 +9,7 @@ import type { Health } from '../sources/host.ts'
 import { KV } from '../kv.ts'
 import type { Intervention, InterventionResult, Observation, Snapshot } from './protocol.ts'
 import { ExecutionEvidenceSchema, unavailableExecutionEvidence, type ExecutionEvidence } from './execution-evidence.ts'
+import { heldTicketIds, stopHold } from '../executor/stop-view.ts'
 
 const { receipt: receipts, nudged } = KV.supervision
 const FRAME_TTL_MS = 15_000, MAX_FRAMES = 2, MAX_TICKETS = 10_000, MAX_FRAME_BYTES = 64 * 1024 * 1024
@@ -44,6 +45,8 @@ export class Supervision {
   }
   private observe(ticket: Ticket): Observation {
     const assignment = latestAssignment(ticket), report = latestReport(ticket), stage = ticketStage(ticket)
+    const hold = stopHold(this.host.store, ticket)
+    // Stop progress and operator receipts change evidence, never replenish the task's assessment allowance.
     const episodeRevision = key(JSON.stringify(ticket))
     let execution: ExecutionEvidence | undefined
     if (this.host.executionEvidence) {
@@ -56,12 +59,13 @@ export class Supervision {
     }
     return {
       id: ticket.id, assignmentId: assignment?.id ?? null,
-      episodeRevision, revision: execution ? key(JSON.stringify({ episodeRevision, execution })) : episodeRevision,
+      episodeRevision, revision: execution || hold ? key(JSON.stringify({ episodeRevision, execution, stopHold: hold })) : episodeRevision,
+      ...(hold ? { stopHold: hold } : {}),
       ...(execution ? { execution } : {}), title: ticket.title.slice(0, 500), scope: ticket.mandate.scope.slice(0, 2000),
       stage: `${stage.stage}${stage.stage === 'person' ? '/' + stage.action : ''}`, updatedAt: ticket.updatedAt,
       report: report ? { ...report, summary: report.summary.slice(0, 2000) } : null,
       question: ticket.attention?.question.slice(0, 2000) ?? null,
-      canNudge: liveTicket(ticket) && assignment?.state === 'running' && stage.stage === 'working'
+      canNudge: !hold && liveTicket(ticket) && assignment?.state === 'running' && stage.stage === 'working'
         && !this.host.store.get(nudged(assignment.id)),
     }
   }
@@ -78,7 +82,18 @@ export class Supervision {
       if (!frame) throw new SupervisionSnapshotError(410, 'supervision_frame_expired')
     } else {
       if (offset !== 0) throw new SupervisionSnapshotError(400, 'supervision_frame_required')
-      const all = this.host.store.tickets.open()
+      const open = this.host.store.tickets.open()
+      if (open.length > MAX_TICKETS) throw new SupervisionSnapshotError(503, 'supervision_snapshot_capacity')
+      const selected = new Map(open.map(ticket => [ticket.id, ticket]))
+      const held = heldTicketIds(this.host.store, MAX_TICKETS + 1)
+      if (selected.size > MAX_TICKETS || held.length > MAX_TICKETS) throw new SupervisionSnapshotError(503, 'supervision_snapshot_capacity')
+      for (const id of held) {
+        const ticket = this.host.store.tickets.get(id)
+        if (!ticket) throw new SupervisionSnapshotError(503, 'supervision_stop_reference_missing')
+        selected.set(id, ticket)
+        if (selected.size > MAX_TICKETS) throw new SupervisionSnapshotError(503, 'supervision_snapshot_capacity')
+      }
+      const all = [...selected.values()]
       if (all.length > MAX_TICKETS) throw new SupervisionSnapshotError(503, 'supervision_snapshot_capacity')
       const tickets = all.map(ticket => this.observe(ticket))
       const snapshot: Snapshot = { instance: this.instance, at: new Date(now).toISOString(), configured: this.host.configured(),
