@@ -191,3 +191,43 @@ it('operator evidence may settle missing local job evidence but cannot bypass an
   expect(await f.stops.recheck(id)).toMatchObject({ state: 'unknown' })
   expect((await f.stops.attest(id, f.attest(id))).receipt.phase).toBe('accepted')
 })
+
+it('settles a never-dispatched retry assignment alongside an ended prior assignment', async () => {
+  const f = fixture(false), ticket = f.store.tickets.get('task')!
+  const original = ticket.assignments[0]!
+  const retry = { ...original, id: 'retry', state: 'pending', createdAt: '2026-01-02T00:00:00.000Z' } as typeof original
+  delete retry.startedAt
+  original.state = 'ended'; original.endedAt = '2026-01-01T01:00:00.000Z'
+  ticket.assignments = [original, retry]
+  f.store.tickets.save(ticket)
+  f.agents.clear()
+  f.effects.ensure('launch', 'retry', { ticketId: 'task', assignmentId: 'retry' })
+  const id = f.stops.request(ticket, retry)
+  await f.stops.idle()
+  expect(f.stops.detail(id)).toMatchObject({ assignmentId: 'retry', state: 'quiet', proof: 'undispatched' })
+  expect(f.jobs.kill).not.toHaveBeenCalled()
+  validateStopAuthority(f.store.db, new Map([['task', ticket]]), () => {})
+})
+
+it('retains an unknown original stop on a cold start even when the retry never dispatched', async () => {
+  const f = fixture(false), ticket = f.store.tickets.get('task')!
+  // Simulate a cold restore: prior assignment ended and its stop is held unknown, while the retry is still pending.
+  const original = ticket.assignments[0]!
+  const retry = { ...original, id: 'retry', state: 'pending', createdAt: '2026-01-02T00:00:00.000Z' } as typeof original
+  delete retry.startedAt
+  original.state = 'ended'; original.endedAt = '2026-01-01T01:00:00.000Z'
+  ticket.assignments = [original, retry]
+  f.store.tickets.save(ticket)
+  f.agents.clear()
+  f.effects.ensure('launch', 'retry', { ticketId: 'task', assignmentId: 'retry' })
+  const held = f.stops.request(ticket, original)
+  await f.stops.idle()
+  expect(f.stops.detail(held).state).toBe('unknown')
+  // A fresh process has no original registry continuity. Absence cannot prove termination.
+  const restored = new ExecutorStops({ ...f.host, effects: new Effects(f.store, new HealthBoard()) })
+  restored.recover(); await restored.idle()
+  expect(restored.detail(held)).toMatchObject({ state: 'unknown', proof: null })
+  expect(restored.problem('task')).toBeDefined()
+  expect(() => restored.admitted(f.agent, retry.id)).toThrow('Original work is not confirmed stopped')
+  expect(f.jobs.kill).not.toHaveBeenCalled()
+})

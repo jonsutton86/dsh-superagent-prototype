@@ -675,6 +675,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/core-recovery.spec.ts`, `tests/executor-failure.spec.ts` | Durable host-restart bounds, held original recovery notes, typed failure facts and lifecycle callback fencing |
 | `tests/executor-stop-harness.spec.ts`, `tests/fixtures/executor-stop-provider.ts`, `tests/fixtures/executor-stop-probe.mjs` | Opt-in installed Harness retry with real bounded worker, injected cancellation uncertainty, original-ID admission holds and independently checked cleanup |
 | `tests/executor-stop.spec.ts`, `tests/fixtures/stop-record.ts` | Original stop lifecycle, admission, recovery and durable proof contracts |
+| `tests/stop-service-identity.spec.ts` | Real Cordis service-proxy continuity, changed worker/host registry refusal and preservation of unknown cold-stop holds |
 | `tests/stop-http.spec.ts`, `tests/stop-views.spec.ts` | Original-target HTTP controls and bounded shared stop projections |
 | `tests/stop-recovery-ui.spec.tsx` | Rendered original-request recovery, response-loss remount, stale refusal and storage failure |
 | `tests/executor-recovery-harness.spec.ts`, `tests/fixtures/executor-recovery-provider.ts`, `tests/fixtures/executor-recovery-observer.mjs` | Opt-in fresh installed Harness native retry chain and terminal failed hold beyond the old continuation timer; synthetic loopback only |

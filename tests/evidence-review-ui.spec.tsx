@@ -48,6 +48,10 @@ it('requires a selected real check for every artifact and accepts through the re
     runIds.push(run.id)
   }
   await host.runTool(`worker-${ticket.id}`, 'orchestrator_report', { state: 'ready', summary: 'Two files ready' })
+  host.finishTurn(`worker-${ticket.id}`)
+  await host.runtime.idle(); await host.runtime.executor.stops.idle()
+  await host.runtime.idle()
+  expect(workspace.get(mission.id).actions[0]!.status).toBe('review')
   let pending = 0
   vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
     pending++

@@ -25,7 +25,7 @@ function availableEvidence(): ExecutionEvidence {
   value.jobs = { ...value.jobs, availability: 'available', coverage: 'complete', sampleRevision, outputBytes: 0 }
   value.subagents = { ...value.subagents, availability: 'available', coverage: 'loaded-only', sampleRevision }
   value.executor = { ...value.executor, availability: 'available', provenance: 'process-and-durable-queue',
-    recovery: { providerRetryOwner: 'harness', terminalTurnRetries: 0, launchRetryLimit: 3,
+    recovery: { providerRetryOwner: 'harness', terminalTurnRetries: 3, launchRetryLimit: 3,
       hostRestart: { limit: 3, used: 0, remaining: 3, exhausted: false } } }
   value.remoteEffects = emptyRemoteExecutionEvidence('not_applicable')
   return value

@@ -155,7 +155,9 @@ it('keeps actual speculative work held through unknown usage and preserves revie
   const ticket = r.store.tickets.get(decision.ticketId!)!, run = r.speculation.page().items[0]!, root = `worker-${ticket.id}`
   r.usage.bind(root, root)
   const call = r.usage.begin({ sessionId: root, root, role: 'worker', ticketId: ticket.id, assignmentId: run.assignmentId }, run.providers[0]!, 'current', 'conversation', 100)
-  r.usage.settle(call.id, 'interrupted'); r.engine.report(ticket.id, { state: 'ready', summary: 'Original prepared result' }); await r.idle(); await r.speculation.tick()
+  r.usage.settle(call.id, 'interrupted'); r.engine.report(ticket.id, { state: 'ready', summary: 'Original prepared result' })
+  h.finishTurn(root)
+  await r.idle(); await r.executor.stops.idle(); await r.speculation.tick()
   const before = recoveryStateDigest(r.store.db)
   expect((await verify(h)).budget).toMatchObject({ speculativeRuns: 1, heldAllocations: 1, unknownCalls: 1, releasedAllocations: 0, legacyPolicies: 0 })
   expect(recoveryStateDigest(r.store.db)).toBe(before)

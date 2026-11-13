@@ -46,6 +46,8 @@ export class ExecutorStops {
   private readonly bindings = new Map<string, Binding>()
   private readonly pending = new Map<string, Promise<void>>()
   private readonly observations = new Map<string, Promise<StopDetail>>()
+  /** Lifecycle refresh that arrived while an observation was in flight; the settled run re-observes. */
+  private readonly refreshed = new Set<string>()
   constructor(private readonly host: Host) {
     host.effects.handle('stop', async ({ stopId }) => {
       await this.run(stopId)
@@ -152,8 +154,12 @@ export class ExecutorStops {
   /** Actual lifecycle progress observes the existing authorization, without minting a replacement stop. */
   refresh(ticketId: string): void {
     for (const row of this.host.store.db.prepare("SELECT id FROM executor_stop WHERE ticket=? AND state NOT IN ('quiet','dormant') ORDER BY id").iterate(ticketId)) {
-      this.host.effects.wake('stop', String(row.id))
-      void this.run(String(row.id)).catch(() => {})
+      const id = String(row.id)
+      this.host.effects.wake('stop', id)
+      // A run that already inspected before this lifecycle progress coalesces with the refresh: re-observe once it
+      // settles, so the new idle state is seen instead of waiting for the effect retry.
+      if (this.pending.has(id)) { this.refreshed.add(id); continue }
+      void this.run(id).catch(() => {})
     }
   }
   private released(record: StopRecord): void {
@@ -216,24 +222,35 @@ export class ExecutorStops {
       coverageConsumed: false, proof: null, settledAt: null, attestationId: null }
     record.world = world; record.executionBindingHash = stopExecutionDigest(execution, world); record.scopeHash = stopScopeDigest(record)
     const launch = this.host.store.db.prepare("SELECT launch_started,attempts FROM effect WHERE kind='launch' AND key=?").get(assignment.id)
-    const undispatched = owned && scope === 'all' && !assignment.startedAt && !assignment.deliveredAt && !assignment.report && !agent
-      && ticket.assignments.length === 1 && launch?.launch_started === 0 && launch.attempts === 0
+    // A stop for an assignment that never crossed worker dispatch has no original work to protect, whether it is the
+    // ticket's first assignment or a later retry; prior assignments' held stops still block the shared Session through `problem`.
+    // Never an absence inference: the second proof is a durable pre-dispatch failure the Executor recorded.
+    const undispatched = owned && scope === 'all' && !agent && !assignment.startedAt && !assignment.deliveredAt
+      && (assignment.dispatch === 'none'
+        || !assignment.report && launch?.launch_started === 0 && launch.attempts === 0)
     if (undispatched) Object.assign(record, { state: 'quiet', proof: 'undispatched', settledAt: NOW(), reason: 'Original assignment never crossed worker dispatch' })
     this.host.store.atomic(() => {
       saveStop(this.host.store.db, record)
       if (stopHeld(record)) this.host.effects.ensure('stop', record.id, { stopId: record.id })
       const admission = agent && admissions.get(agent)
       if (owned && admission?.assignmentId === assignment.id && admission.session === agent!.session
-        && admission.jobs === this.host.context.get('jobs') && admission.children === this.host.context.get('subagents')) this.bindings.set(record.id, admission)
+        && this.servicesCurrent(admission)) this.bindings.set(record.id, admission)
       this.host.store.afterCommit(() => { if (stopHeld(record)) void this.run(record.id).catch(() => {}) })
     })
     return record.id
   }
+  /** Control and observation use the host pair, which must still be the worker's original pair, not merely fresh proxies. */
+  private servicesCurrent(binding: Binding): boolean {
+    const worker = this.services(binding.agent)
+    return serviceIdentity(binding.jobs) === serviceIdentity(worker.jobs)
+      && serviceIdentity(binding.children) === serviceIdentity(worker.children)
+      && serviceIdentity(binding.jobs) === serviceIdentity(this.host.context.get('jobs'))
+      && serviceIdentity(binding.children) === serviceIdentity(this.host.context.get('subagents'))
+  }
   private continuous(record: StopRecord): boolean {
     const binding = this.bindings.get(record.id)
-    return record.instance === this.instance && !!binding && binding.jobs === this.host.context.get('jobs')
-      && binding.children === this.host.context.get('subagents') && binding.agent === this.host.context.agents.get(record.sessionId as SessionId)
-      && binding.session === binding.agent.session
+    return record.instance === this.instance && !!binding && this.servicesCurrent(binding)
+      && binding.agent === this.host.context.agents.get(record.sessionId as SessionId) && binding.session === binding.agent.session
   }
   private ownerCurrent(record: StopRecord): boolean {
     const ticket = this.host.store.tickets.get(record.ticketId), latest = ticket?.assignments.at(-1)
@@ -351,7 +368,10 @@ export class ExecutorStops {
         } catch { this.update(record, { state: 'unknown', reason: 'Original cancellation outcome is unconfirmed' }) }
       }
       await this.observe(id, true)
-    })().finally(() => { this.pending.delete(id) })
+    })().finally(() => {
+      this.pending.delete(id)
+      if (this.refreshed.delete(id)) void this.run(id).catch(() => {})
+    })
     this.pending.set(id, operation); return operation
   }
   async recheck(id: string, input?: { expectedRevision?: number; executionBindingHash: string; scopeHash: string }): Promise<StopDetail> {
@@ -406,5 +426,13 @@ export class ExecutorStops {
     }
     return { receipt, current: this.detail(id) }
   }
-  async idle(): Promise<void> { await Promise.allSettled([...this.pending.values(), ...this.observations.values()]) }
+  async idle(): Promise<void> {
+    // A settled run may immediately re-observe a refresh that arrived while it was in flight; await that run too.
+    for (;;) {
+      const work = [...this.pending.values(), ...this.observations.values()]
+      if (!work.length) return
+      await Promise.allSettled(work)
+      if (!this.pending.size && !this.observations.size) return
+    }
+  }
 }

@@ -94,6 +94,7 @@ describe('bounded execution evidence', () => {
     const remoteFor = vi.fn(() => { throw new Error('Unloaded managed world must not fall back to local') })
     Object.assign(executor, { host: { store: { tickets: { get: () => stored } }, context: { agents: host.input.agents, get: () => host.input.jobs() }, effects: { retryState: () => ({ attempts: 1, due: 0 }) }, environments: { remoteFor } },
        settling: new Map([['ticket', {}]]),
+       resuming: new Set(), rateLimitRetries: new Map(),
       preparingRepositories: new Map(), stopping: new Map(), left: new Map([['ticket', { jobs: new Set(['left']) }]]) })
     host.rows.push({ id: 'left', owner: host.parent.id, status: 'running' })
     const value = executor.executionEvidence(ticket)

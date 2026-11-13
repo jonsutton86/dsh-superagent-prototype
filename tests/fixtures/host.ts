@@ -177,6 +177,7 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
   const agents = new Map<string, FakeAgent>()
   /** Each Session's next step, which takes the messages that wait for one. */
   const steps = new Map<string, () => void>(), claims = new Map<string, () => void>()
+  const finishes = new Map<string, (reason?: 'completed' | 'aborted' | 'error') => void>()
   const tools = new Map<string, Map<string, RegisteredTool>>()
   const deliveries = vi.fn<(request: Delivery) => void>()
   let http!: HttpHandler
@@ -184,6 +185,10 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
   const createAgent = async ({ sessionId, workspaceId, agentPreset }: { sessionId: string; workspaceId?: string; agentPreset?: string }) => {
       if (agents.has(sessionId)) return
       const agentCtx = new Context()
+      // Native worker scopes inherit the host registries. An independent empty Context would
+      // model a different execution boundary and correctly lose original-stop continuity.
+      agentCtx.reflect.provide('jobs', jobs.service)
+      agentCtx.reflect.provide('subagents', subagents.service)
       const sessionTools = new Map<string, RegisteredTool>()
       tools.set(sessionId, sessionTools)
       const register = (tool: RegisteredTool) => { sessionTools.set(tool.name, tool); return () => sessionTools.delete(tool.name) }
@@ -199,7 +204,16 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
         }) }
       // A step claims each message once, all that wait for a step and, as a turn starts, the next queued one, and takes them into
       // the Session's history, unless it is `cut` off before, as a cancel in its pre-step does; DSH says each.
-      let turn = 0
+      let turn = 0, activeTurn: number | undefined
+      finishes.set(sessionId, (reason = 'completed') => {
+        const agent = agents.get(sessionId)!
+        if (activeTurn === undefined) return
+        const ended = activeTurn
+        activeTurn = undefined
+        ctx.emit('session/event', session as never, { type: 'turn/end', data: { turn: ended, reason: { kind: reason } } } as never)
+        agent.status = 'idle'
+        ctx.emit('agent/status', { agent, status: 'idle' } as never)
+      })
       const take = (starts: boolean, cut = false) => {
         const agent = agents.get(sessionId)!
         const queued = starts ? inbox.nextTurn.splice(0, 1) : []
@@ -222,10 +236,11 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
         agent.status = 'running'
         ctx.emit('agent/status', { agent, status: 'running' } as never)
         turn++
+        activeTurn = turn
         ctx.emit('session/event', session as never, { type: 'turn/start', data: { turn } } as never)
         take(true)
         void Promise.resolve().then(() => ctx.waterfall('agent/request', { agent, turn, step: 1, signal: new AbortController().signal } as never, async () => ({} as never)))
-          .catch(error => { ctx.emit('agent/error', { agent, turn, step: 1, error } as never); agent.status = 'idle'; ctx.emit('agent/status', { agent, status: 'idle' } as never) })
+          .catch(error => { ctx.emit('agent/error', { agent, turn, step: 1, error } as never); finishes.get(sessionId)!('error') })
       })
       const session = options.captureSessions ? Session.create(SessionId(sessionId), [],
         { ...Session.create(SessionId(sessionId)).header, cwd: workspaceId, agentPreset })
@@ -240,8 +255,8 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
         queueMicrotask(() => {
           const agent = agents.get(sessionId)!
           if (agent.status === 'idle') return
-          agent.status = 'idle'
-          ctx.emit('agent/status', { agent, status: 'idle' } as never)
+          if (activeTurn !== undefined) finishes.get(sessionId)!('aborted')
+          else { agent.status = 'idle'; ctx.emit('agent/status', { agent, status: 'idle' } as never) }
         })
       })
       agents.set(sessionId, { id: sessionId, ctx: agentCtx, inbox, followup: deliver('queue'), steer: deliver('steer'), inject: vi.fn(), session, cancel,
@@ -352,6 +367,8 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
   /** A step of the worker claims what waits for it, and is cut off before the Session took it. */
   const claim = (sessionId: string) => { claims.get(sessionId)!() }
   return { runtime, ctx, directory, agents, tools, deliveries, relays, candidates, runTool, withTool, route, acceptedTicket, api, controller, subprocess, hooks, resolveDefault, stop,
-    jobs, subagents, step, claim, presets, http }
+    jobs, subagents, step, claim, presets, http,
+    /** End the actual simulated model turn, separately from any tool report it submitted. */
+    finishTurn: (sessionId: string) => { finishes.get(sessionId)!() } }
 }
 export type Host = Awaited<ReturnType<typeof startRuntime>>

@@ -574,19 +574,31 @@ async function remoteMission(native: boolean) {
   const longScript = 'printf ready; sleep 30'
   const long = await host.withTool(id, 'bash', async () => host.ctx.subprocess.spawn({ argv: ['/bin/sh', '-c', longScript],
     cwd: ticket.execution!.directory, graceMs: 100, stdio: { stdin: 'ignore', stdout: { maxBytes: 128 }, stderr: { maxBytes: 128 } } }))
+  // Observe immediately even if a later assertion aborts this scenario; still rethrow when collected below.
+  const longOutcome = long.done.then(value => ({ value }), error => ({ error }))
   // An accepted receipt precedes native process dispatch. This scenario cancels an actually running command.
   await vi.waitFor(() => expect(long.collected.stdout!.readFrom(0).text).toBe('ready'), { timeout: 10_000 })
   const runningId = h.endpoint.journal.jobs().find(job => job.request.argv.includes(longScript))!.id
   await host.runTool(id, 'orchestrator_report', { state: 'ready', summary: 'Remote result is ready for review' })
+  host.finishTurn(id)
+  await host.runtime.idle(); await host.runtime.executor.stops.idle()
   expect(host.runtime.library.read(artifact.id).content).toBe('remote result')
-  expect(host.runtime.workspace.get(mission.id).actions[0]!.status).toBe('review')
-  await expect(host.withTool(id, 'bash', async () => {})).rejects.toThrow('Ticket ended')
+  // The worker left a remote command running that its job registry never learned about. The original stop cannot be
+  // proven quiet, so review stays blocked until the operator stops that original work.
+  expect(host.runtime.executor.stops.problem(ticketId)).toBeDefined()
+  expect(host.runtime.workspace.get(mission.id).actions[0]!.status).toBe('blocked')
   expect((await host.api('POST', `tickets/${ticketId}/execution/${runningId}/cancel`, { requestId: 'operator-stop' })).status).toBe(200)
-  await long.done
+  const outcome = await longOutcome
+  if ('error' in outcome) throw outcome.error
   // The outcome precedes native managed-range shutdown; only confirmed quiescence can satisfy the receipt assertion.
   expect(await long.waitForExit(AbortSignal.timeout(5000))).toBe(true)
   expect((await host.api('POST', `tickets/${ticketId}/execution/refresh`)).status).toBe(200)
   expect(p.world.effects(ticketId).items.find(item => item.id === runningId)?.quiescent).toBe(true)
+  await vi.waitFor(async () => {
+    await host.runtime.executor.stops.idle(); await host.runtime.idle()
+    expect(host.runtime.workspace.get(mission.id).actions[0]!.status).toBe('review')
+  }, { timeout: 10_000 })
+  await expect(host.withTool(id, 'bash', async () => {})).rejects.toThrow('Ticket ended')
   const wrong = host.runtime.store.get(KV.sessions.world(id))!
   host.runtime.store.set(KV.sessions.world(id), 'another-world')
   await expect(host.runtime.sessions.ensure(id, ticket.execution!.directory, ticket.title, 'worker')).rejects.toThrow('another execution world')

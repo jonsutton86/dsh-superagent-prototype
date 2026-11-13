@@ -42,6 +42,24 @@ assignment. Loading another Agent with the same Session ID cannot recreate that 
 a graceful cold restart; before later work under that same assignment, the canonical record marks that coverage consumed.
 The historical quiet receipt remains readable, but it cannot prove termination of subsequently admitted work.
 
+Cordis may return a fresh proxy for the same service on each lookup. Stop continuity therefore compares underlying
+service identities, not proxy object equality. Both the current worker pair and host control/observation pair must still
+match the originally admitted jobs/subagent services. A genuinely different registry or world remains refused. An absent
+loaded Session plus a never-dispatched retry does not prove that the prior assignment's native work terminated; the prior
+unknown stop remains held. Focused regressions use actual Cordis Service proxies, not just plain fixture objects.
+These checks do not qualify the full stop/restart contract or establish OS process containment.
+
+Lifecycle progress that arrives while an observation is already in flight coalesces with that observation. The settled run
+then re-observes once, so the worker's real idle transition is evaluated without waiting for the effect retry and without
+releasing on the earlier busy snapshot. This changes responsiveness only: every release still requires the same scoped
+continuity, target and remote-receipt evidence.
+
+A prepare command that fails is thrown only before the worker Session is created. The Executor records `dispatch: 'none'`
+on that Assignment as durable proof that it never crossed worker dispatch, and a later retry may settle the old attempt's
+stop as `undispatched` on that proof, provided no Agent and no admission for the Assignment exists. Absence of a worker,
+registry, Session or launch effect row is never accepted as that proof. The marker cannot be set by an ordinary worker
+report, so a report that a worker actually produced still requires an observed stop.
+
 The database schema must prevent an older binary from ignoring these holds. Restore validation must check original identity,
 execution references, effect pointers and control receipts, including unresolved work whose domain task already ended.
 Bounded record/target sizes and paginated reads avoid an artificial per-assignment execution quota. Unresolved or referenced

@@ -35,7 +35,8 @@ it('uses the runtime launch/tool guards, durable HTTP reviews and separate outbo
   const { h, r, sent, ticket, run } = await prepare()
   expect(run.state).toBe('admitted'); expect(ticket.mandate.strength).toBe('inferred'); expect(sent).not.toHaveBeenCalled()
   r.engine.report(ticket.id, { state: 'ready', summary: 'Prepared result with retained evidence' })
-  await r.idle(); await vi.waitFor(async () => { await r.speculation.tick(); expect(r.speculation.get(run.id).releasedAt).toBeDefined() })
+  h.finishTurn(`worker-${ticket.id}`)
+  await r.idle(); await r.executor.stops.idle(); await vi.waitFor(async () => { await r.speculation.tick(); expect(r.speculation.get(run.id).releasedAt).toBeDefined() })
   const ready = (await h.api('GET', `speculation/${run.id}`)).body
   expect(ready.state).toBe('ready')
   const promoted = await h.api('POST', `speculation/${run.id}/review`, { requestId: 'promote', revision: ready.revision, evidence: ready.evidence, command: 'promote', note: 'Evidence reviewed' })
@@ -48,6 +49,23 @@ it('uses the runtime launch/tool guards, durable HTTP reviews and separate outbo
   try { await r.pump(); await r.sendReplies() } finally { vi.useRealTimers() }
   expect(sent).toHaveBeenCalledOnce(); expect(r.store.tickets.get(ticket.id)!.assignments).toHaveLength(1)
   expect((await h.api('GET', 'speculation/versions/0')).status).toBe(200)
+})
+it('keeps a ready report held until the original reporting turn actually ends', async () => {
+  const { h, r, ticket, run } = await prepare(), sessionId = `worker-${ticket.id}`
+  await h.runTool(sessionId, 'orchestrator_report', { state: 'ready', summary: 'Result submitted, turn still running' })
+  await r.idle(); await r.executor.stops.idle(); await r.speculation.tick()
+  expect(h.agents.get(sessionId)!.status).toBe('running')
+  expect(h.agents.get(sessionId)!.cancel).not.toHaveBeenCalled()
+  expect(r.executor.stops.problem(ticket.id)).toBeDefined()
+  expect(await r.executor.quiescence(run)).toBeUndefined()
+  expect(r.speculation.get(run.id).releasedAt).toBeUndefined()
+
+  h.finishTurn(sessionId)
+  await r.idle(); await r.executor.stops.idle()
+  await vi.waitFor(async () => { await r.speculation.tick(); expect(r.speculation.get(run.id).releasedAt).toBeDefined() })
+  expect(h.agents.get(sessionId)!.status).toBe('idle')
+  expect(r.executor.stops.problem(ticket.id)).toBeUndefined()
+  expect(await r.executor.quiescence(run)).toBeDefined()
 })
 it('stops old speculative activity without cancelling a newly queued assignment', async () => {
   const { r, ticket, run } = await prepare()
@@ -73,8 +91,10 @@ it('rechecks publication authority after asynchronous observation but settles an
 })
 
 it('checks original remote execution bindings and all receipts beyond the display page before release', async () => {
-  const { r, ticket, run } = await prepare()
-  r.engine.report(ticket.id, { state: 'ready', summary: 'Prepared' }); await r.idle()
+  const { h, r, ticket, run } = await prepare()
+  r.engine.report(ticket.id, { state: 'ready', summary: 'Prepared' })
+  h.finishTurn(`worker-${ticket.id}`)
+  await r.idle(); await r.executor.stops.idle()
   r.executor.halt(ticket.id, 'Stop for receipt check', run.assignmentId); await r.idle()
   const journal = new ExecutionEffects(r.store.db)
   for (let i = 0; i < 105; i++) r.store.db.prepare('INSERT INTO execution_effect VALUES (?,?)').run(`receipt-${i}`, JSON.stringify({

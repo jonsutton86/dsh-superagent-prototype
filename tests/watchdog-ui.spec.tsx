@@ -241,7 +241,7 @@ it('retains an unconfirmed acknowledgement identity across an execution evidence
 it('shows durable recovery allowances separately from provider request retries', async () => {
   const value = execution()
   value.executor = { ...value.executor, provenance: 'process-and-durable-queue', launchRetryAttempts: 2,
-    recovery: { providerRetryOwner: 'harness', terminalTurnRetries: 0, launchRetryLimit: 3,
+    recovery: { providerRetryOwner: 'harness', terminalTurnRetries: 3, launchRetryLimit: 3,
       hostRestart: { limit: 3, used: 5, remaining: 0, exhausted: true } } }
   container = document.createElement('div'); document.body.append(container); root = createRoot(container)
   await act(async () => root!.render(<ExecutionEvidenceView evidence={value} />))

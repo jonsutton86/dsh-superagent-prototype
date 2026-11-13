@@ -232,6 +232,12 @@ export interface Assignment {
   endedAt?: string
   endedReason?: string
   report?: { state: ReportState; summary: string; at: string }
+  /**
+   * Present only when the Executor proved this Assignment never crossed worker dispatch, such as a prepare command
+   * that failed before any worker Session was created. A durable fact, not an absence inference: it lets a retry
+   * stop the old attempt without holding unprovable original work.
+   */
+  dispatch?: 'none'
   /** When Inputs last reached the worker; one at or after `report.at` means the worker has been busy with Inputs since that report. */
   deliveredAt?: string
   /**

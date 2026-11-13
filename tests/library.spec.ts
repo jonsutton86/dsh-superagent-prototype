@@ -155,6 +155,8 @@ it('invalidates human-reviewed mission acceptance when library memory changes vi
   const host = await hostFixture(), worker = await missionWorker(host), workspace = host.runtime.workspace, library = host.runtime.library
   const record = library.publish(input({ kind: 'memory' }), worker.actor)
   await host.runTool(worker.sessionId, 'orchestrator_report', { state: 'ready', summary: 'Saved the evidence' })
+  host.finishTurn(worker.sessionId)
+  await host.runtime.idle(); await host.runtime.executor.stops.idle()
   let mission = workspace.get(worker.mission.id), action = mission.actions[0]!
   const stale = { requestId: requestId(), revision: mission.revision, command: 'complete', ticketRevision: action.ticket!.revision, text: 'Reviewed memory', reviewKind: 'operator' }
   library.archive(record.id, { requestId: requestId(), revision: 1, archived: true })

@@ -147,6 +147,8 @@ it('invalidates human-reviewed memory on distant changes without invalidating fo
   const sources = chain(library, 36), artifact = library.publish(input({ kind: 'memory', sources: [{ id: sources.at(-1)!.id, relation: 'derived_from' }] }), w.actor)
   expect(library.read(artifact.id).freshness).toMatchObject({ status: 'unknown', complete: false })
   await host.runTool(w.sessionId, 'orchestrator_report', { state: 'ready', summary: 'Candidate memory ready' })
+  host.finishTurn(w.sessionId)
+  await host.runtime.idle(); await host.runtime.executor.stops.idle()
   let mission = workspace.get(w.mission.id), action = mission.actions[0]!
   mission = workspace.act(mission.id, action.id, { requestId: randomUUID(), revision: mission.revision, command: 'complete', ticketRevision: action.ticket!.revision, text: 'Operator reviewed sources', reviewKind: 'operator' })
   const before = library.evidenceRevision(w.ticketId)

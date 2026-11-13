@@ -41,17 +41,17 @@ export function ExecutionEvidenceView({ evidence }: { evidence?: ExecutionEviden
     </>}
     {executor.availability === 'unavailable' ? <><h4>Coordinator activity</h4><p>Coordinator activity unavailable. Retry counts and work state are unknown.</p></> : <><Facts title="Coordinator activity" rows={[
       ['Preparing work', yesNo(executor.preparing)], ['Retry pending', yesNo(executor.retrying)],
-      ['Additional worker-turn retries', executor.turnRetryAttempts], ['Failed launch deliveries', executor.launchRetryAttempts],
+      ['Rate-limit turn retries used', executor.turnRetryAttempts], ['Failed launch deliveries', executor.launchRetryAttempts],
       ['Finishing work', yesNo(executor.settling)], ['Stopping work', yesNo(executor.stopping)],
       ['Known handed-off jobs', executor.knownHandedOffJobs],
     ]} />
     <p className="wd-muted">{executor.provenance === 'process-local' ? 'Observed in this coordinator process.' : 'Activity flags are process-local; failed launch deliveries come from the durable queue.'} These flags are not durable completion evidence.</p>
     {executor.recovery && <><Facts title="Recovery policy" rows={[
-      ['Provider request retries', 'Managed by DeepSeek Harness'], ['Additional worker-turn retries', executor.recovery.terminalTurnRetries],
+      ['Provider request retries', 'Managed by DeepSeek Harness'], ['Rate-limit turn retry allowance', executor.recovery.terminalTurnRetries],
       ['Launch retry allowance', executor.recovery.launchRetryLimit], ['Automatic host recoveries used', executor.recovery.hostRestart.used],
       ['Automatic host recoveries remaining', executor.recovery.hostRestart.remaining],
       ['Automatic host recovery limit reached', yesNo(executor.recovery.hostRestart.exhausted)],
-    ]} /><p className="wd-muted">Terminal provider failures require attention. Acknowledging evidence does not retry a task or reset recovery allowances.</p></>}
+    ]} /><p className="wd-muted">Rate-limit (429) failures retry the worker turn with backoff up to the allowance; other terminal provider failures require attention. Acknowledging evidence does not retry a task or reset recovery allowances.</p></>}
     </>}
     <h4>Remote operations</h4>
     {remote.availability === 'not_applicable' ? <p>Remote operations do not apply to this assignment.</p>

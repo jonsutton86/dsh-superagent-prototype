@@ -24,6 +24,14 @@ it('keeps classification separate from recovery authority and excludes terminal 
   }
 })
 
+it('carries the validated provider Retry-After hint only on retryable failures', () => {
+  expect(safeWorkerFailure(carried('RATE_LIMIT', { status: 429, providerRetryAfterMs: 2000 })))
+    .toMatchObject({ code: 'RATE_LIMIT', retryable: true, retryAfterMs: 2000 })
+  expect(safeWorkerFailure(carried('SERVER', { status: 503 })).retryAfterMs).toBeUndefined()
+  expect(safeWorkerFailure(carried('AUTH', { status: 429, providerRetryAfterMs: 1000 }))).toMatchObject({ code: 'AUTH', retryable: false })
+  expect(safeWorkerFailure(carried('RATE_LIMIT', { status: 429, providerRetryAfterMs: 0 }))).toMatchObject({ code: 'UNKNOWN' })
+})
+
 it('refuses untyped text, raw status, mismatched facts and malformed typed fields', () => {
   for (const error of [new Error('429 ECONNRESET rate limit'), { status: 503 }, { code: 'SERVER', failure: { code: 'SERVER' } },
     Object.assign(new Error(), { code: 'SERVER', failure: { code: 'AUTH' } }), carried(secret), carried('SERVER', { status: 600 }),

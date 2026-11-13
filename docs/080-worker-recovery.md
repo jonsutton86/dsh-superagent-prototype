@@ -4,6 +4,13 @@ This increment continues supervision and operational visibility in the implement
 as the runtime and removes a second layer of provider retries that could start extra worker turns after Harness had already
 ended its retry chain. The optional Abliteration route and existing default model are unchanged.
 
+> **Follow-up (rate-limit retries).** The Harness provider retry policy does not cover the DeepSeek `429 rate_limit_exceeded`
+> response, so it surfaced as a terminal worker failure. `safeWorkerFailure` now carries the provider's validated Retry-After
+> hint (`retryAfterMs`), and `DshExecutor` adds a bounded turn-level retry — up to three retries per assignment — for retryable
+> `RATE_LIMIT` failures, honoring `providerRetryAfterMs` or exponential backoff (15 s initial, 300 s cap). Ordinary transient
+> provider failures (`SERVER`, `TIMEOUT`, `TRANSPORT`) remain Harness-owned and are not double-retried. The execution-evidence
+> view reports the rate-limit retry allowance and the retries used in this process.
+
 ## Source evidence and decision
 
 Codegraph indexed the checkout at `0db02c586b82872d1dcdbc7a37460e132da605a7` before investigation. REA analyzed six selected

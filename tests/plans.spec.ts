@@ -33,6 +33,8 @@ async function ready(h: Host, mission: MissionView, index = 0) {
   const m = h.runtime.workspace.act(mission.id, action.id, { requestId: rid(), revision: mission.revision, command: 'run' })
   await h.runtime.idle()
   await h.runTool(m.actions[index]!.ticket!.sessionId!, 'orchestrator_report', { state: 'ready', summary: 'Evidence ready' })
+  h.finishTurn(m.actions[index]!.ticket!.sessionId!)
+  await h.runtime.idle(); await h.runtime.executor.stops.idle()
   return h.runtime.workspace.get(m.id)
 }
 function accept(workspace: Workspace, mission: MissionView, index = 0) {
@@ -111,6 +113,8 @@ it('protects affected running work while permitting independent additions withou
   expect(h.runtime.store.tickets.get(original.id)?.mandate).toEqual(original.mandate)
   expect(h.runtime.store.tickets.list()).toHaveLength(1)
   await h.runTool(updated.actions[0]!.ticket!.sessionId!, 'orchestrator_report', { state: 'ready', summary: 'First result' })
+  h.finishTurn(updated.actions[0]!.ticket!.sessionId!)
+  await h.runtime.idle(); await h.runtime.executor.stops.idle()
   await h.api('POST', 'executor/pause', { paused: true })
   h.runtime.inbox.reply(original.id, { requestId: rid(), revision: h.runtime.inbox.item(original.id).revision, text: 'Revise this result' })
   const pending = workspace.get(m.id), revised = definitionOf(pending); revised.actions[0]!.instructions = 'Change the task'
@@ -182,6 +186,8 @@ it('launches one planner through actual routes and binds its proposal tools to i
   await expect(h.runTool(sessionId, 'workspace_plan_propose', { ...proposalBody, requestId: rid() })).rejects.toThrow('no longer authorizes')
   h.runtime.store.saveSettings(settings)
   await h.runTool(sessionId, 'orchestrator_report', { state: 'ready', summary: `Proposed ${submitted.id}` })
+  h.finishTurn(sessionId)
+  await h.runtime.idle(); await h.runtime.executor.stops.idle()
   await expect(h.runTool(sessionId, 'workspace_plan_propose', { ...proposalBody, requestId: rid() })).rejects.toThrow('no longer authorizes')
   const reviewed = await h.api('POST', `missions/${m.id}/proposals/${submitted.id}`, { requestId: rid(), revision: 1,
     missionRevision: workspace.get(m.id).revision, decision: 'approve', note: 'Inspected the plan' })

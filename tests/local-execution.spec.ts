@@ -127,6 +127,8 @@ it('runs a local mission through actual management routes and Harness tools with
   const artifact = await host.runTool(sessionId, 'workspace_publish', { requestId: requestId(), kind: 'artifact', title: 'Research brief', summary: 'Saved briefing', content: '# Brief\nEvidence and findings.' }) as unknown as LibraryEntry
   const selection = await check(artifact.id, '# Brief\nEvidence and findings.')
   await host.runTool(sessionId, 'orchestrator_report', { state: 'ready', summary: `Brief saved: ${artifact.id}` })
+  host.finishTurn(sessionId)
+  await host.runtime.idle(); await host.runtime.executor.stops.idle()
   mission = host.runtime.workspace.get(mission.id)
   result = await host.api('POST', `missions/${mission.id}/actions/${mission.actions[0]!.id}`, { requestId: requestId(), revision: mission.revision,
     command: 'complete', ticketRevision: mission.actions[0]!.ticket!.revision, text: 'Read the saved brief and checked its evidence', reviewKind: 'checks', checks: [selection] })

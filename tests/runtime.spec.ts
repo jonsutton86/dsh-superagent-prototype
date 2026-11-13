@@ -37,6 +37,7 @@ import { preview, readable } from '../src/app/views/text.ts'
 import { decisionList, search, threadDetail, threadList } from '../src/app/views/threads.ts'
 import { executorLoad, ticketDetail, ticketList } from '../src/app/views/tickets.ts'
 
+const originalGitConfig = process.env.GIT_CONFIG_GLOBAL
 let runtime: Runtime
 const viewsOf = (value: Runtime) => ({ store: value.store, sources: value.sources, links: value.links() })
 const overviewOf = (value: Runtime) => overview(viewsOf(value), value.health, policyVersion(value.store.settings()), executorLoad(value.store, value.executor.activeCount()), value.setupProblem ?? value.feishuProblem)
@@ -57,7 +58,9 @@ async function api(method: string, path: string): Promise<{ status: number; body
   await http(req, { writeHead: (code: number) => { status = code }, end: (data: string) => { text = data } })
   return { status, body: JSON.parse(text) }
 }
-let agents: Map<string, { id: string; status: string; inbox: { nextTurn: UserMessage[]; nextStep: UserMessage[] }; cancel: ReturnType<typeof vi.fn>; inject: ReturnType<typeof vi.fn> }>
+let finishTurns: Map<string, () => void>
+const finishTurn = (sessionId: string) => finishTurns.get(sessionId)!()
+let agents: Map<string, { id: string; session: import('@deepseek-ai/dsh-agent').Agent['session']; status: string; inbox: { nextTurn: UserMessage[]; nextStep: UserMessage[] }; cancel: ReturnType<typeof vi.fn>; inject: ReturnType<typeof vi.fn> }>
 const runTool = async (sessionId: string, name: string, args: unknown) => {
   const tool = tools.get(sessionId)?.get(name)
   if (!tool) throw new Error(`Tool ${name} is not registered for ${sessionId}`)
@@ -156,6 +159,7 @@ beforeEach(async () => {
   }
   const ctx = new Context()
   agents = new Map()
+  finishTurns = new Map()
   tools = new Map()
   sections = new Map()
   guards = new Map()
@@ -165,6 +169,8 @@ beforeEach(async () => {
     create: vi.fn(async ({ sessionId, agentPreset }) => {
       if (agents.has(sessionId)) return
       const agentCtx = new Context()
+      // Mirror native inherited registry visibility rather than an isolated empty worker scope.
+      agentCtx.reflect.provide('jobs', jobs.service)
       const preset = {}
       const inherited = ['bash', 'read', 'read_image', 'skill', 'job_output', 'job_list', 'job_kill', 'grep', 'web_search',
         'ask_user_question', 'plugin_manager', 'schedule_create', 'create_goal', 'session_create', 'session_send_message', 'feishu_doc_edit']
@@ -183,7 +189,15 @@ beforeEach(async () => {
         }),
         guard: vi.fn((check: Guard) => { guards.set(sessionId, check); return () => {} }) })
       agentCtx.reflect.provide('skills', { register: () => () => {} })
-      agentCtx.reflect.provide('systemPrompt', { section: (spec: Section) => { sections.set(sessionId, spec); return () => {} } })
+      const promptSections = new Map<string, Section>()
+      agentCtx.reflect.provide('systemPrompt', { section: (spec: Section) => {
+        promptSections.set(spec.name, spec)
+        // Harness composes all registered sections, including admission guards. Keeping only
+        // the last registration hid the policy prompt whenever a new guard was installed.
+        sections.set(sessionId, { name: 'fixture-composed', interpolate: false,
+          text: context => [...promptSections.values()].map(part => part.text(context)).join('\n\n') })
+        return () => { if (promptSections.get(spec.name) === spec) promptSections.delete(spec.name) }
+      } })
       const inbox = { nextTurn: [] as UserMessage[], nextStep: [] as UserMessage[],
         // A pending message taken out, as DSH's inbox does by its id.
         remove: (id: string) => [inbox.nextTurn, inbox.nextStep].some(list => {
@@ -192,12 +206,24 @@ beforeEach(async () => {
           return at >= 0
         }) }
       const modelEvents: { type: string; data: unknown }[] = []
+      let turn = 0
       const deliver = (mode: 'queue' | 'steer') => vi.fn((message: UserMessage) => {
         inbox[mode === 'queue' ? 'nextTurn' : 'nextStep'].push(message)
         deliveries({ sessionId, mode, id: message.id, text: message.content.map(block => block.type === 'text' ? block.text : '').join('') })
-        agents.get(sessionId)!.status = 'running'
+        const agent = agents.get(sessionId)!
+        if (agent.status !== 'idle') return
+        agent.status = 'running'
+        // Native Harness records turn/start synchronously when delivery wakes an idle Session.
+        // Prompt/tool admission must see that lifecycle, not bypass the production guard.
+        ctx.emit('session/event', agent.session, { type: 'turn/start', data: { turn: ++turn } } as never)
       })
       agents.set(sessionId, { id: sessionId, ctx: agentCtx, inbox, followup: deliver('queue'), steer: deliver('steer'), status: 'idle', inject: vi.fn(), session: { id: sessionId, header: { agentPreset }, snapshotEvents: () => modelEvents, requestHeader: () => undefined, append: vi.fn((type: string, data: unknown) => { modelEvents.push({ type, data }) }) }, cancel: vi.fn(), whenIdle: async () => { agents.get(sessionId)!.status = 'idle' } } as never)
+      finishTurns.set(sessionId, () => {
+        const agent = agents.get(sessionId)!
+        ctx.emit('session/event', agent.session, { type: 'turn/end', data: { turn, reason: { kind: 'completed' } } } as never)
+        agent.status = 'idle'
+        ctx.emit('agent/status', { agent, status: 'idle' } as never)
+      })
       bindScopeParent(agents.get(sessionId)!, preset)
     }),
     selectModel: vi.fn(async () => {}), resolveAgent: vi.fn(async id => agents.has(id) ? { agent: agents.get(id) } : { error: { code: 'session/not-found' } }), rename: vi.fn(async () => {}),
@@ -685,12 +711,16 @@ it('retries only a failed, blocked or undelivered ticket with a new assignment, 
   expect(retried.assignments.at(-2)!.endedReason).toBe('retried')
   // The worker's Session holds the assignment, so the new one says only that a person retried it.
   expect(relays(`worker-${ticket.id}`).at(-1)).toEqual({ ticket_id: ticket.id, assignment: 2, note: expect.stringContaining('A person retried this ticket') })
-  // A Session someone deleted gets the whole first message again with the next Assignment.
+  // A deleted original Session cannot be recreated until original work has independent stop proof.
   runtime.store.atomic(() => { runtime.engine.report(ticket.id, { state: 'failed', summary: 'LlmError: offline' }) })
   agents.delete(`worker-${ticket.id}`)
+  const delivered = relays(`worker-${ticket.id}`).length
   runtime.engine.retryTicket(ticket.id)
-  await runtime.idle()
-  expect(relays(`worker-${ticket.id}`).at(-1)).toMatchObject({ ticket_id: ticket.id, title: '修复回归', trigger: expect.objectContaining({ text: '@bot 修一下回归' }) })
+  await runtime.idle(); await runtime.executor.stops.idle()
+  expect(relays(`worker-${ticket.id}`)).toHaveLength(delivered)
+  expect(agents.has(`worker-${ticket.id}`)).toBe(false)
+  expect(runtime.store.tickets.get(ticket.id)!.assignments.at(-1)).toMatchObject({ state: 'pending' })
+  expect(runtime.executor.stops.list(ticket.id).items).toEqual(expect.arrayContaining([expect.objectContaining({ state: 'unknown', proof: null })]))
   expect(search(viewsOf(runtime), '修复', new TextCache(0)).tickets).toEqual([expect.objectContaining({ id: ticket.id })])
   expect(decisionList(viewsOf(runtime), [], 0, 10, '2999-01-01T00:00:00Z').items).toEqual([])
   const accepted = runtime.store.read.recentDecisions(0, 1)[0]!
@@ -968,7 +998,7 @@ it('runs setup again while the Feishu bot check failed, and restores the process
   const broken = await restart()
   await broken.ready
   expect(broken.setupProblem).toMatchObject({ place: 'deployment', code: 'gitTooOld' })
-  expect(process.env.GIT_CONFIG_GLOBAL).toBeUndefined()
+  expect(process.env.GIT_CONFIG_GLOBAL).toBe(originalGitConfig)
   expect(process.env.PATH?.split(':')).not.toContain(join(directory, 'worker-bin'))
 })
 
@@ -988,7 +1018,7 @@ it('writes worker shims and the agent environment from the configuration only, a
   expect(process.env.GIT_AUTHOR_NAME).toBeUndefined()
   expect(process.env.PATH?.split(':')[0]).toBe(bin)
   await next.stop()
-  expect(process.env.GIT_CONFIG_GLOBAL).toBeUndefined()
+  expect(process.env.GIT_CONFIG_GLOBAL).toBe(originalGitConfig)
   expect(process.env.PATH?.split(':')).not.toContain(bin)
 })
 
@@ -1229,7 +1259,11 @@ it('resumes several ended tickets on one thread from one message without the lau
   await receive(another)
   await runTool(first.sessionId, 'orchestrator_trigger_handback', { trigger_id: another.id, reason: 'Another change.' })
   const second = await acceptedTicket(another)
-  for (const ticket of [first, second]) await runTool(ticket.sessionId, 'orchestrator_report', { state: 'dropped', summary: 'nothing to do' })
+  for (const ticket of [first, second]) {
+    await runTool(ticket.sessionId, 'orchestrator_report', { state: 'dropped', summary: 'nothing to do' })
+    finishTurn(ticket.sessionId)
+  }
+  await runtime.idle(); await runtime.executor.stops.idle()
   await receive(feishu('32', '还有问题', { mentions: [], root_id: 'om_1', sender_id: 'ou_guest' }))
   await vi.waitFor(() => expect([first, second].map(ticket => runtime.store.tickets.get(ticket.ticket.id)!.ended)).toEqual([undefined, undefined]), { timeout: 3000 })
   await vi.waitFor(() => expect([first, second].map(ticket => runtime.store.tickets.get(ticket.ticket.id)!.assignments.at(-1)!.state)).toEqual(['running', 'running']), { timeout: 3000 })
