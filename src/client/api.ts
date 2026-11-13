@@ -34,7 +34,12 @@ async function api<T>(messages: ApiMessages, path: string, method: string, body?
   let response: Response
   const json = body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
   try {
-    response = await fetch(`/orchestrator/api/${path}`, { method, ...json, headers: { 'x-orchestrator-request': '1', ...json.headers } })
+    // Optional administration token set by the operator in this browser; the server also keeps its loopback guard.
+    // Storage can be unavailable (opaque-origin documents, disabled storage); that must not break ordinary requests.
+    let admin: string | null = null
+    try { admin = typeof localStorage === 'undefined' ? null : localStorage.getItem('dsh-admin-token') } catch { admin = null }
+    response = await fetch(`/orchestrator/api/${path}`, { method, ...json,
+      headers: { 'x-orchestrator-request': '1', ...(admin ? { authorization: `Bearer ${admin}` } : {}), ...json.headers } })
   } catch {
     throw new ApiError(messages.offline, 0, { unreachable: true })
   }

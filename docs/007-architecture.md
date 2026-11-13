@@ -479,6 +479,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/app/views/settings.ts` | The settings page's view: each block with its revision, each Source's settings with its kind's form, and the execution environment |
 | `src/app/views/overview.ts` | The overview: Tickets that need a person, problems, the last day's flow and the Executor's load |
 | `src/security/audit.ts` | Append-only operator audit log with SHA-256 hash chaining, secret-shaped detail redaction, bounded pages and tamper verification |
+| `src/security/access.ts` | Optional bearer-token administration boundary, role/capability matrix and explicit deny-by-default connector grants |
 | `src/executor/failure.ts` | Typed sanitized failure facts and exact live Agent/Session/assignment/turn/step fencing |
 | `src/executor/dsh.ts` | The DshExecutor, `WorkerSlots`, `ticketExecution`, `inputMessage` and `mandateInstructions` |
 | `src/executor/stop-model.ts`, `stop-store.ts`, `stops.ts` | Original-scope stop authority in the main Store, retained control receipts and execution admission holds |
@@ -590,6 +591,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/publication-evidence.spec.ts`, `tests/evidence-review-ui.spec.tsx` | Selected evidence approval, publisher expiry, observation-before-retry, native Linux acceptance/publication and rendered all-artifact review |
 | `tests/core-engine.spec.ts` | Domain rules on in-memory repositories: receiving, Eval, fan-out, resume and stop, interrupted Assignments, the pause, Policy changes, reports and outcomes, attaching, replies, failed deliveries and dismissed problems |
 | `tests/emergency.spec.ts` | Emergency engagement halting running work, admission refusal, durable state, idempotent replay, release, independent pause, and audit chain/redaction/tamper detection |
+| `tests/admin-access.spec.ts` | No-token loopback default, bearer-token authentication, role capability denial with audit facts, connector deny-by-default grants, and malformed configuration that does not echo secrets |
 | `tests/environments.spec.ts` | Runtime/API enrollment, persistent grants, paired-provider proof, races, revocation, replacement and legacy task binding |
 | `tests/environments-ui.spec.tsx` | Rendered enrollment/recovery and exact mutation retry after response loss and polling |
 | `tests/world-pool.spec.ts` | Independent paired worlds, per-action dispatch, revocation/recovery, credential fencing and revoked receipts |

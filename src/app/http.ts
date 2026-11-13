@@ -65,6 +65,8 @@ import type { Attachments } from '../attachments/service.ts'
 import { UploadError, UPLOAD_LIMITS } from '../attachments/model.ts'
 import type { ExecutorStops } from '../executor/stops.ts'
 import { EmergencyRequest, type Emergency } from './emergency.ts'
+import type { Access, Capability } from '../security/access.ts'
+import type { AuditLog } from '../security/audit.ts'
 
 export interface HttpHost {
   readonly voice?: Voice
@@ -104,6 +106,8 @@ export interface HttpHost {
   readonly health: Record<string, Health>
   readonly machine: Machine
   readonly emergency?: Pick<Emergency, 'state' | 'engage' | 'release'>
+  readonly access?: Access
+  readonly audit?: Pick<AuditLog, 'append' | 'list'>
   readonly masterId: string
   /** Resolves once startup finishes or setup determines what is still missing. */
   readonly ready: Promise<void>
@@ -122,7 +126,7 @@ export interface HttpHost {
  * Represents a client-facing 400 or 404 error raised during management route parsing or lookup.
  * Route handlers throw it when request bodies are malformed or target records are missing, and registerHttp serializes its status and message in the HTTP response.
  */
-class RouteError extends Error { constructor(readonly status: 400 | 404 | 409, message: string) { super(message) } }
+class RouteError extends Error { constructor(readonly status: 400 | 403 | 404 | 409, message: string) { super(message) } }
 async function readBody(req: IncomingMessage, maxBytes = 128 * 1024): Promise<unknown> {
   let size = 0; const chunks: Buffer[] = []
   for await (const chunk of req) {
@@ -177,7 +181,7 @@ export function stateView(runtime: HttpHost) {
   const settings = runtime.store.settings()
   return { setup: setupView(runtime), load: { ...executorLoad(runtime.store, runtime.executor.activeCount()),
     maxWorkers: settings.executor.maxWorkers },
-    masterId: runtime.masterId, paused: settings.paused, emergency: runtime.emergency?.state() ?? null,
+    masterId: runtime.masterId, paused: settings.paused, emergency: runtime.emergency?.state() ?? null, access: runtime.access?.view() ?? null,
     environment: { ready: runtime.environments.ready() }, health: runtime.health,
     ...(runtime.ownership ? { ownership: runtime.ownership.status() } : {}) }
 }
@@ -222,6 +226,11 @@ const SettingsBlockSchema = z.union([z.enum(['policy', 'eval', 'executor']), Sou
 const SaveRequest = z.object({ value: z.unknown(), revision: z.number().int().nonnegative() })
 
 function routes(runtime: HttpHost): Routes {
+  const allow = (capability: Capability) => {
+    if (!runtime.access || runtime.access.allows(capability)) return
+    try { runtime.audit?.append({ actor: `admin:${runtime.access.role()}`, action: 'access.capability', resource: capability, outcome: 'denied' }) } catch { /* Response remains authoritative. */ }
+    throw new RouteError(403, 'This administration role does not allow that action')
+  }
   const stops = () => { if (!runtime.executor?.stops) throw new WorkspaceError(409, 'Original stop recovery is unavailable'); return runtime.executor.stops }
   const originalStop = (params: { id: string; assignment: string; stop: string }) => {
     const current = stops().detail(params.stop)
@@ -473,21 +482,30 @@ function routes(runtime: HttpHost): Routes {
       const current = originalStop(params)
       return { receipt: stops().attestation(params.stop, params.request), current }
     },
-    'POST tickets/:id/retry': ({ params }) => { const id = ticket(params.id); runtime.engine.retryTicket(id); return { retried: true } },
-    'POST tickets/:id/stop': ({ params }) => { const id = ticket(params.id); runtime.engine.stopTicket(id); return { stopped: true } },
-    'POST executor/pause': async ({ body }) => runtime.settings.pause(z.object({ paused: z.boolean() }).parse(await body()).paused, 'panel'),
+    'POST tickets/:id/retry': ({ params }) => { allow('tasks:write'); const id = ticket(params.id); runtime.engine.retryTicket(id); return { retried: true } },
+    'POST tickets/:id/stop': ({ params }) => { allow('tasks:write'); const id = ticket(params.id); runtime.engine.stopTicket(id); return { stopped: true } },
+    'POST executor/pause': async ({ body }) => { allow('runtime:operate'); return runtime.settings.pause(z.object({ paused: z.boolean() }).parse(await body()).paused, 'panel') },
+    'GET audit': ({ query }) => {
+      allow('audit:read')
+      const limit = Number(query.limit ?? 50), cursor = query.cursor === undefined ? undefined : Number(query.cursor)
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new RouteError(400, 'Invalid audit page')
+      if (cursor !== undefined && (!Number.isSafeInteger(cursor) || cursor < 0)) throw new RouteError(400, 'Invalid audit page')
+      return runtime.audit?.list(limit, cursor) ?? { items: [], nextCursor: null }
+    },
     'GET emergency': () => {
       const emergency = runtime.emergency
       if (!emergency) throw new RouteError(409, 'Emergency control is unavailable')
       return emergency.state()
     },
     'POST emergency': async ({ body }) => {
+      allow('runtime:operate')
       const emergency = runtime.emergency
       if (!emergency) throw new RouteError(409, 'Emergency control is unavailable')
       const request = EmergencyRequest.parse(await body(16_384))
       return request.action === 'engage' ? await emergency.engage(request) : await emergency.release(request)
     },
     'PUT settings/:block': async ({ params, body }) => {
+      allow('settings:write')
       const block = SettingsBlockSchema.parse(params.block)
       const known = !block.startsWith('source:') || runtime.sources.instances().some(instance => `source:${instance.id}` === block)
       if (!known) throw new RouteError(404, 'Source not found')
@@ -529,6 +547,16 @@ export function registerHttp(ctx: Context, runtime: HttpHost): () => void {
       const url = new URL(req.url ?? '/', 'http://localhost')
       if (!url.pathname.startsWith('/orchestrator/api/')) { res.writeHead(404); res.end(); return }
       if (!sameOrigin(req, ctx.webServer.port)) { json(res, 403, { error: 'Same-origin management request required' }); return }
+      // Independent supervision keeps its own bearer authentication and must stay observable during startup.
+      const supervisionPath = url.pathname === '/orchestrator/api/supervision' || url.pathname.startsWith('/orchestrator/api/supervision/')
+      if (!supervisionPath && runtime.access) {
+        const authenticated = runtime.access.authenticate(req.headers.authorization)
+        if (!authenticated.ok) {
+          try { runtime.audit?.append({ actor: 'unauthenticated', action: 'access.authenticate', resource: url.pathname, outcome: 'denied', detail: { reason: authenticated.reason } }) } catch { /* Response remains authoritative. */ }
+          res.writeHead(401, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'www-authenticate': 'Bearer' })
+          res.end(JSON.stringify({ error: 'Administration authentication required' })); return
+        }
+      }
       try {
         // Receipt refresh writes observations locally but never sends an execution or cancellation intent.
         const observation = req.method === 'POST' && /^\/orchestrator\/api\/(?:execution|tickets\/[^/]+\/execution|worlds\/[^/]+\/execution|publications\/[^/]+|repository-publications\/[^/]+|deliveries\/[^/]+|verification\/[^/]+)\/refresh$/.test(url.pathname)
