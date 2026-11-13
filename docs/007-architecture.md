@@ -482,7 +482,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/security/access.ts` | Optional bearer-token administration boundary, role/capability matrix and explicit deny-by-default connector grants |
 | `src/security/credentials.ts` | Confined 0600 credential vault: atomic writes, names-only listing, traversal and symlink refusal |
 | `src/security/providers.ts` | Validated provider endpoints/models from the environment and a redacted view that never claims live verification |
-| `src/memory/service.ts` | Typed persistent memory: scoped access, dedup/upsert, FTS5 search, provenance events and hard deletion |
+| `src/memory/service.ts` | Typed persistent memory: scoped access, dedup/upsert, FTS5 search, bounded advisory context, private conversation capture with retention, provenance events and hard deletion |
 | `src/executor/failure.ts` | Typed sanitized failure facts and exact live Agent/Session/assignment/turn/step fencing |
 | `src/executor/dsh.ts` | The DshExecutor, `WorkerSlots`, `ticketExecution`, `inputMessage` and `mandateInstructions` |
 | `src/executor/stop-model.ts`, `stop-store.ts`, `stops.ts` | Original-scope stop authority in the main Store, retained control receipts and execution admission holds |
@@ -596,7 +596,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/emergency.spec.ts` | Emergency engagement halting running work, admission refusal, durable state, idempotent replay, release, independent pause, and audit chain/redaction/tamper detection |
 | `tests/admin-access.spec.ts` | No-token loopback default, bearer-token authentication, role capability denial with audit facts, connector deny-by-default grants, and malformed configuration that does not echo secrets |
 | `tests/credentials.spec.ts` | Atomic 0600 vault storage, names-only listing, traversal/symlink refusal, provider URL/model validation, redacted API views, audit without values, and viewer denial |
-| `tests/memory.spec.ts` | Memory persistence across restart, FTS and tag search, scope isolation, dedup/upsert revisions, provenance events, hard deletion, API flows and viewer denial |
+| `tests/memory.spec.ts` | Memory persistence across restart, FTS/tag search, scope isolation, dedup/upsert, bounded advisory context, conversation capture/retention, prompt injection, hard deletion, API flows and viewer denial |
 | `tests/environments.spec.ts` | Runtime/API enrollment, persistent grants, paired-provider proof, races, revocation, replacement and legacy task binding |
 | `tests/environments-ui.spec.tsx` | Rendered enrollment/recovery and exact mutation retry after response loss and polling |
 | `tests/world-pool.spec.ts` | Independent paired worlds, per-action dispatch, revocation/recovery, credential fencing and revoked receipts |

@@ -87,6 +87,57 @@ it('filters by kind and hard-deletes the record and its search index while retai
   expect(goal.created).toBe(true)
 })
 
+it('builds bounded advisory context from normal profiles/goals/preferences/decisions only', () => {
+  const { memory } = fixture()
+  memory.save(MemoryAccess.owner(), { kind: 'profile', scope: { type: 'personal' }, subject: 'Alice', content: 'Prefers concise updates', sensitivity: 'normal' })
+  memory.save(MemoryAccess.owner(), { kind: 'goal', scope: { type: 'business' }, subject: 'Launch', content: 'Ship the private beta', sensitivity: 'normal' })
+  memory.save(MemoryAccess.owner(), { kind: 'preference', scope: { type: 'personal' }, subject: 'Briefings', content: 'Morning briefings at 8am', sensitivity: 'normal' })
+  memory.save(MemoryAccess.owner(), { kind: 'fact', scope: { type: 'personal' }, subject: '', content: 'A private fact', sensitivity: 'private' })
+  memory.captureConversation(MemoryAccess.owner(), { sessionId: 'main', text: 'A conversation turn that must not be auto-injected' })
+  const context = memory.context(MemoryAccess.owner(), { limit: 8, maxChars: 1500 })
+  expect(context).toContain('[profile] Alice: Prefers concise updates')
+  expect(context).toContain('[goal] Launch: Ship the private beta')
+  expect(context).toContain('[preference] Briefings: Morning briefings at 8am')
+  expect(context).not.toContain('A private fact')
+  expect(context).not.toContain('conversation turn')
+  expect(memory.context(MemoryAccess.owner(), { limit: 1, maxChars: 1500 })).toBe('- [profile] Alice: Prefers concise updates')
+  expect(memory.context(new MemoryAccess(['business']), { limit: 8 })).toContain('Launch')
+  expect(memory.context(new MemoryAccess(['business']), { limit: 8 })).not.toContain('Alice')
+  memory.save(MemoryAccess.owner(), { kind: 'decision', scope: { type: 'business' }, subject: 'Archive', content: 'x'.repeat(300), sensitivity: 'normal' })
+  const bounded = memory.context(MemoryAccess.owner(), { limit: 8, maxChars: 200 })
+  expect(bounded.length).toBeLessThanOrEqual(200)
+  expect(bounded).not.toContain('Archive')
+})
+
+it('captures operator conversation turns privately, deduplicates them, and keeps bounded retention', () => {
+  const { memory } = fixture()
+  const first = memory.captureConversation(MemoryAccess.owner(), { sessionId: 'main', text: 'Remember the launch is in May' })
+  expect(first).toMatchObject({ kind: 'conversation', sensitivity: 'private', scope: { type: 'personal' }, provenance: { source: 'conversation', ref: 'main' } })
+  expect(memory.captureConversation(MemoryAccess.owner(), { sessionId: 'main', text: 'Remember the launch is in May' })!.id).toBe(first!.id)
+  expect(memory.search(MemoryAccess.owner(), { q: 'launch', kinds: ['conversation'] }).items).toHaveLength(1)
+  for (let index = 0; index < 205; index++) memory.captureConversation(MemoryAccess.owner(), { sessionId: 'main', text: `short-term turn ${index}` })
+  expect(memory.search(MemoryAccess.owner(), { kinds: ['conversation'], limit: 50 }).items).toHaveLength(50)
+  expect(memory.search(MemoryAccess.owner(), { q: 'short-term', kinds: ['conversation'] }).items.length).toBeLessThan(205)
+})
+
+it('injects bounded memory context into the main Session prompt and captures its user turns', async () => {
+  const h = host = await startRuntime(undefined, { executionMode: 'local', noAccounts: true })
+  await h.api('POST', 'memory', { requestId: 'prompt-memory', kind: 'goal', scope: { type: 'business' }, subject: 'Launch',
+    content: 'Ship the private beta', sensitivity: 'normal', source: 'operator' })
+  const section = h.promptSections.get(`${h.runtime.masterId}:dsh-superagent-policy`)
+  expect(section).toBeDefined()
+  const prompt = section!.text({})
+  expect(prompt).toContain('Persistent memory context')
+  expect(prompt).toContain('[goal] Launch: Ship the private beta')
+  const agent = h.agents.get(h.runtime.masterId)!
+  h.ctx.emit('session/event', (agent as unknown as { session: never }).session, { type: 'user/message', data: {
+    content: [{ type: 'text', text: 'Please prepare my priorities for today' }], source: { kind: 'user' } } } as never)
+  const captured = h.runtime.memory.search(MemoryAccess.owner(), { q: 'priorities', kinds: ['conversation'] })
+  expect(captured.items).toHaveLength(1)
+  expect(captured.items[0]).toMatchObject({ sensitivity: 'private', content: 'Please prepare my priorities for today' })
+  expect(h.promptSections.get(`${h.runtime.masterId}:dsh-superagent-policy`)!.text({})).not.toContain('priorities for today')
+})
+
 it('exposes scope-filtered memory through the management API and audits without content', async () => {
   const h = host = await startRuntime(undefined, { executionMode: 'local', noAccounts: true })
   const created = await h.api('POST', 'memory', { requestId: 'memory-1', kind: 'fact', scope: { type: 'personal' },

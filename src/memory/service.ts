@@ -193,6 +193,45 @@ export class Memory {
     return { items, nextCursor: rows.length > limit ? `${rows[limit - 1]!.updated_at}|${rows[limit - 1]!.id}` : null }
   }
 
+  /** Bounded automatic context for the owner's assistant: normal-sensitivity profiles, goals, preferences and decisions. */
+  context(access: MemoryAccess, options: { limit?: number; maxChars?: number } = {}): string {
+    const limit = Math.min(20, Math.max(1, options.limit ?? 8)), maxChars = Math.min(4000, Math.max(200, options.maxChars ?? 1500))
+    const grant = access.filter('m.scope')
+    if (!grant) return ''
+    const rows = this.host.store.db.prepare(`SELECT value FROM memory_record m WHERE ${grant.sql}
+      AND m.kind IN ('profile', 'goal', 'preference', 'decision')
+      AND json_extract(m.value, '$.sensitivity') = 'normal'
+      ORDER BY CASE m.kind WHEN 'profile' THEN 0 WHEN 'goal' THEN 1 WHEN 'preference' THEN 2 ELSE 3 END, m.updated_at DESC
+      LIMIT ?`).all(...grant.params, limit) as unknown as { value: string }[]
+    const lines: string[] = []
+    for (const row of rows) {
+      const record = this.parse(row.value)
+      const line = `- [${record.kind}]${record.subject ? ` ${record.subject}:` : ''} ${(record.summary ?? record.content).replace(/\s+/g, ' ').trim()}`
+      if ([...lines, line].join('\n').length > maxChars) break
+      lines.push(line)
+    }
+    return lines.join('\n')
+  }
+
+  /** Captures an operator conversation turn as private personal memory, deduplicated, and prunes old turns. */
+  captureConversation(access: MemoryAccess, input: { sessionId: string; text: string; actor?: string }): MemoryRecord | undefined {
+    const text = input.text.trim()
+    if (!text) return undefined
+    const saved = this.save(access, { kind: 'conversation', scope: { type: 'personal' }, subject: '', content: text.slice(0, 20_000),
+      tags: ['conversation'], sensitivity: 'private', source: 'conversation', sourceRef: input.sessionId }, input.actor ?? 'operator')
+    this.pruneConversations(access, 200)
+    return saved.record
+  }
+
+  /** Bounded retention for short-term conversation memory; hard-deletes the oldest turns first. */
+  private pruneConversations(access: MemoryAccess, keep: number): void {
+    const grant = access.filter('scope')
+    if (!grant) return
+    const rows = this.host.store.db.prepare(`SELECT id FROM memory_record WHERE ${grant.sql}
+      AND kind = 'conversation' AND scope = 'personal' ORDER BY updated_at DESC LIMIT -1 OFFSET ?`).all(...grant.params, keep) as unknown as { id: string }[]
+    for (const row of rows.slice(0, 20)) this.delete(access, row.id, 'retention')
+  }
+
   /** Hard deletion: the record and its search index are removed; the append-only event records that it existed. */
   delete(access: MemoryAccess, id: string, actor = 'operator'): boolean {
     const record = this.get(access, id)

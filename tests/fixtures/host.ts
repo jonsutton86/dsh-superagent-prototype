@@ -179,6 +179,7 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
   const steps = new Map<string, () => void>(), claims = new Map<string, () => void>()
   const finishes = new Map<string, (reason?: 'completed' | 'aborted' | 'error') => void>()
   const tools = new Map<string, Map<string, RegisteredTool>>()
+  const promptSections = new Map<string, { sessionId: string; name: string; text: (context: Record<string, unknown>) => string }>()
   const deliveries = vi.fn<(request: Delivery) => void>()
   let http!: HttpHandler
   const resolveDefault = async (id: string) => agents.has(id) ? { agent: agents.get(id) } : { error: { code: 'session/not-found' } }
@@ -194,7 +195,10 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
       const register = (tool: RegisteredTool) => { sessionTools.set(tool.name, tool); return () => sessionTools.delete(tool.name) }
       agentCtx.reflect.provide('tools', { register, get: () => undefined, restrict: vi.fn(() => () => {}), guard: vi.fn(() => () => {}) })
       agentCtx.reflect.provide('skills', { register: () => () => {} })
-      agentCtx.reflect.provide('systemPrompt', { section: () => () => {} })
+      agentCtx.reflect.provide('systemPrompt', { section: (spec: { name: string; text: (context: Record<string, unknown>) => string }) => {
+        promptSections.set(`${sessionId}:${spec.name}`, { sessionId, name: spec.name, text: spec.text })
+        return () => {}
+      } })
       const inbox = { nextTurn: [] as UserMessage[], nextStep: [] as UserMessage[],
         // A pending message taken out, as DSH's inbox does by its id.
         remove: (id: string) => [inbox.nextTurn, inbox.nextStep].some(list => {
@@ -367,7 +371,7 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
   /** A step of the worker claims what waits for it, and is cut off before the Session took it. */
   const claim = (sessionId: string) => { claims.get(sessionId)!() }
   return { runtime, ctx, directory, agents, tools, deliveries, relays, candidates, runTool, withTool, route, acceptedTicket, api, controller, subprocess, hooks, resolveDefault, stop,
-    jobs, subagents, step, claim, presets, http,
+    jobs, subagents, step, claim, presets, http, promptSections,
     /** End the actual simulated model turn, separately from any tool report it submitted. */
     finishTurn: (sessionId: string) => { finishes.get(sessionId)!() } }
 }

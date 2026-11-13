@@ -41,7 +41,7 @@ import { Emergency } from './emergency.ts'
 import { Access, readAccessConfig } from '../security/access.ts'
 import { CredentialVault } from '../security/credentials.ts'
 import { ProviderRegistry, readProviders } from '../security/providers.ts'
-import { Memory } from '../memory/service.ts'
+import { Memory, MemoryAccess } from '../memory/service.ts'
 import { Voice } from '../voice/service.ts'
 import { Attachments } from '../attachments/service.ts'
 import { outsideRoots } from '../voice/adapters.ts'
@@ -283,6 +283,12 @@ export class Runtime extends Service implements SourceHost {
         () => machine.executionMode === 'local')
       const masterId = this.masterId = store.get(KV.runtime.masterId) ?? `orchestrator-${key(machine.stateDir)}`
       store.set(KV.runtime.masterId, masterId)
+      // Short-term conversation memory: only the owner's direct messages, stored privately and never auto-injected.
+      this.disposers.push(ctx.on('session/event', (session, event) => {
+        if (this.closing() || session.id !== this.masterId || event.type !== 'user/message' || event.data.source?.kind !== 'user') return
+        const text = event.data.content.filter(block => block.type === 'text').map(block => block.text).join('').trim()
+        if (text) this.memory.captureConversation(MemoryAccess.owner(), { sessionId: this.masterId, text, actor: 'operator' })
+      }))
       const commands = this.commands = new Commands(() => setup.deployment, setup.commandEnvironment, this.lifetime)
       const board = this.board
       const accounting = new UsageRuntime(ctx, store, usage, masterId, this.lifetime, board.claim('usage', { state: 'starting', detail: 'Model accounting is starting' }))
@@ -311,6 +317,7 @@ export class Runtime extends Service implements SourceHost {
         promptVersion: id => this.sessions.promptVersion(id), mayRead: (id, revision) => this.sessions.mayRead(id, revision),
         feishuPageSize: () => feishuSettings(sources).readPageSize, sourceLink: link }
       const sessions = this.sessions = new Sessions({ context: ctx, store, prompts, effects, health: board.claim('models'), masterId,
+        memoryContext: () => this.memory.context(MemoryAccess.owner(), { limit: 8, maxChars: 1500 }),
         attachments: this.attachments,
         lifetime: this.lifetime, remote, worlds: this.worlds, personas, ownership: this.ownership, environmentAllowed: ticket => environments.allows(ticket.execution?.environment),
         executionProblem: ticket => runtime.executor?.stops.problem(ticket.id) ?? runtime.speculation?.problem(ticket),
