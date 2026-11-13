@@ -397,7 +397,7 @@ export class Runtime extends Service implements SourceHost {
       this.disposers.push(watchOperatorChat(ctx, () => this.masterId, trigger => {
         if (engine.receive(trigger) === 'stored') passes.request()
       }, message => ctx.logger.warn('dsh-superagent did not store an operator message: %s', message)))
-      this.toolHost = { context: ctx, engine, store, prompts, sessions, settings: this.settings, assessor, resources, library, verification, planning: workspace.plans, reflections, personas, worlds: this.worlds, attachments: this.attachments,
+      this.toolHost = { context: ctx, engine, store, prompts, sessions, settings: this.settings, assessor, resources, library, verification, planning: workspace.plans, reflections, personas, worlds: this.worlds, attachments: this.attachments, memory: this.memory,
         allowPublicFetch: () => { try { return !this.commands.deployment.github } catch { return false } },
         fetchAllowlist: () => operatorConfig(store.settings()).fetchAllowlist,
         get github() { return runtime.context({ kind: 'github', health: ['github'] }) },

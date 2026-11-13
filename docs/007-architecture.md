@@ -468,6 +468,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/app/tools/tool.ts` | The `Tool` type, `readTool`, the `orchestrator_read` of both roles, and `AcknowledgementSchema` |
 | `src/app/tools/main.ts` | The main Session's tools |
 | `src/app/tools/executor.ts` | An Executor Session's tools |
+| `src/app/tools/memory.ts` | Worker memory search/write tools, registered only for a ticket with explicit scope grants |
 | `src/app/tools/operator-tools.ts` | The worker's scoped file read and bounded public fetch |
 | `src/app/http.ts` | The `/orchestrator/api` routes: the same-origin check, request limits and one status per kind of failure |
 | `src/app/api.ts` | `Api`, every route with its parameters, query, body and response, and the filters of the lists; it imports only types, so the panel bundles it |
@@ -596,7 +597,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/emergency.spec.ts` | Emergency engagement halting running work, admission refusal, durable state, idempotent replay, release, independent pause, and audit chain/redaction/tamper detection |
 | `tests/admin-access.spec.ts` | No-token loopback default, bearer-token authentication, role capability denial with audit facts, connector deny-by-default grants, and malformed configuration that does not echo secrets |
 | `tests/credentials.spec.ts` | Atomic 0600 vault storage, names-only listing, traversal/symlink refusal, provider URL/model validation, redacted API views, audit without values, and viewer denial |
-| `tests/memory.spec.ts` | Memory persistence across restart, FTS/tag search, scope isolation, dedup/upsert, bounded advisory context, conversation capture/retention, prompt injection, hard deletion, API flows and viewer denial |
+| `tests/memory.spec.ts` | Memory persistence across restart, FTS/tag search, scope isolation, dedup/upsert, bounded advisory context, conversation capture/retention, prompt injection, ticket grants, worker tools, hard deletion, API flows and viewer denial |
 | `tests/environments.spec.ts` | Runtime/API enrollment, persistent grants, paired-provider proof, races, revocation, replacement and legacy task binding |
 | `tests/environments-ui.spec.tsx` | Rendered enrollment/recovery and exact mutation retry after response loss and polling |
 | `tests/world-pool.spec.ts` | Independent paired worlds, per-action dispatch, revocation/recovery, credential fencing and revoked receipts |

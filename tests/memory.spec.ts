@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { Store } from '../src/app/store.ts'
 import { Memory, MemoryAccess, MemoryError } from '../src/memory/service.ts'
+import { memoryTools } from '../src/app/tools/memory.ts'
 import { startRuntime, type Host } from './fixtures/host.ts'
 
 let host: Host | undefined
@@ -138,6 +139,44 @@ it('injects bounded memory context into the main Session prompt and captures its
   expect(h.promptSections.get(`${h.runtime.masterId}:dsh-superagent-policy`)!.text({})).not.toContain('priorities for today')
 })
 
+it('grants worker memory per ticket, deny-by-default, and keeps tools scoped to those grants', async () => {
+  const { memory } = fixture()
+  expect(memoryTools(memory, 'ticket-1')).toEqual([])
+  memory.save(MemoryAccess.owner(), { ...fact('Business context'), scope: { type: 'business' } })
+  memory.save(MemoryAccess.owner(), fact('Personal context'))
+  expect(memory.setGrants(MemoryAccess.owner(), 'ticket-1', ['business'], 'operator')).toEqual(['business'])
+  const tools = memoryTools(memory, 'ticket-1')
+  expect(tools.map(tool => tool.name)).toEqual(['memory_search', 'memory_write'])
+  const signal = new AbortController().signal
+  const search = tools.find(tool => tool.name === 'memory_search')!
+  const found = await search.execute({ limit: 10 }, signal) as { items: { content: string }[] }
+  expect(found.items.map(item => item.content)).toEqual(['Business context'])
+  const write = tools.find(tool => tool.name === 'memory_write')!
+  const written = await write.execute({ kind: 'fact', scope: 'business', subject: 'worker', content: 'Worker-written fact', tags: [], sensitivity: 'normal' }, signal) as { created: boolean; revision: number }
+  expect(written).toMatchObject({ created: true, revision: 1 })
+  expect(memory.search(MemoryAccess.owner(), { q: 'Worker-written' }).items).toHaveLength(1)
+  await expect(write.execute({ kind: 'fact', scope: 'personal', subject: '', content: 'Escalation', tags: [], sensitivity: 'normal' }, signal))
+    .rejects.toThrow(MemoryError)
+  expect(memory.grants('ticket-1')).toEqual(['business'])
+  expect(memory.accessFor('ticket-1').allows('personal')).toBe(false)
+  expect(() => memory.setGrants(new MemoryAccess(['personal']), 'ticket-1', ['business'], 'operator')).toThrow(MemoryError)
+})
+
+it('persists ticket grants across a Store restart and revokes them by replacement', () => {
+  const first = fixture()
+  first.memory.save(MemoryAccess.owner(), { ...fact('Business fact'), scope: { type: 'business' } })
+  first.memory.setGrants(MemoryAccess.owner(), 'ticket-2', ['business'], 'operator')
+  first.store.close()
+  const reopened = new Store(join(first.directory, 'state.sqlite'))
+  try {
+    const memory = new Memory({ store: reopened })
+    expect(memory.grants('ticket-2')).toEqual(['business'])
+    memory.setGrants(MemoryAccess.owner(), 'ticket-2', [], 'operator')
+    expect(memory.grants('ticket-2')).toEqual([])
+    expect(memoryTools(memory, 'ticket-2')).toEqual([])
+  } finally { reopened.close() }
+})
+
 it('exposes scope-filtered memory through the management API and audits without content', async () => {
   const h = host = await startRuntime(undefined, { executionMode: 'local', noAccounts: true })
   const created = await h.api('POST', 'memory', { requestId: 'memory-1', kind: 'fact', scope: { type: 'personal' },
@@ -168,4 +207,31 @@ it('denies memory writes to a viewer while allowing reads', async () => {
     subject: '', content: 'Viewer must not write', tags: [], source: 'operator' }, headers)
   expect(denied.status).toBe(403)
   expect(h.runtime.memory.search(MemoryAccess.owner(), { q: 'Viewer' }).items).toHaveLength(0)
+})
+
+it('exposes ticket memory grants through the management API and denies viewer writes', async () => {
+  const h = host = await startRuntime(undefined, { executionMode: 'local', noAccounts: true })
+  const item = h.runtime.inbox.start({ requestId: 'grant-task', title: 'Grant task', text: 'Work with memory' })
+  const deniedUnknown = await h.api('GET', 'tickets/missing/memory-grants')
+  expect(deniedUnknown.status).toBe(404)
+  const empty = await h.api('GET', `tickets/${item.id}/memory-grants`)
+  expect(empty.body).toEqual({ scopes: [] })
+  const granted = await h.api('PUT', `tickets/${item.id}/memory-grants`, { requestId: 'grant-1', scopes: ['business', 'project:alpha'] })
+  expect(granted.status).toBe(200)
+  expect(granted.body).toEqual({ scopes: ['business', 'project:alpha'] })
+  expect((await h.api('GET', `tickets/${item.id}/memory-grants`)).body).toEqual({ scopes: ['business', 'project:alpha'] })
+  expect(h.runtime.audit.list(20).items).toEqual(expect.arrayContaining([expect.objectContaining({ action: 'memory.grant', resource: item.id })]))
+  const invalid = await h.api('PUT', `tickets/${item.id}/memory-grants`, { requestId: 'grant-2', scopes: ['not-a-scope'] })
+  expect(invalid.status).toBe(400)
+  await h.runtime.executor.stops.idle()
+})
+
+it('denies ticket grant writes to a viewer', async () => {
+  process.env.DSH_ORCHESTRATOR_ADMIN_TOKEN = TOKEN
+  process.env.DSH_ORCHESTRATOR_ROLE = 'viewer'
+  const h = host = await startRuntime(undefined, { executionMode: 'local', noAccounts: true })
+  const item = h.runtime.inbox.start({ requestId: 'viewer-grant', title: 'Viewer grant', text: 'No writes' })
+  const headers = { authorization: `Bearer ${TOKEN}` }
+  expect((await h.api('GET', `tickets/${item.id}/memory-grants`, undefined, headers)).status).toBe(200)
+  expect((await h.api('PUT', `tickets/${item.id}/memory-grants`, { requestId: 'grant-viewer', scopes: ['personal'] }, headers)).status).toBe(403)
 })

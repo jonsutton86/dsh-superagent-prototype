@@ -79,7 +79,8 @@ export function initializeMemoryStore(db: DatabaseSync): void {
     CREATE TABLE IF NOT EXISTS memory_event (id INTEGER PRIMARY KEY AUTOINCREMENT, memory TEXT NOT NULL, scope TEXT NOT NULL,
       action TEXT NOT NULL, at TEXT NOT NULL, actor TEXT NOT NULL, detail TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS memory_event_memory ON memory_event(memory, id);
-    CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(memory UNINDEXED, content, subject, tags);`)
+    CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(memory UNINDEXED, content, subject, tags);
+    CREATE TABLE IF NOT EXISTS memory_grant (ticket TEXT NOT NULL, scope TEXT NOT NULL, at TEXT NOT NULL, actor TEXT NOT NULL, PRIMARY KEY (ticket, scope));`)
 }
 
 /** Deny-by-default scope grants. `*` allows every local scope; `project:*` allows every project; exact keys otherwise. */
@@ -192,6 +193,29 @@ export class Memory {
     const items = rows.slice(0, limit).map(row => this.parse(row.value))
     return { items, nextCursor: rows.length > limit ? `${rows[limit - 1]!.updated_at}|${rows[limit - 1]!.id}` : null }
   }
+
+  /** Scopes an operator explicitly granted to one ticket; empty means no worker memory access. */
+  grants(ticketId: string): string[] {
+    return (this.host.store.db.prepare('SELECT scope FROM memory_grant WHERE ticket=? ORDER BY scope').all(ticketId) as unknown as { scope: string }[])
+      .map(row => row.scope)
+  }
+
+  /** Replaces one ticket's grants. Every scope must be valid and authorized by the caller. */
+  setGrants(access: MemoryAccess, ticketId: string, scopes: readonly string[], actor = 'operator'): string[] {
+    const unique = [...new Set(scopes.map(scope => scopeKey(parseScopeKey(scope))))]
+    for (const scope of unique) this.requireAccess(access, scope)
+    const at = this.now()
+    return this.host.store.atomic(() => {
+      this.host.store.db.prepare('DELETE FROM memory_grant WHERE ticket=?').run(ticketId)
+      const insert = this.host.store.db.prepare('INSERT INTO memory_grant (ticket, scope, at, actor) VALUES (?,?,?,?)')
+      for (const scope of unique) insert.run(ticketId, scope, at, actor)
+      this.host.audit?.append({ actor, action: 'memory.grant', resource: ticketId, outcome: 'completed', detail: { scopes: unique } })
+      return unique
+    })
+  }
+
+  /** Access object for a worker ticket: exactly its explicit grants, never owner access. */
+  accessFor(ticketId: string): MemoryAccess { return new MemoryAccess(this.grants(ticketId)) }
 
   /** Bounded automatic context for the owner's assistant: normal-sensitivity profiles, goals, preferences and decisions. */
   context(access: MemoryAccess, options: { limit?: number; maxChars?: number } = {}): string {

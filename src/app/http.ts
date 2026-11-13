@@ -510,6 +510,21 @@ function routes(runtime: HttpHost): Routes {
       const input = MemoryInputSchema.parse(await body(64 * 1024))
       return runtime.memory.save(MemoryAccess.owner(), input, 'operator')
     },
+    'GET tickets/:id/memory-grants': ({ params }) => {
+      allow('memory:read')
+      ticket(params.id)
+      if (!runtime.memory) throw new RouteError(409, 'Memory is unavailable')
+      return { scopes: runtime.memory.grants(params.id) }
+    },
+    'PUT tickets/:id/memory-grants': async ({ params, body }) => {
+      allow('memory:write')
+      ticket(params.id)
+      if (!runtime.memory) throw new RouteError(409, 'Memory is unavailable')
+      const request = z.object({ requestId: z.string().trim().min(1).max(200),
+        scopes: z.array(z.string().trim().min(1).max(120)).max(20) }).strict().parse(await body(16 * 1024))
+      const scopes = runtime.memory.setGrants(MemoryAccess.owner(), params.id, request.scopes, 'operator')
+      return { scopes }
+    },
     'GET memory/:id': ({ params }) => {
       allow('memory:read')
       if (!runtime.memory) throw new RouteError(409, 'Memory is unavailable')

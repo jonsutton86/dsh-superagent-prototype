@@ -23,6 +23,8 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Attachments } from '../../attachments/service.ts'
 import { attachmentTools } from './attachments.ts'
 import { operatorTools, type OperatorToolHost } from './operator-tools.ts'
+import { memoryTools } from './memory.ts'
+import type { Memory } from '../../memory/service.ts'
 
 export interface ExecutorToolsHost extends OperatorToolHost {
   readonly attachments?: Attachments
@@ -36,6 +38,8 @@ export interface ExecutorToolsHost extends OperatorToolHost {
   readonly store: Pick<Store, 'tickets' | 'triggers' | 'settings' | 'replyStatus' | 'atomic'>
   readonly sessions: Pick<Sessions, 'relay' | 'notify'>
   readonly resources: ResourceHost
+  /** Persistent memory; worker tools appear only for a ticket with explicit grants. */
+  readonly memory?: Memory
   /** GitHub Source context whose pull-request rules govern claiming a reported PR. */
   readonly github: SourceContext
   sendReplies(): Promise<void>
@@ -49,6 +53,7 @@ export function executorTools(host: ExecutorToolsHost, ticket: Ticket, agent?: A
     ...!reflection && host.verification ? verificationTools(host.verification, ticketId) : [],
     ...(reflection ? reflectionTools(host.reflections!, ticketId) : ticket.mandate.actor.source === 'workspace' ? planningTools(host.planning, ticketId, host.personas, host.worlds) : []),
     ...operatorTools(host, ticket),
+    ...(host.memory ? memoryTools(host.memory, ticketId) : []),
     readTool('Read one page of a resource of this ticket that the resource parameter lists. Follow next_offset, and next_resource where a page names one.',
       true, (resource, offset, limit, signal) => readResource(host.resources, resource, offset, limit, ticketId, signal)),
     tool({

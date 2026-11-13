@@ -223,6 +223,8 @@ export interface Api {
   'POST memory': { body: MemoryInput; response: { record: MemoryRecord; created: boolean } }
   'GET memory/:id': { response: { record: MemoryRecord; events: MemoryEvent[] } }
   'DELETE memory/:id': { response: { deleted: boolean } }
+  'GET tickets/:id/memory-grants': { response: { scopes: string[] } }
+  'PUT tickets/:id/memory-grants': { body: { requestId: string; scopes: string[] }; response: { scopes: string[] } }
   'PUT settings/:block': { body: { value: unknown; revision: number }; response: { revision: number; restarting: boolean } }
   'GET policy/history': { response: HistoryView }
   'POST policy-sync/:id': { response: { policy: unknown } }
