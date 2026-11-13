@@ -6,7 +6,7 @@ export const Role = z.enum(['owner', 'operator', 'viewer'])
 export type Role = z.infer<typeof Role>
 
 export const CAPABILITIES = ['runtime:read', 'runtime:operate', 'tasks:write', 'settings:write',
-  'connectors:read', 'connectors:execute', 'audit:read', 'secrets:read'] as const
+  'connectors:read', 'connectors:execute', 'audit:read', 'secrets:read', 'secrets:write'] as const
 export type Capability = (typeof CAPABILITIES)[number]
 
 /** Deny-by-default role matrix; `owner` is broad, `operator` runs work, `viewer` only reads. */

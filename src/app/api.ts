@@ -27,6 +27,8 @@ import type { ExecutionReceiptPage } from '../remote/effects.ts'
 import type { StopAttestationRequest, StopAttestationReceipt, StopDetail, StopHoldSummary } from '../executor/stop-model.ts'
 import type { EmergencyRecord, EmergencyRequest } from './emergency.ts'
 import type { AuditRecord } from '../security/audit.ts'
+import type { CredentialMetadata } from '../security/credentials.ts'
+import type { ProviderView } from '../security/providers.ts'
 import type { ArchivePersonaInput, CreatePersonaInput, PersonaList, PersonaRecord, PersonaVersion, SavePersonaInput } from '../personas/model.ts'
 import type { ActivateWorldInput, RevokeWorldInput, WorldList, WorldView } from '../environments/pool-model.ts'
 import type { EndpointCatalog, EndpointCommandInput, EndpointList, EndpointRegistration, OperatorCommand, RegisterEndpointInput, RemoteProfileView } from '../environments/endpoint-model.ts'
@@ -212,6 +214,10 @@ export interface Api {
   'GET emergency': { response: EmergencyRecord }
   'POST emergency': { body: EmergencyRequest; response: EmergencyRecord }
   'GET audit': { query: { limit?: number; cursor?: number }; response: { items: AuditRecord[]; nextCursor: number | null } }
+  'GET credentials': { response: { items: CredentialMetadata[] } }
+  'POST credentials/:name': { body: { requestId: string; value: string }; response: CredentialMetadata }
+  'DELETE credentials/:name': { response: { deleted: boolean } }
+  'GET providers': { response: { items: ProviderView[]; verified: false } }
   'PUT settings/:block': { body: { value: unknown; revision: number }; response: { revision: number; restarting: boolean } }
   'GET policy/history': { response: HistoryView }
   'POST policy-sync/:id': { response: { policy: unknown } }

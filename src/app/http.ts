@@ -67,6 +67,8 @@ import type { ExecutorStops } from '../executor/stops.ts'
 import { EmergencyRequest, type Emergency } from './emergency.ts'
 import type { Access, Capability } from '../security/access.ts'
 import type { AuditLog } from '../security/audit.ts'
+import { CREDENTIAL_NAME, type CredentialVault } from '../security/credentials.ts'
+import type { ProviderRegistry } from '../security/providers.ts'
 
 export interface HttpHost {
   readonly voice?: Voice
@@ -108,6 +110,8 @@ export interface HttpHost {
   readonly emergency?: Pick<Emergency, 'state' | 'engage' | 'release'>
   readonly access?: Access
   readonly audit?: Pick<AuditLog, 'append' | 'list'>
+  readonly credentials?: Pick<CredentialVault, 'list' | 'set' | 'delete'>
+  readonly providers?: Pick<ProviderRegistry, 'view'>
   readonly masterId: string
   /** Resolves once startup finishes or setup determines what is still missing. */
   readonly ready: Promise<void>
@@ -485,6 +489,31 @@ function routes(runtime: HttpHost): Routes {
     'POST tickets/:id/retry': ({ params }) => { allow('tasks:write'); const id = ticket(params.id); runtime.engine.retryTicket(id); return { retried: true } },
     'POST tickets/:id/stop': ({ params }) => { allow('tasks:write'); const id = ticket(params.id); runtime.engine.stopTicket(id); return { stopped: true } },
     'POST executor/pause': async ({ body }) => { allow('runtime:operate'); return runtime.settings.pause(z.object({ paused: z.boolean() }).parse(await body()).paused, 'panel') },
+    'GET credentials': () => {
+      allow('secrets:read')
+      return { items: runtime.credentials?.list() ?? [] }
+    },
+    'POST credentials/:name': async ({ params, body }) => {
+      allow('secrets:write')
+      if (!CREDENTIAL_NAME.test(params.name)) throw new RouteError(400, 'Invalid credential name')
+      const request = z.object({ requestId: z.string().trim().min(1).max(200), value: z.string().min(1).max(16 * 1024) }).strict().parse(await body(32 * 1024))
+      if (!runtime.credentials) throw new RouteError(409, 'Credential storage is unavailable')
+      const stored = runtime.credentials.set(params.name, request.value)
+      runtime.audit?.append({ actor: 'operator', action: 'credential.write', resource: params.name, outcome: 'completed', detail: { bytes: stored.bytes } })
+      return stored
+    },
+    'DELETE credentials/:name': ({ params }) => {
+      allow('secrets:write')
+      if (!CREDENTIAL_NAME.test(params.name)) throw new RouteError(400, 'Invalid credential name')
+      if (!runtime.credentials) throw new RouteError(409, 'Credential storage is unavailable')
+      const deleted = runtime.credentials.delete(params.name)
+      runtime.audit?.append({ actor: 'operator', action: 'credential.delete', resource: params.name, outcome: deleted ? 'completed' : 'failed' })
+      return { deleted }
+    },
+    'GET providers': () => {
+      allow('runtime:read')
+      return { items: runtime.providers?.view() ?? [], verified: false }
+    },
     'GET audit': ({ query }) => {
       allow('audit:read')
       const limit = Number(query.limit ?? 50), cursor = query.cursor === undefined ? undefined : Number(query.cursor)
