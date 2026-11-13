@@ -30,6 +30,7 @@ import type { AuditRecord } from '../security/audit.ts'
 import type { CredentialMetadata } from '../security/credentials.ts'
 import type { ProviderView } from '../security/providers.ts'
 import type { MemoryEvent, MemoryInput, MemoryPage, MemoryRecord } from '../memory/service.ts'
+import type { ImportInput } from '../memory/import.ts'
 import type { ArchivePersonaInput, CreatePersonaInput, PersonaList, PersonaRecord, PersonaVersion, SavePersonaInput } from '../personas/model.ts'
 import type { ActivateWorldInput, RevokeWorldInput, WorldList, WorldView } from '../environments/pool-model.ts'
 import type { EndpointCatalog, EndpointCommandInput, EndpointList, EndpointRegistration, OperatorCommand, RegisterEndpointInput, RemoteProfileView } from '../environments/endpoint-model.ts'
@@ -223,6 +224,10 @@ export interface Api {
   'POST memory': { body: MemoryInput; response: { record: MemoryRecord; created: boolean } }
   'GET memory/:id': { response: { record: MemoryRecord; events: MemoryEvent[] } }
   'DELETE memory/:id': { response: { deleted: boolean } }
+  'GET memory/profiles': { response: { personal: MemoryRecord | null; business: MemoryRecord | null } }
+  'PUT memory/profiles/:type': { body: { requestId: string; content: string; summary?: string; tags?: string[] }; response: MemoryRecord }
+  'POST memory/consolidate': { body: { requestId: string; sessionId: string; maxChars?: number }; response: MemoryRecord }
+  'POST memory/import': { body: ImportInput; response: { imported: number; skipped: number; records: string[] } }
   'GET tickets/:id/memory-grants': { response: { scopes: string[] } }
   'PUT tickets/:id/memory-grants': { body: { requestId: string; scopes: string[] }; response: { scopes: string[] } }
   'PUT settings/:block': { body: { value: unknown; revision: number }; response: { revision: number; restarting: boolean } }

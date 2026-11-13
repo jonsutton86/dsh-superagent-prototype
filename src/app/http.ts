@@ -70,6 +70,7 @@ import type { AuditLog } from '../security/audit.ts'
 import { CREDENTIAL_NAME, type CredentialVault } from '../security/credentials.ts'
 import type { ProviderRegistry } from '../security/providers.ts'
 import { MEMORY_KINDS, MemoryAccess, MemoryError, MemoryInputSchema, parseScopeKey, type Memory } from '../memory/service.ts'
+import { ImportInputSchema, importMemory } from '../memory/import.ts'
 
 export interface HttpHost {
   readonly voice?: Voice
@@ -524,6 +525,33 @@ function routes(runtime: HttpHost): Routes {
         scopes: z.array(z.string().trim().min(1).max(120)).max(20) }).strict().parse(await body(16 * 1024))
       const scopes = runtime.memory.setGrants(MemoryAccess.owner(), params.id, request.scopes, 'operator')
       return { scopes }
+    },
+    'GET memory/profiles': () => {
+      allow('memory:read')
+      if (!runtime.memory) throw new RouteError(409, 'Memory is unavailable')
+      return { personal: runtime.memory.profile(MemoryAccess.owner(), 'personal') ?? null,
+        business: runtime.memory.profile(MemoryAccess.owner(), 'business') ?? null }
+    },
+    'PUT memory/profiles/:type': async ({ params, body }) => {
+      allow('memory:write')
+      const type = z.enum(['personal', 'business']).parse(params.type)
+      if (!runtime.memory) throw new RouteError(409, 'Memory is unavailable')
+      const request = z.object({ requestId: z.string().trim().min(1).max(200), content: z.string().trim().min(1).max(20_000),
+        summary: z.string().trim().max(1000).optional(), tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]) }).strict().parse(await body(32 * 1024))
+      return runtime.memory.saveProfile(MemoryAccess.owner(), type, { content: request.content,
+        ...(request.summary ? { summary: request.summary } : {}), tags: request.tags }, 'operator')
+    },
+    'POST memory/consolidate': async ({ body }) => {
+      allow('memory:write')
+      if (!runtime.memory) throw new RouteError(409, 'Memory is unavailable')
+      const request = z.object({ requestId: z.string().trim().min(1).max(200), sessionId: z.string().trim().min(1).max(200),
+        maxChars: z.number().int().min(200).max(4000).optional() }).strict().parse(await body(16 * 1024))
+      return runtime.memory.summarizeConversations(MemoryAccess.owner(), request.sessionId, request.maxChars ?? 800)
+    },
+    'POST memory/import': async ({ body }) => {
+      allow('memory:write')
+      if (!runtime.memory) throw new RouteError(409, 'Memory is unavailable')
+      return importMemory(runtime.memory, MemoryAccess.owner(), ImportInputSchema.parse(await body(1_100_000)), 'operator')
     },
     'GET memory/:id': ({ params }) => {
       allow('memory:read')

@@ -41,7 +41,7 @@ import { Emergency } from './emergency.ts'
 import { Access, readAccessConfig } from '../security/access.ts'
 import { CredentialVault } from '../security/credentials.ts'
 import { ProviderRegistry, readProviders } from '../security/providers.ts'
-import { Memory, MemoryAccess } from '../memory/service.ts'
+import { Memory, MemoryAccess, readMemoryRetention } from '../memory/service.ts'
 import { Voice } from '../voice/service.ts'
 import { Attachments } from '../attachments/service.ts'
 import { outsideRoots } from '../voice/adapters.ts'
@@ -201,7 +201,7 @@ export class Runtime extends Service implements SourceHost {
       this.access = new Access(readAccessConfig(process.env))
       this.credentials = new CredentialVault(machine.stateDir)
       this.providers = new ProviderRegistry(readProviders(process.env), this.credentials)
-      this.memory = new Memory({ store, audit })
+      this.memory = new Memory({ store, audit }, undefined, { retention: readMemoryRetention(process.env) })
       if (store.get(KV.recovery.hold)) throw new Error('This is a staged checkpoint restore. Reconcile coordinator ownership, Sessions and external effects before enabling execution.')
       const world = remoteWorld(ctx)
       if (machine.ownership && machine.executionMode !== 'local') throw new Error('Ownership-controlled repository publication requires a fenced publication service; use a general-mission profile until that integration is available')

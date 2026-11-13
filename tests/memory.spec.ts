@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { Store } from '../src/app/store.ts'
-import { Memory, MemoryAccess, MemoryError } from '../src/memory/service.ts'
+import { Memory, MemoryAccess, MemoryError, readMemoryRetention } from '../src/memory/service.ts'
+import { chunkText, importMemory } from '../src/memory/import.ts'
 import { memoryTools } from '../src/app/tools/memory.ts'
 import { startRuntime, type Host } from './fixtures/host.ts'
 
@@ -175,6 +176,96 @@ it('persists ticket grants across a Store restart and revokes them by replacemen
     expect(memory.grants('ticket-2')).toEqual([])
     expect(memoryTools(memory, 'ticket-2')).toEqual([])
   } finally { reopened.close() }
+})
+
+it('honours configurable conversation retention and builds an extractive digest', () => {
+  expect(readMemoryRetention({} as NodeJS.ProcessEnv)).toEqual({ conversation: 200 })
+  expect(readMemoryRetention({ DSH_ORCHESTRATOR_MEMORY_RETENTION: '{"conversation":10}' } as NodeJS.ProcessEnv)).toEqual({ conversation: 10 })
+  expect(() => readMemoryRetention({ DSH_ORCHESTRATOR_MEMORY_RETENTION: 'nope' } as NodeJS.ProcessEnv)).toThrow(/JSON object/)
+  expect(() => readMemoryRetention({ DSH_ORCHESTRATOR_MEMORY_RETENTION: '{"conversation":1}' } as NodeJS.ProcessEnv)).toThrow(/Invalid memory retention/)
+  const directory = mkdtempSync(join(tmpdir(), 'memory-retention-'))
+  temporary.push(directory)
+  const store = new Store(join(directory, 'state.sqlite'))
+  try {
+    const memory = new Memory({ store }, undefined, { retention: { conversation: 10 } })
+    for (let index = 0; index < 15; index++) memory.captureConversation(MemoryAccess.owner(), { sessionId: 'main', text: `Retained turn ${index}. Extra detail.` })
+    expect(memory.search(MemoryAccess.owner(), { kinds: ['conversation'], limit: 50 }).items.length).toBeLessThanOrEqual(11)
+    const digest = memory.summarizeConversations(MemoryAccess.owner(), 'main', 500)
+    expect(digest).toMatchObject({ kind: 'conversation', subject: 'digest:main', sensitivity: 'private', provenance: { source: 'system', ref: 'main' } })
+    expect(digest.content).toContain('Extractive digest (no model synthesis)')
+    expect(digest.content).toContain('Retained turn')
+    expect(memory.context(MemoryAccess.owner())).not.toContain('Extractive digest')
+    expect(chunkText('a'.repeat(9000)).every(chunk => chunk.length <= 8000)).toBe(true)
+  } finally { store.close() }
+})
+
+it('upserts personal and business profiles through the API without forking them', async () => {
+  const h = host = await startRuntime(undefined, { executionMode: 'local', noAccounts: true })
+  expect((await h.api('GET', 'memory/profiles')).body).toEqual({ personal: null, business: null })
+  const first = await h.api('PUT', 'memory/profiles/personal', { requestId: 'profile-1', content: 'Prefers morning briefings', tags: ['profile'] })
+  expect(first.status).toBe(200)
+  const firstId = (first.body as { id: string }).id
+  const updated = await h.api('PUT', 'memory/profiles/personal', { requestId: 'profile-2', content: 'Prefers morning briefings and concise updates' })
+  expect(updated.body).toMatchObject({ id: firstId, revision: 2, subject: 'personal' })
+  const business = await h.api('PUT', 'memory/profiles/business', { requestId: 'profile-3', content: 'Company builds developer tools' })
+  expect(business.status).toBe(200)
+  const profiles = (await h.api('GET', 'memory/profiles')).body as { personal: { id: string }; business: { id: string } }
+  expect(profiles.personal.id).toBe(firstId)
+  expect(profiles.business.id).toBe((business.body as { id: string }).id)
+  expect((await h.api('PUT', 'memory/profiles/other', { requestId: 'profile-4', content: 'x' })).status).toBe(400)
+})
+
+it('imports operator-provided exports only with consent, provenance and dedup', async () => {
+  const { memory } = fixture()
+  const access = MemoryAccess.owner()
+  const chatgpt = JSON.stringify([{ title: 'Planning chat', mapping: {
+    a: { message: { author: { role: 'user' }, content: { parts: ['Plan the launch.'] } } },
+    b: { message: { author: { role: 'assistant' }, content: { parts: ['I will prepare a plan.'] } } } } }])
+  const first = importMemory(memory, access, { requestId: 'import-1', format: 'chatgpt', content: chatgpt,
+    scope: { type: 'business' }, consent: true, title: 'ChatGPT export' })
+  expect(first.imported).toBe(1)
+  const record = memory.search(access, { q: 'launch', kinds: ['conversation'] }).items[0]!
+  expect(record).toMatchObject({ kind: 'conversation', scope: { type: 'business' }, tags: ['import', 'chatgpt'], provenance: { source: 'import' } })
+  expect(record.content).toContain('user: Plan the launch.')
+  const again = importMemory(memory, access, { requestId: 'import-2', format: 'chatgpt', content: chatgpt,
+    scope: { type: 'business' }, consent: true })
+  expect(again).toMatchObject({ imported: 0, skipped: 1 })
+  const markdown = importMemory(memory, access, { requestId: 'import-3', format: 'markdown', content: '# Notes\n\nEverything is on track.',
+    scope: { type: 'personal' }, consent: true, title: 'Notes' })
+  expect(markdown.imported).toBe(1)
+  expect(memory.search(access, { q: 'track', kinds: ['document'] }).items[0]).toMatchObject({ kind: 'document', subject: 'Notes' })
+  const claude = importMemory(memory, access, { requestId: 'import-4', format: 'claude',
+    content: JSON.stringify([{ name: 'Research', chat_messages: [{ sender: 'human', text: 'Summarize findings.' }] }]),
+    scope: { type: 'business' }, consent: true })
+  expect(claude.imported).toBe(1)
+  const codex = importMemory(memory, access, { requestId: 'import-5', format: 'codex-jsonl',
+    content: '{"type":"message","role":"user","content":[{"text":"Check the build."}]}\n', scope: { type: 'business' }, consent: true })
+  expect(codex.imported).toBe(1)
+  expect(() => importMemory(memory, access, { requestId: 'import-6', format: 'chatgpt', content: '{}',
+    scope: { type: 'business' }, consent: true })).toThrow(MemoryError)
+  expect(() => importMemory(memory, access, { requestId: 'import-7', format: 'pdf' as never, content: 'x',
+    scope: { type: 'business' }, consent: true })).toThrow()
+  expect(() => importMemory(memory, access, { requestId: 'import-8', format: 'text', content: 'x',
+    scope: { type: 'business' }, consent: false as never })).toThrow()
+})
+
+it('exposes import and consolidation through the API, audits counts only, and denies viewers', async () => {
+  const h = host = await startRuntime(undefined, { executionMode: 'local', noAccounts: true })
+  const imported = await h.api('POST', 'memory/import', { requestId: 'import-api', format: 'markdown',
+    content: 'Private launch notes with sensitive content', scope: { type: 'personal' }, consent: true, title: 'Launch notes' })
+  expect(imported.status).toBe(200)
+  expect(imported.body).toMatchObject({ imported: 1, skipped: 0 })
+  const audit = h.runtime.audit.list(20)
+  expect(audit.items).toEqual(expect.arrayContaining([expect.objectContaining({ action: 'memory.import', outcome: 'completed' })]))
+  expect(JSON.stringify(audit.items)).not.toContain('sensitive content')
+  const consentless = await h.api('POST', 'memory/import', { requestId: 'import-no-consent', format: 'text',
+    content: 'x', scope: { type: 'personal' }, consent: false })
+  expect(consentless.status).toBe(400)
+  const agent = h.agents.get(h.runtime.masterId)!
+  h.ctx.emit('session/event', (agent as unknown as { session: never }).session, { type: 'user/message', data: {
+    content: [{ type: 'text', text: 'Remember the launch plan.' }], source: { kind: 'user' } } } as never)
+  const digest = await h.api('POST', 'memory/consolidate', { requestId: 'digest-1', sessionId: h.runtime.masterId })
+  expect(digest.body).toMatchObject({ subject: `digest:${h.runtime.masterId}`, sensitivity: 'private' })
 })
 
 it('exposes scope-filtered memory through the management API and audits without content', async () => {

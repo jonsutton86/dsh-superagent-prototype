@@ -5,7 +5,7 @@ import { z } from 'zod'
 import type { Store } from '../app/store.ts'
 import type { AuditLog } from '../security/audit.ts'
 
-export const MemoryKind = z.enum(['fact', 'preference', 'goal', 'decision', 'conversation', 'project', 'profile'])
+export const MemoryKind = z.enum(['fact', 'preference', 'goal', 'decision', 'conversation', 'project', 'profile', 'document'])
 export type MemoryKind = z.infer<typeof MemoryKind>
 export const MemorySensitivity = z.enum(['normal', 'private'])
 export type MemorySensitivity = z.infer<typeof MemorySensitivity>
@@ -103,12 +103,27 @@ export class MemoryAccess {
 }
 
 /** Typed memory failure carrying the HTTP status the management route maps without leaking record existence. */
+/** Configurable retention from `DSH_ORCHESTRATOR_MEMORY_RETENTION`; conversation turns kept per profile. */
+export const MemoryRetention = z.object({ conversation: z.number().int().min(10).max(5000).default(200) }).strict()
+export type MemoryRetention = z.infer<typeof MemoryRetention>
+export function readMemoryRetention(env: NodeJS.ProcessEnv = process.env): MemoryRetention {
+  const raw = env.DSH_ORCHESTRATOR_MEMORY_RETENTION?.trim()
+  if (!raw) return { conversation: 200 }
+  let value: unknown
+  try { value = JSON.parse(raw) as unknown } catch { throw new Error('DSH_ORCHESTRATOR_MEMORY_RETENTION must be a JSON object such as {"conversation":200}') }
+  const parsed = MemoryRetention.safeParse(value)
+  if (!parsed.success) throw new Error(`Invalid memory retention configuration (${parsed.error.issues.map(issue => issue.path.join('.') || 'value').join(', ')})`)
+  return parsed.data
+}
+export interface MemoryOptions { retention?: MemoryRetention }
+
+/** Typed memory failure carrying the HTTP status the management route maps without leaking record existence. */
 export class MemoryError extends Error { constructor(readonly status: 400 | 403 | 404, message: string) { super(message) } }
 
 /** Store-backed memory. Every read is scope-filtered; deletion is real, with an append-only event retained. */
 export class Memory {
   constructor(private readonly host: { store: Pick<Store, 'db' | 'atomic'>; audit?: Pick<AuditLog, 'append'> },
-    private readonly now: () => string = () => new Date().toISOString()) {}
+    private readonly now: () => string = () => new Date().toISOString(), private readonly options: MemoryOptions = {}) {}
 
   private parse(value: string): MemoryRecord { return JSON.parse(value) as MemoryRecord }
   private requireAccess(access: MemoryAccess, scope: string): void {
@@ -194,6 +209,11 @@ export class Memory {
     return { items, nextCursor: rows.length > limit ? `${rows[limit - 1]!.updated_at}|${rows[limit - 1]!.id}` : null }
   }
 
+  /** Host audit hook for import and other callers that do not mutate a single record. */
+  record(action: string, resource: string, outcome: 'completed' | 'failed' | 'denied', detail: Record<string, unknown>, actor = 'operator'): void {
+    this.host.audit?.append({ actor, action, resource, outcome, detail })
+  }
+
   /** Scopes an operator explicitly granted to one ticket; empty means no worker memory access. */
   grants(ticketId: string): string[] {
     return (this.host.store.db.prepare('SELECT scope FROM memory_grant WHERE ticket=? ORDER BY scope').all(ticketId) as unknown as { scope: string }[])
@@ -216,6 +236,38 @@ export class Memory {
 
   /** Access object for a worker ticket: exactly its explicit grants, never owner access. */
   accessFor(ticketId: string): MemoryAccess { return new MemoryAccess(this.grants(ticketId)) }
+
+  /** The personal or business profile, if one has been saved. */
+  profile(access: MemoryAccess, type: 'personal' | 'business'): MemoryRecord | undefined {
+    return this.search(access, { scope: { type }, kinds: ['profile'], limit: 1 }).items[0]
+  }
+
+  /** Upserts the single profile record for a scope; subject is fixed so profiles cannot fork. */
+  saveProfile(access: MemoryAccess, type: 'personal' | 'business', input: { content: string; summary?: string; tags?: string[] }, actor = 'operator'): MemoryRecord {
+    const saved = this.save(access, { kind: 'profile', scope: { type }, subject: type, content: input.content,
+      ...(input.summary ? { summary: input.summary } : {}), tags: input.tags ?? [], sensitivity: 'normal', source: 'operator' }, actor)
+    return saved.record
+  }
+
+  /**
+   * Deterministic extractive digest of a session's captured conversation turns (no model synthesis). The digest is
+   * private, searchable and never auto-injected; raw turns remain subject to retention.
+   */
+  summarizeConversations(access: MemoryAccess, sessionId: string, maxChars = 800): MemoryRecord {
+    const turns = this.search(access, { kinds: ['conversation'], limit: 50 }).items
+      .filter(record => record.provenance.ref === sessionId && !record.subject.startsWith('digest:'))
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+    const lines: string[] = []
+    for (const turn of turns) {
+      const sentence = turn.content.split(/(?<=[.!?])\s+/)[0]!.replace(/\s+/g, ' ').trim().slice(0, 200)
+      if (!sentence) continue
+      if ([...lines, `- ${sentence}`].join('\n').length > maxChars) break
+      lines.push(`- ${sentence}`)
+    }
+    return this.save(access, { kind: 'conversation', scope: { type: 'personal' }, subject: `digest:${sessionId}`,
+      content: `Extractive digest (no model synthesis) of ${turns.length} captured turns:\n${lines.join('\n')}`,
+      tags: ['conversation', 'digest'], sensitivity: 'private', source: 'system', sourceRef: sessionId }, 'system').record
+  }
 
   /** Bounded automatic context for the owner's assistant: normal-sensitivity profiles, goals, preferences and decisions. */
   context(access: MemoryAccess, options: { limit?: number; maxChars?: number } = {}): string {
@@ -243,7 +295,7 @@ export class Memory {
     if (!text) return undefined
     const saved = this.save(access, { kind: 'conversation', scope: { type: 'personal' }, subject: '', content: text.slice(0, 20_000),
       tags: ['conversation'], sensitivity: 'private', source: 'conversation', sourceRef: input.sessionId }, input.actor ?? 'operator')
-    this.pruneConversations(access, 200)
+    this.pruneConversations(access, this.options.retention?.conversation ?? 200)
     return saved.record
   }
 
