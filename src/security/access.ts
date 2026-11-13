@@ -6,14 +6,14 @@ export const Role = z.enum(['owner', 'operator', 'viewer'])
 export type Role = z.infer<typeof Role>
 
 export const CAPABILITIES = ['runtime:read', 'runtime:operate', 'tasks:write', 'settings:write',
-  'connectors:read', 'connectors:execute', 'audit:read', 'secrets:read', 'secrets:write'] as const
+  'connectors:read', 'connectors:execute', 'audit:read', 'secrets:read', 'secrets:write', 'memory:read', 'memory:write'] as const
 export type Capability = (typeof CAPABILITIES)[number]
 
 /** Deny-by-default role matrix; `owner` is broad, `operator` runs work, `viewer` only reads. */
 const MATRIX: Readonly<Record<Role, readonly Capability[]>> = {
   owner: CAPABILITIES,
-  operator: ['runtime:read', 'runtime:operate', 'tasks:write', 'connectors:read', 'connectors:execute', 'audit:read'],
-  viewer: ['runtime:read', 'connectors:read'],
+  operator: ['runtime:read', 'runtime:operate', 'tasks:write', 'connectors:read', 'connectors:execute', 'audit:read', 'memory:read', 'memory:write'],
+  viewer: ['runtime:read', 'connectors:read', 'memory:read'],
 }
 
 export const ConnectorPermission = z.object({ read: z.boolean().default(false), execute: z.boolean().default(false) }).strict()

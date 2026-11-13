@@ -69,6 +69,7 @@ import type { Access, Capability } from '../security/access.ts'
 import type { AuditLog } from '../security/audit.ts'
 import { CREDENTIAL_NAME, type CredentialVault } from '../security/credentials.ts'
 import type { ProviderRegistry } from '../security/providers.ts'
+import { MEMORY_KINDS, MemoryAccess, MemoryError, MemoryInputSchema, parseScopeKey, type Memory } from '../memory/service.ts'
 
 export interface HttpHost {
   readonly voice?: Voice
@@ -112,6 +113,7 @@ export interface HttpHost {
   readonly audit?: Pick<AuditLog, 'append' | 'list'>
   readonly credentials?: Pick<CredentialVault, 'list' | 'set' | 'delete'>
   readonly providers?: Pick<ProviderRegistry, 'view'>
+  readonly memory?: Memory
   readonly masterId: string
   /** Resolves once startup finishes or setup determines what is still missing. */
   readonly ready: Promise<void>
@@ -151,6 +153,7 @@ export function sameOrigin(req: Pick<IncomingMessage, 'headers'>, port: number):
 }
 /** Maps errors to HTTP status codes and structured payloads that the panel localizes in the interface language. */
 function failure(error: unknown): [number, Record<string, unknown>] {
+  if (error instanceof MemoryError) return [error.status, { error: error.message }]
   if (error instanceof SupervisionSnapshotError) return [error.status, { error: error.code }]
   if (error instanceof z.ZodError) {
     const issues = error.issues.map(issue => ({ path: issue.path.join('.'), message: issue.message }))
@@ -489,6 +492,36 @@ function routes(runtime: HttpHost): Routes {
     'POST tickets/:id/retry': ({ params }) => { allow('tasks:write'); const id = ticket(params.id); runtime.engine.retryTicket(id); return { retried: true } },
     'POST tickets/:id/stop': ({ params }) => { allow('tasks:write'); const id = ticket(params.id); runtime.engine.stopTicket(id); return { stopped: true } },
     'POST executor/pause': async ({ body }) => { allow('runtime:operate'); return runtime.settings.pause(z.object({ paused: z.boolean() }).parse(await body()).paused, 'panel') },
+    'GET memory/search': ({ query }) => {
+      allow('memory:read')
+      const parsed = z.object({ q: z.string().trim().max(200).optional(), scope: z.string().trim().max(120).optional(),
+        kinds: z.string().trim().max(200).optional(), limit: z.coerce.number().int().min(1).max(50).default(20),
+        cursor: z.string().trim().max(300).optional() }).strict().parse(query)
+      if (!runtime.memory) throw new RouteError(409, 'Memory is unavailable')
+      const kinds = parsed.kinds ? parsed.kinds.split(',').map(kind => kind.trim()).filter(Boolean) : undefined
+      if (kinds?.some(kind => !(MEMORY_KINDS as readonly string[]).includes(kind))) throw new RouteError(400, 'Unknown memory kind')
+      const scope = parsed.scope ? parseScopeKey(parsed.scope) : undefined
+      return runtime.memory.search(MemoryAccess.owner(), { ...(parsed.q ? { q: parsed.q } : {}), ...(scope ? { scope } : {}),
+        ...(kinds ? { kinds: kinds as never } : {}), limit: parsed.limit, ...(parsed.cursor ? { cursor: parsed.cursor } : {}) })
+    },
+    'POST memory': async ({ body }) => {
+      allow('memory:write')
+      if (!runtime.memory) throw new RouteError(409, 'Memory is unavailable')
+      const input = MemoryInputSchema.parse(await body(64 * 1024))
+      return runtime.memory.save(MemoryAccess.owner(), input, 'operator')
+    },
+    'GET memory/:id': ({ params }) => {
+      allow('memory:read')
+      if (!runtime.memory) throw new RouteError(409, 'Memory is unavailable')
+      const record = runtime.memory.get(MemoryAccess.owner(), params.id)
+      if (!record) throw new RouteError(404, 'Memory record not found')
+      return { record, events: runtime.memory.events(MemoryAccess.owner(), params.id) }
+    },
+    'DELETE memory/:id': ({ params }) => {
+      allow('memory:write')
+      if (!runtime.memory) throw new RouteError(409, 'Memory is unavailable')
+      return { deleted: runtime.memory.delete(MemoryAccess.owner(), params.id, 'operator') }
+    },
     'GET credentials': () => {
       allow('secrets:read')
       return { items: runtime.credentials?.list() ?? [] }

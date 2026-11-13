@@ -8,6 +8,7 @@ import { KV, type Family, type Key } from '../kv.ts'
 import { SettingsSchema, type Settings, type SettingsOrigin, type SettingsSave } from '../policy.ts'
 import { OLDEST_SCHEMA, SCHEMA_VERSION, migrateTo11, tooOld } from './migration.ts'
 import { initializeAuditStore } from '../security/audit.ts'
+import { initializeMemoryStore } from '../memory/service.ts'
 import { Versions } from './versions.ts'
 import { storeReads } from './store-read.ts'
 import { initializeStopStore } from '../executor/stop-store.ts'
@@ -98,6 +99,7 @@ export class Store implements Repositories {
           if (version !== undefined && version < 12) this.db.exec("UPDATE effect SET launch_started=1 WHERE kind='launch'")
           initializeStopStore(this.db, version)
           initializeAuditStore(this.db)
+          initializeMemoryStore(this.db)
           if (version !== SCHEMA_VERSION) this.set(KV.store.schema, SCHEMA_VERSION)
         })
       } catch (error) {

@@ -29,6 +29,7 @@ import type { EmergencyRecord, EmergencyRequest } from './emergency.ts'
 import type { AuditRecord } from '../security/audit.ts'
 import type { CredentialMetadata } from '../security/credentials.ts'
 import type { ProviderView } from '../security/providers.ts'
+import type { MemoryEvent, MemoryInput, MemoryPage, MemoryRecord } from '../memory/service.ts'
 import type { ArchivePersonaInput, CreatePersonaInput, PersonaList, PersonaRecord, PersonaVersion, SavePersonaInput } from '../personas/model.ts'
 import type { ActivateWorldInput, RevokeWorldInput, WorldList, WorldView } from '../environments/pool-model.ts'
 import type { EndpointCatalog, EndpointCommandInput, EndpointList, EndpointRegistration, OperatorCommand, RegisterEndpointInput, RemoteProfileView } from '../environments/endpoint-model.ts'
@@ -218,6 +219,10 @@ export interface Api {
   'POST credentials/:name': { body: { requestId: string; value: string }; response: CredentialMetadata }
   'DELETE credentials/:name': { response: { deleted: boolean } }
   'GET providers': { response: { items: ProviderView[]; verified: false } }
+  'GET memory/search': { query: { q?: string; scope?: string; kinds?: string; limit?: number; cursor?: string }; response: MemoryPage }
+  'POST memory': { body: MemoryInput; response: { record: MemoryRecord; created: boolean } }
+  'GET memory/:id': { response: { record: MemoryRecord; events: MemoryEvent[] } }
+  'DELETE memory/:id': { response: { deleted: boolean } }
   'PUT settings/:block': { body: { value: unknown; revision: number }; response: { revision: number; restarting: boolean } }
   'GET policy/history': { response: HistoryView }
   'POST policy-sync/:id': { response: { policy: unknown } }

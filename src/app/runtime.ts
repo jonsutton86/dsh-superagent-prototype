@@ -41,6 +41,7 @@ import { Emergency } from './emergency.ts'
 import { Access, readAccessConfig } from '../security/access.ts'
 import { CredentialVault } from '../security/credentials.ts'
 import { ProviderRegistry, readProviders } from '../security/providers.ts'
+import { Memory } from '../memory/service.ts'
 import { Voice } from '../voice/service.ts'
 import { Attachments } from '../attachments/service.ts'
 import { outsideRoots } from '../voice/adapters.ts'
@@ -116,6 +117,8 @@ export class Runtime extends Service implements SourceHost {
   readonly credentials!: CredentialVault
   /** Validated, read-only provider configuration; never claims live verification. */
   readonly providers!: ProviderRegistry
+  /** Typed persistent memory with scope-filtered search and provenance. */
+  readonly memory!: Memory
   readonly assessor: MasterAssessor
   readonly outbox: Outbox
   readonly engine: Engine
@@ -198,6 +201,7 @@ export class Runtime extends Service implements SourceHost {
       this.access = new Access(readAccessConfig(process.env))
       this.credentials = new CredentialVault(machine.stateDir)
       this.providers = new ProviderRegistry(readProviders(process.env), this.credentials)
+      this.memory = new Memory({ store, audit })
       if (store.get(KV.recovery.hold)) throw new Error('This is a staged checkpoint restore. Reconcile coordinator ownership, Sessions and external effects before enabling execution.')
       const world = remoteWorld(ctx)
       if (machine.ownership && machine.executionMode !== 'local') throw new Error('Ownership-controlled repository publication requires a fenced publication service; use a general-mission profile until that integration is available')
@@ -493,7 +497,7 @@ export class Runtime extends Service implements SourceHost {
       channelPublications: this.channelPublications,
       conversations: this.conversations,
       get health() { return runtime.health }, remoteEffects: this.remoteWorkspace?.world,
-      supervision: this.supervision, workspace: this.workspace, schedules: this.schedules, reflections: this.reflections, speculation: this.speculation, usage: this.usage, library: this.library, inbox: this.inbox, environments: this.environments, endpoints: this.endpoints, personas: this.personas, worlds: this.worlds, emergency: this.emergency, access: this.access, audit: this.audit, credentials: this.credentials, providers: this.providers,
+      supervision: this.supervision, workspace: this.workspace, schedules: this.schedules, reflections: this.reflections, speculation: this.speculation, usage: this.usage, library: this.library, inbox: this.inbox, environments: this.environments, endpoints: this.endpoints, personas: this.personas, worlds: this.worlds, emergency: this.emergency, access: this.access, audit: this.audit, credentials: this.credentials, providers: this.providers, memory: this.memory,
       get deployment() { return setup.deployment },
       get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem },
       configured: () => setup.configured(), links: () => runtime.links(), ticketEnvironment: ticket => runtime.ticketEnvironment(ticket),
