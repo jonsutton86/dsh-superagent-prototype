@@ -159,7 +159,7 @@ function sourceStatuses(): SourceStatusRow[] {
 }
 const stateView = (): StateView => ({
   setup: server.setup, load: { running: server.setup.problem ? 0 : 2, queued: 0, maxWorkers: server.settings.executor.maxWorkers },
-  masterId: 'master', paused: server.settings.paused, environment: { ready: true },
+  masterId: 'master', paused: server.settings.paused, emergency: null, environment: { ready: true },
   // The panel does not read health; the service script does.
   health: {},
 })
@@ -425,6 +425,8 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
   'GET missions/:id/completions': { answer: () => ({ items: [] }) },
   'POST mission-completions/:id/retry': { answer: () => refuse(409, 'Mission completion fixture not configured') },
   'GET mission-pull-targets/:id': { answer: () => refuse(404, 'Mission PR target not found') },
+  'GET emergency': { answer: () => ({ version: 1, engaged: false, reason: '', actor: '', at: null, revision: 0, requestId: null, action: null }) },
+  'POST emergency': { body: true, answer: () => refuse(409, 'Emergency fixture not configured') },
   'GET state': { answer: stateView },
   'GET overview': { answer: overviewView },
   'GET search': { query: ['q'], answer: async ({ query }) => {

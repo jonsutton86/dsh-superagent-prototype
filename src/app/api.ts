@@ -25,6 +25,7 @@ import type { RecallState, RecallConfiguration, SaveRecallInput } from '../works
 import type { EnvironmentList, EnvironmentView, EnrollEnvironmentInput, EnvironmentCommandInput } from '../environments/model.ts'
 import type { ExecutionReceiptPage } from '../remote/effects.ts'
 import type { StopAttestationRequest, StopAttestationReceipt, StopDetail, StopHoldSummary } from '../executor/stop-model.ts'
+import type { EmergencyRecord, EmergencyRequest } from './emergency.ts'
 import type { ArchivePersonaInput, CreatePersonaInput, PersonaList, PersonaRecord, PersonaVersion, SavePersonaInput } from '../personas/model.ts'
 import type { ActivateWorldInput, RevokeWorldInput, WorldList, WorldView } from '../environments/pool-model.ts'
 import type { EndpointCatalog, EndpointCommandInput, EndpointList, EndpointRegistration, OperatorCommand, RegisterEndpointInput, RemoteProfileView } from '../environments/endpoint-model.ts'
@@ -207,6 +208,8 @@ export interface Api {
   'POST tickets/:id/retry': { response: { retried: true } }
   'POST tickets/:id/stop': { response: { stopped: true } }
   'POST executor/pause': { body: { paused: boolean }; response: { paused: boolean } }
+  'GET emergency': { response: EmergencyRecord }
+  'POST emergency': { body: EmergencyRequest; response: EmergencyRecord }
   'PUT settings/:block': { body: { value: unknown; revision: number }; response: { revision: number; restarting: boolean } }
   'GET policy/history': { response: HistoryView }
   'POST policy-sync/:id': { response: { policy: unknown } }

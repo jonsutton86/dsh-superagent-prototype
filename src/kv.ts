@@ -11,6 +11,7 @@ import type { RecoveryIntent } from './recovery/ownership.ts'
 import type { ReceiptAudit } from './recovery/audit.ts'
 import type { ReceiptPreparation } from './recovery/prepare.ts'
 import type { RecoveryBindings } from './recovery/bindings.ts'
+import type { EmergencyRecord } from './app/emergency.ts'
 
 /** Key of a KV record whose value has type `V`; a plain string represents an untyped key. */
 export type Key<V> = string & { readonly __value?: V }
@@ -36,7 +37,9 @@ export const KV = {
     builtIn: family<string, [base: string]>('prompt-built-in:') },
   /** Runtime: the main Session's ID. */
   runtime: { masterId: record<string>('master-id'), ownership: record<{ authorityId: string; coordinatorId: string; credentialFile?: string }>('runtime:ownership'),
-    publication: record<{ serviceId: string; credentialFile?: string }>('runtime:publication') },
+    publication: record<{ serviceId: string; credentialFile?: string }>('runtime:publication'),
+    /** Durable global emergency stop; distinct from the ordinary processing pause. */
+    emergency: record<EmergencyRecord>('runtime:emergency') },
   /** Copying a staged checkpoint cannot make its data an execution owner. */
   recovery: { hold: record<{ checkpoint: string; at: string; state: 'staged' | 'prepared'; requestId?: string }>('recovery:restore-hold'),
     reservation: record<RecoveryIntent>('recovery:ownership-reservation'), audit: record<ReceiptAudit>('recovery:receipt-audit'),

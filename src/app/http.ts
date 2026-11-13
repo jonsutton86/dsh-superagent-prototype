@@ -64,6 +64,7 @@ import { VoiceError } from '../voice/model.ts'
 import type { Attachments } from '../attachments/service.ts'
 import { UploadError, UPLOAD_LIMITS } from '../attachments/model.ts'
 import type { ExecutorStops } from '../executor/stops.ts'
+import { EmergencyRequest, type Emergency } from './emergency.ts'
 
 export interface HttpHost {
   readonly voice?: Voice
@@ -102,6 +103,7 @@ export interface HttpHost {
   readonly executor: Pick<DshExecutor, 'activeCount'> & { stops?: Pick<ExecutorStops, 'list' | 'detail' | 'recheck' | 'attest' | 'attestation' | 'attestations'> }
   readonly health: Record<string, Health>
   readonly machine: Machine
+  readonly emergency?: Pick<Emergency, 'state' | 'engage' | 'release'>
   readonly masterId: string
   /** Resolves once startup finishes or setup determines what is still missing. */
   readonly ready: Promise<void>
@@ -120,7 +122,7 @@ export interface HttpHost {
  * Represents a client-facing 400 or 404 error raised during management route parsing or lookup.
  * Route handlers throw it when request bodies are malformed or target records are missing, and registerHttp serializes its status and message in the HTTP response.
  */
-class RouteError extends Error { constructor(readonly status: 400 | 404, message: string) { super(message) } }
+class RouteError extends Error { constructor(readonly status: 400 | 404 | 409, message: string) { super(message) } }
 async function readBody(req: IncomingMessage, maxBytes = 128 * 1024): Promise<unknown> {
   let size = 0; const chunks: Buffer[] = []
   for await (const chunk of req) {
@@ -175,7 +177,8 @@ export function stateView(runtime: HttpHost) {
   const settings = runtime.store.settings()
   return { setup: setupView(runtime), load: { ...executorLoad(runtime.store, runtime.executor.activeCount()),
     maxWorkers: settings.executor.maxWorkers },
-    masterId: runtime.masterId, paused: settings.paused, environment: { ready: runtime.environments.ready() }, health: runtime.health,
+    masterId: runtime.masterId, paused: settings.paused, emergency: runtime.emergency?.state() ?? null,
+    environment: { ready: runtime.environments.ready() }, health: runtime.health,
     ...(runtime.ownership ? { ownership: runtime.ownership.status() } : {}) }
 }
 const views = (runtime: HttpHost): ViewHost => ({ store: runtime.store, sources: runtime.sources, links: runtime.links() })
@@ -473,6 +476,17 @@ function routes(runtime: HttpHost): Routes {
     'POST tickets/:id/retry': ({ params }) => { const id = ticket(params.id); runtime.engine.retryTicket(id); return { retried: true } },
     'POST tickets/:id/stop': ({ params }) => { const id = ticket(params.id); runtime.engine.stopTicket(id); return { stopped: true } },
     'POST executor/pause': async ({ body }) => runtime.settings.pause(z.object({ paused: z.boolean() }).parse(await body()).paused, 'panel'),
+    'GET emergency': () => {
+      const emergency = runtime.emergency
+      if (!emergency) throw new RouteError(409, 'Emergency control is unavailable')
+      return emergency.state()
+    },
+    'POST emergency': async ({ body }) => {
+      const emergency = runtime.emergency
+      if (!emergency) throw new RouteError(409, 'Emergency control is unavailable')
+      const request = EmergencyRequest.parse(await body(16_384))
+      return request.action === 'engage' ? await emergency.engage(request) : await emergency.release(request)
+    },
     'PUT settings/:block': async ({ params, body }) => {
       const block = SettingsBlockSchema.parse(params.block)
       const known = !block.startsWith('source:') || runtime.sources.instances().some(instance => `source:${instance.id}` === block)

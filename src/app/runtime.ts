@@ -36,6 +36,8 @@ import { TextCache } from './cache.ts'
 import { Effects } from './effects.ts'
 import { Prompts } from './prompts.ts'
 import { registerHttp, type HttpHost } from './http.ts'
+import { AuditLog } from '../security/audit.ts'
+import { Emergency } from './emergency.ts'
 import { Voice } from '../voice/service.ts'
 import { Attachments } from '../attachments/service.ts'
 import { outsideRoots } from '../voice/adapters.ts'
@@ -101,6 +103,10 @@ export class Runtime extends Service implements SourceHost {
   readonly sessions: Sessions
   readonly settings: Settings
   readonly executor: DshExecutor
+  /** Append-only operator audit trail, created with the Store. */
+  readonly audit!: AuditLog
+  /** Durable global emergency stop, distinct from the ordinary processing pause. */
+  readonly emergency!: Emergency
   readonly assessor: MasterAssessor
   readonly outbox: Outbox
   readonly engine: Engine
@@ -179,6 +185,7 @@ export class Runtime extends Service implements SourceHost {
       }
       const report = (error: unknown) => { ctx.logger.warn('dsh-superagent: %s', String(error)) }
       const store = opened = this.store = new Store(path, report)
+      const audit = this.audit = new AuditLog(store)
       if (store.get(KV.recovery.hold)) throw new Error('This is a staged checkpoint restore. Reconcile coordinator ownership, Sessions and external effects before enabling execution.')
       const world = remoteWorld(ctx)
       if (machine.ownership && machine.executionMode !== 'local') throw new Error('Ownership-controlled repository publication requires a fenced publication service; use a general-mission profile until that integration is available')
@@ -309,6 +316,8 @@ export class Runtime extends Service implements SourceHost {
         lifetime: this.lifetime, sessions, closing: () => this.closing(), paused: () => this.paused(), environment, sourceLink: link,
         authorizeStopObservation: () => { if (runtime.executionOwnershipLost) throw new Error('Coordinator ownership was lost') },
         repliedTo: trigger => repliedTo({ store, sources }, trigger) })
+      this.emergency = new Emergency({ store, audit, hooks: {
+        haltAll: reason => runtime.emergencyHaltAll(reason), resume: () => { runtime.effects.kick() } } })
       this.assessor = new MasterAssessor({ get engine() { return runtime.engine }, commands, get deployment() { return setup.deployment }, effects,
         settings: () => store.settings(), paused: () => this.paused(), threadContext: trigger => sources.threadContext(trigger),
         deliver: async (id, text) => { await sessions.prompt(masterId, id, text, 'steer') }, candidateCard: candidate => candidateCard(links, candidate) })
@@ -429,7 +438,7 @@ export class Runtime extends Service implements SourceHost {
   sendReplies(): Promise<void> { return this.outbox.sent() }
   private closing(): boolean { return this.closingFlag || this.lifetime.aborted }
   /** Hold evaluation, dispatch, and outbound delivery while paused or awaiting setup; sources still record incoming triggers. */
-  private paused(): boolean { return !this.initialized || this.closing() || !ownershipReady(this.ownership) || !this.setup.configured() || !this.environments.ready() || this.store.settings().paused }
+  private paused(): boolean { return !this.initialized || this.closing() || !ownershipReady(this.ownership) || !this.setup.configured() || !this.environments.ready() || this.store.settings().paused || this.store.get(KV.runtime.emergency)?.engaged === true }
   private async initialize(): Promise<void> {
     // Register management HTTP routes before setup completes so operators can fix setup problems in the UI.
     this.disposers.push(registerHttp(this.ctx, this.httpHost()))
@@ -472,12 +481,25 @@ export class Runtime extends Service implements SourceHost {
       channelPublications: this.channelPublications,
       conversations: this.conversations,
       get health() { return runtime.health }, remoteEffects: this.remoteWorkspace?.world,
-      supervision: this.supervision, workspace: this.workspace, schedules: this.schedules, reflections: this.reflections, speculation: this.speculation, usage: this.usage, library: this.library, inbox: this.inbox, environments: this.environments, endpoints: this.endpoints, personas: this.personas, worlds: this.worlds,
+      supervision: this.supervision, workspace: this.workspace, schedules: this.schedules, reflections: this.reflections, speculation: this.speculation, usage: this.usage, library: this.library, inbox: this.inbox, environments: this.environments, endpoints: this.endpoints, personas: this.personas, worlds: this.worlds, emergency: this.emergency,
       get deployment() { return setup.deployment },
       get setupProblem() { return setup.problem }, get feishuProblem() { return setup.feishuProblem },
       configured: () => setup.configured(), links: () => runtime.links(), ticketEnvironment: ticket => runtime.ticketEnvironment(ticket),
       checkSetup: () => { setup.check() }, requestPass: () => { passes.request() }, models: () => this.ctx.sessionController.modelCatalog() }
   }
+  /** Halt every open assignment after emergency engagement, then settle the original stop receipts. */
+  private async emergencyHaltAll(reason: string): Promise<{ total: number; failed: number }> {
+    const tickets = this.store.tickets.open()
+    let failed = 0
+    for (const ticket of tickets) {
+      if (!latestAssignment(ticket)) continue
+      try { this.executor.halt(ticket.id, `Emergency stop: ${reason}`) } catch { failed++ }
+    }
+    this.effects.kick()
+    try { await this.executor.stops.idle() } catch { failed++ }
+    return { total: tickets.length, failed }
+  }
+
   /** Idempotent stop; concurrent or repeated calls share the same shutdown promise. */
   stop(): Promise<void> { return this.stopping ??= this.shutdown() }
   private async shutdown(): Promise<void> {
