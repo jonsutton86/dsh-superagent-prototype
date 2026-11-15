@@ -14,7 +14,7 @@ import type { AuditCheckpointReceipts } from './audit.ts'
 import type { RecoveryIntent } from './ownership.ts'
 import { withVerifiedStagedCheckpoint } from './checkpoint.ts'
 import { privateInput, recoveryKey } from './crypto.ts'
-import { ReceiptImage, recoveryFileDigest, syncRecoveryPath, verifyReceiptImage } from './image.ts'
+import { ReceiptImage, requireInstallableStorageImage, recoveryFileDigest, syncRecoveryPath, verifyReceiptImage } from './image.ts'
 import { recoveryStateDigest } from './state.ts'
 import { readRecoveryBindings, resolveRecoveryRegistration, resolveRecoveryWorld } from './bindings.ts'
 import { installationPatch, type InstallationLaunch } from './profile.ts'
@@ -68,6 +68,7 @@ export async function readInstallation(root: string, keyFile: string, signal: Ab
     chunks.push(Buffer.from(chunk))
   }
   const value = Installation.parse(authenticateInstallationValue(Buffer.concat(chunks).toString('utf8'), keyFile, 'dsh-installation:1'))
+  requireInstallableStorageImage(value.image)
   if (value.root !== resolve(root) || value.stateDir !== join(value.root, 'state')) throw new Error('Installation cannot be moved without a new installation request')
   for (const item of value.credentials) {
     if (!inside(join(value.root, 'control'), item.file)) throw new Error('Installed credential path differs from its private deployment')
@@ -96,6 +97,7 @@ export async function installCheckpoint(options: InstallCheckpoint): Promise<Ins
   const release = lockSync(options.target, { realpath: false, stale: 30_000, onCompromised: error => abort.abort(error) })
   try { return await withVerifiedStagedCheckpoint(options.checkpoint, options.keyFile, options.destination, signal, async ({ root, manifest, db }) => {
     const imageRoot = join(root, 'prepared-' + options.preparationId), image = await verifyReceiptImage(imageRoot, options.keyFile, signal)
+    requireInstallableStorageImage(image)
     if (image.checkpoint !== manifest.id || image.digest !== fingerprint(manifest)) throw new Error('Installation image differs from its checkpoint')
     for (const proof of ['administration', 'revocations', 'executionConfiguration', 'sessionBackend', 'controlConfiguration', 'inferenceConfiguration',
       'consumedInputs', 'sourceConfiguration', 'stateGraph', 'connectorState', 'workspaceState', 'resultState', 'registryState', 'contextState', 'budgetState', 'publicationState'] as const)

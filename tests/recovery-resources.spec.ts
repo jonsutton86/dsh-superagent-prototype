@@ -160,6 +160,11 @@ it('keeps actual speculative work held through unknown usage and preserves revie
   expect((await verify(h)).budget).toMatchObject({ speculativeRuns: 1, heldAllocations: 1, unknownCalls: 1, releasedAllocations: 0, legacyPolicies: 0 })
   expect(recoveryStateDigest(r.store.db)).toBe(before)
   r.usage.reconcile(call.id, { requestId: rid(), tokens: { inputTokens: 2, outputTokens: 3 }, cost: 0, note: 'Provider settlement verified' })
+  await r.speculation.tick(); expect(r.speculation.get(run.id).releasedAt).toBeUndefined()
+  // Reporting ready does not end the reporting turn; model Harness's subsequent idle event explicitly.
+  const worker = h.agents.get(root)!; worker.status = 'idle'
+  h.ctx.emit('agent/status', { agent: worker, status: 'idle' } as never)
+  await r.idle()
   await vi.waitFor(async () => { await r.speculation.tick(); expect(r.speculation.get(run.id).releasedAt).toBeDefined() })
   const ready = r.speculation.get(run.id), promoted = r.speculation.review(run.id, { requestId: rid(), revision: ready.revision, command: 'promote', evidence: ready.evidence, note: 'Promote original evidence' })
   const message = promoted.messages.find(item => item.id === key('ack', trigger.id))!

@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { InventoryPage } from '../ownership/inventory.ts'
 import { RecoveryReservation } from '../ownership/protocol.ts'
 import { privateInput, recoveryKey } from './crypto.ts'
+import { auditStorageRecoveryArtifacts } from './storage-artifacts.ts'
 
 const digest = z.string().regex(/^[a-f0-9]{64}$/)
 export const ReceiptImage = z.object({ version: z.literal(1), requestId: z.string().uuid(), requestHash: digest,
@@ -16,8 +17,10 @@ export const ReceiptImage = z.object({ version: z.literal(1), requestId: z.strin
   applied: z.object({ commands: z.number().int().nonnegative(), mutations: z.number().int().nonnegative(), publications: z.number().int().nonnegative(),
     repositoryPublications: z.number().int().nonnegative().optional() }).strict(),
   files: z.array(z.object({ member: z.string().regex(/^(?:orchestrator\.sqlite|[a-z0-9-]+\.bin)$/),
-    kind: z.enum(['store', 'world', 'session']), bytes: z.number().int().nonnegative().max(2 ** 40), sha256: digest,
+    kind: z.enum(['store', 'world', 'session', 'storage-host', 'storage-endpoint']), bytes: z.number().int().nonnegative().max(2 ** 40), sha256: digest,
     binding: digest.optional() }).strict()).min(1).max(20000),
+  storage: z.array(z.object({ endpointId: z.string().uuid(), hostMember: z.string().regex(/^[a-z0-9-]+\.bin$/),
+    endpointMember: z.string().regex(/^[a-z0-9-]+\.bin$/) }).strict()).min(1).max(256).optional(),
   administration: z.object({ verified: z.number().int().nonnegative(), recovered: z.number().int().nonnegative(), superseded: z.number().int().nonnegative() }).strict().optional(),
   revocations: z.object({ verified: z.number().int().nonnegative(), recovered: z.number().int().nonnegative() }).strict().optional(),
   executionConfiguration: z.object({ worlds: z.number().int().nonnegative(), bindings: z.number().int().nonnegative() }).strict().optional(),
@@ -79,10 +82,31 @@ export const ReceiptImage = z.object({ version: z.literal(1), requestId: z.strin
     repositoryUnresolved: z.number().int().nonnegative().optional(), digest }).strict().optional(),
 }).strict()
 export type ReceiptImage = z.infer<typeof ReceiptImage>
+/** Storage members are held evidence. They cannot be silently treated as ordinary world/session files. */
+export function validateStorageImageMembers(manifest: ReceiptImage): void {
+  const bindings = manifest.storage ?? [], endpoints = new Set<string>(), endpointMembers = new Set<string>(), referenced = new Set<string>()
+  const files = new Map(manifest.files.map(file => [file.member, file]))
+  if (files.size !== manifest.files.length) throw new Error('Recovery image has duplicate members')
+  for (const binding of bindings) {
+    if (endpoints.has(binding.endpointId) || endpointMembers.has(binding.endpointMember)
+      || files.get(binding.hostMember)?.kind !== 'storage-host' || files.get(binding.endpointMember)?.kind !== 'storage-endpoint'
+      || !manifest.resources.some(resource => resource.identity.id === binding.endpointId && resource.identity.kind === 'endpoint'))
+      throw new Error('Storage image members do not match their original endpoint resource')
+    endpoints.add(binding.endpointId); endpointMembers.add(binding.endpointMember)
+    referenced.add(binding.hostMember); referenced.add(binding.endpointMember)
+  }
+  if (manifest.files.some(file => file.kind.startsWith('storage-') && !referenced.has(file.member)))
+    throw new Error('Recovery image contains unbound storage members')
+}
+export function requireInstallableStorageImage(manifest: ReceiptImage): void {
+  validateStorageImageMembers(manifest)
+  if (manifest.storage?.length) throw new Error('Storage recovery installation requires host auditing, fencing and restore integration')
+}
 const envelope = z.object({ manifest: ReceiptImage, mac: digest }).strict()
 const authenticate = (manifest: ReceiptImage, key: Buffer) => createHmac('sha256', key).update('dsh-receipt-image:1\n').update(JSON.stringify(manifest)).digest()
 export function sealReceiptImage(value: ReceiptImage, key: Buffer): string {
   const manifest = ReceiptImage.parse(value)
+  validateStorageImageMembers(manifest)
   return JSON.stringify({ manifest, mac: authenticate(manifest, key).toString('hex') })
 }
 export async function syncRecoveryPath(path: string): Promise<void> {
@@ -109,6 +133,7 @@ export async function verifyReceiptImage(path: string, keyFile: string, signal =
   const value = envelope.parse(JSON.parse(Buffer.concat(chunks).toString('utf8'))), key = recoveryKey(keyFile)
   try { if (!timingSafeEqual(authenticate(value.manifest, key), Buffer.from(value.mac, 'hex'))) throw new Error('Prepared recovery manifest authentication failed') }
   finally { key.fill(0) }
+  validateStorageImageMembers(value.manifest)
   const expected = value.manifest.files.map(file => file.member)
   if (new Set(expected).size !== expected.length || value.manifest.files.filter(file => file.kind === 'store' && file.member === 'orchestrator.sqlite').length !== 1
     || JSON.stringify((await readdir(root)).sort()) !== JSON.stringify([...expected, 'prepared.json'].sort()))
@@ -116,6 +141,13 @@ export async function verifyReceiptImage(path: string, keyFile: string, signal =
   for (const file of value.manifest.files) {
     const actual = await recoveryFileDigest(join(root, file.member), signal, file.bytes)
     if (actual.bytes !== file.bytes || actual.sha256 !== file.sha256) throw new Error('Prepared recovery image member digest differs')
+  }
+  for (const binding of value.manifest.storage ?? []) {
+    const endpoint = value.manifest.files.find(file => file.member === binding.endpointMember)!
+    const host = value.manifest.files.find(file => file.member === binding.hostMember)!
+    await auditStorageRecoveryArtifacts({ endpointId: binding.endpointId,
+      endpoint: { path: join(root, endpoint.member), bytes: endpoint.bytes, sha256: endpoint.sha256 },
+      host: { path: join(root, host.member), bytes: host.bytes, sha256: host.sha256 } }, signal)
   }
   signal.throwIfAborted(); return value.manifest
 }

@@ -1,5 +1,7 @@
-import { createHash } from 'node:crypto'
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { ReceiptImage, sealReceiptImage, verifyReceiptImage, requireInstallableStorageImage } from '../src/recovery/image.ts'
+import { createRecoveryKey, recoveryKey } from '../src/recovery/crypto.ts'
+import { createHash, randomUUID } from 'node:crypto'
+import { chmod, copyFile, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { auditStorageRecoveryArtifacts } from '../src/recovery/storage-artifacts.ts'
@@ -108,7 +110,7 @@ it('honors cancellation before reading either database', async () => {
 
 
 it('verifies expected artifact bytes before reading isolated SQLite copies', async () => {
-  const db = databases(), directory = await mkdtemp(join(tmpdir(), 'dsh-storage-artifact-test-'))
+  const db = databases(), directory = await realpath(await mkdtemp(join(tmpdir(), 'dsh-storage-artifact-test-')))
   try {
     const capture = async (source: DatabaseSync, name: string) => {
       const path = join(directory, name)
@@ -125,6 +127,30 @@ it('verifies expected artifact bytes before reading isolated SQLite copies', asy
     await expect(auditStorageRecoveryArtifacts({ ...input, host: { ...host, sha256: 'f'.repeat(64) } }, signal)).rejects.toThrow('digest')
     await expect(auditStorageRecoveryArtifacts({ ...input, endpoint: { ...endpoint, bytes: endpoint.bytes - 1 } }, signal)).rejects.toThrow('size')
     await expect(auditStorageRecoveryArtifacts(input, AbortSignal.abort())).rejects.toThrow()
+    const image = join(directory, 'image'), keyFile = join(directory, 'recovery.key')
+    await mkdir(image, { mode: 0o700 }); createRecoveryKey(keyFile)
+    await copyFile(endpoint.path, join(image, 'endpoint.bin')); await copyFile(host.path, join(image, 'host.bin'))
+    await writeFile(join(image, 'orchestrator.sqlite'), 'held', { mode: 0o600 })
+    const checkpoint = randomUUID(), manifest = ReceiptImage.parse({ version: 1, requestId: randomUUID(), requestHash: 'a'.repeat(64),
+      checkpoint, digest: 'b'.repeat(64), auditId: randomUUID(), at: new Date().toISOString(),
+      recovery: { checkpoint, digest: 'b'.repeat(64), generation: 1 }, epoch: 0, executionOwnership: false,
+      resources: [{ identity: { id: input.endpointId, kind: 'endpoint', authorityId: randomUUID(), coordinatorId: 'coordinator', resourceId: 'endpoint' },
+        revision: 'c'.repeat(32), total: 1, quiescent: true }], applied: { commands: 0, mutations: 0, publications: 0 },
+      files: [{ member: 'orchestrator.sqlite', kind: 'store', bytes: 4, sha256: createHash('sha256').update('held').digest('hex') },
+        { member: 'endpoint.bin', kind: 'storage-endpoint', bytes: endpoint.bytes, sha256: endpoint.sha256 },
+        { member: 'host.bin', kind: 'storage-host', bytes: host.bytes, sha256: host.sha256 }],
+      storage: [{ endpointId: input.endpointId, endpointMember: 'endpoint.bin', hostMember: 'host.bin' }] })
+    const key = recoveryKey(keyFile)
+    try {
+      const signed = sealReceiptImage(manifest, key)
+      await writeFile(join(image, 'prepared.json'), signed, { mode: 0o600 })
+      expect(await verifyReceiptImage(image, keyFile, signal)).toEqual(manifest)
+      expect(() => requireInstallableStorageImage(manifest)).toThrow('fencing and restore integration')
+      expect(() => sealReceiptImage({ ...manifest, storage: undefined }, key)).toThrow('unbound storage')
+      const tampered = JSON.parse(signed); tampered.manifest.storage[0].endpointId = randomUUID()
+      await writeFile(join(image, 'prepared.json'), JSON.stringify(tampered))
+      await expect(verifyReceiptImage(image, keyFile, signal)).rejects.toThrow('authentication failed')
+    } finally { key.fill(0) }
     const walHeader = await readFile(endpoint.path); walHeader[18] = 2; walHeader[19] = 2
     await writeFile(endpoint.path, walHeader)
     const walInput = { ...input, endpoint: { ...endpoint, sha256: createHash('sha256').update(walHeader).digest('hex') } }

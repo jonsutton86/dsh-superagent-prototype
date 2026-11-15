@@ -35,6 +35,9 @@ it('uses the runtime launch/tool guards, durable HTTP reviews and separate outbo
   const { h, r, sent, ticket, run } = await prepare()
   expect(run.state).toBe('admitted'); expect(ticket.mandate.strength).toBe('inferred'); expect(sent).not.toHaveBeenCalled()
   r.engine.report(ticket.id, { state: 'ready', summary: 'Prepared result with retained evidence' })
+  await r.idle(); expect(r.speculation.get(run.id).releasedAt).toBeUndefined()
+  const worker = h.agents.get(`worker-${ticket.id}`)!; worker.status = 'idle'
+  h.ctx.emit('agent/status', { agent: worker, status: 'idle' } as never)
   await r.idle(); await vi.waitFor(async () => { await r.speculation.tick(); expect(r.speculation.get(run.id).releasedAt).toBeDefined() })
   const ready = (await h.api('GET', `speculation/${run.id}`)).body
   expect(ready.state).toBe('ready')
@@ -50,7 +53,7 @@ it('uses the runtime launch/tool guards, durable HTTP reviews and separate outbo
   expect((await h.api('GET', 'speculation/versions/0')).status).toBe(200)
 })
 it('stops old speculative activity without cancelling a newly queued assignment', async () => {
-  const { r, ticket, run } = await prepare()
+  const { h, r, ticket, run } = await prepare()
   r.engine.report(ticket.id, { state: 'blocked', summary: 'Needs retry' }); r.engine.retryTicket(ticket.id)
   const next = latestAssignment(r.store.tickets.get(ticket.id)!)!
   await r.speculation.tick()
@@ -73,8 +76,11 @@ it('rechecks publication authority after asynchronous observation but settles an
 })
 
 it('checks original remote execution bindings and all receipts beyond the display page before release', async () => {
-  const { r, ticket, run } = await prepare()
+  const { h, r, ticket, run } = await prepare()
   r.engine.report(ticket.id, { state: 'ready', summary: 'Prepared' }); await r.idle()
+  const worker = h.agents.get(`worker-${ticket.id}`)!; worker.status = 'idle'
+  h.ctx.emit('agent/status', { agent: worker, status: 'idle' } as never)
+  await r.idle()
   r.executor.halt(ticket.id, 'Stop for receipt check', run.assignmentId); await r.idle()
   const journal = new ExecutionEffects(r.store.db)
   for (let i = 0; i < 105; i++) r.store.db.prepare('INSERT INTO execution_effect VALUES (?,?)').run(`receipt-${i}`, JSON.stringify({

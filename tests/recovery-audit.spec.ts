@@ -423,7 +423,7 @@ it.each(['github-comment', 'github-review', 'feishu-reply'] as const)('prepares 
     receipts: 2, sent: 2, unresolved: 0, withdrawn: 1, legacyApprovals: 0, legacyDestinations: 0, legacyGrantRequests: 0, legacyPlanBindings: 0 })
   expect(prepared.manifest.sessionBackend).toEqual({ sessions: 1, events: 1 })
   expect(prepared.manifest.controlConfiguration).toEqual({ claimant: true, publication: true, destinations: 1 })
-  expect(prepared.manifest.sourceConfiguration).toEqual({ kinds: 3, enabled: 3, inactive: 0, retained: 0, configuration: expect.stringMatching(/^[a-f0-9]{64}$/) })
+  expect(prepared.manifest.sourceConfiguration).toEqual({ kinds: 5, enabled: 5, inactive: 0, retained: 0, configuration: expect.stringMatching(/^[a-f0-9]{64}$/) })
   expect(await verifyReceiptImage(prepared.path, f.audit.keyFile)).toEqual(prepared.manifest)
   expect(await prepareCheckpointReceipts(options)).toEqual(prepared)
   const db = new DatabaseSync(join(prepared.path, 'orchestrator.sqlite'), { readOnly: true })
