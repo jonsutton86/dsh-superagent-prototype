@@ -30,6 +30,7 @@ def refused(action):
     raise AssertionError('Expected host refusal')
 
 
+baseline_descriptors = len(list(Path('/proc/self/fd').iterdir()))
 host = module.StorageHost(registry, config)
 try:
     refused(lambda: host.provision({**request, 'workspace': '../escape'}))
@@ -53,9 +54,17 @@ try:
     module.run = real_run
     refused(lambda: host.provision({**request, 'requestHash': 'b' * 64}))
     # Registry-wide range collision, even for a different endpoint identity.
-    descriptors = len(list(Path('/proc/self/fd').iterdir()))
     refused(lambda: module.StorageHost(registry, {**config, 'endpointId': str(uuid.uuid4())}))
-    assert len(list(Path('/proc/self/fd').iterdir())) == descriptors, 'Failed host registration leaked descriptors'
+    # SQLite may retain a shared database descriptor until the other connection closes.
+    # The rejected registration must release its own flock handle immediately.
+    lock_handles = []
+    for descriptor in Path('/proc/self/fd').iterdir():
+        try:
+            if os.readlink(descriptor) == str(registry / 'host.lock'):
+                lock_handles.append(descriptor)
+        except FileNotFoundError:
+            pass
+    assert len(lock_handles) == 1, 'Failed registration retained its host lock handle'
     # Crash after committed intent but before roots: inspection cannot invent success or replay the write.
     second = {**request, 'requestId': 'uncertain', 'workspace': 'two', 'projectId': 101}
     host.db.execute('INSERT INTO operations VALUES (?,?,?,?,?,?,?)', (endpoint, second['requestId'], second['workspace'], filesystem,
@@ -73,3 +82,4 @@ try:
                       'uncertainIntentRetained': True, 'capacityRetained': True, 'rootReplacementRefused': True}), flush=True)
 finally:
     host.close()
+    assert len(list(Path('/proc/self/fd').iterdir())) == baseline_descriptors, 'Host descriptors remained after all connections closed'
