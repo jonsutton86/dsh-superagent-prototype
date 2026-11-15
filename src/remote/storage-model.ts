@@ -25,9 +25,21 @@ export const StorageIntent = z.object({
   workspace: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
 }).strict()
 export type StorageIntent = z.infer<typeof StorageIntent>
+const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+export const StorageObservation = z.object({
+  mountId: z.number().int().positive(), filesystemUUID: z.string().uuid(), mountRoot: z.string().min(2).max(4096),
+  projectId: z.number().int().min(1).max(2 ** 32 - 1),
+  directories: z.array(z.object({ path: z.string().min(2).max(4096), device: z.string().regex(/^\d+$/), inode: z.string().regex(/^\d+$/),
+    projectId: z.number().int().positive(), inherits: z.literal(true), realtime: z.literal(false) }).strict()).min(1).max(16),
+  quota: z.object({ accounting: z.literal(true), enforcement: z.literal(true), usedBytes: count, hardBytes: count,
+    usedInodes: count, hardInodes: count }).strict(),
+  observedAt: z.string().datetime(),
+}).strict()
+export type StorageObservation = z.infer<typeof StorageObservation>
 export const StorageReservation = StorageIntent.extend({
   endpointId: z.string().uuid(), projectId: z.number().int().min(1).max(2 ** 32 - 1),
-  phase: z.enum(['reserved', 'provisioning']),
+  phase: z.enum(['reserved', 'provisioning', 'provisioned']),
+  observation: StorageObservation.optional(),
   createdAt: z.string().datetime(),
-}).strict()
+}).strict().refine(value => (value.phase === 'provisioned') === !!value.observation, 'Provisioned state requires its observation')
 export type StorageReservation = z.infer<typeof StorageReservation>

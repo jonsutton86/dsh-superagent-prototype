@@ -1,11 +1,12 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { RemoteJournal, fingerprint } from '../src/remote/journal.ts'
-import { EndpointStorage } from '../src/remote/storage-model.ts'
+import { StorageProvisioning, type StorageHost } from '../src/remote/storage-provisioning.ts'
+import { EndpointStorage, type StorageObservation, type StorageReservation } from '../src/remote/storage-model.ts'
 import { RemoteEndpoint, type EndpointHost } from '../src/remote/endpoint.ts'
-import { StorageReservations } from '../src/remote/storage-journal.ts'
+import { StorageReservations, storageRoots } from '../src/remote/storage-journal.ts'
 
 const policy: EndpointStorage = { kind: 'linux-xfs-project', filesystemUUID: 'a9b48006-3a5a-4238-a2c8-b64e1f6b530a',
   mountRoot: '/srv/storage', projectIds: { first: 100, last: 104 },
@@ -93,4 +94,84 @@ it('refuses retained allocations whose policy is missing and never starts an une
   const stateDir = journal.directory, root = journal.root
   journal.close(); journals.splice(journals.indexOf(journal), 1)
   expect(() => new RemoteEndpoint({ stateDir, root } as EndpointHost)).toThrow('requires storage enforcement')
+})
+
+function observed(reservation: StorageReservation): StorageObservation {
+  return { mountId: 42, filesystemUUID: policy.filesystemUUID, mountRoot: policy.mountRoot, projectId: reservation.projectId,
+    directories: storageRoots(policy, reservation).map((path, index) => ({ path, device: '8', inode: String(100 + index),
+      projectId: reservation.projectId, inherits: true, realtime: false })),
+    quota: { accounting: true, enforcement: true, usedBytes: 0, hardBytes: policy.workspace.bytes,
+      usedInodes: 2, hardInodes: policy.workspace.inodes }, observedAt: new Date().toISOString() }
+}
+it('recovers a lost provisioning response by observing original roots, never repeating the host write', async () => {
+  const { journal, open, storage } = fixture(), request = intent('one')
+  const host: StorageHost = { provision: vi.fn(async () => { throw new Error('response lost after host write') }),
+    observe: vi.fn(async (_, reservation) => observed(reservation)) }
+  await expect(new StorageProvisioning(storage, host).prepare(request, AbortSignal.timeout(5000))).rejects.toThrow('response lost')
+  expect(storage.list()[0]!.phase).toBe('provisioning')
+  expect(host.observe).not.toHaveBeenCalled()
+  journal.close(); journals.splice(journals.indexOf(journal), 1)
+  const restored = new StorageReservations(open(), policy), service = new StorageProvisioning(restored, host)
+  const result = await service.prepare(request, AbortSignal.timeout(5000))
+  expect(result).toMatchObject({ projectId: 100, phase: 'provisioned', observation: { projectId: 100 } })
+  await service.prepare(request, AbortSignal.timeout(5000))
+  expect(host.provision).toHaveBeenCalledTimes(1)
+  expect(host.observe).toHaveBeenCalledTimes(2) // Stored evidence is never substituted for a new observation.
+})
+it('serializes duplicate preparation and preserves one original host effect', async () => {
+  const { storage } = fixture(), release = Promise.withResolvers<void>()
+  const host: StorageHost = { provision: vi.fn(async () => release.promise), observe: vi.fn(async (_, reservation) => observed(reservation)) }
+  const service = new StorageProvisioning(storage, host), request = intent('one'), signal = AbortSignal.timeout(5000)
+  const first = service.prepare(request, signal), second = service.prepare(request, signal)
+  release.resolve()
+  expect((await Promise.all([first, second])).map(item => item.projectId)).toEqual([100, 100])
+  expect(host.provision).toHaveBeenCalledTimes(1)
+  expect(host.observe).toHaveBeenCalledTimes(2)
+})
+it('does not record provisioning success from mismatched or disabled quota evidence', () => {
+  const { storage } = fixture(), request = intent('one'), reservation = storage.reserve(request)
+  storage.beginProvisioning(request)
+  for (const change of [
+    { projectId: 101 }, { mountRoot: '/other' }, { directories: [observed(reservation).directories[0]!] },
+    { quota: { ...observed(reservation).quota, hardBytes: policy.workspace.bytes * 2 } },
+    { quota: { ...observed(reservation).quota, enforcement: false } },
+  ]) expect(() => storage.recordObservation(request, { ...observed(reservation), ...change } as StorageObservation)).toThrow()
+  expect(storage.list()[0]!.phase).toBe('provisioning')
+})
+it('refuses root identity replacement even when its new quota membership matches', () => {
+  const { storage } = fixture(), request = intent('one'), reservation = storage.reserve(request)
+  storage.beginProvisioning(request); storage.recordObservation(request, observed(reservation))
+  const changed = observed(reservation); changed.directories[0]!.inode = '999'
+  expect(() => storage.recordObservation(request, changed)).toThrow('changed identity')
+  expect(storage.list()[0]!.observation!.directories[0]!.inode).toBe('100')
+})
+it('keeps original provisioning intent if observation receipt fails to commit', async () => {
+  const { journal, storage } = fixture(), request = intent('one')
+  const host: StorageHost = { provision: vi.fn(async () => {}), observe: vi.fn(async (_, reservation) => {
+    journal.db.exec("CREATE TRIGGER reject_storage_observation BEFORE UPDATE ON remote_storage BEGIN SELECT RAISE(ABORT, 'receipt unavailable'); END")
+    return observed(reservation)
+  }) }
+  const service = new StorageProvisioning(storage, host)
+  await expect(service.prepare(request, AbortSignal.timeout(5000))).rejects.toThrow('receipt unavailable')
+  expect(storage.list()[0]!.phase).toBe('provisioning')
+  journal.db.exec('DROP TRIGGER reject_storage_observation')
+  host.observe = vi.fn(async (_, reservation) => observed(reservation))
+  expect((await service.prepare(request, AbortSignal.timeout(5000))).phase).toBe('provisioned')
+  expect(host.provision).toHaveBeenCalledTimes(1)
+})
+it('retains uncertain capacity on cancellation at the effect boundary', async () => {
+  const { storage } = fixture(), request = intent('one'), abort = new AbortController()
+  const host: StorageHost = { provision: vi.fn(async () => { abort.abort() }), observe: vi.fn(async (_, reservation) => observed(reservation)) }
+  await expect(new StorageProvisioning(storage, host).prepare(request, abort.signal)).rejects.toThrow()
+  expect(storage.list()[0]!.phase).toBe('provisioning')
+  expect(host.observe).not.toHaveBeenCalled()
+})
+
+it('rejects corrupted persisted observation on reopen', () => {
+  const { journal, storage } = fixture(), request = intent('one'), reservation = storage.reserve(request)
+  storage.beginProvisioning(request)
+  const value = storage.recordObservation(request, observed(reservation))
+  value.observation!.quota.hardInodes *= 2
+  journal.db.prepare('UPDATE remote_storage SET value=?').run(JSON.stringify(value))
+  expect(() => new StorageReservations(journal, policy)).toThrow('does not match original storage allocation')
 })
