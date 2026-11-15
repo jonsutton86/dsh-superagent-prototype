@@ -1239,3 +1239,9 @@ external effects. Document supported OS/environment combinations, backup/restore
 Declare complete only when each capability above has executable evidence and a supported operator path. Cross-organization
 agent communication remains explicitly scoped work with its own identity/delegation contract; it is not silently assumed
 from the article's open research discussion.
+
+Storage continuation (`93d17fa`): managed endpoint configuration and SSH enrollment now carry and
+pin the optional quota policy; coordinator identity retains it as configuration, not live capacity.
+Focused validation and remaining native launcher/install/recovery gates are recorded in
+[086-workspace-storage-quotas.md](086-workspace-storage-quotas.md). No deployment or full-project
+completion is claimed.

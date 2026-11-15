@@ -338,3 +338,51 @@ builds passed. Native storage evidence above remains tied to its earlier revisio
 for this configuration-only increment. Launcher/UI configuration, supported service installation,
 storage recovery export/restore, headroom and reboot/clean-host qualification remain incomplete.
 No running application was restarted and no model defaults or provider routing were changed.
+
+### Managed launcher and transport policy binding
+
+Source revision `93d17fa` adds storage to the existing `--endpoint-config` input. Initialization and
+restart derive the workspace parent from the configured mount and endpoint ID, and do not create or
+change the permissions of the protected quota namespace. The control installation must be separate
+from the storage mount. Configuration validates canonical IDs/paths, integer budgets, and capacity
+for startup plus at least one worker. Existing installation equality checks pin these settings.
+
+For example, the following is a configuration shape, not an installed host or usable filesystem ID:
+
+```json
+{
+  "storage": {
+    "endpointId": "11111111-1111-4111-8111-111111111111",
+    "socketPath": "/run/agentic-storage/endpoint.sock",
+    "policy": {
+      "kind": "linux-xfs-project",
+      "filesystemUUID": "22222222-2222-4222-8222-222222222222",
+      "mountRoot": "/srv/agentic-quota",
+      "projectIds": { "first": 10000, "last": 10099 },
+      "pool": { "bytes": 10737418240, "inodes": 100000 },
+      "workspace": { "bytes": 1073741824, "inodes": 10000 }
+    }
+  }
+}
+```
+
+The endpoint identity and coordinator metadata now retain `storage: { policy }`. This is pinned
+configuration, not a live usage sample or a capacity guarantee. Runtime operations still obtain
+fresh host observations. Launcher health requires the configured endpoint ID and exact policy;
+SSH enrollment retains that policy and refuses missing, unexpected or changed policy during health
+checks. Enrollment does not export the privileged socket path. Omitting storage retains the old
+workspace layout and refuses unexpected storage on the connected endpoint.
+
+VERIFIED: focused launcher health contract passes after fixing a fixture name collision; transport
+and storage-plugin suites pass 15 tests with one native skip after fixing a fixture tuple-access
+error. Adjacent remote/endpoint/transport suites passed 50 tests with three native skips. The earlier
+launcher/journal/plugin/transport run had 47 passes, three skips and that repaired fixture failure.
+Typecheck and all seven builds passed; production sources were unchanged after the build except
+Python whitespace. These are local configuration/contract checks, not native installed-launcher
+qualification. CodeGraph sync completed; its affected-file output was supplemented with the launcher,
+transport, coordinator endpoint and remote suites based on direct call-path inspection.
+
+UNKNOWN/unqualified: actual storage-backed managed Harness/SSH launch and reboot. Supported privileged
+service installation, UI storage controls/status, complete storage backup/restore, volume headroom,
+partial-effect reconciliation and final clean-host/full-system qualification remain open. No service
+was installed or restarted and no provider/default model changes were made by this increment.
