@@ -164,3 +164,27 @@ it.skipIf(!process.env.DSH_VOICE_QUALIFICATION)('qualifies actual macOS synthesi
   expect(voice.get(input).text?.toLowerCase()).toContain('briefing'); expect(readdirSync(join(value.stateDir, 'speech-temporary'))).toEqual([])
   expect(readFileSync(config.input!.kind === 'whisper' ? config.input!.modelFile : '').length).toBeGreaterThan(70000000)
 }, 160000)
+
+it('streams tokenized speech audio with byte ranges and refuses a missing or wrong capability', async () => {
+  const upstream = await provider(); host = await startRuntime(undefined, { executionMode: 'local', noAccounts: true, voice: upstream.config })
+  const requestId = randomUUID()
+  await host.api('POST', 'voice/speak', { requestId, text: 'Prepare a short briefing.' })
+  const receipt = await terminal(host.runtime.voice, requestId)
+  expect(receipt.mediaToken).toMatch(/^[0-9a-f]{32}$/)
+  const call = async (url: string, headers: Record<string, string> = {}) => {
+    const captured: { code: number; headers?: Record<string, string>; body?: Buffer } = { code: 0 }
+    const req = { method: 'GET', url, headers: { host: '127.0.0.1:3082', ...headers } }
+    const res = { writeHead: (code: number, values?: Record<string, string>) => { captured.code = code; captured.headers = values },
+      end: (data?: Buffer) => { captured.body = data } }
+    await host.http(req as never, res as never)
+    return captured
+  }
+  const audio = host.runtime.voice.audio(requestId)
+  const full = await call(`/orchestrator/api/voice/${requestId}/audio?token=${receipt.mediaToken}`)
+  expect(full.code).toBe(200); expect(full.headers?.['accept-ranges']).toBe('bytes'); expect(full.body).toEqual(audio)
+  const range = await call(`/orchestrator/api/voice/${requestId}/audio?token=${receipt.mediaToken}`, { range: 'bytes=0-3' })
+  expect(range.code).toBe(206); expect(range.headers?.['content-range']).toBe(`bytes 0-3/${audio.length}`)
+  expect(range.body).toEqual(audio.subarray(0, 4))
+  expect((await call(`/orchestrator/api/voice/${requestId}/audio?token=${'0'.repeat(32)}`)).code).toBe(403)
+  expect((await call(`/orchestrator/api/voice/${requestId}/audio`)).code).toBe(403)
+})

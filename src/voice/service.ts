@@ -1,5 +1,5 @@
 /** Durable request identity, short-lived speech content, explicit cancellation, and no restart replay. */
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { existsSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Store } from '../app/store.ts'
@@ -62,6 +62,14 @@ export class Voice {
     if (receipt.phase !== 'completed' || receipt.kind !== 'speak' || !row?.audio) throw new VoiceError(409, 'Speech audio is unavailable or expired')
     return Buffer.from(row.audio)
   }
+  /** Constant-time check of the short-lived media capability; content remains unavailable without it. */
+  authorizeAudio(id: string, token: string | undefined): boolean {
+    try {
+      const receipt = this.get(id)
+      if (!token || !receipt.mediaToken || token.length !== receipt.mediaToken.length) return false
+      return timingSafeEqual(Buffer.from(token), Buffer.from(receipt.mediaToken))
+    } catch { return false }
+  }
   transcribe(value: unknown): VoiceReceipt {
     const input = Transcribe.parse(value), audio = Buffer.from(input.audio, 'base64')
     if (audio.length > L.inputBytes || audio.toString('base64') !== input.audio) throw new VoiceError(400, 'Invalid or oversized audio')
@@ -85,7 +93,8 @@ export class Voice {
     const count = this.host.store.db.prepare('SELECT count(*) AS count FROM voice_operation').get()!.count as number
     if (count >= L.receipts) throw new VoiceError(429, 'Speech receipt capacity reached; operator maintenance is required')
     const receipt: VoiceReceipt = { id, kind, mode: adapter.config.kind === 'http' ? adapter.config.mode : 'local', phase: 'running',
-      createdAt: this.now(), expiresAt: this.now() + L.retentionMs }
+      createdAt: this.now(), expiresAt: this.now() + L.retentionMs,
+      ...(kind === 'speak' ? { mediaToken: randomBytes(16).toString('hex') } : {}) }
     this.host.store.db.prepare('INSERT INTO voice_operation (id, fingerprint, receipt) VALUES (?, ?, ?)').run(id, fingerprint, JSON.stringify(receipt))
     const abort = new AbortController(), signal = AbortSignal.any([abort.signal, this.host.lifetime, AbortSignal.timeout(L.timeoutMs)])
     const task = Promise.resolve().then(async () => {

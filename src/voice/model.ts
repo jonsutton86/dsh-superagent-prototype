@@ -20,6 +20,8 @@ export type TranscribeInput = z.infer<typeof Transcribe>
 export type SpeakInput = z.infer<typeof Speak>
 export interface VoiceCapabilities { input: 'local' | 'cloud' | null; output: 'local' | 'cloud' | null; recordingMs: number; inputBytes: number; textChars: number }
 export interface VoiceReceipt { id: string; kind: 'transcribe' | 'speak'; mode: 'local' | 'cloud'; phase: 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
-  createdAt: number; expiresAt: number; text?: string; audioBytes?: number; error?: string; expired?: boolean }
+  createdAt: number; expiresAt: number; text?: string; audioBytes?: number; error?: string; expired?: boolean;
+  /** Short-lived capability token for streaming this synthesis result through a media element. */
+  mediaToken?: string }
 /** Safe operator-facing speech error, without raw transport or process diagnostics. */
 export class VoiceError extends Error { constructor(readonly status: 400 | 404 | 409 | 429 | 503, message: string) { super(message) } }

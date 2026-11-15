@@ -36,22 +36,21 @@ async function fixture(children: React.ReactNode) {
   host = await startRuntime(undefined, { executionMode: 'local', noAccounts: true })
   const requests: { path: string; body?: Record<string, unknown> }[] = []
   let pendingSpeech = false
-  const pause = vi.fn(), play = vi.fn(async () => {})
-  vi.stubGlobal('Audio', class { pause = pause; play = play; onended?: () => void; onerror?: () => void })
-  Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:speech') })
-  Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
+  const pause = vi.fn(), play = vi.fn(async () => {}), audios: { src: string }[] = []
+  vi.stubGlobal('Audio', class { src = ''; pause = pause; play = play; preload = ''; onended?: () => void; onerror?: () => void
+    constructor(src?: string) { this.src = src ?? ''; audios.push(this) } })
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
     const path = String(url).replace('/orchestrator/api/', ''), body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : undefined
     requests.push({ path, body })
     if (path === 'voice') return new Response(JSON.stringify({ input: 'local', output: 'local', recordingMs: 30000, inputBytes: 2097152, textChars: 2000 }))
     if (path.endsWith('/audio')) return new Response(new Blob(['audio'], { type: 'audio/wav' }))
-    if (path.startsWith('voice/')) return new Response(JSON.stringify({ id: body?.requestId ?? path.split('/')[1], phase: pendingSpeech ? 'running' : 'completed', text: 'Spoken addition.' }))
+    if (path.startsWith('voice/')) return new Response(JSON.stringify({ id: body?.requestId ?? path.split('/')[1], phase: pendingSpeech ? 'running' : 'completed', text: 'Spoken addition.', mediaToken: 'a'.repeat(32) }))
     const result = await host!.api(init?.method ?? 'GET', path, body)
     return new Response(JSON.stringify(result.body), { status: result.status })
   })
   element = document.createElement('div'); document.body.append(element); root = createRoot(element)
   await act(async () => root!.render(<PanelProvider t={translator(en)} navigate={vi.fn()}>{children}</PanelProvider>))
-  return { requests, pause, play, pending: () => { pendingSpeech = true } }
+  return { requests, pause, play, audios, pending: () => { pendingSpeech = true } }
 }
 it('waits for the final recording chunk, appends to an edited draft, and requires the ordinary Send action', async () => {
   const mic = microphone(), { requests } = await fixture(<InboxPage />)
@@ -92,18 +91,21 @@ it('releases a late permission grant after navigation and never starts listening
   expect(mic.stop).toHaveBeenCalled(); expect(requests.some(request => request.path === 'voice/transcribe')).toBe(false)
 })
 function AudioPage() { const [busy, setBusy] = useState(false); return <VoiceProvider><SpeakReply id="reply" text="A reply" /><Dictation disabled={false} onBusy={setBusy} onText={() => {}} /><span>{busy ? 'busy' : 'idle'}</span></VoiceProvider> }
-it('interrupts active playback when microphone input starts and revokes audio on navigation', async () => {
-  microphone(); const { pause, play } = await fixture(<AudioPage />)
-  await click('Read aloud'); expect(play).toHaveBeenCalledOnce()
-  await click('Record'); expect(pause).toHaveBeenCalledOnce(); expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:speech')
+it('streams authenticated speech through the media element and interrupts it on microphone input', async () => {
+  microphone(); const { pause, play, audios } = await fixture(<AudioPage />)
+  await click('Read aloud')
+  expect(play).toHaveBeenCalledTimes(2) // silent unlock inside the gesture, then the capability URL
+  expect(audios.at(-1)!.src).toMatch(/\/orchestrator\/api\/voice\/[0-9a-f-]{36}\/audio\?token=[0-9a-f]{32}$/)
+  await click('Record'); expect(pause).toHaveBeenCalledOnce()
   await click('Cancel voice'); await click('Read aloud'); await act(async () => root!.unmount()); root = undefined
   expect(pause).toHaveBeenCalledTimes(2)
 })
-it('cancels pending synthesis by its original request ID on Stop', async () => {
+it('cancels pending synthesis by its original request ID on Stop without loading speech audio', async () => {
   microphone(); const state = await fixture(<AudioPage />); state.pending()
   await click('Read aloud'); await click('Stop speaking')
   const original = state.requests.find(request => request.path === 'voice/speak')!.body!.requestId
-  expect(state.requests.some(request => request.path === `voice/${original}/cancel`)).toBe(true); expect(state.play).not.toHaveBeenCalled()
+  expect(state.requests.some(request => request.path === `voice/${original}/cancel`)).toBe(true)
+  expect(state.audios.some(audio => audio.src.includes('/audio?token='))).toBe(false)
 })
 it('stops automatically at the duration limit and releases tracks when the byte cap is exceeded', async () => {
   const mic = microphone(), first = await recordMicrophone(new AbortController().signal, 100, 5)

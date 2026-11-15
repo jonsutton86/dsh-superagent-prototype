@@ -679,6 +679,21 @@ function match(table: Routes, method: string, segments: string[]) {
   }
   return undefined
 }
+/** Serve stored speech with byte-range support so media elements can stream and seek. */
+function speechAudioResponse(req: IncomingMessage, res: ServerResponse, audio: Buffer): void {
+  const range = req.headers.range
+  const common = { 'content-type': 'audio/wav', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'accept-ranges': 'bytes' }
+  const match = range ? /^bytes=(\d*)-(\d*)$/.exec(range) : null
+  if (!match) { res.writeHead(200, { ...common, 'content-length': audio.length }); res.end(audio); return }
+  const start = match[1] ? Number(match[1]) : 0
+  const end = match[2] ? Math.min(Number(match[2]), audio.length - 1) : audio.length - 1
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= audio.length) {
+    res.writeHead(416, { ...common, 'content-range': `bytes */${audio.length}` }); res.end(); return
+  }
+  res.writeHead(206, { ...common, 'content-length': end - start + 1, 'content-range': `bytes ${start}-${end}/${audio.length}` })
+  res.end(audio.subarray(start, end + 1))
+}
+
 export function registerHttp(ctx: Context, runtime: HttpHost): () => void {
   if (ctx.webServer.host !== '127.0.0.1') throw new Error('Orchestrator management requires a loopback Web server')
   const table = routes(runtime)
@@ -686,6 +701,14 @@ export function registerHttp(ctx: Context, runtime: HttpHost): () => void {
     ctx.webServer.register({ kind: 'prefix', path: '/orchestrator', handler: async (req, res) => {
       const url = new URL(req.url ?? '/', 'http://localhost')
       if (!url.pathname.startsWith('/orchestrator/api/')) { res.writeHead(404); res.end(); return }
+      // A media element cannot attach the management header, so a short-lived capability token authorizes only audio bytes.
+      const media = /^\/orchestrator\/api\/voice\/([0-9a-f-]{36})\/audio$/.exec(url.pathname)
+      if (req.method === 'GET' && media && url.searchParams.get('token')) {
+        const host = req.headers.host
+        if (host !== `127.0.0.1:${ctx.webServer.port}` && host !== `localhost:${ctx.webServer.port}`) { res.writeHead(403); res.end(); return }
+        if (!runtime.voice?.authorizeAudio(media[1]!, url.searchParams.get('token') ?? undefined)) { res.writeHead(403); res.end(); return }
+        speechAudioResponse(req, res, runtime.voice.audio(media[1]!)); return
+      }
       if (!sameOrigin(req, ctx.webServer.port)) { json(res, 403, { error: 'Same-origin management request required' }); return }
       // Independent supervision keeps its own bearer authentication and must stay observable during startup.
       const supervisionPath = url.pathname === '/orchestrator/api/supervision' || url.pathname.startsWith('/orchestrator/api/supervision/')
@@ -744,9 +767,7 @@ export function registerHttp(ctx: Context, runtime: HttpHost): () => void {
         const speechAudio = /^\/orchestrator\/api\/voice\/([0-9a-f-]{36})\/audio$/.exec(url.pathname)
         if (req.method === 'GET' && speechAudio) {
           if (!runtime.voice) throw new VoiceError(503, 'Speech is unavailable')
-          const audio = runtime.voice.audio(speechAudio[1]!)
-          res.writeHead(200, { 'content-type': 'audio/wav', 'content-length': audio.length, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' })
-          res.end(audio); return
+          speechAudioResponse(req, res, runtime.voice.audio(speechAudio[1]!)); return
         }
         const route = match(table, req.method ?? 'GET', url.pathname.slice('/orchestrator/api/'.length).split('/'))
         if (!route) throw new RouteError(404, 'Unknown operation')

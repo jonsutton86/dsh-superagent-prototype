@@ -5,6 +5,9 @@ import { usePanel, usePanelData } from './provider.tsx'
 import { recordMicrophone } from './voice-media.ts'
 import type { VoiceCapabilities, VoiceReceipt } from '../voice/model.ts'
 
+/** A tiny silent WAV that unlocks media playback inside a user gesture on iOS Safari. */
+const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAAAAA='
+
 interface VoiceState { capabilities?: VoiceCapabilities; playing?: string; error: boolean; stop(): void; speak(id: string, text: string): Promise<void> }
 const VoiceContext = createContext<VoiceState>({ error: false, stop() {}, async speak() {} })
 async function wait(signal: AbortSignal): Promise<void> {
@@ -31,8 +34,8 @@ async function operation(start: () => Promise<VoiceReceipt>, get: () => Promise<
 export function VoiceProvider({ children }: { children: ReactNode }) {
   const { call, t } = usePanel(), [capabilities, setCapabilities] = useState<VoiceCapabilities>(), [playing, setPlaying] = useState<string>(), [error, setError] = useState(false)
   const { restarts } = usePanelData()
-  const active = useRef<AbortController>(), playback = useRef<HTMLAudioElement>(), objectUrl = useRef<string>()
-  const release = () => { playback.current?.pause(); playback.current = undefined; if (objectUrl.current) URL.revokeObjectURL(objectUrl.current); objectUrl.current = undefined }
+  const active = useRef<AbortController>(), playback = useRef<HTMLAudioElement>()
+  const release = () => { playback.current?.pause(); playback.current = undefined }
   const stop = () => { active.current?.abort(); active.current = undefined; release(); setPlaying(undefined) }
   useEffect(() => {
     let current = true
@@ -43,14 +46,17 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
   const speak = async (id: string, text: string) => {
     stop(); setError(false)
     const controller = new AbortController(), requestId = crypto.randomUUID(); active.current = controller; setPlaying(id)
+    // Safari requires a user-gesture play() on the element that later produces sound. Start it silently now,
+    // then replace the source with the streaming capability URL once synthesis completes.
+    const audio = new Audio(SILENT_WAV)
+    audio.preload = 'auto'; playback.current = audio
+    void audio.play().catch(() => {})
     try {
-      await operation(() => call('POST voice/speak', { body: { requestId, text } }), () => call('GET voice/:id', { id: requestId }),
+      const receipt = await operation(() => call('POST voice/speak', { body: { requestId, text } }), () => call('GET voice/:id', { id: requestId }),
         () => call('POST voice/:id/cancel', { id: requestId }), controller.signal)
-      const response = await fetch(`/orchestrator/api/voice/${requestId}/audio`, { headers: { 'x-orchestrator-request': '1' }, signal: controller.signal })
-      if (!response.ok) throw new Error('Speech audio unavailable')
-      const blob = await response.blob(); controller.signal.throwIfAborted()
-      objectUrl.current = URL.createObjectURL(blob)
-      const audio = playback.current = new Audio(objectUrl.current)
+      controller.signal.throwIfAborted()
+      if (!receipt.mediaToken) throw new Error('Speech capability is unavailable')
+      audio.src = `/orchestrator/api/voice/${requestId}/audio?token=${encodeURIComponent(receipt.mediaToken)}`
       audio.onended = () => { if (active.current === controller) stop() }
       audio.onerror = () => { if (active.current === controller) { setError(true); stop() } }
       await audio.play()
