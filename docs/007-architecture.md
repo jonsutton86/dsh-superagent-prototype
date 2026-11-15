@@ -639,6 +639,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/getting-started-ui.spec.tsx` | Guided draft navigation without dispatch, model overrides/catalog failure, managed selection, pause/offline recovery and stale mission review display |
 | `tests/attachments.spec.ts`, `tests/attachments-ui.spec.tsx` | Native image reconstruction, upload/Send replay, copy authority and recovery, streamed HTTP and file-picker/preview DOM lifecycle |
 | `tests/voice.spec.ts`, `tests/voice-ui.spec.tsx` | Speech lifecycle contracts, real local qualification, and microphone/draft/playback/cancellation DOM flows |
+| `tests/worker-specialization.spec.ts` | Native persona specialization: capability→tool grants and denials, partial grants and model carriage |
 | `tests/local-execution.spec.ts` | General local missions without accounts, filesystem/process probes, mode mismatch, local prompts and GitHub exclusion |
 | `tests/remote.spec.ts` | Real Harness/HTTP execution, acknowledgement loss, lease fencing, sibling command concurrency, delayed catalog observations, uncertain recovery, confined-helper semantics, output backpressure and opt-in native Linux qualification |
 | `tests/remote-resources.spec.ts` | Resource policy/control contracts, kernel-interface fixture, durable endpoint policy/reconciliation and opt-in native CPU, memory/OOM, process-limit and restart qualification |
