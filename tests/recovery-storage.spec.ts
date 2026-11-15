@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
-import { auditStorageRecoveryBindings } from '../src/recovery/storage.ts'
+import { DatabaseSync } from 'node:sqlite'
+import { auditStorageRecoveryBindings, readEndpointStorageSnapshot, readHostStorageSnapshot } from '../src/recovery/storage.ts'
 
 function fixture() {
   const endpointId = '11111111-1111-4111-8111-111111111111'
@@ -46,4 +47,56 @@ it('retains the provisioning-before-host-intent gap without inventing an allocat
   expect(auditStorageRecoveryBindings(captured, { ...host, operations: [] })).toMatchObject({ provisioning: 1, hostMissing: 1, restoreVerified: false })
   expect(auditStorageRecoveryBindings({ ...captured, reservations: [{ ...pending, phase: 'reserved' }] }, { ...host, operations: [] })).toMatchObject({ reserved: 1 })
   expect(() => auditStorageRecoveryBindings({ ...captured, reservations: [{ ...pending, phase: 'reserved' }] }, host)).toThrow()
+})
+
+
+function databases() {
+  const value = fixture(), endpoint = new DatabaseSync(':memory:'), host = new DatabaseSync(':memory:')
+  endpoint.exec('CREATE TABLE endpoint_meta(key,value); CREATE TABLE remote_storage(workspace,request_id,project_id,value); CREATE TABLE remote_grant(id,value);')
+  endpoint.prepare('INSERT INTO endpoint_meta VALUES(?,?)').run('id', value.endpoint.endpointId)
+  endpoint.prepare('INSERT INTO endpoint_meta VALUES(?,?)').run('storage-policy', JSON.stringify(value.endpoint.policy))
+  const reservation = value.endpoint.reservations[0]!, grant = value.endpoint.grants[0]!, operation = value.host.operations[0]!
+  endpoint.prepare('INSERT INTO remote_storage VALUES(?,?,?,?)').run(reservation.workspace, reservation.requestId, reservation.projectId, JSON.stringify(reservation))
+  endpoint.prepare('INSERT INTO remote_grant VALUES(?,?)').run(grant.id, JSON.stringify(grant))
+  host.exec('CREATE TABLE endpoints(id,filesystem,first,last,config); CREATE TABLE namespaces(endpoint,identities); CREATE TABLE operations(endpoint,request,workspace,filesystem,project,intent,roots); CREATE TABLE repairs(endpoint,id,request,intent,phase);')
+  host.prepare('INSERT INTO endpoints VALUES(?,?,?,?,?)').run(value.host.endpointId, value.host.policy.filesystemUUID, 100, 109,
+    JSON.stringify({ endpointId: value.host.endpointId, uid: 1001, gid: 1001, policy: value.host.policy }))
+  host.prepare('INSERT INTO operations VALUES(?,?,?,?,?,?,?)').run(value.host.endpointId, operation.intent.requestId, operation.intent.workspace,
+    value.host.policy.filesystemUUID, operation.intent.projectId, JSON.stringify(operation.intent), JSON.stringify(operation.roots))
+  return { value, endpoint, host, close() { endpoint.close(); host.close() } }
+}
+
+it('reads original SQLite rows without initializing services or changing the captured journals', async () => {
+  const db = databases(), signal = new AbortController().signal
+  try {
+    const before = [db.endpoint, db.host].map(value => value.prepare('SELECT total_changes() AS changes').get())
+    const endpoint = await readEndpointStorageSnapshot(db.endpoint, signal), host = await readHostStorageSnapshot(db.host, db.value.host.endpointId, signal)
+    expect(endpoint.snapshot).toEqual(db.value.endpoint); expect(host.snapshot).toEqual(db.value.host)
+    expect(auditStorageRecoveryBindings(endpoint.snapshot, host.snapshot)).toMatchObject({ provisioned: 1, restoreVerified: false })
+    expect(endpoint.digest).toMatch(/^[a-f0-9]{64}$/); expect(host.digest).toMatch(/^[a-f0-9]{64}$/)
+    expect([db.endpoint, db.host].map(value => value.prepare('SELECT total_changes() AS changes').get())).toEqual(before)
+    db.host.prepare('INSERT INTO repairs VALUES(?,?,?,?,?)').run(db.value.host.endpointId, 'repair', 'original', '{}', 'started')
+    expect((await readHostStorageSnapshot(db.host, db.value.host.endpointId, signal)).digest).not.toBe(host.digest)
+  } finally { db.close() }
+})
+
+it.each(['reservation', 'grant', 'operation', 'configuration', 'missing'])('refuses inconsistent persisted %s row keys', async kind => {
+  const db = databases(), signal = new AbortController().signal
+  try {
+    if (kind === 'reservation') db.endpoint.exec("UPDATE remote_storage SET request_id='different'")
+    if (kind === 'grant') db.endpoint.exec("UPDATE remote_grant SET id='different'")
+    if (kind === 'operation') db.host.exec("UPDATE operations SET request='different'")
+    if (kind === 'configuration') db.host.exec('UPDATE endpoints SET first=101')
+    if (kind === 'missing') db.endpoint.exec('DROP TABLE remote_storage')
+    if (['operation', 'configuration'].includes(kind)) await expect(readHostStorageSnapshot(db.host, db.value.host.endpointId, signal)).rejects.toThrow('recovery_host_storage_')
+    else await expect(readEndpointStorageSnapshot(db.endpoint, signal)).rejects.toThrow('recovery_endpoint_storage_')
+  } finally { db.close() }
+})
+
+it('honors cancellation before reading either database', async () => {
+  const db = databases()
+  try {
+    await expect(readEndpointStorageSnapshot(db.endpoint, AbortSignal.abort())).rejects.toThrow()
+    await expect(readHostStorageSnapshot(db.host, db.value.host.endpointId, AbortSignal.abort())).rejects.toThrow()
+  } finally { db.close() }
 })

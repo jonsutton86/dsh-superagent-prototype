@@ -1,5 +1,7 @@
 /** Cross-check separately captured records. Never imports state or treats historical quotas as live proof. */
 import { z } from 'zod'
+import type { DatabaseSync } from 'node:sqlite'
+import { StateReader } from './reader.ts'
 import { EndpointStorage, StorageIntent, StorageReservation } from '../remote/storage-model.ts'
 import { storageRoots } from '../remote/storage-journal.ts'
 import { GrantMetadata } from '../environments/endpoint-model.ts'
@@ -63,4 +65,68 @@ export function auditStorageRecoveryBindings(endpointInput: unknown, hostInput: 
   }
   return { allocations: endpoint.reservations.length, reserved, provisioning, provisioned, hostMissing,
     recordBindingsVerified: true as const, liveFilesystemVerified: false as const, restoreVerified: false as const }
+}
+
+
+/** Caller supplies authenticated, frozen databases; this does not open paths or initialize services. */
+export async function readEndpointStorageSnapshot(db: DatabaseSync, signal: AbortSignal) {
+  signal.throwIfAborted()
+  const r = new StateReader(db, signal, 'endpoint_storage')
+  for (const table of ['endpoint_meta', 'remote_storage', 'remote_grant'])
+    if (!r.tables.has(table)) r.fail('reference', table)
+  let endpointId: string | undefined, policy: z.infer<typeof EndpointStorage> | undefined
+  for (const row of r.rows('endpoint_meta')) {
+    if (row.key === 'id') { if (endpointId) r.fail('conflict', 'endpoint_id'); endpointId = r.parse(z.string().uuid(), row.value, 'endpoint_id') }
+    if (row.key === 'storage-policy') { if (policy) r.fail('conflict', 'storage_policy'); policy = r.json(row.value, EndpointStorage, 'storage_policy') }
+    await r.step()
+  }
+  if (!endpointId || !policy) r.fail('reference', 'storage_configuration')
+  const reservations: z.infer<typeof StorageReservation>[] = [], grants: z.infer<typeof GrantMetadata>[] = []
+  for (const row of r.rows('remote_storage')) {
+    const value = r.json(row.value, StorageReservation, 'reservation')
+    r.same([row.workspace, row.request_id, row.project_id], [value.workspace, value.requestId, value.projectId], 'reservation_keys')
+    r.same(value.endpointId, endpointId, 'reservation_endpoint'); reservations.push(value)
+    if (reservations.length > 20000) r.fail('limit', 'reservations')
+    await r.step()
+  }
+  for (const row of r.rows('remote_grant')) {
+    const value = r.json(row.value, GrantMetadata, 'grant')
+    r.same(row.id, value.id, 'grant_key'); grants.push(value)
+    if (grants.length > 20000) r.fail('limit', 'grants')
+    await r.step()
+  }
+  return { snapshot: endpointSnapshot.parse({ endpointId, policy, reservations, grants }), records: r.records, digest: r.digest() }
+}
+
+/** Selected endpoint view of a separately verified/audited root registry artifact; unrelated rows stay in its digest. */
+export async function readHostStorageSnapshot(db: DatabaseSync, endpointId: string, signal: AbortSignal) {
+  signal.throwIfAborted()
+  const r = new StateReader(db, signal, 'host_storage')
+  r.parse(z.string().uuid(), endpointId, 'endpoint_id')
+  for (const table of ['endpoints', 'namespaces', 'operations', 'repairs'])
+    if (!r.tables.has(table)) r.fail('reference', table)
+  const configSchema = z.object({ endpointId: z.string().uuid(), uid: z.number().int().positive().max(2 ** 31 - 1),
+    gid: z.number().int().positive().max(2 ** 31 - 1), policy: EndpointStorage }).strict()
+  let policy: z.infer<typeof EndpointStorage> | undefined
+  for (const row of r.rows('endpoints')) {
+    if (row.id === endpointId) {
+      if (policy) r.fail('conflict', 'endpoint_id')
+      const config = r.json(row.config, configSchema, 'host_configuration'); policy = config.policy
+      r.same([row.id, row.filesystem, row.first, row.last], [config.endpointId, policy.filesystemUUID, policy.projectIds.first, policy.projectIds.last], 'host_configuration_keys')
+    }
+    await r.step()
+  }
+  const selectedPolicy = policy ?? r.fail('reference', 'endpoint_id')
+  const operations: z.infer<typeof hostOperation>[] = []
+  for (const row of r.rows('operations')) {
+    if (row.endpoint === endpointId) {
+      const intent = r.json(row.intent, hostOperation.shape.intent, 'host_intent'), roots = r.json(row.roots, hostOperation.shape.roots, 'host_roots')
+      r.same([row.endpoint, row.request, row.workspace, row.filesystem, row.project],
+        [intent.endpointId, intent.requestId, intent.workspace, selectedPolicy.filesystemUUID, intent.projectId], 'host_intent_keys')
+      operations.push({ intent, roots }); if (operations.length > 20000) r.fail('limit', 'operations')
+    }
+    await r.step()
+  }
+  for (const table of ['namespaces', 'repairs']) for (const _row of r.rows(table)) await r.step()
+  return { snapshot: hostSnapshot.parse({ endpointId, policy: selectedPolicy, operations }), records: r.records, digest: r.digest() }
 }
