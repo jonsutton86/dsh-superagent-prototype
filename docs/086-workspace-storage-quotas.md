@@ -728,7 +728,12 @@ Operator sequence, after the separate deployment/installation action:
    --config /opt/agentic-storage/ENDPOINT/host.json --registry /var/lib/agentic-os-storage
    inspect --request /root/storage-request.json`, using the actual installation/registry paths.
 3. Review the returned inspection, including root identities, ownership, quota state and `snapshotHash`.
-   Inspection never authorizes repair by itself. For an intended repair, prepare a separate root-owned
+   Inspection never authorizes repair by itself. If `repair` is non-null, preserve that original
+   `repairId` and `originalSnapshotHash`: these reconstruct the original approval when its file was lost.
+   Do not replace the original snapshot with the current inspection hash. Repeating that original repair
+   only observes existing effects; an incomplete repair remains held for further explicit reconciliation.
+   A recorded `complete` phase is historical, not fresh proof of healthy storage. If `repair` is null,
+   for an intended new repair prepare a separate root-owned
    mode-0600 JSON file containing exactly `request` (the same original five fields), `repairId` (a stable
    unique operator operation ID), and `snapshotHash` (the reviewed hash).
 4. Run the same command prefix with `repair --approval /root/storage-repair.json`. The backend obtains
@@ -821,3 +826,19 @@ passed the scoped Linux storage workflow (15 native Vitest executions, existing 
 crash fixtures, typecheck and builds). See [recorded evidence](evidence/086-storage-coordinator-repair.json).
 This adds coordinator receipt recovery evidence, not browser acceptance, a managed-launcher failure/repair
 journey, general orphan reconciliation, backup/restore, power loss or reboot qualification. No app deployment.
+
+
+### Retained repair approval inspection
+
+VERIFIED at `7b436422261bbb1f0160c42f2b5da800f92612e6`: inspection includes nullable `repair`, with
+`repairId`, recorded `phase`, and `originalSnapshotHash`. It validates the saved repair against the
+original host request and refuses malformed records. This is read-only evidence for reconstructing
+a lost approval file; it does not authorize a new repair, resume partial effects, or prove present health.
+The snapshot digest includes this retained record, so receipt changes invalidate an earlier inspection.
+
+Three SQLite contracts passed locally and in Linux CI. Native operator inspection after both repair
+SIGKILL boundaries recovered the exact original approval without changing the registry. Scoped
+[run 43700712481](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43700712481)
+passed the existing storage/endpoint/coordinator/installation/crash checks, typecheck and builds.
+See [evidence](evidence/086-storage-repair-receipts.json). Incomplete repair reconciliation, broader
+orphan handling and backup/restore remain open; no deployment or full architecture qualification.

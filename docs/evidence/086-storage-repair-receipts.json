@@ -1,0 +1,25 @@
+{
+  "kind": "retained-storage-repair-inspection",
+  "revision": "7b436422261bbb1f0160c42f2b5da800f92612e6",
+  "recordedAt": "2026-11-15T09:48:00.889881+00:00",
+  "workflowRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43700712481",
+  "result": "success",
+  "classification": "VERIFIED; NOT DEPLOYED",
+  "hashes": {
+    "scripts/agentic_storage.py": "7393e1141203a3211ea9e1faf9fd487036cda4e3801641457bf125a55673a0a3",
+    "tests/fixtures/storage-crash-native.py": "9754a46db41f3bec2f7784693f8d2df20bd22e160e42c68758ed2de4931e2001",
+    "tests/fixtures/storage-repair-receipt-contract.py": "fd5d402a40c7cb4d6dfc9e9e4015e79f3e4bd9298a3937b41e0f62a545d6520c"
+  },
+  "validation": [
+    "Three SQLite repair-receipt contracts passed locally and in Linux CI",
+    "Malformed or mismatched retained repair records refused",
+    "Read-only inspection after two real repair SIGKILL boundaries returned original repair ID and approval snapshot",
+    "Database dump unchanged by operator inspection",
+    "Existing scoped Linux storage workflow passed, including coordinator repair journey, host crash fixtures, installation, typecheck and builds"
+  ],
+  "limits": [
+    "Inspection is not automatic resume of incomplete repairs",
+    "Recorded phase is historical, not fresh host health evidence",
+    "Broader reconciliation, backup/restore and final qualification remain open"
+  ]
+}

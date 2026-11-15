@@ -1314,3 +1314,9 @@ Linux run 43700326077. Unknown workspace creation survives coordinator restart; 
 and endpoint restart, read-only inspection leaves the request unknown and explicit original-ID retry
 completes it without another allocation. See [evidence](evidence/086-storage-coordinator-repair.json).
 Browser/managed-launcher failure journeys, wider reconciliation, storage restore and final qualification remain open.
+
+
+086 retained repair inspection: VERIFIED at `7b436422261bbb1f0160c42f2b5da800f92612e6` by scoped Linux
+run 43700712481. Root inspection exposes the original repair ID/approval snapshot without mutation,
+including after interrupted repairs, enabling recovery of a lost approval file. It does not resume
+partial repairs. [Evidence](evidence/086-storage-repair-receipts.json); broader reconciliation remains open.
