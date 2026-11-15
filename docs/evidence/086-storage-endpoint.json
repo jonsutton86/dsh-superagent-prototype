@@ -1,0 +1,46 @@
+{
+  "kind": "quota-backed-endpoint-integration",
+  "revision": "d893a3ba7222f4f177dc01f5febe520d28741a77",
+  "recordedAt": "2026-11-15T08:34:04.438488+00:00",
+  "workflowRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43694832290",
+  "result": "success",
+  "classification": "backend INTEGRATED and native TESTED; operator config/install and full recovery unfinished; NOT DEPLOYED",
+  "hashes": {
+    "src/remote/endpoint-storage.ts": "bfe270338306b90b45a3bb4501af26308ce9d5110b08cb134169e0feac2725bd",
+    "src/remote/endpoint.ts": "c1cc65dc557a87ec0ff7283881bb07b8b5db3798411db75253e9156c0dea4744",
+    "tests/storage-host-client.spec.ts": "37bedf7b05db5d529cc8b6e439d3ac94a01f65d0878a5c425a3a91778f81eea8",
+    "tests/storage-journal.spec.ts": "fa8acddc0d49448237ffba76a84d525c64f47ba837348f13318589864899f8ef",
+    ".github/workflows/remote-execution.yml": "24a12ebb9f215d847ee045a4f06b4cff49f2d181cb65ee84564d2ffcf69b4e67"
+  },
+  "validation": {
+    "nativeVitestTests": 13,
+    "nativeTypecheck": "passed",
+    "nativeBuilds": 7,
+    "localAdjacentTests": 66,
+    "localAdjacentNativeSkipped": 4,
+    "finalJournalTests": 21,
+    "localTypecheck": "passed",
+    "nativeScope": [
+      "persistent quota-accounted startup proof",
+      "grant enrollment",
+      "confined file writes/reads",
+      "ordinary process execution",
+      "captured verification and storage cleanup",
+      "real quota exhaustion exit 1",
+      "host socket hidden from worker namespace",
+      "journal restart reuses original grant and allocations",
+      "unsupported recovery export refuses"
+    ],
+    "fullMatrix": "not run"
+  },
+  "remaining": [
+    "launcher/plugin/UI config and status",
+    "supported root-owned installation",
+    "complete storage recovery inventory/export/restore/migration",
+    "whole-volume/control-state headroom",
+    "partial-effect operator reconciliation",
+    "endpoint/service reboot and clean-host",
+    "final qualification",
+    "deployment"
+  ]
+}

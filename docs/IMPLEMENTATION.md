@@ -1122,7 +1122,8 @@ Provisioning orchestration now preserves original effects across response loss a
 at `b1ab8c0` (`docs/evidence/086-storage-host.json`); authenticated service transport now passes native checks with the client running as the endpoint UID
 (`docs/evidence/086-storage-service.json`). The service now rejects slow-drip requests using a total deadline and refuses duplicate authority fields
 (`docs/evidence/086-storage-framing.json`). Prepared root-owned namespaces and optional first-creation endpoint identity now pass native checks
-(`docs/evidence/086-storage-namespace.json`). Startup proof allocation, supported installation, endpoint wiring and deployment remain unfinished.
+(`docs/evidence/086-storage-namespace.json`). Quota-backed startup, enrollment, filesystem/process boundaries and verification roots now pass native endpoint tests
+(`docs/evidence/086-storage-endpoint.json`). Operator configuration/install, full storage recovery export, capacity headroom and deployment remain unfinished.
 
 Introduce an environment registry in the existing state store. Each environment has a stable ID, endpoint identity,
 capabilities, availability, grant revision and lease epoch. Bind a ticket's execution to that environment and grant revision.

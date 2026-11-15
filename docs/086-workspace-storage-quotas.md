@@ -1,6 +1,6 @@
 # 086 — Workspace storage quotas (design checkpoint)
 
-Status: host provisioning, authenticated service and original-operation recovery are implemented and tested; endpoint enrollment/dispatch integration remains pending. This increment does not advertise
+Status: quota-backed endpoint startup, grants, filesystem/process execution and verification are integrated and native-tested. Operator configuration/install, recovery export, capacity headroom and full qualification remain unfinished. This increment does not advertise
 storage protection in endpoint capabilities. Harness remains the executor and existing provider defaults are unchanged.
 
 ## Observed write boundaries
@@ -283,3 +283,41 @@ namespace proofs in an explicit quota allocation (do not grant write permission 
 to the original StorageProvisioning request; use the assigned per-workspace verification root; reobserve pinned storage
 at each execution boundary. Any persistent startup allocation must be visible in capacity accounting and reused by its
 original identity after restart. The endpoint's existing storage startup refusal remains until these paths are connected.
+
+## Endpoint backend integration
+
+At `d893a3ba7222f4f177dc01f5febe520d28741a77`, `EndpointStorageManager` connects the original reservation/provisioning flow to `RemoteEndpoint`. Storage
+is supplied only through the programmatic EndpointHost configuration for now; the shipped plugin/launcher/UI does not yet
+offer this option. Endpoints without storage retain the existing path. Endpoints with a persisted storage policy still
+refuse startup when the storage configuration is absent; configured storage requires confined process and filesystem paths.
+
+Startup allocates the reserved `__dsh_startup` workspace using one stable intent and the assigned endpoint identity. The
+filesystem/world and namespace proofs run inside that allocation, without making the protected parent writable. The
+startup allocation persists and consumes the same pool budget; configuration must fit startup plus at least one worker
+workspace. User enrollment cannot claim that reserved workspace. Grant enrollment uses its original request/hash to
+provision/observe the root before committing the grant, so lost enrollment responses cannot select another project.
+
+Filesystem helper boundaries, ordinary process dispatch and verification authorization reobserve the original storage
+allocation and validate its pinned root/policy. Snapshot containers and cleanup now use the workspace's assigned
+verification root, sharing its quota with source files. Cleanup refuses mismatched storage instead of deleting through
+an unverified root. Startup/restart reuse original allocations, and no release/recycling shortcut was introduced.
+
+Recovery limits remain explicit: unfinished storage reservations prevent ownership quiescence; storage table mutations
+invalidate recovery inventory revisions. The old `recovery.world` export is refused for storage endpoints because it does
+not yet carry quota policy and host-registry state. This is an unfinished required recovery feature, not an owner-deferred
+requirement or a successful recovery claim. Full inventory/restore/profile integration must replace that refusal.
+
+Native [run 43694832290](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43694832290) passed at the exact
+revision above, including typecheck and all seven builds. The unprivileged endpoint starts against the real root service,
+creates a grant, writes/reads files via confined helpers, executes a command, verifies a captured copy and releases it,
+observes real quota exhaustion with a failing allocation command, confirms the privileged service socket is absent from
+the worker namespace, stops/reopens the actual journal, and reuses the original grant and two allocations. It also confirms
+that the incomplete recovery export refuses the request. All 13 native client/probe tests and the host, transport and
+mechanism fixtures passed. Local adjacent remote/storage/verification suites passed 66 tests with four native skips; the
+final storage journal suite passed 21 tests and typecheck passed. Earlier native integration run `43694640813` also passed,
+before the recovery refusal and explicit startup-capacity validation were added.
+
+Remaining work includes launcher/plugin/UI configuration and storage status, root-owned supported installation, ownership
+inventory/backup/restore/migration for both endpoint and host records, whole-volume/control-state headroom, operator
+reconciliation of partial effects, service/endpoint reboot and clean-host acceptance, and final whole-system qualification.
+The backend is not deployed to the running app; default models and provider routing were not changed.
