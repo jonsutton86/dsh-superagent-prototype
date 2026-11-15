@@ -1,0 +1,35 @@
+{
+  "revision": "fb2c4b3e74558750b0c9df5415bbfcb77060e98a",
+  "classification": "VERIFIED",
+  "workflow": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43705671144",
+  "scope": "storage",
+  "conclusion": "success",
+  "logSHA256": "e6dbce72cf5709ca933427c8ba3fa61042e24adf15529fdd9a6e90c2393c0a40",
+  "local": {
+    "storageTests": 32,
+    "typecheck": "passed"
+  },
+  "linux": {
+    "storageRecoveryTests": 32,
+    "typecheck": "passed",
+    "build": "passed",
+    "xfsProbeTests": 12,
+    "crashCases": 12,
+    "registryBackup": {
+      "allRecordsRetained": true,
+      "uncertainRepairRetained": true,
+      "overwriteRefused": true,
+      "standaloneSQLite": true,
+      "offlineArtifactVerification": true,
+      "recordBindingsVerified": true
+    },
+    "realHarnessLauncher": "passed",
+    "coordinatorRepairJourney": "passed"
+  },
+  "limits": [
+    "Focused storage scope, not full qualification",
+    "No coordinated cross-host capture epoch",
+    "No live storage restore authorization",
+    "No deployment"
+  ]
+}

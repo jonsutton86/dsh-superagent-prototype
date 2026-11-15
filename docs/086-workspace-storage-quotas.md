@@ -1164,3 +1164,18 @@ Those remaining boundaries must be resolved before live storage installation.
 The focused storage suite passed 30 tests, typecheck and build passed, and the
 built Node command successfully exported a private SQLite fixture. The tested
 implementation revision is recorded in [evidence](evidence/086-endpoint-snapshot.json).
+
+### WAL retention and Linux qualification
+
+The exporter now has regression coverage for committed SQLite WAL records and
+uncertain original operation IDs, with no source changes or operation settlement.
+A malformed storage source leaves a retained output without `snapshot.json`, releases
+the writer lock, and refuses reuse of the destination.
+
+At `fb2c4b3e74558750b0c9df5415bbfcb77060e98a`, the focused Linux storage
+[run](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43705671144)
+passed typecheck/build, 32 recovery/storage tests, 12 XFS probe tests, native service,
+Harness launcher and coordinator repair journeys, installation contracts and 12
+crash boundaries. The shared registry backup preserved uncertain repair records
+and passed offline binding audit. [Receipt](evidence/086-storage-snapshot-native.json).
+This is focused qualification, not the final full-system or clean-host restore gate.
