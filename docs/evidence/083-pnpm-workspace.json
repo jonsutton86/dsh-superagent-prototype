@@ -1,0 +1,20 @@
+{
+  "classification": "VERIFIED_local_tooling_fix",
+  "baseRevision": "c756ecee4ab8b6e1a43b117178708fc83e4cde2f",
+  "change": "Declare root package in pnpm workspace; preserve existing allowBuilds. No dependency installation or lockfile change.",
+  "workspaceSha256": "42aca475e487b8f731b2916de57e18d530d13cb736d795f824a7e1878183cf31",
+  "before": "pnpm9.12.0 exec tsc --version rejected missing packages field",
+  "after": [
+    {
+      "command": "pnpm exec tsc --version",
+      "exitCode": 0,
+      "output": "Version6.0.3"
+    },
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0,
+      "logSha256": "7e2f69baaa3e8515d113f83a8a9a5d98c42b2a2a2854c090cc2dadc4bdcf8e93"
+    }
+  ],
+  "limitations": "Local pnpm9.12 compatibility and typecheck only; pinned CI toolchain and full qualification not run."
+}
