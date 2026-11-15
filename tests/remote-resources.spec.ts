@@ -1,3 +1,4 @@
+import { captureWorkspaceRecovery } from '../src/recovery/workspace-archive.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { join, resolve } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -192,6 +193,8 @@ it.runIf(!!process.env.DSH_RESOURCE_QUALIFICATION_ROOT)('qualifies actual cgroup
   const pool = join(configured.cgroupRoot, 'dsh-' + endpoint.journal.id)
   try {
     await endpoint.start()
+    const initialArchive = await endpoint.withRecoveryCapture(signal => captureWorkspaceRecovery(join(directory, 'work'), join(directory, 'native-archive'), { maxEntries: 100, maxBytes: 1024 }, signal))
+    expect(initialArchive.manifest.contentArchived).toBe(true)
     const enrolled = await endpoint.rpc({ role: 'admin' }, { op: 'grant.create', requestId: 'native-resource-grant', owner: 'test', workspace: 'resource',
       operations: ['fs.read', 'fs.write', 'process.spawn'], leaseMs: 300000 }) as GrantReceipt
     const principal = { role: 'grant' as const, id: enrolled.grant.id, epoch: enrolled.grant.epoch }
@@ -210,6 +213,9 @@ it.runIf(!!process.env.DSH_RESOURCE_QUALIFICATION_ROOT)('qualifies actual cgroup
     expect(resources!.quiescent()).toBe(true)
     await endpoint.rpc(principal, cpu)
     await vi.waitFor(() => expect(resources!.quiescent()).toBe(false), { timeout: 4000, interval: 20 })
+    const forbiddenCapture = vi.fn(async () => 'not captured')
+    await expect(endpoint.withRecoveryCapture(forbiddenCapture)).rejects.toThrow('managed process quiescence')
+    expect(forbiddenCapture).not.toHaveBeenCalled()
     const throttled = await settled(cpu.requestId)
     expect(resources!.quiescent()).toBe(true)
     expect(throttled.outcome?.exitCode).toBe(0); expect(throttled.resources?.complete).toBe(true)
@@ -459,5 +465,43 @@ it('reports recovery inventory non-quiescent for populated or unreadable pools d
     expect(await observe()).toMatchObject({ quiescent: false })
     io.files.set(events, 'populated 0')
     expect(await observe()).toMatchObject({ quiescent: true })
+  } finally { await endpoint.stop(); await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }) }
+})
+
+it('holds all endpoint admission during host capture and releases the fence after refusal or failure', async () => {
+  const directory = await realpath(await mkdtemp(join(tmpdir(), 'resource capture '))), ctx = new Context(), io = new FakeCgroup()
+  const resources = new CgroupResources(policy, io), root = join(directory, 'work')
+  const endpoint = new RemoteEndpoint({ filesystem: new LocalFileSystem(ctx, { cwd: directory, diffBasisMaxBytes: 1024 * 1024 }),
+    subprocess: new LocalSubprocessRuntime(ctx), stateDir: join(directory, 'state'), root, resources,
+    isolation: { name: 'test-only-unconfined', wrap: async (argv: readonly string[]) => argv } })
+  try {
+    await endpoint.start()
+    const activeRead = endpoint.rpc({ role: 'admin' }, { op: 'identity' })
+    const notCalled = vi.fn(async () => 'unexpected')
+    await expect(endpoint.withRecoveryCapture(notCalled)).rejects.toThrow('idle endpoint admission')
+    expect(notCalled).not.toHaveBeenCalled(); await activeRead
+    const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>()
+    const capture = endpoint.withRecoveryCapture(async signal => { entered.resolve(); await release.promise; signal.throwIfAborted(); return 'captured' })
+    await entered.promise
+    try {
+      await expect(endpoint.rpc({ role: 'admin' }, { op: 'identity' })).rejects.toThrow('held for recovery capture')
+      await expect(endpoint.rpc({ role: 'admin' }, { op: 'grant.create', requestId: 'blocked', owner: 'test', workspace: 'blocked',
+        operations: ['fs.read'], leaseMs: 60000 })).rejects.toThrow('held for recovery capture')
+      await expect(endpoint.withRecoveryCapture(notCalled)).rejects.toThrow('idle endpoint admission')
+      expect(endpoint.journal.grants()).toHaveLength(0)
+    } finally { release.resolve() }
+    expect(await capture).toBe('captured')
+    await expect(endpoint.withRecoveryCapture(async () => { throw new Error('capture failed') })).rejects.toThrow('capture failed')
+    expect(await endpoint.rpc({ role: 'admin' }, { op: 'identity' })).toBeDefined()
+    const events = join(io.root, 'dsh-' + endpoint.journal.id, 'cgroup.events')
+    await expect(endpoint.withRecoveryCapture(async () => { io.files.set(events, 'populated 1'); return 'not complete' })).rejects.toThrow('changed during capture')
+    await expect(endpoint.withRecoveryCapture(notCalled)).rejects.toThrow('managed process quiescence')
+    io.files.set(events, 'populated 0')
+    await expect(endpoint.withRecoveryCapture(notCalled, AbortSignal.abort())).rejects.toThrow()
+    expect(notCalled).not.toHaveBeenCalled()
+    await writeFile(join(root, 'retained.txt'), 'fenced content')
+    const archived = await endpoint.withRecoveryCapture(signal => captureWorkspaceRecovery(root, join(directory, 'archive'), { maxEntries: 100, maxBytes: 1024 }, signal))
+    expect(archived.manifest.entries).toContainEqual(expect.objectContaining({ path: 'retained.txt', kind: 'file' }))
+    expect(archived.manifest).toMatchObject({ contentArchived: true, executionQuiescenceVerified: false, restoreVerified: false })
   } finally { await endpoint.stop(); await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }) }
 })

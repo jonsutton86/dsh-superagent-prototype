@@ -46,6 +46,8 @@ export class RemoteEndpoint {
   private readonly inventory: ResourceInventory
   private readonly ownershipScope = new AsyncLocalStorage<OwnershipGuard>()
   private protectedCalls = 0
+  private activeCalls = 0
+  private recoveryCapture = false
   private readonly lifetime = new AbortController()
   private readonly live = new Map<string, SubprocessHandle>()
   private readonly pending = new Map<string, Promise<void>>()
@@ -274,6 +276,7 @@ export class RemoteEndpoint {
     return this.view(grant)
   }
   private sweep(): void {
+    if (this.recoveryCapture) return
     this.cleanSnapshots()
     if (this.closing) return
     for (const grant of this.journal.grants()) if (grant.enabled && (grant.leaseUntil <= Date.now() || !this.credentials.valid(grant.credentials))) {
@@ -520,14 +523,38 @@ export class RemoteEndpoint {
     }
     return operation
   }
+  /** Trusted host-only capture scope. Not an RPC, durable checkpoint epoch or ownership grant.
+   * All endpoint admission is stopped, including reads that launch confined helper processes. */
+  async withRecoveryCapture<T>(capture: (signal: AbortSignal) => Promise<T>, requestedSignal = new AbortController().signal): Promise<T> {
+    if (!this.initialized || this.closing || this.closed) throw new RemoteError(503, 'unavailable', 'Endpoint is not ready')
+    if (this.recoveryCapture || this.activeCalls || this.snapshotCleanup.size)
+      throw new RemoteError(409, 'recovery_busy', 'Recovery capture requires idle endpoint admission and cleanup')
+    if (!this.host.resources || !this.ownershipQuiescent())
+      throw new RemoteError(409, 'recovery_busy', 'Recovery capture requires verified managed process quiescence')
+    const signal = AbortSignal.any([requestedSignal, this.lifetime.signal])
+    signal.throwIfAborted()
+    // No await between the idle checks and closing admission.
+    this.recoveryCapture = true
+    try {
+      const result = await capture(signal)
+      signal.throwIfAborted()
+      if (this.closing || !this.ownershipQuiescent()) throw new RemoteError(409, 'recovery_busy', 'Managed process quiescence changed during capture')
+      return result
+    } finally { this.recoveryCapture = false }
+  }
   async rpc(principal: Principal, input: unknown, ownershipProof?: string): Promise<unknown> {
     if (!this.initialized || this.closing) throw new RemoteError(503, 'unavailable', 'Endpoint is not ready')
+    if (this.recoveryCapture) throw new RemoteError(409, 'recovery_capture', 'Endpoint admission is held for recovery capture')
     const request = Rpc.parse(input)
-    if (!this.ownership || !requiresOwnership(request.op)) return this.dispatch(principal, request)
-    const guard = await this.ownership.authorize(ownershipProof)
-    this.protectedCalls++
-    try { return await this.ownershipScope.run(guard, () => this.dispatch(principal, request)) }
-    finally { this.protectedCalls-- }
+    // Count before asynchronous ownership authorization, queueing or path resolution.
+    this.activeCalls++
+    try {
+      if (!this.ownership || !requiresOwnership(request.op)) return await this.dispatch(principal, request)
+      const guard = await this.ownership.authorize(ownershipProof)
+      this.protectedCalls++
+      try { return await this.ownershipScope.run(guard, () => this.dispatch(principal, request)) }
+      finally { this.protectedCalls-- }
+    } finally { this.activeCalls-- }
   }
   private async dispatch(principal: Principal, request: RpcRequest): Promise<unknown> {
     switch (request.op) {
