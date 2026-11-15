@@ -28,5 +28,26 @@
     "/tmp/dsh-083-native-preparation.log",
     "/tmp/dsh-083-native-preparation-typecheck.log"
   ],
-  "limitations": "Native subprocess/production observer boundary only. Does not test coordinator crash/restore around native preparation, escaped descendants, Linux, live inference or deployment."
+  "limitations": "Native subprocess/production observer boundary only. Does not test coordinator crash/restore around native preparation, escaped descendants, Linux, live inference or deployment.",
+  "reopenVerification": {
+    "recordedAt": "2026-11-15T07:11:36.379729+00:00",
+    "baseRevision": "1d1f167eda0298b27c81bba3f0087cb4075893f6",
+    "testFileSha256": "72b1773153b5c76e37e9645468cfdcdd57b7f1ac0ba5ecc098af4bb1bd4b3e05",
+    "passed": 2,
+    "failed": 0,
+    "durationSeconds": 4.62,
+    "typecheck": "pnpm typecheck passed",
+    "logs": [
+      "/tmp/dsh-083-native-reopen.log",
+      "/tmp/dsh-083-native-reopen-typecheck.log"
+    ],
+    "observed": [
+      "Intent persisted before spawning real native command.",
+      "Direct command exited9 while descendant retained managed range.",
+      "Canonical Store closed and reopened; new stop coordinator retained same unknown intent and blocked admission.",
+      "After actual managed range emptied, foreign-instance finishPreparation still could not settle original intent.",
+      "Restored canonical authority validated; cleanup confirmed before private database removal."
+    ],
+    "limitations": "Database reopen and lost handle authority, not abrupt process kill, complete Runtime restart, cross-host restore or deployment."
+  }
 }

@@ -88,7 +88,10 @@ Focused synthetic/runtime and restore checks are recorded in [preparation recove
 A native preparation subprocess check now verifies nonzero command exit with an empty range, and command exit with a
 live descendant whose bounded observation remains unknown until the original range empties.
 `docs/evidence/083-native-preparation.json` records the installed Harness version and tested scope. This is the actual
-subprocess/observer boundary, not coordinator crash/restore acceptance. Native coordinator preparation fault injection
+subprocess/observer boundary. A second check reopens the canonical Store while a real descendant remains active,
+then recreates the stop coordinator without the original handle. The same intent stays held both before and after native
+termination; a foreign-instance completion cannot settle it. This is database reopen and handle-authority loss, not an
+abrupt host/process kill or complete Runtime crash/restore acceptance. Native coordinator preparation fault injection
 and the final platform matrix remain unqualified.
 
 ## Qualification still required

@@ -704,7 +704,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/model-surface.spec.ts` | Everything models read: tools, prompts, skills and inputs, checked against the tool schemas, the execution environment and the glossary, within a size budget per role |
 | `tests/deployment.spec.ts`, `tests/environment.spec.ts`, `tests/index.spec.ts` | The plugin configuration and setup, the agent's process environment, the plugin entry |
 | `tests/preparation-outcome.spec.ts` | Preparation command outcomes, unavailable range observation and bounded response loss |
-| `tests/preparation-harness.spec.ts`, `tests/fixtures/preparation-harness.mjs` | Opt-in installed native Harness command exit versus live descendant range, bounded observation and confirmed cleanup |
+| `tests/preparation-harness.spec.ts`, `tests/fixtures/preparation-harness.mjs` | Opt-in installed native Harness command exit versus live descendant range, bounded observation, durable reopen with lost handle authority and confirmed cleanup |
 | `tests/service-script.spec.ts` | `scripts/dsh-superagent` against fake `ps`, `tmux` and `dsh` |
 | `tests/client-bundle.spec.ts` | Actual production browser factory with declared React modules and standalone watchdog entry mounted without a package resolver; rejects host-only or undeclared imports |
 | `tests/launcher.spec.ts` | Persistent installation, real detached process ownership, graceful restart, stop markers, locks, health identity and private browser shortcuts |
