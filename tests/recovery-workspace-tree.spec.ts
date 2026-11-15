@@ -1,14 +1,23 @@
+import { stageWorkspaceRecovery } from '../src/recovery/workspace-stage.ts'
 import { validateWorkspaceMembers, verifyWorkspaceMembers } from '../src/recovery/workspace-members.ts'
 import { createRecoveryKey } from '../src/recovery/crypto.ts'
 import { encryptWorkspaceRecovery, verifyEncryptedWorkspaceRecovery } from '../src/recovery/workspace-encrypted.ts'
 import { verifyWorkspaceRecovery } from '../src/recovery/workspace-verify.ts'
 import { createHash } from 'node:crypto'
 import { captureWorkspaceRecovery } from '../src/recovery/workspace-archive.ts'
-import { it, expect } from 'vitest'
-import { mkdtemp, mkdir, writeFile, symlink, link, rm, chmod, readFile, stat, readdir, realpath, copyFile } from 'node:fs/promises'
+import { it, expect, vi } from 'vitest'
+import { mkdtemp, mkdir, writeFile, symlink, link, rm, chmod, readFile, stat, readdir, realpath, copyFile, readlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { inventoryWorkspaceRecovery } from '../src/recovery/workspace-tree.ts'
+const stageFault = vi.hoisted(() => ({ abort: undefined as AbortController | undefined }))
+vi.mock('node:fs/promises', async importOriginal => {
+  const real = await importOriginal<typeof import('node:fs/promises')>()
+  return { ...real, async copyFile(...args: Parameters<typeof real.copyFile>) {
+    await real.copyFile(...args)
+    const abort = stageFault.abort; stageFault.abort = undefined; abort?.abort()
+  } }
+})
 const budget = { maxEntries: 100, maxBytes: 10 * 1024 * 1024 }
 it('includes Git history, original modes, symbolic links and internal hard-link relationships', async () => {
   const root = await mkdtemp(join(tmpdir(), 'recovery-tree-'))
@@ -166,4 +175,43 @@ it('verifies authenticated workspace member mapping and rejects role, source and
     await expect(verifyWorkspaceMembers(members, bindings, [files[0]!, { ...files[1]!, sha256: 'f'.repeat(64) }], new AbortController().signal)).rejects.toThrow('authenticated digest')
     await expect(verifyWorkspaceMembers(members, bindings, files, AbortSignal.abort())).rejects.toThrow()
   } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+
+it('reconstructs Git bytes and links in a new held candidate without applying authority or original permissions', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'recovery-workspace-held-')))
+  try {
+    const source = join(root, 'source'); await mkdir(source, { mode: 0o700 }); await mkdir(join(source, '.git'))
+    await writeFile(join(source, '.git', 'HEAD'), 'ref: refs/heads/main\n')
+    await writeFile(join(source, 'tool'), 'original'); await chmod(join(source, 'tool'), 0o755)
+    await link(join(source, 'tool'), join(source, 'alias')); await symlink('../outside', join(source, 'external-link'))
+    const archive = await captureWorkspaceRecovery(source, join(root, 'archive'), budget)
+    const staged = await stageWorkspaceRecovery(archive.path, join(root, 'held'))
+    expect(staged).toMatchObject({ state: 'held', contentReconstructed: true, metadataApplied: false, executionOwnership: false, restoreVerified: false })
+    expect(await readFile(join(staged.workspace, '.git', 'HEAD'), 'utf8')).toBe('ref: refs/heads/main\n')
+    expect(await readlink(join(staged.workspace, 'external-link'))).toBe('../outside')
+    expect((await stat(join(staged.workspace, 'tool'))).ino).toBe((await stat(join(staged.workspace, 'alias'))).ino)
+    expect((await stat(join(staged.workspace, 'tool'))).mode & 0o777).toBe(0o600)
+    expect(JSON.parse(await readFile(join(staged.path, 'source-manifest.json'), 'utf8')).entries.find((item: { path: string }) => item.path === 'tool').mode).toBe(0o755)
+    expect(JSON.parse(await readFile(join(staged.path, 'hold.json'), 'utf8')).state).toBe('held')
+    await expect(stageWorkspaceRecovery(archive.path, staged.path)).rejects.toMatchObject({ code: 'EEXIST' })
+    await expect(stageWorkspaceRecovery(archive.path, join(source, 'nested'))).rejects.toThrow('original source')
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+
+it('retains the original preparing hold after cancellation during reconstruction', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'recovery-workspace-cancel-')))
+  try {
+    const source = join(root, 'source'); await mkdir(source, { mode: 0o700 }); await writeFile(join(source, 'file'), 'retained')
+    const archive = await captureWorkspaceRecovery(source, join(root, 'archive'), budget)
+    const abort = new AbortController(), target = join(root, 'held')
+    stageFault.abort = abort
+    await expect(stageWorkspaceRecovery(archive.path, target, abort.signal)).rejects.toThrow()
+    stageFault.abort = undefined
+    expect(JSON.parse(await readFile(join(target, 'hold.json'), 'utf8'))).toMatchObject({ state: 'preparing', executionOwnership: false, restoreVerified: false })
+    expect(await readFile(join(target, 'workspace', 'file'), 'utf8')).toBe('retained')
+    expect(await readFile(join(source, 'file'), 'utf8')).toBe('retained')
+    await expect(stageWorkspaceRecovery(archive.path, target)).rejects.toMatchObject({ code: 'EEXIST' })
+  } finally { stageFault.abort = undefined; await rm(root, { recursive: true, force: true }) }
 })
