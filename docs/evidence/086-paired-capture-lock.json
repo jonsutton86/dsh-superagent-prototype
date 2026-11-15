@@ -1,0 +1,20 @@
+{
+  "revision": "b9c826c41ef3247cc9f76657ae31569fe77ff899",
+  "classification": "VERIFIED",
+  "scope": "Trusted local host-lock lifetime primitive",
+  "evidence": [
+    "StorageHost.exclusive holds a shared registry flock",
+    "capture_pair calls the lock-free internal backup routine and retains the outer lock through the endpoint callback",
+    "A second file descriptor cannot acquire the lock during the callback; it can after completion or callback failure"
+  ],
+  "validation": {
+    "storageBackupContracts": 7,
+    "storageBindingContracts": 3
+  },
+  "limits": [
+    "Endpoint callback wiring to the operator CLI remains incomplete",
+    "No endpoint/host end-to-end pair claim",
+    "No process quiescence or restore authority",
+    "Native Linux workflow has not been rerun for this revision"
+  ]
+}

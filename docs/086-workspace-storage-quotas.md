@@ -1179,3 +1179,19 @@ Harness launcher and coordinator repair journeys, installation contracts and 12
 crash boundaries. The shared registry backup preserved uncertain repair records
 and passed offline binding audit. [Receipt](evidence/086-storage-snapshot-native.json).
 This is focused qualification, not the final full-system or clean-host restore gate.
+
+### Paired capture lock boundary (operator integration unfinished)
+
+`StorageHost.capture_pair` now holds the shared registry lock continuously across
+its host backup and a trusted local endpoint-capture callback. The inner backup
+routine does not reacquire/release the same flock, so it cannot accidentally expose
+a gap before endpoint capture. Competing-lock tests prove exclusion during the
+callback and release on success/failure; failed outputs remain retained and cannot
+be overwritten. Seven backup and three binding tests passed at the revision in
+[this receipt](evidence/086-paired-capture-lock.json).
+
+The next integration step is an explicit operator command that invokes the existing
+endpoint exporter as its configured service user while this host lock remains held,
+then verifies both returned artifacts and emits a pair receipt. That command is not
+implemented yet. The callback primitive alone does not prove an endpoint lock was
+acquired, establish whole-system capture consistency, or permit live restore.
