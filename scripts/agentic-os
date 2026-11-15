@@ -190,7 +190,7 @@ def initialize(root, args):
                 raise RuntimeError('Existing endpoint configuration differs; it was not changed.')
         if args.service_resources:
             budgets = read_json(Path(args.service_resources).expanduser())
-            if not value.get('delegation') or budgets != {key: value['endpointConfig']['resources'][key] for key in ('pool', 'command')}:
+            if not value.get('delegation') or budgets != {key: item for key, item in value['endpointConfig']['resources'].items() if key != 'cgroupRoot'}:
                 raise RuntimeError('Existing service resource settings differ; they were not changed.')
         if value.get('phase') == 'ready':
             print(json.dumps({'installed': True, 'directory': str(root), 'profile': value['profile']}))
@@ -218,7 +218,7 @@ def initialize(root, args):
             config = read_json(Path(args.endpoint_config).expanduser()) if args.endpoint_config else {}
             if args.service_resources:
                 budgets = read_json(Path(args.service_resources).expanduser())
-                if not isinstance(config, dict) or 'resources' in config or not isinstance(budgets, dict) or set(budgets) != {'pool', 'command'}:
+                if not isinstance(config, dict) or 'resources' in config or not isinstance(budgets, dict) or (set(budgets) - {'pool', 'command', 'workspace'} or {'pool', 'command'} - set(budgets)):
                     raise RuntimeError('--service-resources requires pool/command budgets and cannot replace explicit endpoint resources.')
                 value['delegation'] = agentic_delegation.plan(root, agentic_service.service_identity(root)['label'])
                 config = {**config, 'resources': {'cgroupRoot': value['delegation']['workerRoot'], **budgets}}
@@ -535,7 +535,7 @@ def main():
     parser.add_argument('--role', choices=('workspace', 'endpoint', 'transport'), help='Select the workspace, Linux endpoint or SSH transport role and default directory.')
     parser.add_argument('--transport-config', help='init only: private JSON with SSH host/account, identity, known hosts, endpoint enrollment and local credential-file paths.')
     parser.add_argument('--endpoint-config', help='init only: private JSON file containing endpoint limits and optional ownership binding.')
-    parser.add_argument('--service-resources', help='init only: pool/command resource-budget JSON for an owned Linux systemd endpoint service.')
+    parser.add_argument('--service-resources', help='init only: pool/command and optional workspace resource-budget JSON for an owned Linux systemd endpoint service.')
     parser.add_argument('--checkout', help='init only: built checkout to install; defaults to this checkout.')
     parser.add_argument('--dsh', help='init only: existing pinned Harness CLI; otherwise install it privately.')
     parser.add_argument('--profile', help='init only: Harness profile name (default agentic-os or agentic-endpoint).')

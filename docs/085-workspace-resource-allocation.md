@@ -71,6 +71,18 @@ Discovery and original-effect liveness traverse nested groups. Empty workspace p
 populated groups remain; workspace group capacity is bounded at 256. Simulated-kernel tests check shared versus separate
 workspace parents, original-effect liveness, nested policy projection, changed-policy refusal and budget validation.
 
-Still required before calling this feature integrated: launcher configuration support, rendered environment controls,
-end-to-end endpoint attribution tests including verification stages, restart/cleanup race tests, helper tamper coverage,
+Launcher configuration and Harness plugin schema now preserve the optional workspace budget. The environment card
+shows it as a combined per-workspace limit. Launcher health refuses a missing/different configured workspace policy;
+existing installations still refuse silent budget changes. Both explicit endpoint configuration and delegated-service
+budget JSON accept the optional field.
+
+Still required before calling this feature integrated: end-to-end endpoint attribution tests including verification stages,
+restart/cleanup race tests, helper tamper coverage,
 recovery-policy checks, and native Linux aggregate enforcement. No host or existing resource policy has been changed.
+
+
+For a new configured endpoint, add `workspace` alongside the existing `pool` and `command` budgets, for example
+`"workspace": {"cpuPercent": 150, "memoryBytes": 536870912, "processes": 64}` when the pool and command intervals permit
+those values. Supply `cgroupRoot` in explicit endpoint configuration; delegated-service budget JSON omits that root because
+the launcher supplies its owned subtree. Existing running policies are pinned and cannot be edited this way.
+`evidence/085-config-ui.json` records configuration, displayed limits, plugin schema and delegated-service test scope.

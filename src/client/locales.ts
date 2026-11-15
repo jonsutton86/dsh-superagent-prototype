@@ -566,6 +566,7 @@ const TEXT = {
   'endpoint.privateFile': ['使用本机服务用户拥有的私有文件，放在执行工作区之外。此处只填写路径，不填写密钥内容。', 'Use a private file owned by the local service user, outside execution workspaces. Enter its path here; keep the key in the file.'],
   'endpoint.revision': ['注册版本 {revision}', 'Registration revision {revision}'],
   'endpoint.resourceLimits': ['已配置的工作进程资源限制', 'Configured worker resource limits'],
+  'endpoint.resourceWorkspace': ['每工作区合计：{cpu} CPU · {memory} MiB 内存 · {processes} 进程', 'Per workspace combined: {cpu} CPUs · {memory} MiB RAM · {processes} processes'],
   'endpoint.resourcePool': ['总池：{cpu} 个 CPU · {memory} MiB 内存 · {processes} 个进程/线程', 'Pool: {cpu} CPUs · {memory} MiB RAM · {processes} processes/threads'],
   'endpoint.resourceCommand': ['每条命令：{cpu} 个 CPU · {memory} MiB 内存 · {processes} 个进程/线程', 'Per command: {cpu} CPUs · {memory} MiB RAM · {processes} processes/threads'],
   'endpoint.resourceUsage': ['CPU 时间 {cpu} 秒 · 内存不足终止 {oom} 次 · 进程限制拒绝 {pids} 次', 'CPU time {cpu} s · Out-of-memory kills {oom} · Process-limit refusals {pids}'],

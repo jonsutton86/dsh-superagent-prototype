@@ -57,10 +57,12 @@ async function fixture(resources?: ResourceStatus) {
 
 it('shows configured resource limits and kernel-derived command receipts without claiming current usage from registration metadata', async () => {
   const policy = { cgroupRoot: '/private/delegated', pool: { cpuPercent: 200, memoryBytes: 1024 ** 3, processes: 128 },
-    command: { cpuPercent: 100, memoryBytes: 256 * 1024 ** 2, processes: 32 } }
+    command: { cpuPercent: 100, memoryBytes: 256 * 1024 ** 2, processes: 32 },
+    workspace: { cpuPercent: 150, memoryBytes: 512 * 1024 ** 2, processes: 64 } }
   const h = await fixture({ kind: 'linux-cgroup-v2', policy, ready: true, memoryBytes: 10, processes: 1, activeScopes: 1 })
   expect(container!.textContent).toContain('Pool: 2 CPUs · 1024 MiB RAM · 128 processes')
   expect(container!.textContent).toContain('Per command: 1 CPUs · 256 MiB RAM · 32 processes')
+  expect(container!.textContent).toContain('Per workspace combined: 1.5 CPUs · 512 MiB RAM · 64 processes')
   expect(container!.textContent).not.toContain('/private/delegated')
   const at = new Date().toISOString()
   h.endpoint.journal.saveJob({ id: 'quota-receipt', grantId: h.enrolled.grant.id, epoch: 1, revision: 1, fingerprint: 'proof', phase: 'settled',

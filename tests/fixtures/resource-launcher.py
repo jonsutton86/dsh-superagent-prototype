@@ -59,4 +59,22 @@ try:
     raise AssertionError('Accepted a per-command budget above the pool')
 except RuntimeError:
     pass
+
+aggregate = copy.deepcopy(policy)
+aggregate['workspace'] = {'cpuPercent': 150, 'memoryBytes': 536870912, 'processes': 64}
+configured = endpoint.configuration({'resources': aggregate})
+assert configured['resources'] == aggregate
+aggregate_status = copy.deepcopy(result)
+aggregate_status['resources']['policy'] = aggregate
+aggregate_installation = {'port': 3084, 'endpointConfig': configured}
+assert health(aggregate_status, aggregate_installation) is not None
+assert health(result, aggregate_installation) is None
+for key, value in [('cpuPercent', 99), ('memoryBytes', 2147483648), ('processes', True)]:
+    invalid = copy.deepcopy(aggregate)
+    invalid['workspace'][key] = value
+    try:
+        endpoint.configuration({'resources': invalid})
+        raise AssertionError('Accepted invalid workspace budget')
+    except RuntimeError:
+        pass
 print('Resource health contract passed')

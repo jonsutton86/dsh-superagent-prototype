@@ -1,0 +1,48 @@
+{
+  "kind": "workspace-resource-configuration-and-view",
+  "recordedAt": "2026-11-15T07:20:56.836288+00:00",
+  "baseRevision": "ca17086",
+  "fileHashes": {
+    "scripts/agentic-os": "b508043c6545195a1ea58144911300d6ea8601407a0b65af11ade2ae742cc8b1",
+    "scripts/agentic_endpoint.py": "cb2efce228c07358733823761d82145bc35503136485847efe1c015f0016d821",
+    "src/client/endpoints.tsx": "ab51d2fcbd8f37004e17f0d57034e7c77ee6a23112eccf958323405833367dcd",
+    "src/client/locales.ts": "d860991bf3f580f6c284d2bff62f7653fa311d629edde8ac6990b9850a011df5",
+    "src/remote/endpoint-plugin.ts": "cb456eec2671c849a7cfb03df4ea10bd75cb102aa2c4e51bfbd72d0a00b784a0",
+    "tests/endpoints-ui.spec.tsx": "69aa04e88f7ca0470741ac320ff55c1db9bdff0e77e9c5d8de909a9dee77caac",
+    "tests/fixtures/resource-launcher.py": "eb1261c3f615556f538e6b666c5ec39cd8583d67ff05722fb8a1ba93ce1849df",
+    "tests/remote-resources.spec.ts": "6bdda9a9334192e074406a556d94064eed4b68542930429bb4c0eb6be3082bda"
+  },
+  "runs": [
+    {
+      "command": "vitest run tests/endpoints-ui.spec.tsx tests/launcher.spec.ts tests/locales.spec.ts",
+      "passed": 21,
+      "failed": 1,
+      "skipped": 2,
+      "log": "/tmp/dsh-085-config-ui.log",
+      "failure": "Python fixture extra success line mismatched exact output assertion; removed redundant line after confirming new assertions passed."
+    },
+    {
+      "command": "vitest run tests/launcher.spec.ts -t 'configured resource policy'",
+      "passed": 1,
+      "failed": 0,
+      "log": "/tmp/dsh-085-launcher-focused.log"
+    },
+    {
+      "command": "vitest run tests/remote-resources.spec.ts tests/delegated-service.spec.ts",
+      "passed": 25,
+      "failed": 0,
+      "skipped": 2,
+      "log": "/tmp/dsh-085-plugin-service.log"
+    }
+  ],
+  "typecheck": {
+    "exitCode": 0,
+    "log": "/tmp/dsh-085-config-ui-typecheck.log"
+  },
+  "build": {
+    "exitCode": 0,
+    "log": "/tmp/dsh-085-config-ui-build.log"
+  },
+  "implemented": "Optional workspace config across explicit/delegated launcher, Harness plugin schema, strict health-policy equality, displayed combined workspace ceilings.",
+  "limitations": "No native Linux enforcement, real service mutation, browser deployment or live endpoint. End-to-end attribution and recovery/tamper cases still pending."
+}

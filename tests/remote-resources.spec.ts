@@ -268,3 +268,11 @@ it('refuses changed workspace limits before admitting another command', () => {
   expect(() => h.resources.run('job:two', () => h.runtime.spawn(h.spec), 'alpha')).toThrow('pinned endpoint policy')
   expect(h.base.spawn).toHaveBeenCalledOnce()
 })
+
+
+it('preserves the optional aggregate policy through the Harness endpoint plugin schema', async () => {
+  const { Config } = await import('../src/remote/endpoint-plugin.ts')
+  const workspace = { cpuPercent: 150, memoryBytes: 512 * 1024 ** 2, processes: 64 }
+  const parsed = Config({ stateDir: '/private/endpoint', workspaceRoot: '/workspaces', resources: { ...policy, workspace } })
+  expect(parsed.resources?.workspace).toEqual(workspace)
+})

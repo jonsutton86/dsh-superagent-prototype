@@ -57,20 +57,22 @@ def configuration(value):
         raise RuntimeError('Endpoint limits require 1–32 running commands and 64 KiB–64 MiB retained output per stream.')
     if 'resources' in value:
         resources = value['resources']
-        if not isinstance(resources, dict) or set(resources) != {'cgroupRoot', 'pool', 'command'}:
+        if not isinstance(resources, dict) or (set(resources) - {'cgroupRoot', 'pool', 'command', 'workspace'} or {'cgroupRoot', 'pool', 'command'} - set(resources)):
             raise RuntimeError('Resource policy requires cgroupRoot, pool and command limits.')
         path = resources['cgroupRoot']
         if not isinstance(path, str) or len(path) > 4096 or not Path(path).is_absolute() or any(char in path for char in '\x00\n\r'):
             raise RuntimeError('Resource cgroupRoot must be an absolute delegated cgroup path.')
         limits = {}
         bounds = {'cpuPercent': (1, 6400), 'memoryBytes': (67108864, 1099511627776), 'processes': (16, 65536)}
-        for kind in ('pool', 'command'):
+        for kind in ('pool', 'command', *(['workspace'] if 'workspace' in resources else [])):
             current = resources[kind]
             if not isinstance(current, dict) or set(current) != set(bounds) or any(type(current[key]) is not int or not low <= current[key] <= high for key, (low, high) in bounds.items()):
                 raise RuntimeError('Resource budgets require bounded integer cpuPercent, memoryBytes and processes.')
             limits[kind] = {key: current[key] for key in bounds}
         if any(limits['command'][key] > limits['pool'][key] for key in bounds):
             raise RuntimeError('Command resource limits cannot exceed the shared worker pool.')
+        if 'workspace' in limits and any(not limits['command'][key] <= limits['workspace'][key] <= limits['pool'][key] for key in bounds):
+            raise RuntimeError('Workspace limits must cover commands and fit within the shared pool.')
         result['resources'] = {'cgroupRoot': path, **limits}
     if 'ownership' in value:
         owner = value['ownership']

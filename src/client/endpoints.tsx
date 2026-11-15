@@ -63,8 +63,9 @@ function EndpointCard({ record, changed }: { record: EndpointRegistration; chang
     <h4>{record.name}</h4><p><code>{record.url}</code> · <code>{record.id}</code></p>
     <p>{record.identity.confinement} · {t('endpoint.revision', { revision: record.revision })}</p>
     {record.identity.resources && <div><strong>{t('endpoint.resourceLimits')}</strong>
-      {(['pool', 'command'] as const).map(kind => { const limit = record.identity.resources!.policy[kind]
-        return <p key={kind}>{t(kind === 'pool' ? 'endpoint.resourcePool' : 'endpoint.resourceCommand',
+      {(['pool', 'workspace', 'command'] as const).map(kind => { const limit = record.identity.resources!.policy[kind]
+        if (!limit) return null
+        return <p key={kind}>{t(kind === 'pool' ? 'endpoint.resourcePool' : kind === 'workspace' ? 'endpoint.resourceWorkspace' : 'endpoint.resourceCommand',
           { cpu: limit.cpuPercent / 100, memory: limit.memoryBytes / 1024 ** 2, processes: limit.processes })}</p>
       })}
     </div>}
