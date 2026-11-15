@@ -1,0 +1,17 @@
+{
+  "status": "focused_pass_full_increment_incomplete",
+  "baseRevision": "b2380acb6105937bb8e82b2e70f00d2b2de17b35",
+  "source": "tests/runtime-concurrency.spec.ts",
+  "sourceSha256": "356eded0f02e4a27828ca2bf289f3271ce905badbdef23c24ec82774b98ad4b1",
+  "command": "env -u GIT_CONFIG_GLOBAL ./node_modules/.bin/vitest run tests/runtime-concurrency.spec.ts -t 'only when the stop'",
+  "exitCode": 0,
+  "passed": 1,
+  "deselected": 60,
+  "logSha256": "d05ce816f2e014908eacebe398e4f8844b7aff8229c2baeaace83a753f94a98b",
+  "typecheck": {
+    "command": "./node_modules/.bin/tsc --noEmit",
+    "exitCode": 0
+  },
+  "criterion": "Rollback leaves no stop record or cancellation; committed stop retains intent before asynchronous cancellation.",
+  "next": "Investigate remaining restart/deleted-Session and failed-prepare runtime cases; retain unknown original stop evidence."
+}

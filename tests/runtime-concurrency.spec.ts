@@ -888,8 +888,11 @@ it('ends a worker\'s turn only when the stop that ended its Assignment commits',
   expect(() => h.runtime.store.atomic(() => { h.runtime.engine.stopTicket(one.ticket.id); throw new Error('rolled back') })).toThrow('rolled back')
   expect(worker.cancel).not.toHaveBeenCalled()
   expect(h.runtime.store.tickets.get(one.ticket.id)!.ended).toBeUndefined()
+  expect(h.runtime.executor.stops.list(one.ticket.id).items).toEqual([])
   h.runtime.engine.stopTicket(one.ticket.id)
-  expect(worker.cancel).toHaveBeenCalledOnce()
+  // Intent commits synchronously; cancellation follows original-scope inspection asynchronously.
+  expect(h.runtime.executor.stops.list(one.ticket.id).items).toHaveLength(1)
+  await vi.waitFor(() => expect(worker.cancel).toHaveBeenCalledOnce())
 })
 
 describe('the Executor\'s parts', () => {
