@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-15",
+  "testedRevision": "3c0c333b20a3d009f9da760dc0be2f144a2a9b3f",
+  "localAffectedTests": { "passed": 78, "skipped": 3 },
+  "localCaptureStorageTests": { "passed": 33, "skipped": 1 },
+  "nativeRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43711955326",
+  "nativeTests": { "passed": 29, "skipped": 0 },
+  "typecheck": "passed locally and in Linux CI",
+  "build": "passed locally and in Linux CI",
+  "verified": ["completed original-ID retrieval without recapture", "interrupted started intent retained without replay", "payload conflict refusal", "binding preserved across database reopen", "native confined endpoint capture"],
+  "checkpointReceiptConsumption": false,
+  "nativeStorageBackedCaptureQualified": false,
+  "deployed": false
+}

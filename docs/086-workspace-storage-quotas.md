@@ -1606,3 +1606,37 @@ is running. Local affected suites passed 78 tests (three native-only skips), inc
 pending admission, blocked requests, nested capture, callback failure, changed kernel
 population, cancellation and real archive creation. Local typecheck/build passed.
 No full matrix or deployment is claimed.
+
+### Retained host workspace capture operations
+
+`RemoteEndpoint.captureWorkspace` connects host-only admission fencing to archive
+capture and original-ID recovery. Its strict request selects an existing grant ID,
+epoch, fresh archive destination and bounded capture limits. Under the fence it
+verifies the original root (and configured storage enforcement), then commits a
+started intent before any archive writes. The original grant revision, workspace,
+root identity and optional storage allocation request/project/policy hash are saved
+in the existing endpoint database's `endpoint_meta` namespace; no second journal or
+agent RPC is introduced. Retained attempts are bounded at 256 and never auto-evicted.
+
+A completed record includes the archived inventory and manifest digests and the
+capture-time managed-quiescence observation. Original-root/storage and kernel checks
+run again before completion. A repeated request returns its existing record without
+copying again; a changed payload under that ID is refused. Failed/interrupted copies
+retain `phase: started`, with no result, and repeated calls observe that state rather
+than resuming or overwriting it. Completed records are historical observations, not
+fresh verification of files that may subsequently change. Operator reconciliation
+of interrupted captures and authenticated checkpoint consumption remain unfinished.
+
+Global snapshot and restore verification remain false. The primitive does not fence
+unmanaged host writers or collect all host/coordinator/control state in one epoch.
+It is not exposed in the workspace UI and does not change the running app.
+
+VERIFIED at `3c0c333b20a3d009f9da760dc0be2f144a2a9b3f`: local affected
+resource/ownership/remote suites passed 78 tests (three native-only skips), and
+capture-journal/storage suites passed 33 tests (one native-only skip). Typecheck and
+build passed. [Scoped Linux run 43711955326](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43711955326)
+passed 29 tests, typecheck and build, including the real endpoint retained-capture
+path. Tests preserve completed and interrupted original IDs, refuse payload conflicts,
+retain bindings across database reopen and reject changed endpoint identity. This is
+not storage-backed native capture qualification, checkpoint receipt consumption, or
+a full architecture qualification pass.
