@@ -629,3 +629,36 @@ builds. Production code did not change in this increment. Partial-effect operato
 inside an external quota command, power loss, machine reboot, clean-host restoration, storage export/
 backup/migration, headroom and final whole-system qualification remain required. The running app and
 provider defaults were unchanged.
+
+### Partial-provisioning inspection evidence
+
+The privileged host library now has an internal `inspect(originalRequest)` method for the repair
+workflow. Under the existing host lock it validates the namespace, original persisted intent and live
+mount, then reports each root as missing, unrecorded, not-directory, identity-mismatch or recorded.
+Unrecorded/replaced/non-directory paths are not adopted or traversed. Recorded directories include
+current owner/group/mode, inode/device identity, modification/change timestamps, project membership,
+inheritance/realtime flags and a bounded emptiness check. Metadata is rechecked after reading a
+recorded root. Exact project quota observations are included independently of provisioning completion.
+
+A SHA-256 snapshot binds the original request, policy, mount identity, root evidence and quota fields.
+It is evidence for a future fresh-comparison repair step, not authorization: the result explicitly says
+`authorizesRepair: false`. Inspection neither writes SQLite nor changes filesystem ownership, quota
+membership or limits. The snapshot does not prove process quiescence and is not a machine-reboot
+migration record. The method is not added to the endpoint peer socket protocol or model tools.
+
+The crash fixture now checks the expected root classifications at all eight interruption boundaries,
+unchanged registry content and a stable repeated snapshot on an idle filesystem. It checks the distinct
+first-owner-only state and hard-limit evidence. The host fixture separately checks a replaced root and
+a symlink. A native run/revision is required before claiming those checks passed.
+
+VERIFIED at `04b2a1726dbee5a6e3535bbae6ab636f44118eba`: native
+[run 43698291854](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43698291854)
+passed all eight inspection/classification cases without changing the registry, plus the replaced-root
+and symlink checks. Stable snapshots were confirmed for repeated reads of each idle state. The existing
+scoped storage/Harness/systemd checks, typecheck and builds also passed. See
+[repair-inspection evidence](evidence/086-storage-repair-inspection.json) for source hashes and cases.
+
+This is internal repair evidence, not an exposed repair command. Repair intent journaling, fresh
+snapshot matching, quiescence/fencing, explicit actions for admissible partial states and operator
+reconciliation remain open, as do backup/migration, headroom, power-loss/reboot/clean-host testing and
+final architecture qualification. No user-host deployment or provider/model changes occurred.

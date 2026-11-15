@@ -1283,3 +1283,9 @@ Storage interruption qualification (`e7084be`): eight native SIGKILL boundaries 
 original intents/capacity and refusing incomplete replay; completed-before-reply work was re-observed
 without mutation. This proves fail-closed process-loss handling, not partial-state repair or power-loss
 recovery. See [086 crash evidence](evidence/086-storage-provisioning-crashes.json); recovery work remains open.
+
+Partial-storage repair evidence (`04b2a17`): read-only host inspection passed native classification
+checks across eight real process-loss states, including missing/unrecorded roots and incomplete
+ownership. Replaced roots and symlinks remain unadopted. Snapshot hashes bind evidence but authorize
+no repair. See [086 repair-inspection evidence](evidence/086-storage-repair-inspection.json); actual
+repair/fencing and broader recovery gates remain unfinished.

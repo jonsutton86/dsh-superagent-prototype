@@ -1,0 +1,127 @@
+{
+  "kind": "partial-storage-inspection",
+  "revision": "04b2a1726dbee5a6e3535bbae6ab636f44118eba",
+  "recordedAt": "2026-11-15T09:17:33.250342+00:00",
+  "workflowRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43698291854",
+  "result": "success",
+  "classification": "internal read-only repair evidence IMPLEMENTED and native TESTED; repair NOT IMPLEMENTED",
+  "hashes": {
+    "scripts/agentic_storage.py": "6f17d4c1feab7f594a8580b36b3c6fbd36d8ccb9fd67bd138b4f415996403e6c",
+    "tests/fixtures/storage-crash-native.py": "356499d5a0729710a0b4f7694885371cc368724cd8335388b571b71da8e11b6c",
+    "tests/fixtures/storage-host-native.py": "56967e9ae9c7ae86f997e3f9b6efc19015ca486a16b299eddb1f819794db32a3"
+  },
+  "cases": [
+    {
+      "boundary": "intent-committed",
+      "originalIntentRetained": true,
+      "mutationReplay": false,
+      "observation": "refused-incomplete",
+      "capacityRetained": true,
+      "inspectionStates": [
+        "missing",
+        "missing"
+      ],
+      "inspectionReadOnly": true
+    },
+    {
+      "boundary": "first-root-created",
+      "originalIntentRetained": true,
+      "mutationReplay": false,
+      "observation": "refused-incomplete",
+      "capacityRetained": true,
+      "inspectionStates": [
+        "unrecorded",
+        "missing"
+      ],
+      "inspectionReadOnly": true
+    },
+    {
+      "boundary": "first-root-recorded",
+      "originalIntentRetained": true,
+      "mutationReplay": false,
+      "observation": "refused-incomplete",
+      "capacityRetained": true,
+      "inspectionStates": [
+        "recorded",
+        "missing"
+      ],
+      "inspectionReadOnly": true
+    },
+    {
+      "boundary": "first-project-applied",
+      "originalIntentRetained": true,
+      "mutationReplay": false,
+      "observation": "refused-incomplete",
+      "capacityRetained": true,
+      "inspectionStates": [
+        "recorded",
+        "missing"
+      ],
+      "inspectionReadOnly": true
+    },
+    {
+      "boundary": "second-project-applied",
+      "originalIntentRetained": true,
+      "mutationReplay": false,
+      "observation": "refused-incomplete",
+      "capacityRetained": true,
+      "inspectionStates": [
+        "recorded",
+        "recorded"
+      ],
+      "inspectionReadOnly": true
+    },
+    {
+      "boundary": "hard-limit-applied",
+      "originalIntentRetained": true,
+      "mutationReplay": false,
+      "observation": "refused-incomplete",
+      "capacityRetained": true,
+      "inspectionStates": [
+        "recorded",
+        "recorded"
+      ],
+      "inspectionReadOnly": true
+    },
+    {
+      "boundary": "first-owner-applied",
+      "originalIntentRetained": true,
+      "mutationReplay": false,
+      "observation": "refused-incomplete",
+      "capacityRetained": true,
+      "inspectionStates": [
+        "recorded",
+        "recorded"
+      ],
+      "inspectionReadOnly": true
+    },
+    {
+      "boundary": "complete-before-reply",
+      "originalIntentRetained": true,
+      "mutationReplay": false,
+      "observation": "verified",
+      "capacityRetained": true,
+      "inspectionStates": [
+        "recorded",
+        "recorded"
+      ],
+      "inspectionReadOnly": true
+    }
+  ],
+  "validation": [
+    "unchanged registry after inspection",
+    "stable snapshot for unchanged idle state",
+    "first-owner-only state distinguished",
+    "applied hard limits retained",
+    "replaced roots classified without adoption",
+    "symlink classified without traversal",
+    "existing scoped storage workflow passed"
+  ],
+  "limits": [
+    "snapshot does not prove process quiescence",
+    "no repair or root adoption",
+    "no endpoint peer or model-tool exposure",
+    "no power-loss, reboot or clean-host claim"
+  ],
+  "fullMatrix": "not run"
+}
