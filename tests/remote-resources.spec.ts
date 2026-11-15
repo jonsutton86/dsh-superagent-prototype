@@ -413,3 +413,47 @@ it('removes empty workspace parents on disposal without removing populated paren
   expect(h.io.directories.has(emptyParent)).toBe(false)
   expect(h.io.directories.has(liveScope.slice(0, liveScope.lastIndexOf('/')))).toBe(true)
 })
+
+
+it('requires pool-wide kernel emptiness even without a known scope and refuses unavailable evidence', () => {
+  const h = fixture()
+  expect(h.resources.quiescent()).toBe(true)
+  // cgroup.events at the pool includes all descendants, including names absent from the journal.
+  h.io.files.set(join(h.pool, 'cgroup.events'), 'populated 1\nfrozen 0')
+  expect(h.resources.hasLive('unknown-original')).toBe(false)
+  expect(h.resources.quiescent()).toBe(false)
+  h.io.files.set(join(h.pool, 'cgroup.events'), 'populated 0\nfrozen 0')
+  expect(h.resources.quiescent()).toBe(true)
+  h.io.files.set(join(h.pool, 'cgroup.events'), 'frozen 0')
+  expect(h.resources.quiescent()).toBe(false)
+  h.io.files.set(join(h.pool, 'cgroup.events'), 'populated 0')
+  h.io.files.set(join(h.pool, 'memory.max'), 'max')
+  expect(h.resources.quiescent()).toBe(false)
+  h.resources.close()
+  expect(h.resources.quiescent()).toBe(false)
+})
+
+
+it('reports recovery inventory non-quiescent for populated or unreadable pools despite empty job journals', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'resource recovery ')), ctx = new Context(), io = new FakeCgroup()
+  const resources = new CgroupResources(policy, io)
+  const endpoint = new RemoteEndpoint({ filesystem: new LocalFileSystem(ctx, { cwd: directory, diffBasisMaxBytes: 1024 * 1024 }),
+    subprocess: new LocalSubprocessRuntime(ctx), stateDir: join(directory, 'state'), root: join(directory, 'work'), resources,
+    isolation: { name: 'test-only-unconfined', wrap: async (argv: readonly string[]) => argv } })
+  try {
+    await endpoint.start()
+    // Supply identity metadata only; this test exercises the production inventory/quiescence path, not authority transport.
+    const identity = endpoint.identity()
+    vi.spyOn(endpoint, 'identity').mockReturnValue({ ...identity, ownership: { authorityId: randomUUID(), coordinatorId: 'coordinator', resourceId: 'endpoint' } })
+    const observe = () => endpoint.rpc({ role: 'admin' }, { op: 'recovery.inventory', offset: 0 })
+    expect(endpoint.journal.jobs()).toHaveLength(0)
+    expect(await observe()).toMatchObject({ quiescent: true })
+    const events = join(io.root, 'dsh-' + endpoint.journal.id, 'cgroup.events')
+    io.files.set(events, 'populated 1')
+    expect(await observe()).toMatchObject({ quiescent: false })
+    io.files.delete(events)
+    expect(await observe()).toMatchObject({ quiescent: false })
+    io.files.set(events, 'populated 0')
+    expect(await observe()).toMatchObject({ quiescent: true })
+  } finally { await endpoint.stop(); await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }) }
+})

@@ -204,6 +204,7 @@ export class RemoteEndpoint {
   }
   private ownershipQuiescent(keepAccepted?: OwnershipStamp): boolean {
     return !this.closed && this.protectedCalls === 0
+      && (!this.host.resources || this.host.resources.quiescent())
       && !this.storage?.reservations.list().some(item => item.phase !== 'provisioned')
       && ![...this.pending.keys()].some(id => {
         const job = this.journal.job(id)

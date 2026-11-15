@@ -159,6 +159,15 @@ export class CgroupResources {
     if (value && [...this.scopes.values()].some(scope => scope.owner === owner)) value.complete = false
     return value
   }
+  /** Pool-wide observation includes descendants not represented by retained job/scope names.
+   * It is not a dispatch fence: callers must also hold admission and check original receipts. */
+  quiescent(): boolean {
+    try {
+      if (!this.pool || this.closed) return false
+      this.check(this.pool, budgetFiles(this.policy.pool, false))
+      return !this.populated(this.pool)
+    } catch { return false } // Missing or changed kernel evidence never proves stopped execution.
+  }
   hasLive(owner: string): boolean { const prefix = 's-' + tag(owner) + '-'; return this.groups().some(path => path.split('/').at(-1)!.startsWith(prefix) && this.populated(path)) }
   status(): ResourceStatus {
     const result: ResourceStatus = { kind: 'linux-cgroup-v2', policy: this.policy, ready: false, memoryBytes: null, processes: null, activeScopes: null }
