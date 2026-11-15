@@ -1,0 +1,30 @@
+{
+  "date": "2026-11-15",
+  "testedRevision": "47cb9ee9ed0675d56aa51b4b79a9ecf7dd2d0a3d",
+  "localTests": {
+    "passed": 33,
+    "nativeOnlySkipped": 1
+  },
+  "nativeRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43715346813",
+  "nativeVitestPassed": 49,
+  "nativePythonFixtures": "passed",
+  "typecheck": "passed locally and in Linux CI",
+  "build": "passed in Linux CI",
+  "initialFailure": {
+    "revision": "e2dea39d2ccb37de318807c7d74405734c2fa661",
+    "run": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43715090409",
+    "reason": "Checkpoint fixture omitted original coordinator workspace registration; production ownership check correctly refused archive."
+  },
+  "verified": [
+    "unprivileged endpoint with actual cgroup limits and XFS quotas",
+    "maintenance API capture of original provisioned workspace",
+    "retained original capture identity and storage allocation binding",
+    "paired host/endpoint snapshot includes completed capture",
+    "actual archive authenticated by explicit capture selection in encrypted checkpoint",
+    "control-state held staging"
+  ],
+  "installedStorageCaptureProfileQualified": false,
+  "globalSnapshotVerified": false,
+  "restoreVerified": false,
+  "deployed": false
+}

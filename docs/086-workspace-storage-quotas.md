@@ -1844,3 +1844,35 @@ skip) and typecheck passed. The reconciliation profile completed the retained st
 attempt with its original identity and unchanged archive manifest. Native storage-backed
 maintenance, coordinated capture and restoration remain unqualified; no operator app
 or model configuration was changed.
+
+### Quota-backed workspace capture checkpoint qualification
+
+The storage fixture now runs its unprivileged endpoint inside a dedicated delegated
+systemd unit, with real cgroup process limits alongside the disposable XFS project
+quotas. After execution and endpoint restart, it enters maintenance mode and captures
+the original quota-backed grant. Assertions require the original allocation request
+and project ID, managed quiescence, a retained completed capture and identical replay
+retrieval. No global snapshot or installed restore is claimed.
+
+The privileged paired host/endpoint export then preserves that capture record. The
+unprivileged checkpoint journey checks the authenticated record against the retained
+result, includes the actual workspace archive with an explicit original capture
+selection, verifies the encrypted checkpoint and stages its control state on hold.
+This exercises the endpoint maintenance API; the installed Harness loader with storage
+configuration remains a separate boundary. A coordinated multi-store epoch and
+ownership-fenced destination installation remain unfinished.
+
+The initial Linux run at `e2dea39d2ccb37de318807c7d74405734c2fa661` passed
+native endpoint capture but correctly refused checkpoint creation: the fixture had
+registered the endpoint without registering the captured workspace in coordinator
+state. Revision `47cb9ee9ed0675d56aa51b4b79a9ecf7dd2d0a3d` adds that fixture
+record; it does not relax the production ownership check. Local storage tests passed
+33 cases (native-only checks skipped), and typecheck passed after the correction.
+
+VERIFIED at `47cb9ee9ed0675d56aa51b4b79a9ecf7dd2d0a3d`: [Linux run 43715346813](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43715346813)
+passed all selected storage qualification steps, including 49 Vitest cases and the
+native Python service/repair/installation/crash fixtures, typecheck and build. The
+new real cgroup-plus-quota endpoint capture and archive-bearing encrypted checkpoint
+both passed. The [evidence receipt](evidence/086-quota-workspace-capture.json) distinguishes
+this endpoint API boundary from the still-unqualified installed storage-capture profile.
+No operator app, credentials, provider defaults or deployment were changed.
