@@ -17,3 +17,7 @@ truncate -s 512M "$fixture/volume.img"
 mkfs.xfs -f "$fixture/volume.img" >/dev/null
 mount -o loop,prjquota,nodev,nosuid "$fixture/volume.img" "$fixture/volume"
 python3 "$(dirname "$0")/storage-qualification.py" "$fixture/volume" "$1" "$2"
+
+# Observe the same prepared filesystem through the real Harness subprocess runtime.
+xfs_quota -x -c 'enable -p' "$fixture/volume"
+DSH_STORAGE_PROBE_ROOT="$fixture/volume" pnpm exec vitest run tests/storage-probe.spec.ts
