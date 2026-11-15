@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-15",
+  "testedRevision": "88ee7aee44397fbcf72ef03bf82b5768d20a93dc",
+  "platform": "macOS",
+  "harnessVersion": "0.2.1-rc.3",
+  "installedHarnessMaintenance": { "passed": 1, "modes": ["stage-workspace", "verify-workspace"], "originalHoldPreserved": true, "executionOwnership": false },
+  "recoveryTests": { "passed": 43, "skipped": 1 },
+  "providerTests": { "passed": 12, "skipped": 1 },
+  "typecheck": "passed",
+  "defaultModelChanged": false,
+  "externalInferenceRequested": false,
+  "deployed": false,
+  "liveRestoreQualified": false
+}

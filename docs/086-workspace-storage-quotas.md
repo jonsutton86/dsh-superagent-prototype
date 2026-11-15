@@ -1491,3 +1491,28 @@ build passed at the revision in [evidence](evidence/086-held-workspace-reauthent
 Tests explicitly check changed content, altered source metadata, exposed file modes
 and workspace-root symlink replacement while confirming hold bytes remain unchanged.
 Installed-profile invocation, native requalification and live activation remain open.
+
+### Installed Harness workspace maintenance qualification (2026-11-15)
+
+At `88ee7aee44397fbcf72ef03bf82b5768d20a93dc`, the new opt-in
+`tests/recovery-workspace-harness.spec.ts` passed against the installed Harness
+0.2.1-rc.3 CLI on macOS. It creates an isolated HOME and fresh installation,
+authenticates a synthetic checkpoint with workspace content, then launches separate
+real Harness processes for `stage-workspace` and `verify-workspace`. Both emit
+completion receipts with execution ownership false. The second process preserves
+exact hold-record bytes and reconstructed content; this qualifies the built plugin
+loader, configuration modes and restart boundary, not just direct function calls.
+
+Run after building with `DSH_WORKSPACE_RECOVERY_CLI=/absolute/path/to/dsh pnpm exec vitest run tests/recovery-workspace-harness.spec.ts`.
+The fixture accommodates pnpm's workspace-root check only in its disposable child
+environment. No operator profile, credentials, default model or running app is changed.
+Initial fixture attempts exposed an empty-session setup mistake and the pnpm root
+check; both were corrected before the successful run.
+
+Related checks: recovery storage/workspace tests 43 passed, one Linux-only test
+skipped; optional-provider tests 12 passed, one opt-in installed-provider test skipped;
+typecheck passed. The provider remains opt-in through Harness and no external
+inference was requested. No new Linux, deployment or live restoration claim is made.
+Source quiescence, target filesystem/quota validation, ownership/mode application,
+live installation and activation remain unfinished; workspace-bearing installation
+continues to refuse activation.
