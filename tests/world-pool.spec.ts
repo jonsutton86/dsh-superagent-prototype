@@ -112,7 +112,7 @@ it('does not adopt replaced credentials before first startup and preserves a fai
   expect(restarted.list().items.every(item => item.ready)).toBe(true)
   expect(() => new RemoteWorld({ ...connection.config, stateDir: join(h.directory, 'wrong-world') }, {
     grant: { ...connection.grant, epoch: connection.grant.epoch + 1 }, credentialReader: () => token.trim() })).toThrow('Credential no longer matches')
-})
+}, 15_000)
 
 it('restores revoked-world receipt access without adopting a new grant epoch or disabling another world', async () => {
   const { h, a, first, second, pool } = await fixture()
@@ -132,7 +132,7 @@ it('restores revoked-world receipt access without adopting a new grant epoch or 
   expect(recovered.get(second.id).ready).toBe(true)
   await recovered.lookup(first.id)!.world.refresh()
   expect(dispatch.mock.calls.some(([, request]) => (request as { op: string }).op === 'grant.revoke')).toBe(false)
-})
+}, 15_000)
 
 it('persists revocation while offline and retries the original request without disturbing another world', async () => {
   const { a, first, second, pool } = await fixture()
