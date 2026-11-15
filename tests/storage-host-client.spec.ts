@@ -14,6 +14,7 @@ import { EndpointStorage } from '../src/remote/storage-model.ts'
 import { StorageReservations, storageRoots } from '../src/remote/storage-journal.ts'
 import { LocalStorageHost } from '../src/remote/storage-host-client.ts'
 import { RemoteEndpoint } from '../src/remote/endpoint.ts'
+import { qualifyCaptureMaintenance } from './fixtures/capture-maintenance-harness.ts'
 import { CgroupResources } from '../src/remote/resources.ts'
 import type { WorkspaceCaptureRecord } from '../src/remote/workspace-capture.ts'
 import { BubblewrapIsolation } from '../src/remote/isolation.ts'
@@ -28,12 +29,13 @@ it.runIf(!!process.env.DSH_STORAGE_SERVICE_CONFIG)('starts, enrolls, executes an
   const ctx = new Context(), filesystem = new LocalFileSystem(ctx, { cwd: directory, diffBasisMaxBytes: 1024 * 1024 })
   const local = new LocalSubprocessRuntime(ctx)
   const client = new LocalStorageHost(process.env.DSH_STORAGE_SERVICE_SOCKET!)
-  const create = () => {
-    const resources = process.env.DSH_RESOURCE_QUALIFICATION_ROOT ? new CgroupResources({
+  const resourcePolicy = process.env.DSH_RESOURCE_QUALIFICATION_ROOT ? {
       cgroupRoot: process.env.DSH_RESOURCE_QUALIFICATION_ROOT,
       pool: { cpuPercent: 200, memoryBytes: 1024 ** 3, processes: 128 },
       command: { cpuPercent: 100, memoryBytes: 256 * 1024 ** 2, processes: 32 },
-    }) : undefined
+    } : undefined
+  const create = () => {
+    const resources = resourcePolicy ? new CgroupResources(resourcePolicy) : undefined
     const subprocess = resources ? resources.decorate(local, resolve('lib/remote-resource-worker.js')) : local
     const isolation = new BubblewrapIsolation(subprocess)
     return new RemoteEndpoint({ stateDir: state, root: assignedRoot, filesystem, subprocess, isolation, resources,
@@ -128,6 +130,13 @@ it.runIf(!!process.env.DSH_STORAGE_SERVICE_CONFIG)('starts, enrolls, executes an
       expect(capture).toMatchObject({ phase: 'complete', binding: { storage: { requestId: original.requestId, projectId: original.projectId } },
         result: { managedQuiescenceObserved: true, globalSnapshotVerified: false, restoreVerified: false } })
       expect(await endpoint.captureWorkspace(capture.request)).toEqual(capture)
+      await endpoint.stop()
+      expect(process.env.DSH_ENDPOINT_QUALIFICATION_CLI).toBeTruthy()
+      capture = await qualifyCaptureMaintenance(process.env.DSH_ENDPOINT_QUALIFICATION_CLI!, {
+        stateDir: state, workspaceRoot: assignedRoot, resources: resourcePolicy,
+        storage: { endpointId: config.endpointId, socketPath: process.env.DSH_STORAGE_SERVICE_SOCKET!, policy },
+      }, { ...capture.request, requestId: randomUUID(), destination: join(directory, 'profile-workspace-archive') })
+      expect(capture.binding.storage).toMatchObject({ requestId: original.requestId, projectId: original.projectId })
     }
     captureReady = true
   } finally {
@@ -137,4 +146,4 @@ it.runIf(!!process.env.DSH_STORAGE_SERVICE_CONFIG)('starts, enrolls, executes an
     if (captureReady && process.env.DSH_STORAGE_CAPTURE_STATE)
       await writeFile(process.env.DSH_STORAGE_CAPTURE_STATE, JSON.stringify({ directory, state, capture }), { mode: 0o600 })
     else await rm(directory, { recursive: true, force: true }) }
-}, 90000)
+}, 180000)

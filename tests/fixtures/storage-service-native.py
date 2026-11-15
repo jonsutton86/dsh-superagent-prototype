@@ -47,14 +47,15 @@ try:
         connection.settimeout(5); connection.connect(str(socket_path))
         assert json.loads(connection.recv(4096)) == {'ok': False, 'error': 'storage_host_refused'}
     env = {'PATH': os.environ['PATH'], 'DSH_STORAGE_SERVICE_CONFIG': json.dumps(config),
-           'DSH_STORAGE_SERVICE_SOCKET': str(socket_path), 'CI': 'true', 'DSH_STORAGE_CAPTURE_STATE': str(exchange / 'state.json')}
+           'DSH_STORAGE_SERVICE_SOCKET': str(socket_path), 'CI': 'true',
+           'DSH_ENDPOINT_QUALIFICATION_CLI': os.environ['DSH_ENDPOINT_QUALIFICATION_CLI'], 'DSH_STORAGE_CAPTURE_STATE': str(exchange / 'state.json')}
     result = subprocess.run(['systemd-run', '--wait', '--pipe', '--collect', '--service-type=exec',
         '--unit=agentic-storage-capture-' + str(uuid.uuid4()), '--uid=' + str(uid), '--gid=' + str(gid),
         '--property=Delegate=cpu memory pids', '--property=WorkingDirectory=' + str(Path.cwd()),
         *['--setenv=' + key + '=' + value for key, value in env.items()],
         '/bin/bash', str(Path('tests/fixtures/resource-qualification.sh').resolve()),
         'node', 'node_modules/vitest/vitest.mjs', 'run', 'tests/storage-host-client.spec.ts', '--no-cache'],
-        capture_output=True, text=True, timeout=120)
+        capture_output=True, text=True, timeout=210)
     print(result.stdout, flush=True)
     assert result.returncode == 0, result.stderr
     retained = json.loads((exchange / 'state.json').read_text())
