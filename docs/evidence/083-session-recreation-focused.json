@@ -1,0 +1,22 @@
+{
+  "status": "focused_pass_increment_incomplete",
+  "baseRevision": "14d1d0dcc8a47a5dbeb6bd6d4378cc405bd9c112",
+  "sourceSha256": "bf75888db415df13f7c54137fa090dbcbe81e54a187af436bf7ca3e4fc8211a9",
+  "command": "env -u GIT_CONFIG_GLOBAL ./node_modules/.bin/vitest run tests/runtime-concurrency.spec.ts -t 'could not be created again|creates a worker Session someone deleted'",
+  "exitCode": 0,
+  "passed": 2,
+  "deselected": 59,
+  "logSha256": "dcecf9ca392a868ba1e3e1c9f3ab60bd2b727c8d2f082146eb15b52698bc3daa",
+  "typecheck": {
+    "command": "./node_modules/.bin/tsc --noEmit",
+    "exitCode": 0
+  },
+  "criterion": "Original-stop uncertainty holds queued input without misreporting storage failure. After original-scope confirmation, recreation failure is reported while input remains queued. Successful recreation also covered.",
+  "limitations": "Synthetic Runtime fixture, no deployment or native termination proof.",
+  "nextInvestigation": {
+    "classification": "INFERRED",
+    "issue": "Failed preparation sets a failed report and retires launch evidence; later retry cannot use narrow undispatched proof. Do not relax unknown-stop checks merely because no worker Agent exists.",
+    "nextCommand": "env -u GIT_CONFIG_GLOBAL ./node_modules/.bin/vitest run tests/runtime.spec.ts -t 'failed prepare fails at once'",
+    "requiredEvidence": "Trace original prepare command settlement and launch journal transitions before designing a retained proof of definite pre-worker failure."
+  }
+}

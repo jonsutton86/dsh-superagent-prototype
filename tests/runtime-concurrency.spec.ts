@@ -195,7 +195,17 @@ it('records on the ticket that its worker Session could not be created again', a
     return h.resolveDefault(id)
   })
   h.runtime.receive(feishu('2', '一的补充', { mentions: [], root_id: 'om_1', sender_id: 'ou_guest' })); await h.runtime.idle()
+  expect(h.runtime.store.tickets.get(one.ticket.id)!.undelivered).toHaveLength(1)
+  expect(h.runtime.store.tickets.get(one.ticket.id)!.delivery?.error).toBeUndefined()
+  const stop = h.runtime.executor.stops.list(one.ticket.id).items[0]!
+  expect(stop.state).toBe('unknown')
+  const result = await h.runtime.executor.stops.attest(stop.id, { schema: 1, requestId: 'offline-session-original-stop',
+    expectedRevision: stop.revision, executionBindingHash: stop.executionBindingHash, scopeHash: stop.scopeHash,
+    confirmed: true, note: 'Fixture operator inspected original work before attempting Session recreation.' })
+  expect(result.receipt.phase).toBe('accepted')
+  await h.runtime.idle()
   expect(h.runtime.store.tickets.get(one.ticket.id)).toMatchObject({ delivery: { error: expect.stringContaining('The Session store is offline') } })
+  expect(h.runtime.store.tickets.get(one.ticket.id)!.undelivered).toHaveLength(1)
 })
 
 it('leaves terminal provider recovery to Harness and records a sanitized failure without creating another turn', async () => {
