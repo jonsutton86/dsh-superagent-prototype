@@ -1,0 +1,30 @@
+{
+  "date": "2026-11-15",
+  "testedRevision": "5f56f8274ee72c9d95114c58d503bdac56928812",
+  "localTests": {
+    "passed": 49,
+    "nativeOnlySkipped": 1,
+    "suites": [
+      "recovery-storage",
+      "recovery-workspace-tree",
+      "recovery-capture-members"
+    ]
+  },
+  "typecheck": "passed",
+  "build": "passed",
+  "verified": [
+    "optional explicit capture selection in stopped-endpoint export API",
+    "writer lock held during source/archive reinspection and receipt construction",
+    "original completed request and reviewed manifest required",
+    "current grant generation and storage allocation binding required",
+    "changed source content and changed retained result refused",
+    "failed handoff retains partial artifact without success receipt",
+    "source endpoint database unchanged"
+  ],
+  "pairedHostCliIntegrated": false,
+  "nativeHandoffQualified": false,
+  "executionQuiescenceVerified": false,
+  "globalSnapshotVerified": false,
+  "restoreVerified": false,
+  "deployed": false
+}

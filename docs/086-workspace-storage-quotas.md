@@ -1904,3 +1904,28 @@ avoids this by reading stopped endpoint state without initializing its services.
 coordinated handoff must preserve this ordering and separately establish quiescence and
 workspace content consistency. This is a design constraint from code inspection, not a
 completed implementation or a native deadlock experiment.
+
+### Stopped-endpoint capture handoff reinspection
+
+`exportEndpointStorageSnapshot` accepts an optional fourth argument selecting original
+capture IDs and reviewed manifest digests. While holding the original endpoint writer
+lock, it reads the captured database and requires each selected operation to be complete,
+with its original current grant generation/root identity and provisioned storage binding.
+It then verifies the archive and freshly inventories the source using the original bounds.
+The retained manifest, inventory hash and canonical archive path must all match. Only
+then may the exporter write a receipt containing the handoff observations. Failure retains
+partial output without a success receipt and releases the lock; it does not change source
+journals, complete interrupted requests, start services or issue storage-host queries.
+
+This is deliberately an observation under the endpoint writer lock, not a cgroup process
+fence, a multi-workspace atomic snapshot or restore authority. External writers can still
+invalidate source consistency. The existing root paired-export CLI does not yet request
+this optional check; that wiring and native handoff qualification are the next steps.
+
+VERIFIED at `5f56f8274ee72c9d95114c58d503bdac56928812`: 49 affected storage,
+workspace-tree and capture-membership tests passed (one native-only skip), plus typecheck
+and build. New integration coverage exercises the actual exporter, held lock refusal,
+source/database immutability, successful original-record reinspection, unknown/duplicate
+selections, wrong digests, changed grant/storage bindings, altered retained results and
+changed source contents without a completion receipt. No new native test is claimed.
+See [handoff evidence](evidence/086-capture-handoff.json).

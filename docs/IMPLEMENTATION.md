@@ -47,7 +47,10 @@ held staging at `47cb9ee9ed0675d56aa51b4b79a9ecf7dd2d0a3d`
 ([evidence](evidence/086-quota-workspace-capture.json)). Fresh installed Harness quota-backed capture also passed at
 `25726b35bbec597116501005ff08ecff16305d82`
 ([evidence](evidence/086-installed-storage-capture.json)). Operator UI review, a coordinated
-capture epoch and clean-host activation remain unfinished.
+capture epoch and clean-host activation remain unfinished. The stopped-endpoint export API now optionally
+rechecks explicitly selected captures against fresh source contents under its writer lock
+([evidence](evidence/086-capture-handoff.json)); paired-host CLI wiring and native handoff
+qualification remain open.
 
 The immediate recovery sequence remains: capture workspace content under verified process quiescence; bind that content
 to the original storage allocations and authenticated checkpoint; implement target filesystem/quota verification and
