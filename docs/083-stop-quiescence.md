@@ -73,4 +73,5 @@ fixture's cleanup; this fault does not claim a process resisted native SIGKILL. 
 
 Record the exact tested revision, focused results, typecheck/build, full macOS/native Linux and installed-boundary results
 before calling this increment qualified. [082](082-supervision-endurance.md) remains the preceding qualified runtime; its
-ongoing eight-hour run uses an immutable private snapshot and is not affected by this checkout's subsequent edits.
+interrupted eight-hour run retains an immutable private snapshot and an unknown outcome. Later checkout edits do not
+change that evidence.

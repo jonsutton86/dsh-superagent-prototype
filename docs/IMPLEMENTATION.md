@@ -17,7 +17,7 @@ Current continuation: [083 Original-worker stop holds](083-stop-quiescence.md) i
 canonical original-scope stop records to the main Store, holds replacement/delivery/model/tool admission while termination
 is unknown, and exposes original-ID observation and operator confirmation in the workspace and independent console.
 The installed real-process retry boundary and full platform qualification have not yet run on this increment. No deployment
-to the running user app has occurred. The preceding qualified runtime and ongoing independent endurance run are below.
+to the running user app has occurred. The preceding qualified runtime and interrupted independent endurance run are below.
 
 Previous continuation: [082 Sustained supervision qualification](082-supervision-endurance.md) adds a plan-first operator
 runner with private runtime snapshots, native background-job wakeups, bounded sequential jobs under one assignment,
@@ -25,8 +25,8 @@ independently checked output history and cancellation/quiescence evidence. Exact
 `59497bc31932d1073ca44e872d454a7a6347d938` passed full macOS (2,290 passed / 25 skipped) and native Linux (2,303 / 14),
 typecheck, seven builds and all six installed Harness boundaries. Native checks passed 16 with one skip on macOS and 30 on
 Linux. The first macOS attempt exposed an evaluation trace/status classification race; it is fixed with controlled regression
-evidence. `docs/evidence/082-qualification.json` records both attempts. The eight-hour run began at 22:17:34 UTC on November 10 from an isolated clean `527e0ee` snapshot; its result remains
-pending. `docs/evidence/082-endurance-run.json` identifies the original retained run. The original five-second job wait and
+evidence. `docs/evidence/082-qualification.json` records both attempts. The eight-hour run began at 22:17:34 UTC on November 10 from an isolated clean `527e0ee` snapshot; its runner is now absent and its retained outcome remains
+unknown; it does not establish eight-hour acceptance. `docs/evidence/082-endurance-run.json` identifies the original retained run. The original five-second job wait and
 thirty-minute idle-job limit remain unchanged. This is synthetic local endurance tooling, not semantic model-quality or
 cross-host acceptance. The next recovery defect is a reproduced local stop boundary: replacement dispatch can proceed after
 a timed-out wait while the prior job is still running. Its original-operation hold must be fixed and qualified separately.

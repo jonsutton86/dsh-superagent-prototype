@@ -135,8 +135,10 @@ The eight-hour run started at **2026-11-10 22:17:34 UTC** from clean checkpoint 
 match qualified revision `59497bc`. Its private runtime/dependency snapshot is sealed independently of later checkout edits.
 The [run observation](evidence/082-endurance-run.json) records its original identity and private report location. At that
 observation the first twenty-minute chunk was active and the injected provider error/hang had recovered to a current
-assessment. It remains an in-progress run, not completed duration evidence. Follow the original process and retained report;
-do not relaunch it or infer success from elapsed time.
+assessment. A November 15 recheck found no process for the recorded runner PID; the retained report still has an unknown
+outcome, a November 10 22:52:20 UTC heartbeat, no completion time and pending cleanup. Treat this as interrupted or lost
+execution, not an active runner or completed duration evidence. Preserve its original records; no cleanup is inferred from
+runner absence. Any future acceptance run needs a new identity and output directory.
 
 Real-model diagnosis quality, manual evidence review, live operator alert acceptance, active-job crash recovery,
 cross-host failover and the remaining full Agentic OS architecture remain open. No running user app is deployed or restarted

@@ -25,5 +25,16 @@
   "privateReport": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/endurance/082-20261110T2218-527e0ee/report.json",
   "qualification": "In progress at the recorded observation. No eight-hour result, final output integrity or final quiescence is claimed.",
   "recovery": "Inspect original live process/session and retained report; never infer liveness or success from this saved status or elapsed deadline. Never repeat using this output directory.",
-  "isolation": "Copied runtime and dependencies; synthetic loopback provider only. Existing app/default model unchanged. Owned caffeinate prevents idle sleep while this runner lives."
+  "isolation": "Copied runtime and dependencies; synthetic loopback provider only. Existing app/default model unchanged. Owned caffeinate prevents idle sleep while this runner lives.",
+  "latestObservation": {
+    "recordedAt": "2026-11-15T06:54:28.481082+00:00",
+    "reportState": "running",
+    "reportOutcome": "unknown",
+    "heartbeatAt": "2026-11-10T22:52:20.110Z",
+    "completedAt": null,
+    "runnerPid": 75028,
+    "runnerProcessPresent": false,
+    "cleanupState": "pending",
+    "interpretation": "Interrupted or lost runner; no terminal result or eight-hour acceptance. Retain original records. No process cleanup is inferred from runner absence."
+  }
 }
