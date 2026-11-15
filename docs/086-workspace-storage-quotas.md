@@ -1640,3 +1640,29 @@ path. Tests preserve completed and interrupted original IDs, refuse payload conf
 retain bindings across database reopen and reject changed endpoint identity. This is
 not storage-backed native capture qualification, checkpoint receipt consumption, or
 a full architecture qualification pass.
+
+### Validate capture records in storage recovery snapshots
+
+Storage recovery now parses the retained `workspace-capture:` records from endpoint
+metadata with the same strict schema used by the live capture journal. It checks
+record keys, original request fingerprints, endpoint IDs and request/grant generation
+agreement, bounded to 256 records. Paired host/endpoint validation additionally
+requires each capture's original workspace/root identity and grant revision/generation
+to agree with retained grants, and its allocation request, project and policy digest
+to agree with the provisioned storage records. A newer grant revision/generation may
+retain the same original root; it cannot substitute a different root or allocation.
+Snapshots without capture records retain their existing representation.
+
+The storage audit reports started and complete capture counts separately. Started
+captures remain valid retained uncertainty, never successful content captures.
+Malformed complete records with no result are refused. These checks run along the
+existing checkpoint/storage-image verification paths; they do not yet connect a
+selected completed capture receipt to a specific authenticated workspace manifest.
+That content-membership link, historical archive reinspection and clean-host restore
+remain required before any global consistency or activation claim.
+
+VERIFIED at `c1b54c77ce5cb053121bbf719d3119c58bd477bb`: 85 focused capture,
+storage, checkpoint and installation tests passed (one native-only skip); typecheck
+and build passed. Initial fixture setup used an UPSERT against a deliberately simple
+metadata table without a unique constraint; the test setup was corrected before the
+successful run. No new native run or deployment is claimed for this read-only audit change.

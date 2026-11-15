@@ -1,0 +1,11 @@
+{
+  "date": "2026-11-15",
+  "testedRevision": "c1b54c77ce5cb053121bbf719d3119c58bd477bb",
+  "focusedTests": { "passed": 85, "skipped": 1 },
+  "typecheck": "passed",
+  "build": "passed",
+  "verified": ["capture record shape and request fingerprint", "original endpoint/grant/root identity", "allocation request/project/policy binding", "started and completed counts remain distinct"],
+  "workspaceArchiveReceiptLink": false,
+  "globalSnapshotProven": false,
+  "deployed": false
+}
