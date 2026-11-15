@@ -1,6 +1,9 @@
 """Root-owned local storage service. Installation/activation is a separate operator action."""
 import argparse
+import contextlib
 import datetime
+import errno
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -76,12 +79,49 @@ def respond(host, connection):
         pass  # Lost response does not undo or repeat an original host operation.
 
 
+@contextlib.contextmanager
+def listener_claim(path, gid):
+    """Fence cooperating listeners; only reclaim an unchanged, refused root-owned socket."""
+    protected(path.parent)
+    require(path.is_absolute() and len(os.fsencode(path)) < 104)
+    descriptor = os.open(str(path) + '.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+    try:
+        info = os.fstat(descriptor)
+        require(stat.S_ISREG(info.st_mode) and info.st_uid == 0 and info.st_nlink == 1 and not info.st_mode & 0o077)
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            original = path.lstat()
+        except FileNotFoundError:
+            original = None
+        if original is not None:
+            require(stat.S_ISSOCK(original.st_mode) and original.st_uid == 0 and original.st_gid == gid
+                    and stat.S_IMODE(original.st_mode) == 0o660 and original.st_nlink == 1)
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+                probe.settimeout(0.5)
+                try:
+                    probe.connect(str(path))
+                except OSError as error:
+                    require(error.errno == errno.ECONNREFUSED)
+                else:
+                    require(False)  # A live listener, including an older service, must never be displaced.
+            current = path.lstat()
+            require((current.st_dev, current.st_ino, current.st_mode, current.st_uid, current.st_gid, current.st_nlink)
+                    == (original.st_dev, original.st_ino, original.st_mode, original.st_uid, original.st_gid, original.st_nlink))
+            path.unlink()
+        yield
+    finally:
+        os.close(descriptor)  # Keep the lock inode: unlinking it would let another process bypass the fence.
+
+
 def serve(config_path, registry, socket_path):
     require(os.getuid() == 0)
     config = configuration(config_path)
     path = Path(socket_path)
-    protected(path.parent)
-    require(path.is_absolute() and len(os.fsencode(path)) < 104 and not path.exists() and not path.is_symlink())
+    with listener_claim(path, config['gid']):
+        serve_claimed(config, registry, path)
+
+
+def serve_claimed(config, registry, path):
     host = StorageHost(registry, config)
     listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     bound = None

@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import selectors
 import socket
+import sqlite3
 import subprocess
 import sys
 import uuid
@@ -22,13 +23,22 @@ config = {'endpointId': str(uuid.uuid4()), 'uid': uid, 'gid': gid, 'policy': {
     'workspace': {'bytes': 16 * 1024 ** 2, 'inodes': 128}}}
 with os.fdopen(os.open(config_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'w') as file:
     json.dump(config, file)
-process = subprocess.Popen([sys.executable, 'scripts/agentic_storage_service.py', '--config', str(config_path),
-    '--registry', str(registry), '--socket', str(socket_path)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+argv = [sys.executable, 'scripts/agentic_storage_service.py', '--config', str(config_path),
+    '--registry', str(registry), '--socket', str(socket_path)]
+
+def start():
+    process = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        with selectors.DefaultSelector() as selector:
+            selector.register(process.stdout, selectors.EVENT_READ)
+            assert selector.select(15), 'Host service did not report startup'
+            assert process.stdout.readline().strip() == 'storage-host-ready'
+        return process
+    except BaseException:
+        process.kill(); process.wait(); raise
+
+process = start()
 try:
-    with selectors.DefaultSelector() as selector:
-        selector.register(process.stdout, selectors.EVENT_READ)
-        assert selector.select(15), 'Host service did not report startup'
-        assert process.stdout.readline().strip() == 'storage-host-ready'
     # Root can open the mode-0660 socket but is not the configured peer UID. Payload must not override peer credentials.
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
         connection.settimeout(5); connection.connect(str(socket_path))
@@ -75,7 +85,24 @@ assert 4 <= time.monotonic()-start < 8
     checked = subprocess.run([sys.executable, '-c', client, str(socket_path), '{}'], user=uid, group=gid,
                              extra_groups=[], capture_output=True, text=True, timeout=15)
     assert checked.returncode == 0, checked.stderr
-    print(json.dumps({'nativeStorageService': 'passed', 'peerUidRequired': True, 'malformedRequestsRefused': True, 'slowRequestDeadline': True}), flush=True)
+    # A duplicate service must not mutate the host registry or displace the current listener.
+    def saved_registry():
+        with sqlite3.connect((registry / 'host.sqlite').as_uri() + '?mode=ro', uri=True) as database:
+            return list(database.iterdump())
+    before = saved_registry()
+    inode = socket_path.stat().st_ino
+    duplicate = subprocess.run(argv, capture_output=True, text=True, timeout=10)
+    assert duplicate.returncode == 1 and duplicate.stdout.strip() == 'storage-host-unavailable'
+    assert socket_path.stat().st_ino == inode and saved_registry() == before
+    # SIGKILL leaves the socket. Restart reclaims only that stale transport, never host operation intents.
+    process.kill(); process.wait(timeout=10)
+    assert process.returncode == -9 and socket_path.exists()
+    process = start()
+    assert saved_registry() == before
+    checked = subprocess.run([sys.executable, '-c', client, str(socket_path), '{}'], user=uid, group=gid,
+                             extra_groups=[], capture_output=True, text=True, timeout=15)
+    assert checked.returncode == 0, checked.stderr
+    print(json.dumps({'nativeStorageService': 'passed', 'peerUidRequired': True, 'malformedRequestsRefused': True, 'slowRequestDeadline': True, 'crashRestartPreservedRegistry': True, 'duplicateListenerRefused': True}), flush=True)
 finally:
     process.terminate()
     try:
