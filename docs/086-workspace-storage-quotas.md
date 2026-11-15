@@ -503,3 +503,22 @@ whole-machine reboot and clean-host recovery, in-flight quota mutation recovery,
 and migration, explicit upgrade/uninstall/partial-install reconciliation, volume/control-state headroom,
 workspace controls and live usage, and final full-system qualification. The user's app was not deployed
 or restarted and model defaults remain unchanged.
+
+### Workspace disk-policy display
+
+At `2ac63a3`, endpoint cards display the registered allocation pool and per-workspace byte/inode limits
+in English and Chinese. The wording identifies verification copies as part of the workspace limit,
+startup qualification as a reserved allocation, and retained workspaces as still consuming allocation
+capacity. It explicitly labels these figures as configuration recorded at registration, not current
+usage or free space. Endpoints without storage metadata say that no managed quota was reported; this
+does not claim that the host has no other filesystem limits. Internal mount paths are not displayed.
+
+VERIFIED: four endpoint UI tests passed, including quota display, absent-metadata wording and retaining
+the existing grant/retry workflows. Nine adjacent client/environment UI tests passed. Typecheck and all
+seven builds passed. CodeGraph selected the endpoint/client/environment suites; the fixture file and
+unrelated recovery-source match were inspected as indirect context rather than additional changed
+behavior. React review found no new effects, subscriptions, async requests, interactive controls or
+expensive derived state. These are rendered DOM tests, not a deployed browser or visual-layout claim.
+
+This implements policy visibility only. Live allocation/usage queries, freshness/error handling,
+operator reconciliation and storage recovery remain unfinished. The running user app was not restarted.

@@ -1262,3 +1262,8 @@ and coordinator + SSH enrollment passed the real native journey, including comma
 endpoint/coordinator restarts and exactly the original two quota allocations. Scoped run `43696531434`
 passed 14 native tests, nine Python contracts, typecheck and seven builds. See
 [086 managed-launcher evidence](evidence/086-storage-managed-launcher.json) for scope and open gates.
+
+Storage workspace visibility (`2ac63a3`): endpoint cards now show registered disk quotas and explain
+startup/retained allocation accounting without claiming live usage/free space. English/Chinese copy,
+13 focused/adjacent UI tests, typecheck and seven builds passed. Live storage status and recovery controls
+remain open; see the latest section of [086](086-workspace-storage-quotas.md).
