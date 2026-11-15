@@ -27,3 +27,20 @@ it('bounds an unresponsive range observation without claiming termination', asyn
   await observed; controller.abort()
   expect(await result).toEqual({ command: 'exited', exitCode: 1, quiescence: 'unknown' })
 })
+it('does not observe a pre-aborted handle and consumes its late rejection', async () => {
+  const controller = new AbortController(); controller.abort()
+  let reject!: (error: Error) => void
+  const done = new Promise<{ exitCode: number; signal: null }>((_resolve, fail) => { reject = fail })
+  const waitForExit = vi.fn(async () => true)
+  expect(await preparationOutcome({ done, waitForExit }, controller.signal))
+    .toEqual({ command: 'unknown', exitCode: null, quiescence: 'unknown' })
+  reject(new Error('late provider response loss')); await Promise.resolve()
+  expect(waitForExit).not.toHaveBeenCalled()
+})
+it('bounds a command whose exit acknowledgement never arrives', async () => {
+  const controller = new AbortController(), waitForExit = vi.fn(async () => true)
+  const pending = preparationOutcome({ done: new Promise(() => {}), waitForExit }, controller.signal)
+  controller.abort()
+  expect(await pending).toEqual({ command: 'unknown', exitCode: null, quiescence: 'unknown' })
+  expect(waitForExit).not.toHaveBeenCalled()
+})

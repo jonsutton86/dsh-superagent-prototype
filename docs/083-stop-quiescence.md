@@ -61,6 +61,32 @@ with a stable request ID and durable receipt. Exact replay checks the existing r
 must preserve that original request through response loss and remount, and never substitute a fresh ID after an uncertain
 response. Operator evidence must remain visibly distinct from observed process termination and from task success.
 
+## Preparation command recovery
+
+Local preparation now commits an original assignment-bound intent in `executor_stop` before Harness receives the command.
+The same canonical record carries a command hash and typed observation, rather than a second preparation journal. A direct
+command exit and a confirmed empty Harness-managed range are separate facts. Only both together permit a `preparation`
+quiet proof. A failed command with this proof remains failed, but an explicit retry can reuse its original stop coverage
+after the failed launch effect is retired. Standard output/error text is not termination authority.
+
+Successful preparation consumes this limited coverage before later launch commands or worker admission. A crash, rejected
+provider response, spawn uncertainty, observation timeout, or unavailable/busy managed range stays unknown under the original
+intent. Missing Agents and empty replacement registries do not release it. Ordinary stop rechecks cannot upgrade that
+preparation uncertainty. An actively observed preparation refuses operator attestation; after observation ends, the existing
+original-bound operator evidence flow remains available. No command is blindly repeated to resolve uncertainty.
+
+This proof requires an untouched first local launch and no already-loaded worker Session. Reused loaded Sessions or
+world-bound assignments cannot mint local preparation-only proof. Remote preparation continues through its existing
+endpoint-owned receipt path. This conservative local refusal does not claim that deleting or unloading a Session proves
+its earlier work stopped. Native provider containment still bounds the evidence: an empty managed range does not prove
+that arbitrary escaped processes do not exist.
+
+Schema 14 provides the older-reader barrier. Schema 13 records retain their identities on upgrade; missing canonical stop
+tables are rejected. Restore verifies original execution bindings and rejects unconsumed preparation-only coverage after
+worker dispatch. Observed outcomes, command identity and consumed coverage cannot be rewritten to authorize a new action.
+Focused synthetic/runtime and restore checks are recorded in [preparation recovery evidence](evidence/083-preparation-recovery.json).
+Installed native preparation fault injection and the final platform matrix remain unqualified.
+
 ## Qualification still required
 
 Targeted cases cover running/failed stop waits, rejected or uncertain control, known eventual termination, old-target

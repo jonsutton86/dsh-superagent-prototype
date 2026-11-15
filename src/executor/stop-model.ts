@@ -4,14 +4,18 @@ import { z } from 'zod'
 const id = z.string().min(1).max(200), digest = z.string().regex(/^[a-f0-9]{64}$/), at = z.iso.datetime()
 export const StopScope = z.enum(['all', 'jobs', 'descendants', 'legacy'])
 export const StopState = z.enum(['prepared', 'observing', 'unknown', 'quiet', 'dormant'])
-export const StopProof = z.enum(['registry', 'remote', 'operator', 'undispatched'])
+export const StopProof = z.enum(['registry', 'remote', 'operator', 'undispatched', 'preparation'])
 export const StopExecution = z.object({ directory: z.string().max(4096), mode: z.enum(['local', 'repository']).optional(),
   environment: z.object({ environmentId: id, revision: z.number().int().positive(), epoch: z.number().int().positive(), world: id.optional() }).strict().optional() }).strict()
+export const PreparationReceipt = z.object({ commandHash: digest, phase: z.enum(['intent', 'observed']),
+  command: z.enum(['unknown', 'exited']), exitCode: z.number().int().nullable(),
+  quiescence: z.enum(['unknown', 'confirmed']) }).strict()
 export const StopRecordSchema = z.object({ version: z.literal(1), id, ticketId: id, assignmentId: id, sessionId: id,
   revision: z.number().int().positive(), scope: StopScope, state: StopState, reason: z.string().max(300),
   execution: StopExecution.nullable(), world: id.nullable(), executionBindingHash: digest, scopeHash: digest,
   createdAt: at, instance: id.nullable(), legacy: z.boolean(), keepInbox: z.boolean(), ownTurn: z.boolean(),
   jobIds: z.array(id).max(256), sessions: z.array(id).max(128), dispatched: z.boolean(), coverageConsumed: z.boolean().default(false),
+  preparation: PreparationReceipt.optional(),
   proof: StopProof.nullable(), settledAt: at.nullable(), attestationId: id.nullable() }).strict().superRefine((record, ctx) => {
     if (record.sessionId !== 'worker-' + record.ticketId || !record.sessions.includes(record.sessionId)
       || new Set(record.sessions).size !== record.sessions.length || new Set(record.jobIds).size !== record.jobIds.length
@@ -20,6 +24,12 @@ export const StopRecordSchema = z.object({ version: z.literal(1), id, ticketId: 
       || record.state !== 'quiet' && (record.proof !== null || record.settledAt !== null)
       || (record.proof === 'operator') !== (record.attestationId !== null)
       || record.proof === 'remote' && record.world === null || record.proof === 'operator' && record.world !== null
+      || record.preparation && (record.scope !== 'all' || record.world !== null || record.legacy
+        || record.proof !== null && record.proof !== 'preparation' && record.proof !== 'operator'
+        || record.preparation.command === 'unknown' && (record.preparation.exitCode !== null || record.preparation.quiescence !== 'unknown')
+        || record.preparation.phase === 'intent' && record.preparation.command !== 'unknown')
+      || record.proof === 'preparation' && (!record.preparation || record.preparation.phase !== 'observed'
+        || record.preparation.command !== 'exited' || record.preparation.quiescence !== 'confirmed' || record.dispatched || record.jobIds.length > 0)
       || record.execution?.environment?.world && record.world !== record.execution.environment.world)
       ctx.addIssue({ code: 'custom', message: 'Inconsistent original stop evidence' })
   })

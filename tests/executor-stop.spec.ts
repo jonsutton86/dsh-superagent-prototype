@@ -9,7 +9,7 @@ import { Effects } from '../src/app/effects.ts'
 import { HealthBoard } from '../src/infra/health.ts'
 import type { Ticket } from '../src/core/index.ts'
 import { ExecutorStops } from '../src/executor/stops.ts'
-import { readStop, stopDigest, stopExecutionDigest, stopScopeDigest, validateStopAuthority } from '../src/executor/stop-store.ts'
+import { readStop, saveStop, stopDigest, stopExecutionDigest, stopScopeDigest, validateStopAuthority } from '../src/executor/stop-store.ts'
 import { KV } from '../src/kv.ts'
 
 const cleanup: (() => void | Promise<void>)[] = []
@@ -231,7 +231,7 @@ it('migrates legacy active and ended Session coverage without inventing local qu
   f.store.set(KV.store.schema, 12)
   const reopened = new Store(f.path)
   try {
-    expect(reopened.get(KV.store.schema)).toBe(13)
+    expect(reopened.get(KV.store.schema)).toBe(14)
     const rows = reopened.db.prepare('SELECT value FROM executor_stop ORDER BY ticket').all().map(row => JSON.parse(String(row.value)))
     expect(rows.map(row => [row.ticketId, row.state, row.legacy])).toEqual([['ended', 'dormant', true], ['task', 'unknown', true]])
     expect(rows.every(row => row.proof === null && row.instance === null)).toBe(true)
@@ -324,4 +324,118 @@ it('retains an unknown original stop after cold start even when the retry never 
   restored.recover(); await restored.idle()
   expect(restored.detail(held)).toMatchObject({ state: 'unknown', proof: null })
   expect(restored.problem('task')).toContain('Original work is not confirmed stopped')
+})
+
+function preparationFixture() {
+  const f = fixture(false), ticket = f.store.tickets.get('task')!, assignment = ticket.assignments[0]!
+  assignment.state = 'pending'; delete assignment.startedAt; f.store.tickets.save(ticket)
+  f.agents.clear(); f.effects.ensure('launch', assignment.id, { ticketId: ticket.id, assignmentId: assignment.id })
+  f.effects.beginLaunch(assignment.id)
+  return { ...f, ticket, assignment, begin: () => f.stops.beginPreparation(ticket, assignment, 'prepare-command') }
+}
+
+it('persists preparation intent before dispatch and retains unknown original coverage after response loss and cold recovery', async () => {
+  const f = preparationFixture(), id = f.begin()
+  expect(readStop(f.store.db, id)).toMatchObject({ state: 'unknown', proof: null, assignmentId: 'original',
+    preparation: { phase: 'intent', command: 'unknown', exitCode: null, quiescence: 'unknown' } })
+  expect(() => f.begin()).toThrow('Original work is not confirmed stopped')
+  const restored = new ExecutorStops({ ...f.host, effects: new Effects(f.store, new HealthBoard()) })
+  restored.recover(); await restored.idle()
+  expect(await restored.recheck(id)).toMatchObject({ state: 'unknown', proof: null })
+  restored.finishPreparation(id, { command: 'exited', exitCode: 1, quiescence: 'confirmed' })
+  expect(restored.detail(id)).toMatchObject({ state: 'unknown', proof: null })
+  expect(restored.list('task').items.map(item => item.id)).toEqual([id])
+  validateStopAuthority(f.store.db, new Map([['task', f.ticket]]), () => {})
+})
+
+it('retains settled failed preparation proof after launch retirement and reuses the exact original receipt for retry', async () => {
+  const f = preparationFixture(), id = f.begin()
+  f.stops.finishPreparation(id, { command: 'exited', exitCode: 3, quiescence: 'confirmed' })
+  f.assignment.state = 'ended'; f.assignment.endedAt = '2026-01-01T01:00:00.000Z'
+  f.assignment.report = { state: 'failed', summary: 'prepare failed', at: f.assignment.endedAt }
+  f.store.tickets.save(f.ticket)
+  f.effects.finishLaunch('original'); f.store.db.prepare("DELETE FROM effect WHERE kind='launch' AND key='original'").run()
+  const restored = new ExecutorStops({ ...f.host, effects: new Effects(f.store, new HealthBoard()) })
+  restored.recover(); await restored.idle()
+  expect(restored.request(f.ticket, f.assignment)).toBe(id)
+  expect(restored.detail(id)).toMatchObject({ state: 'quiet', proof: 'preparation', assignmentId: 'original' })
+  validateStopAuthority(f.store.db, new Map([['task', f.ticket]]), () => {})
+  expect(f.agent.cancel).not.toHaveBeenCalled()
+})
+
+it.each([
+  { command: 'exited' as const, exitCode: 1, quiescence: 'unknown' as const },
+  { command: 'unknown' as const, exitCode: null, quiescence: 'unknown' as const },
+])('never uses incomplete preparation observation as quiet proof: %j', async outcome => {
+  const f = preparationFixture(), id = f.begin()
+  f.stops.finishPreparation(id, outcome)
+  expect(await f.stops.recheck(id)).toMatchObject({ state: 'unknown', proof: null })
+  expect(() => f.stops.beforeAdmission('task', 'original')).toThrow('Original work is not confirmed stopped')
+  f.stops.finishPreparation(id, { command: 'exited', exitCode: 0, quiescence: 'confirmed' })
+  expect(readStop(f.store.db, id)?.preparation).toMatchObject(outcome)
+  expect(f.stops.request(f.ticket, f.assignment)).toBe(id)
+})
+
+it('consumes successful preparation coverage before further launch work and never reuses it to stop that later work', async () => {
+  const f = preparationFixture(), id = f.begin()
+  f.stops.finishPreparation(id, { command: 'exited', exitCode: 0, quiescence: 'confirmed' })
+  f.stops.beforeAdmission('task', 'original')
+  expect(readStop(f.store.db, id)?.coverageConsumed).toBe(true)
+  const later = f.stops.request(f.ticket, f.assignment); await f.stops.idle()
+  expect(later).not.toBe(id)
+  expect(f.stops.detail(later)).toMatchObject({ state: 'unknown', proof: null })
+})
+
+it('refuses preparation-only authority for a reused loaded Session or a remote execution world', () => {
+  const f = preparationFixture()
+  f.agents.set(f.agent.id, f.agent)
+  expect(() => f.begin()).toThrow('exclusive pre-dispatch coverage')
+  f.agents.clear()
+  f.assignment.execution = { ...f.assignment.execution!, environment: { environmentId: 'remote', revision: 1, epoch: 1, world: 'remote-world' } }
+  f.store.tickets.save(f.ticket)
+  expect(() => f.begin()).toThrow('exclusive pre-dispatch coverage')
+  expect(f.stops.list().items).toHaveLength(0)
+})
+
+it('rejects restored preparation proof if later worker dispatch was not marked as consuming its coverage', () => {
+  const f = preparationFixture(), id = f.begin()
+  f.stops.finishPreparation(id, { command: 'exited', exitCode: 1, quiescence: 'confirmed' })
+  f.assignment.startedAt = '2026-01-01T01:00:00.000Z'; f.store.tickets.save(f.ticket)
+  expect(() => validateStopAuthority(f.store.db, new Map([['task', f.ticket]]), () => {})).toThrow('preparation-only coverage')
+})
+
+it('refuses operator attestation while the original preparation handle is still being observed', async () => {
+  const f = preparationFixture(), id = f.begin()
+  expect(f.stops.detail(id).canAttest).toBe(false)
+  expect((await f.stops.attest(id, f.attest(id))).receipt.phase).toBe('refused')
+  expect(f.stops.detail(id)).toMatchObject({ state: 'unknown', proof: null })
+  f.stops.finishPreparation(id, { command: 'exited', exitCode: 3, quiescence: 'unknown' })
+  expect(f.stops.detail(id).canAttest).toBe(true)
+})
+
+it('preserves the pending preparation intent if storage ownership is lost before outcome acceptance', () => {
+  const f = preparationFixture(), id = f.begin()
+  f.lose()
+  expect(() => f.stops.finishPreparation(id, { command: 'exited', exitCode: 3, quiescence: 'confirmed' })).toThrow('unavailable')
+  expect(readStop(f.store.db, id)).toMatchObject({ state: 'unknown', proof: null, preparation: { phase: 'intent' } })
+})
+
+it('upgrades schema 13 without rewriting original stop identities and marks schema 14 for old-reader refusal', async () => {
+  const f = fixture(false), id = f.request(); await f.stops.idle()
+  const before = readStop(f.store.db, id)
+  f.store.set(KV.store.schema, 13)
+  const reopened = new Store(f.path)
+  try {
+    expect(reopened.get(KV.store.schema)).toBe(14)
+    expect(readStop(reopened.db, id)).toEqual(before)
+  } finally { reopened.close() }
+})
+
+it('keeps observed preparation outcomes and consumed coverage immutable', () => {
+  const f = preparationFixture(), id = f.begin()
+  f.stops.finishPreparation(id, { command: 'exited', exitCode: 3, quiescence: 'confirmed' })
+  const observed = readStop(f.store.db, id)!
+  expect(() => saveStop(f.store.db, { ...observed, preparation: { ...observed.preparation!, exitCode: 0 } })).toThrow('identity cannot change')
+  f.stops.beforeAdmission('task', 'original')
+  expect(() => saveStop(f.store.db, observed)).toThrow('identity cannot change')
 })

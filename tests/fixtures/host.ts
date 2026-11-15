@@ -172,7 +172,7 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
     const reader = (text: string) => ({ readFrom: () => ({ text, nextOffset: text.length, lossy: false }) })
     const exited = { exitCode: 0, signal: null }
     const done = argv[0] === 'sh' && hooks.prepare ? hooks.prepare.then(() => exited) : Promise.resolve(exited)
-    return { done, collected: { stdout: reader(argv[0] === 'cat' ? readFileSync(argv[1]!, 'utf8') : answers[argv.join(' ')] ?? ''), stderr: reader('') } }
+    return { done, waitForExit: async () => { await done; return true }, collected: { stdout: reader(argv[0] === 'cat' ? readFileSync(argv[1]!, 'utf8') : answers[argv.join(' ')] ?? ''), stderr: reader('') } }
   }) }
   const agents = new Map<string, FakeAgent>()
   /** Each Session's next step, which takes the messages that wait for one. */

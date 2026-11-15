@@ -1,4 +1,5 @@
 /** Original-scope stop receipts and observation, sharing the main Store and Effects authority. */
+import type { PreparationOutcome } from './preparation-outcome.ts'
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -44,6 +45,7 @@ const NOW = () => new Date().toISOString()
 export class ExecutorStops {
   private readonly instance = randomUUID()
   private readonly bindings = new Map<string, Binding>()
+  private readonly preparing = new Set<string>()
   private readonly pending = new Map<string, Promise<void>>()
   private readonly observations = new Map<string, Promise<StopDetail>>()
   constructor(private readonly host: Host) {
@@ -189,7 +191,7 @@ export class ExecutorStops {
     const record = this.require(id)
     return { ...stopSummary(record), createdAt: record.createdAt, settledAt: record.settledAt,
       execution: record.execution, world: record.world, targets: { jobIds: record.jobIds, sessions: record.sessions },
-      canRecheck: stopHeld(record), canAttest: record.state === 'unknown' && record.world === null && !!record.execution && !this.pending.has(id) && !this.draining(record) }
+      canRecheck: stopHeld(record), canAttest: record.state === 'unknown' && record.world === null && !!record.execution && !this.preparing.has(id) && !this.pending.has(id) && !this.draining(record) }
   }
   private update(record: StopRecord, change: Partial<StopRecord>): StopRecord {
     return this.host.store.atomic(() => {
@@ -206,6 +208,47 @@ export class ExecutorStops {
       this.update(record, { state: 'unknown', reason: 'Original legacy Session stop coverage must be reviewed before reuse' })
       this.host.effects.ensure('stop', record.id, { stopId: record.id })
     }
+  }
+  /** Commit the original preparation intent before handing any command to Harness. */
+  beginPreparation(ticket: Ticket, assignment: Assignment, command: string): string {
+    this.host.authorize()
+    const current = this.host.store.tickets.get(ticket.id)?.assignments.at(-1)
+    const launch = this.host.store.db.prepare("SELECT launch_started,attempts FROM effect WHERE kind='launch' AND key=?").get(assignment.id)
+    if (current?.id !== assignment.id || current.state !== 'pending' || current.startedAt || current.deliveredAt || current.report
+      || stopDigest(current.execution ?? null) !== stopDigest(assignment.execution ?? null)
+      || assignment.execution?.environment?.world || launch?.launch_started !== 1 || launch.attempts !== 0
+      || this.host.context.agents.get(('worker-' + ticket.id) as SessionId))
+      throw new Later('Original preparation cannot establish exclusive pre-dispatch coverage')
+    this.beforeAdmission(ticket.id, assignment.id)
+    const execution = assignment.execution ?? null, sessionId = 'worker-' + ticket.id
+    const record: StopRecord = { version: 1, id: randomUUID(), ticketId: ticket.id, assignmentId: assignment.id, sessionId,
+      revision: 1, scope: 'all', state: 'unknown', reason: 'Original preparation outcome is pending',
+      execution, world: null, executionBindingHash: stopExecutionDigest(execution, null), scopeHash: '', createdAt: NOW(),
+      instance: this.instance, legacy: false, keepInbox: true, ownTurn: false, jobIds: [], sessions: [sessionId], dispatched: false,
+      coverageConsumed: false, proof: null, settledAt: null, attestationId: null,
+      preparation: { commandHash: stopDigest(command), phase: 'intent', command: 'unknown', exitCode: null, quiescence: 'unknown' } }
+    record.scopeHash = stopScopeDigest(record)
+    this.host.store.atomic(() => {
+      saveStop(this.host.store.db, record)
+      this.host.effects.ensure('stop', record.id, { stopId: record.id })
+    })
+    this.preparing.add(record.id)
+    return record.id
+  }
+  /** Only the original process handle may report this intent's bounded observation. */
+  finishPreparation(id: string, outcome: PreparationOutcome): void {
+    const record = this.require(id)
+    if (record.instance !== this.instance || record.preparation?.phase !== 'intent' || record.proof !== null) return
+    this.preparing.delete(id)
+    this.host.authorizeObservation()
+    const original = this.host.store.tickets.get(record.ticketId)?.assignments.find(item => item.id === record.assignmentId)
+    if (!original || original.startedAt || original.deliveredAt || stopDigest(original.execution ?? null) !== stopDigest(record.execution))
+      throw new Error('Original preparation binding changed')
+    const quiet = outcome.command === 'exited' && outcome.quiescence === 'confirmed'
+    this.update(record, { preparation: { ...record.preparation, phase: 'observed', ...outcome },
+      state: quiet ? 'quiet' : 'unknown', proof: quiet ? 'preparation' : null, settledAt: quiet ? NOW() : null,
+      reason: quiet ? 'Original preparation command exited and its Harness-managed range is empty' : 'Original preparation quiescence is unconfirmed' })
+    if (quiet) this.released(record)
   }
   /** Original lifecycle identity is frozen before any Agent, job or descendant receives cancellation. */
   request(ticket: Ticket, assignment: Assignment, options: { scope?: StopRecord['scope']; keepInbox?: boolean; ownTurn?: boolean; jobIds?: string[] } = {}): string {
@@ -276,6 +319,7 @@ export class ExecutorStops {
     }
   }
   private async inspect(record: StopRecord, operatorEvidence = false): Promise<{ sessions: string[]; jobs: string[]; busy: boolean }> {
+    if (this.preparing.has(record.id)) throw new Error('Original preparation is still being observed')
     const ctx = this.host.context, registries = this.registries(record)
     const service = registries.jobs as Jobs | undefined, children = registries.children as Children | undefined
     const sessions = new Set(record.sessions), queue = [...record.sessions], deadline = AbortSignal.timeout(4000)
@@ -311,6 +355,7 @@ export class ExecutorStops {
   private async observe(id: string, finishingControl = false): Promise<StopDetail> {
     let record = this.require(id)
     if (!stopHeld(record)) return this.detail(id)
+    if (record.preparation && !record.coverageConsumed) return this.detail(id)
     if (this.pending.has(id) && !finishingControl) return this.detail(id)
     try {
       const view = await this.inspect(record)

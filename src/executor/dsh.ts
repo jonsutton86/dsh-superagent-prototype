@@ -1,4 +1,5 @@
 /** DSH executor: manages one persistent worker session and workspace directory per ticket. */
+import { preparationOutcome } from './preparation-outcome.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -8,7 +9,7 @@ import { key, latestAssignment, latestReport, liveTicket, runningAssignment, thr
 import type { AssessmentOutcome, Assignment, EngineForExecutor, Execution, Executor, Mandate, PolicyEffect, Ticket, TicketInput, Trigger }
   from '../core/index.ts'
 import type { Machine } from '../deployment.ts'
-import { runAsWorker, verifyDirectory, verifyLocalWorkspace, workerBin } from '../infra/environment.ts'
+import { verifyDirectory, verifyLocalWorkspace, workerBin } from '../infra/environment.ts'
 import { recordedAttachments, stageAttachments } from '../app/scoped-files.ts'
 import type { Settings } from '../policy.ts'
 import type { Store } from '../app/store.ts'
@@ -313,12 +314,30 @@ export class DshExecutor implements Executor {
     env.PATH = [workerBin(this.host.machine.stateDir), process.env.PATH ?? ''].filter(Boolean).join(delimiter)
     // Enforce a timeout so a hung prepare command (such as on a credential prompt) fails the ticket instead of holding a worker slot indefinitely.
     const signal = AbortSignal.any([this.host.lifetime, AbortSignal.timeout(PREPARE_TIMEOUT_MS)])
-    if (command) await runAsWorker(this.host.context.subprocess, ['sh', '-c', command], dirname(directory), signal, env)
-      .catch(async (error: unknown) => {
-        // Remove an empty directory left by a failed prepare command so a later retry does not treat it as already prepared.
-        await rmdir(directory).catch(() => { /* Absent, or holding what the command wrote, which the output explains. */ })
-        throw new PrepareFailed(`The prepare command failed: ${error instanceof Error ? error.message : String(error)}`)
-      })
+    if (command) {
+      const assignment = latestAssignment(ticket)
+      if (!assignment) throw new PrepareFailed('Preparation has no original assignment')
+      const intent = this.stops.beginPreparation(ticket, assignment, command)
+      let outcome: Awaited<ReturnType<typeof preparationOutcome>> = { command: 'unknown', exitCode: null, quiescence: 'unknown' }
+      let errorOutput = ''
+      try {
+        const handle = this.host.context.subprocess.spawn({ argv: ['sh', '-c', command], cwd: dirname(directory),
+          graceMs: 2000, signal, env, stdio: { stdin: 'ignore', stdout: { maxBytes: 1 << 20 }, stderr: { maxBytes: 1 << 16 } } })
+        outcome = await preparationOutcome(handle, signal)
+        errorOutput = handle.collected.stderr?.readFrom(0).text.trim() ?? ''
+      } catch { throw new PrepareFailed('The prepare command outcome is unconfirmed; inspect its original stop receipt') } finally { this.stops.finishPreparation(intent, outcome) }
+      if (outcome.command !== 'exited' || outcome.quiescence !== 'confirmed')
+        throw new PrepareFailed('The prepare command outcome is unconfirmed; inspect its original stop receipt')
+      if (outcome.exitCode !== 0) {
+        // Preserve the original settled preparation receipt while retiring this failed launch.
+        await rmdir(directory).catch(() => { /* Keep nonempty output for operator review. */ })
+        throw new PrepareFailed(`The prepare command failed: ${errorOutput || (outcome.exitCode === null ? 'stopped' : 'exited with ' + outcome.exitCode)}`)
+      }
+      const latest = this.host.store.tickets.get(ticket.id)
+      if (this.host.closing() || !latest || !liveTicket(latest) || latestAssignment(latest)?.id !== assignment.id) return
+      // Further launch work invalidates preparation-only coverage, before another command or worker is admitted.
+      this.stops.beforeAdmission(ticket.id, assignment.id)
+    }
     await mkdir(directory, { recursive: true })
     if (!local) await verifyDirectory(directory, this.host.context.subprocess, this.host.lifetime)
   }

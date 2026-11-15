@@ -28,6 +28,7 @@ const TEXT = {
   "stopHold.proof.registry": ["当前 Harness 注册记录观察", "Current Harness registry observation"],
   "stopHold.proof.remote": ["原远程端点回执", "Original remote endpoint receipts"],
   "stopHold.proof.operator": ["操作员独立检查确认", "Operator independent-inspection attestation"],
+  "stopHold.proof.preparation": ["准备命令已退出且执行范围为空", "Preparation exited; managed range is empty"],
   "stopHold.proof.undispatched": ["未派发执行", "Execution was not dispatched"],
   "stopHold.legacy": ["旧记录无法证明工作属于哪次派工。缺失的进程记录不等于工作已停止。", "Legacy records do not establish the producing assignment. Missing process records do not prove work stopped."],
   "stopHold.originalLocation": ["原执行目录", "Original execution directory"],

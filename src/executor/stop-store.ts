@@ -21,7 +21,10 @@ export function saveStop(db: DatabaseSync, input: StopRecord): void {
       createdAt: item.createdAt, instance: item.instance, scopeHash: item.scopeHash, executionBindingHash: item.executionBindingHash,
       legacy: item.legacy, ownTurn: item.ownTurn, keepInbox: item.keepInbox })
     if (stopDigest(immutable(prior)) !== stopDigest(immutable(record)) || prior.sessions.some(id => !record.sessions.includes(id))
-      || prior.jobIds.some(id => !record.jobIds.includes(id))) throw new Error('Original stop identity cannot change')
+      || prior.jobIds.some(id => !record.jobIds.includes(id))
+      || prior.preparation && (!record.preparation || prior.preparation.commandHash !== record.preparation.commandHash
+        || prior.preparation.phase === 'observed' && stopDigest(prior.preparation) !== stopDigest(record.preparation))
+      || !prior.preparation && record.preparation || prior.coverageConsumed && !record.coverageConsumed) throw new Error('Original stop identity cannot change')
   }
   db.prepare('INSERT INTO executor_stop(id,value) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value').run(record.id, value)
 }
@@ -36,6 +39,8 @@ export function validateStopAuthority(db: DatabaseSync, tickets: ReadonlyMap<str
       || record.scopeHash !== stopScopeDigest(record) || stopDigest(record.execution) !== stopDigest(assignment.execution ?? null)) throw new Error('Invalid original stop authority')
     if (record.proof === 'undispatched' && (record.legacy || record.scope !== 'all' || record.dispatched || record.jobIds.length
       || !record.coverageConsumed && (assignment.startedAt || assignment.deliveredAt || assignment.report))) throw new Error('Invalid no-dispatch proof')
+    if (record.preparation && !record.coverageConsumed && (assignment.startedAt || assignment.deliveredAt))
+      throw new Error('Invalid preparation-only coverage')
     records.set(record.id, record)
   }
   const accepted = new Map<string, string>()
@@ -67,7 +72,7 @@ export function stopHolds(store: { db: DatabaseSync }, ticketId: string): StopHo
 }
 /** Create the schema before services start; legacy coverage is unknown, never a historical cancellation receipt. */
 export function initializeStopStore(db: DatabaseSync, previousVersion?: number): void {
-  if (previousVersion === 13 && (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='executor_stop'").get()
+  if (previousVersion !== undefined && previousVersion >= 13 && (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='executor_stop'").get()
     || !db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='executor_stop_control'").get())) throw new Error('Missing original stop authority')
   db.exec(`CREATE TABLE IF NOT EXISTS executor_stop (id TEXT PRIMARY KEY,value TEXT NOT NULL,
     ticket TEXT GENERATED ALWAYS AS (json_extract(value,'$.ticketId')),

@@ -93,7 +93,7 @@ const subprocess = { spawn: vi.fn((spec: { argv: readonly string[] }) => {
   while (argv[0] === 'env' || /^[A-Z_]+=/.test(argv[0] ?? '')) argv.shift()
   const answer = argv[0] === 'cat' ? readFileSync(argv[1]!, 'utf8') : answers[argv.join(' ')] ?? ''
   const reader = (text: string) => ({ readFrom: () => ({ text, nextOffset: text.length, lossy: false }) })
-  return { done: Promise.resolve({ exitCode: answer instanceof Error ? 1 : 0, signal: null }), collected: { stdout: reader(answer instanceof Error ? '' : answer), stderr: reader(answer instanceof Error ? answer.message : '') } }
+  return { waitForExit: async () => true, done: Promise.resolve({ exitCode: answer instanceof Error ? 1 : 0, signal: null }), collected: { stdout: reader(answer instanceof Error ? '' : answer), stderr: reader(answer instanceof Error ? answer.message : '') } }
 }) }
 /** Source account overrides for test setup; `feishu: null` disables the Feishu source. */
 interface Accounts { github?: Record<string, unknown>; feishu?: Record<string, unknown> | null }
@@ -702,6 +702,14 @@ it('retries only a failed, blocked or undelivered ticket with a new assignment, 
   agents.delete(`worker-${ticket.id}`)
   runtime.engine.retryTicket(ticket.id)
   await runtime.idle()
+  expect(runtime.store.tickets.get(ticket.id)!.assignments.at(-1)!.state).toBe('pending')
+  const stop = runtime.executor.stops.list(ticket.id).items.find(item => item.state === 'unknown')!
+  expect(stop).toBeDefined()
+  const confirmed = await runtime.executor.stops.attest(stop.id, { schema: 1, requestId: 'deleted-retry-original-stop',
+    expectedRevision: stop.revision, executionBindingHash: stop.executionBindingHash, scopeHash: stop.scopeHash,
+    confirmed: true, note: 'Fixture operator inspected the deleted original scope and confirmed its work ended.' })
+  expect(confirmed.receipt.phase).toBe('accepted')
+  await runtime.idle()
   expect(relays(`worker-${ticket.id}`).at(-1)).toMatchObject({ ticket_id: ticket.id, title: '修复回归', trigger: expect.objectContaining({ text: '@bot 修一下回归' }) })
   expect(search(viewsOf(runtime), '修复', new TextCache(0)).tickets).toEqual([expect.objectContaining({ id: ticket.id })])
   expect(decisionList(viewsOf(runtime), [], 0, 10, '2999-01-01T00:00:00Z').items).toEqual([])
@@ -1241,7 +1249,14 @@ it('resumes several ended tickets on one thread from one message without the lau
   await receive(another)
   await runTool(first.sessionId, 'orchestrator_trigger_handback', { trigger_id: another.id, reason: 'Another change.' })
   const second = await acceptedTicket(another)
-  for (const ticket of [first, second]) await runTool(ticket.sessionId, 'orchestrator_report', { state: 'dropped', summary: 'nothing to do' })
+  for (const ticket of [first, second]) {
+    await runTool(ticket.sessionId, 'orchestrator_report', { state: 'dropped', summary: 'nothing to do' })
+    // The report ends the task; model the original Harness turn ending separately.
+    const agent = agents.get(ticket.sessionId)!
+    agent.status = 'idle'
+    ;(runtime as unknown as { ctx: Context }).ctx.emit('agent/status', { agent, status: 'idle' } as never)
+  }
+  await runtime.executor.stops.idle()
   await receive(feishu('32', '还有问题', { mentions: [], root_id: 'om_1', sender_id: 'ou_guest' }))
   await vi.waitFor(() => expect([first, second].map(ticket => runtime.store.tickets.get(ticket.ticket.id)!.ended)).toEqual([undefined, undefined]), { timeout: 3000 })
   await vi.waitFor(() => expect([first, second].map(ticket => runtime.store.tickets.get(ticket.ticket.id)!.assignments.at(-1)!.state)).toEqual(['running', 'running']), { timeout: 3000 })
@@ -1600,6 +1615,39 @@ it('runs a launch that fails for a passing reason again on the launch backoff th
   expect(runs()).toBe(before + 2)
   expect(runtime.store.tickets.get(prepared.ticket.id)!.assignments.at(-1)).toMatchObject({ state: 'running' })
 })
+
+it.each(['range-busy', 'range-unavailable', 'response-lost', 'spawn-failed'] as const)(
+  'retains the original preparation hold after %s and does not repeat it on explicit retry', async failure => {
+    const originalSpawn = subprocess.spawn.getMockImplementation()!
+    let runs = 0
+    subprocess.spawn.mockImplementation(spec => {
+      if (spec.argv[0] !== 'sh') return originalSpawn(spec)
+      runs++
+      // The canonical original intent must already exist when control first crosses into the provider.
+      const rows = runtime.store.db.prepare("SELECT value FROM executor_stop WHERE state='unknown'").all()
+      expect(rows.some(row => JSON.parse(String(row.value)).preparation?.phase === 'intent')).toBe(true)
+      if (failure === 'spawn-failed') throw new Error('provider acknowledgement unavailable')
+      const handle = originalSpawn(spec)
+      return { ...handle, done: failure === 'response-lost' ? Promise.reject(new Error('provider response lost')) : handle.done,
+        waitForExit: async () => { if (failure === 'range-unavailable') throw new Error('range unavailable'); return false } }
+    })
+    try {
+      runtime.store.saveSettings({ ...runtime.store.settings(), executor: { ...runtime.store.settings().executor, prepare: 'prepare-incomplete' } })
+      const prepared = await acceptedTicket(feishu('prepare-unknown', '@bot prepare unknown', { root_id: undefined }))
+      await runtime.idle()
+      const original = runtime.store.tickets.get(prepared.ticket.id)!.assignments.at(-1)!
+      expect(original.report).toMatchObject({ state: 'failed' })
+      const receipts = () => runtime.store.db.prepare('SELECT value FROM executor_stop WHERE assignment=?').all(original.id)
+        .map(row => JSON.parse(String(row.value)))
+      const receipt = receipts().find(item => item.preparation)
+      expect(receipt).toMatchObject({ state: 'unknown', proof: null, assignmentId: original.id, preparation: { quiescence: 'unknown' } })
+      runtime.engine.retryTicket(prepared.ticket.id); await runtime.idle()
+      expect(runtime.store.tickets.get(prepared.ticket.id)!.assignments.at(-1)).toMatchObject({ state: 'pending' })
+      expect(receipts().find(item => item.id === receipt.id)).toMatchObject({ state: 'unknown', proof: null })
+      expect(runs).toBe(1)
+      expect(deliveries.mock.calls.filter(([call]) => call.sessionId === prepared.sessionId)).toHaveLength(0)
+    } finally { subprocess.spawn.mockImplementation(originalSpawn) }
+  })
 
 it('launches a queued Assignment once when the host resumes, and gives a failed launch\'s slot back', async () => {
   runtime.store.saveSettings({ ...runtime.store.settings(), executor: { ...runtime.store.settings().executor, maxWorkers: 1, prepare: 'exit 3' } })
