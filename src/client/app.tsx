@@ -8,6 +8,7 @@ import { ExecutionStatus } from './execution.tsx'
 import { ticketMark } from './marks.ts'
 import { GLOSSARY, GLOSSARY_VALUES, en, zh, type DshSuperagentKey } from './locales.ts'
 import { OverviewPage } from './overview.tsx'
+import { JarvisPage } from './jarvis.tsx'
 import { MissionsPage } from './missions.tsx'
 import { SchedulesPage } from './schedules.tsx'
 import { SpeculationPage } from './speculation.tsx'
@@ -167,6 +168,7 @@ function Pages({ route, openTab, deploymentForm }: { route: Route; openTab: (tab
       case 'speculation': return <SpeculationPage key={route.id ?? 'list'} id={route.id} />
       case 'reflections': return <ReflectionsPage key={route.id ?? 'list'} id={route.id} />
       case 'overview': return <OverviewPage />
+      case 'jarvis': return <JarvisPage />
       case 'source': return <SourceStatus />
       case 'trigger': return route.id !== undefined ? <ThreadPage key={route.id} id={route.id} target={route.query?.trigger} />
         : <TriggerStatus filter={route.query?.filter ?? 'subscribed'} />
