@@ -1,0 +1,31 @@
+{
+  "kind": "explicit-storage-repair-ownership-finish",
+  "revision": "5d654998f64bab23fc3c83876c45704afc2578b5",
+  "recordedAt": "2026-11-15T09:52:47.240050+00:00",
+  "workflowRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43701133532",
+  "result": "success",
+  "classification": "VERIFIED on disposable native XFS; NOT DEPLOYED",
+  "hashes": {
+    "scripts/agentic_storage.py": "cf15d6796b49b45b71d3004629f9fd78760e5d8f3a4934da0cdf5f95b956e70b",
+    "scripts/agentic_storage_admin.py": "e17ca24a4ff7e920f81ca2ed368abc0768cc5a86d32555175b65ca3082f93a48",
+    "tests/fixtures/storage-crash-native.py": "df86dddd3cefbfcd8b55c4e03279ad464f501f7849b351cbe9cc7f0c5869605b",
+    "tests/fixtures/storage-repair-receipt-contract.py": "cb8589eedad80e77b90790d926d9982b81f4381d1142cb72aa0482a21668c28c"
+  },
+  "validation": [
+    "Four SQLite receipt contracts passed locally and in CI",
+    "Separate fresh approval completes root-private empty post-quota repair through root CLI",
+    "Wrong repair ID, original snapshot and fresh snapshot refused without changes",
+    "SIGKILL after first ownership change retains finishing phase and refuses replay",
+    "SIGKILL after verified full handoff recovers by observation only",
+    "Repeated successful handoff and original repair replay leave inode/ctime unchanged",
+    "Twelve native provisioning/repair/handoff crash cases passed",
+    "Existing scoped storage workflow including endpoint/coordinator recovery, installed service and Harness launcher passed",
+    "CI typecheck and builds passed"
+  ],
+  "limits": [
+    "No general orphan or endpoint-owned partial-state reconciliation",
+    "No earlier project-setup repair continuation",
+    "No registry migration/upgrade, backup/restore, reboot or power-loss acceptance",
+    "Full architecture qualification remains open"
+  ]
+}

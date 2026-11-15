@@ -842,3 +842,36 @@ SIGKILL boundaries recovered the exact original approval without changing the re
 passed the existing storage/endpoint/coordinator/installation/crash checks, typecheck and builds.
 See [evidence](evidence/086-storage-repair-receipts.json). Incomplete repair reconciliation, broader
 orphan handling and backup/restore remain open; no deployment or full architecture qualification.
+
+### Explicit ownership handoff after an interrupted repair
+
+`finish-repair --approval FILE` is a distinct root-operator action for a retained repair that stopped
+before handing ownership to the endpoint. The root-private approval JSON contains exactly `request`,
+`repairId`, `snapshotHash` (the original repair approval), and `finishSnapshotHash` (the newly reviewed
+inspection hash). It uses the same installation/config/registry command prefix as `repair`.
+
+Admission requires the original repair in `started`, both recorded roots still empty/root-owned/mode
+0700, exact assigned project IDs with inheritance and no realtime flags, exact hard limits, and quota
+inode usage matching the two roots. It does not create directories, apply projects, reset limits,
+adopt orphan trees or touch endpoint-owned trees. It appends the handoff snapshot to the original
+repair intent and commits `finishing` before changing ownership. Original request/repair IDs and
+original approval hash remain unchanged; inspection exposes the additional `finishSnapshotHash`.
+
+Repeating the same handoff approval only observes. A fully applied handoff whose reply was lost can
+be confirmed and marked complete. A handoff interrupted between the two ownership changes remains
+unverified; neither a fresh snapshot nor a new repair ID bypasses the retained action. Original
+`repair` replay likewise remains observation-only. Older host code refuses the extended repair intent
+rather than silently replaying it. Installation upgrade remains a separate unresolved workflow.
+
+This addresses the recorded empty/root-private post-quota interruption state. Earlier project-setup
+interruptions, unrecorded roots, endpoint-owned partial states, general reconciliation, backup/restore,
+whole-machine restart and final qualification remain open. Native results will be recorded separately.
+
+
+VERIFIED at `5d654998f64bab23fc3c83876c45704afc2578b5`: scoped Linux
+[run 43701133532](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43701133532)
+passed the explicit root CLI handoff, original identity/snapshot refusal checks, and twelve native
+crash cases. SIGKILL after the first ownership change remained held without replay; SIGKILL after
+complete handoff recovered by observation. Repeated approvals preserved inode/ctime. Four SQLite
+receipt contracts, existing scoped storage integration, typecheck and builds passed. See
+[handoff evidence](evidence/086-storage-repair-finish.json). No deployment or full qualification.

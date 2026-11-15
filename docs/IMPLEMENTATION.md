@@ -1320,3 +1320,11 @@ Browser/managed-launcher failure journeys, wider reconciliation, storage restore
 run 43700712481. Root inspection exposes the original repair ID/approval snapshot without mutation,
 including after interrupted repairs, enabling recovery of a lost approval file. It does not resume
 partial repairs. [Evidence](evidence/086-storage-repair-receipts.json); broader reconciliation remains open.
+
+
+086 interrupted repair ownership handoff: VERIFIED at `5d654998f64bab23fc3c83876c45704afc2578b5`,
+scoped Linux run 43701133532. A separately approved `finish-repair` completes only recorded empty
+root-private roots with already-correct quota/project state. The handoff approval persists before
+ownership changes; retries only observe. Native mid-handoff refusal and completed-handoff response-loss
+recovery passed. [Evidence](evidence/086-storage-repair-finish.json). Earlier project-setup interruptions,
+orphan/endpoint-owned reconciliation, upgrade/restore and final qualification remain open.
