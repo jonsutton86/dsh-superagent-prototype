@@ -73,6 +73,12 @@ def worker(mode):
     change = subprocess.run(['xfs_io', '-c', 'chproj 18', str(copy / 'released')], capture_output=True)
     assert project(copy / 'released') == 17, 'Sandbox changed quota membership'
     assert change.stderr, 'Expected an explicit membership-change denial'
+    # Removing inheritance would let future files escape even when the current project ID is unchanged.
+    change = subprocess.run(['xfs_io', '-c', 'chattr -P', str(workspace)], capture_output=True)
+    flags = subprocess.run(['xfs_io', '-r', '-c', 'stat', str(workspace)], check=True, capture_output=True, text=True)
+    match = re.search(r'fsxattr.xflags\s*=\s*(0x[0-9a-fA-F]+)', flags.stdout)
+    assert match and int(match.group(1), 16) & 0x200, 'Sandbox disabled project inheritance'
+    assert change.stderr, 'Expected an explicit inheritance-change denial'
     (copy / 'released').unlink()
     # Distinct inode exhaustion with no appreciable data allocation.
     created = []
@@ -96,7 +102,7 @@ def worker(mode):
     os.sync()
     (copy / 'after-inode-release').touch(exist_ok=False)
     return {'sharedTrees': True, 'independentProject': True, 'inheritedMembership': True,
-            'deletedOpenCharged': True, 'hardLinkDenied': True, 'membershipChangeDenied': True,
+            'deletedOpenCharged': True, 'hardLinkDenied': True, 'membershipChangeDenied': True, 'inheritanceChangeDenied': True,
             'byteLimitENOSPC': True, 'inodeLimitENOSPC': True, 'inodesCreatedBeforeLimit': len(created)}
 
 
