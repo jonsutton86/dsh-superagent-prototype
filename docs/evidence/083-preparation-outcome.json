@@ -1,0 +1,20 @@
+{
+  "status": "implemented_tested_not_integrated",
+  "baseRevision": "525807d6c7a913d20e644865d7d34aee1677931e",
+  "sources": {
+    "src/executor/preparation-outcome.ts": "ce7eca4617aee2c41b069deef8326d58263a4af72cc499db46108101bbe0dc46",
+    "tests/preparation-outcome.spec.ts": "e08f3d1f949cb6a2067bd485a151c3933d5c34d9fceb0ca8d62da0b75fad488f"
+  },
+  "tests": {
+    "command": "env -u GIT_CONFIG_GLOBAL ./node_modules/.bin/vitest run tests/preparation-outcome.spec.ts",
+    "exitCode": 0,
+    "passed": 5,
+    "logSha256": "5bf5d38fe548b6839fde2c792aa683db076b5a3768cdc6a1a6a7b3542b2cf3ff"
+  },
+  "typecheck": {
+    "command": "./node_modules/.bin/tsc --noEmit",
+    "exitCode": 0
+  },
+  "next": "Connect original preparation intent and typed outcome to durable stop authority and DshExecutor; existing failed-prepare integration remains red.",
+  "limitations": "Synthetic handles only; no installed-process or full qualification; default provider and runtime unchanged."
+}

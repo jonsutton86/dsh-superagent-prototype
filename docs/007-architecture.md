@@ -480,6 +480,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/executor/failure.ts` | Typed sanitized failure facts and exact live Agent/Session/assignment/turn/step fencing |
 | `src/executor/dsh.ts` | The DshExecutor, `WorkerSlots`, `ticketExecution`, `inputMessage` and `mandateInstructions` |
 | `src/executor/stop-model.ts`, `stop-store.ts`, `stops.ts` | Original-scope stop authority in the main Store, retained control receipts and execution admission holds |
+| `src/executor/preparation-outcome.ts` | Bounded original preparation observation separating command outcome from managed-range termination; durable integration pending |
 | `src/executor/stop-view-model.ts`, `stop-view.ts` | Shared bounded stop-hold projections for task, Inbox, mission and supervision views |
 | `src/client/stop-recovery.tsx` | Original stop inspection, observation-only recheck and retained operator confirmation through response loss |
 | `src/executor/background.ts` | A worker's background work in DeepSeek Harness, the shell jobs its Session owns (`ctx.jobs`) and its subagents (`ctx.subagents`): `runningJobs`, `untilQuiet`, `killJobs`, `collectJobs`, `stopSubagents`, `stopBackground`, `until`, and `cancelled`, the workers whose turn a stop of their subagents cancelled |
@@ -702,6 +703,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/cards.spec.ts` | The rules the built-in text must state, file by file |
 | `tests/model-surface.spec.ts` | Everything models read: tools, prompts, skills and inputs, checked against the tool schemas, the execution environment and the glossary, within a size budget per role |
 | `tests/deployment.spec.ts`, `tests/environment.spec.ts`, `tests/index.spec.ts` | The plugin configuration and setup, the agent's process environment, the plugin entry |
+| `tests/preparation-outcome.spec.ts` | Preparation command outcomes, unavailable range observation and bounded response loss |
 | `tests/service-script.spec.ts` | `scripts/dsh-superagent` against fake `ps`, `tmux` and `dsh` |
 | `tests/client-bundle.spec.ts` | Actual production browser factory with declared React modules and standalone watchdog entry mounted without a package resolver; rejects host-only or undeclared imports |
 | `tests/launcher.spec.ts` | Persistent installation, real detached process ownership, graceful restart, stop markers, locks, health identity and private browser shortcuts |
