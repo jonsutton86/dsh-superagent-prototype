@@ -1,6 +1,6 @@
 # 086 — Workspace storage quotas (design checkpoint)
 
-Status: source and focused native mechanism investigation complete; endpoint implementation pending. This increment does not advertise
+Status: host provisioning, authenticated service and original-operation recovery are implemented and tested; endpoint enrollment/dispatch integration remains pending. This increment does not advertise
 storage protection in endpoint capabilities. Harness remains the executor and existing provider defaults are unchanged.
 
 ## Observed write boundaries
@@ -257,3 +257,29 @@ preserving quota and cleanup accounting. Enrollment currently performs its own m
 the original storage intent and verified host root instead. Verification currently uses `stateDir/verification`; it must
 move to the workspace's assigned verification root, including cleanup/restart paths. These are concrete code changes still
 required, not accomplished by the service tests or a reason to bypass the startup guard.
+
+## Prepared namespace and initial endpoint identity
+
+The host registry now records a namespace-creation intent before creating the endpoint base and its workspaces/verification
+parents. Each root-owned parent is explicitly mode 0755 independent of service umask, synced, and bound to its observed
+device/inode in the host registry. Restart validates those identities and permissions; partial namespace records, foreign
+existing directories and root-owned replacement directories are not adopted or automatically recreated. Provisioning uses
+these prepared parents rather than creating them late. This closes the parent-directory ordering gap for journal startup.
+
+`RemoteJournal` accepts an optional administrator-assigned canonical endpoint UUID on first creation. If an original ID is
+already present, a different configured ID is rejected; the existing default UUID behavior remains unchanged. The native
+endpoint-client fixture now uses this supported constructor path with the real protected parent, rather than modifying
+its metadata table to install the fixture ID. It explicitly proves the endpoint user cannot write into that parent.
+
+Validation at `aded64bceaa006f00f11f22c64292063e37e9d31`: [run 43694039867](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43694039867)
+passed 13 native client/probe tests, the host namespace/recovery checks, slow-request/authentication checks, and existing
+mechanism fixture. The host fixture starts with umask 0077, verifies searchable protected parents, rejects an unfinished
+namespace intent without creating its directories, and rejects a replaced base directory. Local adjacent storage/remote
+checks passed 52 tests with two native skips before adding two explicit identity assertions; the final storage journal
+suite passed all 20 tests and typecheck passed. No full matrix/build/deployment was run.
+
+Next integration design: preserve this assigned ID through launcher/profile configuration; run startup filesystem and
+namespace proofs in an explicit quota allocation (do not grant write permission to the protected parent); bind enrollment
+to the original StorageProvisioning request; use the assigned per-workspace verification root; reobserve pinned storage
+at each execution boundary. Any persistent startup allocation must be visible in capacity accounting and reused by its
+original identity after restart. The endpoint's existing storage startup refusal remains until these paths are connected.

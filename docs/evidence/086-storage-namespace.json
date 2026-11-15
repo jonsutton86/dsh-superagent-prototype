@@ -1,0 +1,35 @@
+{
+  "kind": "protected-storage-namespace-bootstrap",
+  "revision": "aded64bceaa006f00f11f22c64292063e37e9d31",
+  "recordedAt": "2026-11-15T08:22:42.052821+00:00",
+  "workflowRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43694039867",
+  "result": "success",
+  "hashes": {
+    "scripts/agentic_storage.py": "945fb24a0f1ebf53f8ea80bf8c7f6b1dbe703760351dfd36d1772be8827c66fb",
+    "src/remote/journal.ts": "c0cf5ee7c3ad9db3a654a240e42a6982a10a32caff4509524c645366532b9c4a",
+    "tests/storage-journal.spec.ts": "13c1bf944f353ca6d5f84dbe52d87cdbbb0cbe4f2daebe2a3f237609a103e522",
+    "tests/storage-host-client.spec.ts": "509b651fdbc1395381fb6e4a1d46f3ba789e3b7a3acad5d497fab499023894bc",
+    "tests/fixtures/storage-host-native.py": "d280421afb696810ca865752953afc02f4e18bd58faadbf907b24360b1ca9c82"
+  },
+  "validation": {
+    "nativeVitestTests": 13,
+    "hostNamespace": "intent before mkdir, restrictive umask, original identities, partial intent refusal, replacement refusal passed",
+    "endpointClient": "unprivileged real journal opened on protected parent; parent write refused",
+    "localAdjacentRun": {
+      "passed": 52,
+      "nativeSkipped": 2
+    },
+    "finalStorageJournalTests": 20,
+    "typecheck": "passed",
+    "fullMatrix": "not run",
+    "build": "not run"
+  },
+  "remaining": [
+    "startup proof quota allocation and accounting",
+    "launcher assigned identity and supported installation",
+    "grant enrollment and verification-root wiring",
+    "fresh execution-boundary validation",
+    "migration/operator reconciliation and clean-host/reboot",
+    "deployment"
+  ]
+}
