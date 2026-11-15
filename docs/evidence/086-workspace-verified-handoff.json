@@ -1,0 +1,19 @@
+{
+  "revision": "e5c198f1df6a2274a29a82c57757dd6083c9ad8e",
+  "classification": "VERIFIED",
+  "validation": {
+    "workspaceTests": 6,
+    "typecheck": "passed",
+    "finalChange": "Whitespace-only indentation after checks"
+  },
+  "evidence": [
+    "Consumer receives private files copied during the same reads that establish content hashes",
+    "Source replacement after verification does not affect consumed bytes",
+    "Private copies reverify successfully and are removed on success and consumer failure"
+  ],
+  "limits": [
+    "No encryption or checkpoint membership yet",
+    "No source authority, quiescence or restore claim",
+    "Private copies are temporary; consumer must durably commit its own output before returning"
+  ]
+}

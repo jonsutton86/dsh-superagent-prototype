@@ -1341,3 +1341,19 @@ Verification reports content integrity only; source authority, execution quiesce
 and restore permission remain false. Checkpoint integration must capture verified
 private copies or hold pinned inputs through consumption, rather than verify mutable
 paths and later reopen them. No extraction or running-app integration is enabled.
+
+### Verified private content handoff
+
+The archive verifier now optionally passes temporary private copies to a consumer,
+copying bytes during the same reads used to verify their hashes. The callback runs
+only after the complete archive passes all checks. It receives the original verified
+manifest bytes and generated content members, and cleanup runs on success or failure.
+Consumers must finish durable processing before returning; paths must not be retained
+for later use. This replaces the unsafe pattern of verifying paths then reopening
+potentially changed source files.
+
+Six focused tests and typecheck passed. The handoff test replaces the original
+archive content inside the callback, confirms the private bytes remain original,
+re-verifies the private copy, and checks cleanup on success and callback failure.
+[Receipt](evidence/086-workspace-verified-handoff.json). Encryption and authenticated
+checkpoint membership are next; source quiescence and restoration remain unverified.
