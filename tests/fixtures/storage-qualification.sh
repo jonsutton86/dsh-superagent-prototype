@@ -23,3 +23,4 @@ xfs_quota -x -c 'enable -p' "$fixture/volume"
 DSH_STORAGE_PROBE_ROOT="$fixture/volume" pnpm exec vitest run tests/storage-probe.spec.ts
 
 python3 "$(dirname "$0")/storage-host-native.py" "$fixture/volume" "$1" "$2"
+python3 "$(dirname "$0")/storage-service-native.py" "$fixture/volume" "$1" "$2"
