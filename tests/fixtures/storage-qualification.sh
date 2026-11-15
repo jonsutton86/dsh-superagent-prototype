@@ -31,3 +31,5 @@ DSH_STORAGE_PROBE_ROOT="$fixture/volume" pnpm exec vitest run tests/storage-prob
 python3 "$(dirname "$0")/storage-host-native.py" "$fixture/volume" "$1" "$2"
 
 python3 "$(dirname "$0")/storage-install-native.py" "$fixture/volume" "$1" "$2"
+
+python3 "$(dirname "$0")/storage-crash-native.py" "$fixture/volume" "$1" "$2"
