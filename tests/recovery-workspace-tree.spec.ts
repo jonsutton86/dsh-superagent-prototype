@@ -1,8 +1,10 @@
+import { createRecoveryKey } from '../src/recovery/crypto.ts'
+import { encryptWorkspaceRecovery, verifyEncryptedWorkspaceRecovery } from '../src/recovery/workspace-encrypted.ts'
 import { verifyWorkspaceRecovery } from '../src/recovery/workspace-verify.ts'
 import { createHash } from 'node:crypto'
 import { captureWorkspaceRecovery } from '../src/recovery/workspace-archive.ts'
 import { it, expect } from 'vitest'
-import { mkdtemp, mkdir, writeFile, symlink, link, rm, chmod, readFile, stat } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, symlink, link, rm, chmod, readFile, stat, readdir, realpath } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { inventoryWorkspaceRecovery } from '../src/recovery/workspace-tree.ts'
@@ -114,5 +116,28 @@ it('hands off verified private copies despite later source replacement and alway
       copied = directory; throw new Error('consumer failed')
     })).rejects.toThrow('consumer failed')
     await expect(stat(copied)).rejects.toMatchObject({ code: 'ENOENT' })
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+it('encrypts verified workspace bytes and refuses wrong keys or changed ciphertext', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'recovery-archive-encrypted-')))
+  try {
+    const source = join(root, 'source'); await mkdir(source, { mode: 0o700 })
+    await writeFile(join(source, 'private-name'), 'private workspace content retained exactly')
+    const plain = await captureWorkspaceRecovery(source, join(root, 'plain'), budget)
+    const key = join(root, 'key'), wrong = join(root, 'wrong'); createRecoveryKey(key); createRecoveryKey(wrong)
+    const encrypted = await encryptWorkspaceRecovery(plain.path, join(root, 'encrypted'), key)
+    const checked = await verifyEncryptedWorkspaceRecovery(encrypted.path, key, new AbortController().signal, async directory => {
+      expect(await readFile(join(directory, 'content-0.bin'), 'utf8')).toBe('private workspace content retained exactly')
+    })
+    expect(checked).toMatchObject({ encryptionVerified: true, contentVerified: true, sourceAuthorityVerified: false, restoreVerified: false })
+    expect(checked.manifest.entries).toEqual(plain.manifest.entries)
+    for (const name of await readdir(encrypted.path)) expect((await readFile(join(encrypted.path, name))).includes(Buffer.from('private workspace content retained exactly'))).toBe(false)
+    await expect(verifyEncryptedWorkspaceRecovery(encrypted.path, wrong)).rejects.toThrow()
+    const cipher = join(encrypted.path, 'content-0.bin'), data = await readFile(cipher); data[0] = data[0]! ^ 1; await writeFile(cipher, data)
+    await expect(verifyEncryptedWorkspaceRecovery(encrypted.path, key)).rejects.toThrow()
+    await expect(encryptWorkspaceRecovery(plain.path, encrypted.path, key)).rejects.toMatchObject({ code: 'EEXIST' })
+    const embeddedKey = join(source, 'embedded-key'); createRecoveryKey(embeddedKey)
+    await expect(encryptWorkspaceRecovery(plain.path, join(root, 'refused-key'), embeddedKey)).rejects.toThrow('original workspace')
   } finally { await rm(root, { recursive: true, force: true }) }
 })
