@@ -1,3 +1,4 @@
+import { verifyHeldWorkspaceCandidate } from './workspace-candidate.ts'
 import { stageWorkspaceRecovery } from './workspace-stage.ts'
 import { verifyWorkspaceRecovery } from './workspace-verify.ts'
 import { verifyWorkspaceMembers } from './workspace-members.ts'
@@ -403,5 +404,26 @@ export async function stageCheckpointWorkspace(path: string, keyFile: string, so
     })
     if (!candidate) throw new Error('Checkpoint workspace reconstruction did not produce a held candidate')
     return candidate
+  } finally { await rm(verified.directory, { recursive: true, force: true }) }
+}
+
+
+/** Reauthenticate an existing candidate after response loss; no reconstruction, settlement or execution. */
+export async function verifyCheckpointWorkspaceCandidate(path: string, keyFile: string, source: string, destination: string,
+  signal = new AbortController().signal) {
+  const verified = await unpack(path, keyFile, signal)
+  try {
+    const binding = verified.manifest.workspaceArchives?.find(item => item.source === source)
+    if (!binding) throw new Error('Checkpoint has no archive for the selected original workspace')
+    const selected = new Set([binding.manifestMember, ...binding.content.map(item => item.member)])
+    const files = verified.manifest.files.filter(file => selected.has(file.member))
+    const origin = { checkpointId: verified.manifest.id, workspaceManifestSHA256: files.find(file => file.member === binding.manifestMember)!.sha256 }
+    let candidate: Awaited<ReturnType<typeof verifyHeldWorkspaceCandidate>> | undefined
+    await verifyWorkspaceMembers(verified.directory, [binding], files, signal, async archive => {
+      const original = await verifyWorkspaceRecovery(archive, signal)
+      candidate = await verifyHeldWorkspaceCandidate(destination, original.manifest, origin, signal)
+    })
+    if (!candidate) throw new Error('Checkpoint workspace candidate was not verified')
+    return { ...candidate, checkpointAuthenticated: true as const }
   } finally { await rm(verified.directory, { recursive: true, force: true }) }
 }

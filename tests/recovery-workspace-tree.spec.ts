@@ -1,3 +1,4 @@
+import { verifyHeldWorkspaceCandidate } from '../src/recovery/workspace-candidate.ts'
 import { stageWorkspaceRecovery } from '../src/recovery/workspace-stage.ts'
 import { validateWorkspaceMembers, verifyWorkspaceMembers } from '../src/recovery/workspace-members.ts'
 import { createRecoveryKey } from '../src/recovery/crypto.ts'
@@ -6,7 +7,7 @@ import { verifyWorkspaceRecovery } from '../src/recovery/workspace-verify.ts'
 import { createHash } from 'node:crypto'
 import { captureWorkspaceRecovery } from '../src/recovery/workspace-archive.ts'
 import { it, expect, vi } from 'vitest'
-import { mkdtemp, mkdir, writeFile, symlink, link, rm, chmod, readFile, stat, readdir, realpath, copyFile, readlink } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, symlink, link, rm, chmod, readFile, stat, readdir, realpath, copyFile, readlink, rename } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { inventoryWorkspaceRecovery } from '../src/recovery/workspace-tree.ts'
@@ -214,4 +215,28 @@ it('retains the original preparing hold after cancellation during reconstruction
     expect(await readFile(join(source, 'file'), 'utf8')).toBe('retained')
     await expect(stageWorkspaceRecovery(archive.path, target)).rejects.toMatchObject({ code: 'EEXIST' })
   } finally { stageFault.abort = undefined; await rm(root, { recursive: true, force: true }) }
+})
+
+
+it('refuses changed candidate metadata, exposed modes and replaced workspace roots without mutating the hold', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'recovery-candidate-check-')))
+  try {
+    const source = join(root, 'source'); await mkdir(source, { mode: 0o700 }); await writeFile(join(source, 'file'), 'retained')
+    const archive = await captureWorkspaceRecovery(source, join(root, 'archive'), budget)
+    const expected = (await verifyWorkspaceRecovery(archive.path)).manifest
+    const origin = { checkpointId: '11111111-1111-4111-8111-111111111111', workspaceManifestSHA256: createHash('sha256').update(await readFile(join(archive.path, 'manifest.json'))).digest('hex') }
+    const staged = await stageWorkspaceRecovery(archive.path, join(root, 'held'), new AbortController().signal, origin)
+    const inspect = () => verifyHeldWorkspaceCandidate(staged.path, expected, origin, new AbortController().signal)
+    expect((await inspect()).id).toBe(staged.id)
+    const hold = await readFile(join(staged.path, 'hold.json'))
+    await chmod(join(staged.workspace, 'file'), 0o644)
+    await expect(inspect()).rejects.toThrow('modes changed')
+    await chmod(join(staged.workspace, 'file'), 0o600)
+    await writeFile(join(staged.path, 'source-manifest.json'), '{}')
+    await expect(inspect()).rejects.toThrow('source manifest differs')
+    await copyFile(join(archive.path, 'manifest.json'), join(staged.path, 'source-manifest.json'))
+    await rename(staged.workspace, join(root, 'saved-workspace')); await symlink(source, staged.workspace)
+    await expect(inspect()).rejects.toThrow('root was replaced')
+    expect(await readFile(join(staged.path, 'hold.json'))).toEqual(hold)
+  } finally { await rm(root, { recursive: true, force: true }) }
 })

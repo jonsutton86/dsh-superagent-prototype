@@ -7,7 +7,7 @@ import Jsonl from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { Store } from '../src/app/store.ts'
 import { KV } from '../src/kv.ts'
-import { createCheckpoint, verifyCheckpoint, stageCheckpoint, stageCheckpointWorkspace } from '../src/recovery/checkpoint.ts'
+import { createCheckpoint, verifyCheckpoint, stageCheckpoint, stageCheckpointWorkspace, verifyCheckpointWorkspaceCandidate } from '../src/recovery/checkpoint.ts'
 import { ReceiptImage, sealReceiptImage, verifyReceiptImage, requireInstallableStorageImage } from '../src/recovery/image.ts'
 import { createRecoveryKey, recoveryKey, seal, unseal } from '../src/recovery/crypto.ts'
 import { createHash, randomUUID } from 'node:crypto'
@@ -248,6 +248,13 @@ it('captures verified storage pairs in an encrypted checkpoint and preserves the
     expect(await verifyCheckpoint(checkpoint.path, keyFile)).toEqual(checkpoint.manifest)
     const candidate = await stageCheckpointWorkspace(checkpoint.path, keyFile, workspace, join(directory, 'workspace-held'))
     expect(candidate.origin?.checkpointId).toBe(checkpoint.manifest.id)
+    const observed = await verifyCheckpointWorkspaceCandidate(checkpoint.path, keyFile, workspace, candidate.path)
+    expect(observed).toMatchObject({ id: candidate.id, checkpointAuthenticated: true, contentVerified: true, executionOwnership: false })
+    const holdBefore = await readFile(join(candidate.path, 'hold.json'))
+    await writeFile(join(candidate.workspace, 'retained.txt'), 'modified content')
+    await expect(verifyCheckpointWorkspaceCandidate(checkpoint.path, keyFile, workspace, candidate.path)).rejects.toThrow('differs')
+    expect(await readFile(join(candidate.path, 'hold.json'))).toEqual(holdBefore)
+    await writeFile(join(candidate.workspace, 'retained.txt'), 'workspace content')
     expect(await readFile(join(candidate.workspace, 'retained.txt'), 'utf8')).toBe('workspace content')
     expect(JSON.parse(await readFile(join(candidate.path, 'hold.json'), 'utf8'))).toMatchObject({ state: 'held', executionOwnership: false, origin: candidate.origin })
     await expect(stageCheckpointWorkspace(checkpoint.path, keyFile, '/unregistered', join(directory, 'unknown-held'))).rejects.toThrow('no archive')
