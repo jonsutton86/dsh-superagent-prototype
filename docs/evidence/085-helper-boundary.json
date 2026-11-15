@@ -1,0 +1,24 @@
+{
+  "kind": "workspace-resource-trusted-helper",
+  "recordedAt": "2026-11-15T07:25:49.398753+00:00",
+  "runtimeRevision": "08878b3",
+  "files": {
+    "src/remote/resource-worker.ts": "6b6025fe081299b956e955774ffc206a2b831d3d53b4adfab4400e62272d9b5c",
+    "tests/resource-worker.spec.ts": "5205985c45256e1c440298b2df7b8a283bdd5e737e438051c5e5a52aa5ec8b03"
+  },
+  "command": "vitest run tests/resource-worker.spec.ts",
+  "passed": 6,
+  "failed": 0,
+  "log": "/tmp/dsh-085-helper.log",
+  "typecheck": {
+    "exitCode": 0,
+    "log": "/tmp/dsh-085-helper-typecheck.log"
+  },
+  "verified": [
+    "Actual helper source executes only after exact policy and membership checks for legacy and nested layouts.",
+    "Changed command/workspace/pool memory ceiling refuses before joining or execve.",
+    "Unconfirmed group membership refuses execve.",
+    "Failure diagnostics omit supplied command argument and environment payload."
+  ],
+  "limitations": "Filesystem/process interfaces explicitly simulated; no native kernel enforcement, actual execve, deployment or provider traffic. Verification-stage attribution and native aggregate acceptance remain pending."
+}

@@ -97,3 +97,12 @@ unconfined isolation to verify read, write and command attribution from the stor
 label does not select another allocation. `evidence/085-recovery-attribution.json` records 17 passing resource tests (one
 native case skipped), the final write-attribution check and typecheck. These checks do not establish native cgroup
 limits, verification-stage coverage, complete Runtime restart or clean-host recovery.
+
+
+## Trusted helper checks
+
+Six focused tests execute the actual pre-exec helper module with explicitly simulated filesystem/process interfaces.
+Both hierarchy layouts require exact limits and membership before exec. A changed command, workspace or pool ceiling
+refuses before joining; unconfirmed membership refuses execution. Failure diagnostics contain neither the supplied
+argument nor environment payload. `evidence/085-helper-boundary.json` records hashes and typecheck. Native kernel,
+verification-stage attribution and full platform acceptance remain open.
