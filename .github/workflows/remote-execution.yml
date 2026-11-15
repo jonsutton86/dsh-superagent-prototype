@@ -5,6 +5,12 @@ on:
     branches: [feat/full-superagent-architecture]
   pull_request:
   workflow_dispatch:
+    inputs:
+      scope:
+        description: Qualification scope
+        type: choice
+        options: [full, resources]
+        default: full
 
 permissions:
   contents: read
@@ -31,14 +37,21 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
       - name: Install pinned Harness for real endpoint launch qualification
+        if: github.event_name != 'workflow_dispatch' || inputs.scope != 'resources'
         run: |
           npm install --prefix "$RUNNER_TEMP/agentic-endpoint-harness" --no-audit --no-fund @deepseek-ai/dsh@0.2.1-rc.3
           echo "DSH_ENDPOINT_QUALIFICATION_CLI=$RUNNER_TEMP/agentic-endpoint-harness/node_modules/.bin/dsh" >> "$GITHUB_ENV"
           echo "DSH_ABLITERATION_ADAPTER_PACKAGE=$RUNNER_TEMP/agentic-endpoint-harness/node_modules/@deepseek-ai/dsh-llm-pi-ai" >> "$GITHUB_ENV"
-      - name: Check the complete suite with native confinement enabled
+      - name: Check selected scope with native confinement enabled
+        env:
+          QUALIFICATION_SCOPE: ${{ inputs.scope }}
         run: |
           pnpm typecheck
           pnpm build
+          qualification_tests=(pnpm test --maxWorkers=4)
+          if [[ "$QUALIFICATION_SCOPE" == resources ]]; then
+            qualification_tests=(pnpm exec vitest run tests/remote-resources.spec.ts tests/resource-worker.spec.ts)
+          fi
           sudo systemd-run --wait --pipe --collect --service-type=exec \
             --unit="agentic-qualification-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --uid="$(id -u)" --property='Delegate=cpu memory pids' \
@@ -49,8 +62,9 @@ jobs:
             --setenv=DSH_SUPERVISION_ENDURANCE_QUALIFICATION=1 --setenv=DSH_EXECUTOR_STOP_QUALIFICATION=1 \
             --setenv="DSH_ABLITERATION_ADAPTER_PACKAGE=$DSH_ABLITERATION_ADAPTER_PACKAGE" \
             --setenv="DSH_ENDPOINT_QUALIFICATION_CLI=$DSH_ENDPOINT_QUALIFICATION_CLI" \
-            /bin/bash "$PWD/tests/fixtures/resource-qualification.sh" pnpm test --maxWorkers=4
+            /bin/bash "$PWD/tests/fixtures/resource-qualification.sh" "${qualification_tests[@]}"
       - name: Qualify native services and SSH transport with pinned Harness
+        if: github.event_name != 'workflow_dispatch' || inputs.scope != 'resources'
         run: |
           export XDG_RUNTIME_DIR="/run/user/$(id -u)"
           export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
