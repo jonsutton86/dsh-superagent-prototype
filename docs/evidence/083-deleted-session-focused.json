@@ -1,0 +1,16 @@
+{
+  "status": "focused_pass_increment_incomplete",
+  "baseRevision": "1bb2cff872859e8b9187938ef0b5b70f6b61dd50",
+  "sourceSha256": "055aaf19557831b7a6038fe15c5bd1ba8ac7104b7d1957fd2f844123ec15f9ae",
+  "command": "env -u GIT_CONFIG_GLOBAL ./node_modules/.bin/vitest run tests/runtime-concurrency.spec.ts -t 'creates a worker Session someone deleted'",
+  "exitCode": 0,
+  "passed": 1,
+  "deselected": 60,
+  "logSha256": "333251e7fb9bba218e6cb5e924ceec11a35c9ae3d81380b868a02bc26899e1bc",
+  "typecheck": {
+    "command": "./node_modules/.bin/tsc --noEmit",
+    "exitCode": 0
+  },
+  "criterion": "Deleted worker keeps input held until explicit original-scope operator evidence is accepted; original queued input subsequently delivers to recreated Session.",
+  "limitations": "Synthetic Runtime fixture; does not establish actual process termination or production deployment."
+}

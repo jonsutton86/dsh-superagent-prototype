@@ -139,6 +139,16 @@ it('wakes an idle worker for a bot\'s Input only when a worker slot is free, and
   h.agents.delete(one.sessionId)
   vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 6000 })
   try { await h.runtime.pump(); await h.runtime.idle() } finally { vi.useRealTimers() }
+  // Deleting a Session is not evidence that its original work terminated.
+  expect(h.runtime.store.tickets.get(one.ticket.id)!.undelivered).toHaveLength(1)
+  expect(h.agents.has(one.sessionId)).toBe(false)
+  const stop = h.runtime.executor.stops.list(one.ticket.id).items[0]!
+  expect(stop.state).toBe('unknown')
+  const result = await h.runtime.executor.stops.attest(stop.id, { schema: 1, requestId: 'deleted-session-original-stop',
+    expectedRevision: stop.revision, executionBindingHash: stop.executionBindingHash, scopeHash: stop.scopeHash,
+    confirmed: true, note: 'Fixture operator inspected the original scope; no jobs or descendants remain.' })
+  expect(result.receipt.phase).toBe('accepted')
+  await h.runtime.idle()
   expect(h.runtime.store.tickets.get(one.ticket.id)!.undelivered).toEqual([])
   expect(h.agents.get(one.sessionId)!.status).toBe('running')
 })
