@@ -47,7 +47,7 @@ def configuration(source, api):
     for key in required - {'host', 'user'}:
         path(source[key])
     enrollment = api.read_json(Path(source['enrollmentFile']))
-    if not isinstance(enrollment, dict) or set(enrollment) - {'file', 'endpointId', 'url', 'credentialFile', 'platform', 'confinement', 'maxRunning', 'outputMaxBytes', 'transport', 'ownership', 'resources'}:
+    if not isinstance(enrollment, dict) or set(enrollment) - {'file', 'endpointId', 'url', 'credentialFile', 'platform', 'confinement', 'maxRunning', 'outputMaxBytes', 'transport', 'ownership', 'resources', 'storage'}:
         raise RuntimeError('Use enrollment metadata exported by the managed endpoint launcher.')
     if str(uuid.UUID(enrollment['endpointId'])) != enrollment['endpointId'] or enrollment['platform'] != 'linux' or enrollment['confinement'] != 'linux-bubblewrap':
         raise RuntimeError('Transport enrollment requires a pinned Linux bubblewrap endpoint.')
@@ -63,6 +63,11 @@ def configuration(source, api):
         if not isinstance(owner, dict) or set(owner) != {'authorityId', 'coordinatorId', 'resourceId'} or str(uuid.UUID(owner['authorityId'])) != owner['authorityId'] or not all(isinstance(owner[key], str) and re.fullmatch(r'[A-Za-z0-9_-]{1,100}', owner[key]) for key in ('coordinatorId', 'resourceId')):
             raise RuntimeError('Invalid endpoint ownership binding.')
         endpoint['ownership'] = owner
+    if 'storage' in enrollment:
+        storage = enrollment['storage']
+        if not isinstance(storage, dict) or set(storage) != {'policy'}:
+            raise RuntimeError('Invalid endpoint storage binding.')
+        endpoint['storage'] = {'policy': agentic_endpoint.storage_policy(storage['policy'])}
     if 'resources' in enrollment:
         resource = enrollment['resources']
         if not isinstance(resource, dict) or resource.get('kind') != 'linux-cgroup-v2' or resource.get('ready') is not True:
@@ -180,7 +185,7 @@ def health(root, value, no_redirect):
             return None
         observed_resources = result.get('resources')
         resource_pin = {key: observed_resources.get(key) for key in ('kind', 'ready', 'policy')} if isinstance(observed_resources, dict) else observed_resources
-        if result.get('ownership') != endpoint.get('ownership') or resource_pin != endpoint.get('resources'):
+        if result.get('ownership') != endpoint.get('ownership') or resource_pin != endpoint.get('resources') or result.get('storage') != endpoint.get('storage'):
             return None
         return {'health': {'runtime': {'state': 'ready'}}, 'endpoint': {**endpoint, **({'resources': observed_resources} if observed_resources else {})}}
     except (OSError, ValueError, TypeError, KeyError, AttributeError, RuntimeError):

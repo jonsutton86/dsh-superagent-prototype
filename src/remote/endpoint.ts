@@ -164,6 +164,7 @@ export class RemoteEndpoint {
   }
   identity(): EndpointIdentity {
     return { protocol: 1, id: this.journal.id, platform: process.platform, confinement: this.host.isolation.name,
+      ...(this.storage ? { storage: { policy: this.storage.reservations.policy } } : {}),
       ...(this.host.resources ? { resources: this.host.resources.status() } : {}),
       ...(this.host.ownership ? { ownership: { authorityId: this.host.ownership.authorityId, coordinatorId: this.host.ownership.coordinatorId, resourceId: this.host.ownership.resourceId } } : {}),
       capabilities: { filesystem: true, process: true, terminal: false, interactiveStdin: false, controlChannel: false, outputWindow: MAX_WINDOW, effectOwnership: true, administration: true,

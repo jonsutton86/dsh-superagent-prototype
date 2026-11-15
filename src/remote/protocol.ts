@@ -4,6 +4,7 @@ import type { FsEditOutcome, FsWriteOutcome } from '@deepseek-ai/dsh-fs'
 import type { OwnershipStamp } from '../ownership/protocol.ts'
 import { InventoryPage, InventoryRequest, ReceiptRequest } from '../ownership/inventory.ts'
 import { VerificationJob, type CheckEvidence } from '../verification/model.ts'
+import type { EndpointStorage } from './storage-model.ts'
 import type { ResourceStatus, ResourceUsage } from './resource-model.ts'
 
 export const REMOTE_VERSION = 1
@@ -93,6 +94,8 @@ export interface GrantReceipt { grant: RemoteGrant; credential?: string }
 export interface RevocationReceipt { grantId: string; epoch: number; at: string; quiescent: boolean }
 export interface EndpointIdentity {
   protocol: 1; id: string; platform: string; confinement: string
+  /** Pinned configuration only; each operation obtains its own fresh host observation. */
+  storage?: { policy: EndpointStorage }
   resources?: ResourceStatus
   ownership?: { authorityId: string; coordinatorId: string; resourceId: string }
   capabilities: { filesystem: true; process: true; terminal: false; interactiveStdin: false; controlChannel: false; outputWindow: number; effectOwnership?: true; credentialBindings?: true; administration?: true; snapshotVerification?: true }

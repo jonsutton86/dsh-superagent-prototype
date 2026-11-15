@@ -18,9 +18,13 @@ SYSTEM_MOUNTS = ('/usr', '/bin', '/sbin', '/lib', '/lib64', '/etc', '/dev', '/pr
 def validate_directory(root, config=None):
     if any(root.is_relative_to(Path(path)) for path in SYSTEM_MOUNTS):
         raise RuntimeError('Endpoint installations must be outside the system runtime mounts.')
+    if config and config.get('storage'):
+        mount = Path(config['storage']['policy']['mountRoot']).resolve()
+        if root.is_relative_to(mount) or mount.is_relative_to(root):
+            raise RuntimeError('Storage mount and private endpoint installation must be separate directories.')
     if config and config.get('ownership'):
         credential = Path(config['ownership']['credentialFile']).resolve()
-        if credential.is_relative_to(root / 'workspaces') or any(credential.is_relative_to(Path(path)) for path in SYSTEM_MOUNTS):
+        if credential.is_relative_to(workspace_root(root, config)) or any(credential.is_relative_to(Path(path)) for path in SYSTEM_MOUNTS):
             raise RuntimeError('Ownership credentials must be outside endpoint workspaces and system runtime mounts.')
 
 
@@ -47,14 +51,55 @@ def private_bytes(path, maximum=4096):
         return content
 
 
+def require(condition):
+    if not condition:
+        raise RuntimeError('Invalid endpoint storage configuration.')
+
+def canonical(value, maximum):
+    return isinstance(value, str) and len(value.encode()) < maximum and value.startswith('/') and not any(c in value for c in '\x00\n\r') and all(part not in ('', '.', '..') for part in value.split('/')[1:])
+
+def identifier(value):
+    try:
+        return isinstance(value, str) and str(uuid.UUID(value)) == value
+    except (ValueError, AttributeError):
+        return False
+
+def storage_policy(policy):
+    require(isinstance(policy, dict) and set(policy) == {'kind', 'filesystemUUID', 'mountRoot', 'projectIds', 'pool', 'workspace'})
+    require(policy['kind'] == 'linux-xfs-project' and identifier(policy['filesystemUUID']) and canonical(policy['mountRoot'], 4097))
+    ids = policy['projectIds']
+    require(isinstance(ids, dict) and set(ids) == {'first', 'last'})
+    require(all(type(ids[key]) is int and 1 <= ids[key] <= 2 ** 32 - 1 for key in ids) and ids['first'] < ids['last'])
+    for name in ('pool', 'workspace'):
+        budget = policy[name]
+        require(isinstance(budget, dict) and set(budget) == {'bytes', 'inodes'})
+        require(type(budget['bytes']) is int and 4096 <= budget['bytes'] <= 1024 ** 4 and budget['bytes'] % 4096 == 0)
+        require(type(budget['inodes']) is int and 1 <= budget['inodes'] <= 2 ** 32 - 1)
+    require(all(2 * policy['workspace'][key] <= policy['pool'][key] for key in ('bytes', 'inodes')))
+    return json.loads(json.dumps(policy))
+
+
+def storage_configuration(value):
+    require(isinstance(value, dict) and set(value) == {'endpointId', 'socketPath', 'policy'})
+    require(identifier(value['endpointId']) and canonical(value['socketPath'], 104))
+    return {**value, 'policy': storage_policy(value['policy'])}
+
+
+def workspace_root(root, config):
+    storage = config.get('storage')
+    return Path(storage['policy']['mountRoot']) / ('dsh-' + storage['endpointId']) / 'workspaces' if storage else root / 'workspaces'
+
+
 def configuration(value):
-    if not isinstance(value, dict) or set(value) - {'allowedEnv', 'maxRunning', 'outputMaxBytes', 'ownership', 'resources'}:
-        raise RuntimeError('Endpoint configuration accepts only allowedEnv, maxRunning, outputMaxBytes, ownership and resources.')
+    if not isinstance(value, dict) or set(value) - {'allowedEnv', 'maxRunning', 'outputMaxBytes', 'ownership', 'resources', 'storage'}:
+        raise RuntimeError('Endpoint configuration accepts only allowedEnv, maxRunning, outputMaxBytes, ownership, resources and storage.')
     result = {'allowedEnv': value.get('allowedEnv', []), 'maxRunning': value.get('maxRunning', 8), 'outputMaxBytes': value.get('outputMaxBytes', 8388608)}
     if not isinstance(result['allowedEnv'], list) or len(result['allowedEnv']) > 100 or not all(isinstance(name, str) and re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]{0,99}', name) for name in result['allowedEnv']):
         raise RuntimeError('Endpoint allowedEnv must be a bounded list of environment variable names.')
     if type(result['maxRunning']) is not int or not 1 <= result['maxRunning'] <= 32 or type(result['outputMaxBytes']) is not int or not 65536 <= result['outputMaxBytes'] <= 67108864:
         raise RuntimeError('Endpoint limits require 1–32 running commands and 64 KiB–64 MiB retained output per stream.')
+    if 'storage' in value:
+        result['storage'] = storage_configuration(value['storage'])
     if 'resources' in value:
         resources = value['resources']
         if not isinstance(resources, dict) or (set(resources) - {'cgroupRoot', 'pool', 'command', 'workspace'} or {'cgroupRoot', 'pool', 'command'} - set(resources)):
@@ -106,7 +151,7 @@ def launch_patch(root, installation):
         {'id': 'dsh-superagent-github', 'disabled': True}, {'id': 'dsh-superagent-feishu', 'disabled': True},
         {'id': 'session-title-llm', 'disabled': True},
         {'insert': [{'id': 'agentic-execution-endpoint', 'name': 'dsh-superagent/remote-endpoint',
-                     'config': {'stateDir': str(root / 'state'), 'workspaceRoot': str(root / 'workspaces'), **installation['endpointConfig']}}]},
+                     'config': {'stateDir': str(root / 'state'), 'workspaceRoot': str(workspace_root(root, installation['endpointConfig'])), **installation['endpointConfig']}}]},
     ]
 
 
@@ -152,9 +197,17 @@ def health(root, installation, no_redirect):
                 return None
         elif observed_resources is not None:
             return None
+        expected_storage = installation['endpointConfig'].get('storage')
+        observed_storage = result.get('storage')
+        if expected_storage:
+            if identity != expected_storage['endpointId'] or observed_storage != {'policy': expected_storage['policy']}:
+                return None
+        elif observed_storage is not None:
+            return None
         return {'health': {'runtime': {'state': 'ready'}}, 'setup': {'machine': {'stateDir': str(root / 'state')}, 'problem': None},
                 'endpoint': {'id': identity, 'protocol': 1, 'platform': 'linux', 'confinement': 'linux-bubblewrap',
-                             **({'resources': observed_resources} if expected_resources else {})}, 'adminHash': fingerprint}
+                             **({'resources': observed_resources} if expected_resources else {}),
+                             **({'storage': observed_storage} if expected_storage else {})}, 'adminHash': fingerprint}
     except (OSError, ValueError, TypeError, KeyError, AttributeError, RuntimeError, sqlite3.Error):
         return None
 
@@ -168,6 +221,8 @@ def enrollment(root, installation, current):
             'transport': 'For another host, use an authenticated tunnel or HTTPS and transport the credential into a private file on the coordinator.'}
     if 'ownership' in installation['endpointConfig']:
         result['ownership'] = {key: installation['endpointConfig']['ownership'][key] for key in ('authorityId', 'coordinatorId', 'resourceId')}
+    if 'storage' in installation['endpointConfig']:
+        result['storage'] = current['endpoint']['storage']
     if 'resources' in installation['endpointConfig']:
         result['resources'] = current['endpoint']['resources']
     return result

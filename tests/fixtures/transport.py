@@ -59,6 +59,16 @@ class TransportTests(unittest.TestCase):
             with self.assertRaises((RuntimeError, ValueError)):
                 t.configuration(self.config, api)
 
+        storage = {'policy': {'kind': 'linux-xfs-project', 'filesystemUUID': str(uuid()), 'mountRoot': '/srv/quota',
+            'projectIds': {'first': 100, 'last': 110}, 'pool': {'bytes': 40960, 'inodes': 100},
+            'workspace': {'bytes': 4096, 'inodes': 10}}}
+        api.save(self.base / 'endpoint.json', {**self.endpoint, 'storage': storage})
+        self.assertEqual(t.configuration(self.config, api)[0]['endpoint']['storage'], storage)
+        storage['policy']['workspace']['bytes'] = 40960
+        api.save(self.base / 'endpoint.json', {**self.endpoint, 'storage': storage})
+        with self.assertRaises(RuntimeError):
+            t.configuration(self.config, api)
+
     def test_pins(self):
         first = self.init()
         self.assertEqual(self.init(), first)
@@ -138,7 +148,7 @@ class TransportTests(unittest.TestCase):
             self.assertEqual(exported['credentialFile'], self.config['credentialFile'])
             self.assertEqual(exported['url'], 'http://127.0.0.1:' + str(server.server_port))
             self.assertNotIn(self.secret, json.dumps(exported))
-            for mutation in ({'confinement': 'unconfined'}, {'id': str(uuid())}, {'protocol': 2}, {'capabilities': {}}, {'ownership': {}}, {'resources': {}}):
+            for mutation in ({'confinement': 'unconfined'}, {'id': str(uuid())}, {'protocol': 2}, {'capabilities': {}}, {'ownership': {}}, {'resources': {}}, {'storage': {}}):
                 result = {**answer, 'result': {**answer['result'], **mutation}}
                 self.assertIsNone(t.health(self.root, value, api.NoRedirect))
             for result in ({'redirect': True}, {**answer, 'error': {'code': 'denied'}}, {**answer, 'padding': 'x' * 17000}):
@@ -154,6 +164,17 @@ class TransportTests(unittest.TestCase):
             self.assertIsNone(t.health(self.root, value, api.NoRedirect))
             result['result']['resources']['ready'] = True
             result['result']['resources']['policy'] = {**resource_pin['policy'], 'cgroupRoot': '/sys/fs/cgroup/unrelated'}
+            self.assertIsNone(t.health(self.root, value, api.NoRedirect))
+            del value['transport']['endpoint']['resources']
+            storage = {'policy': {'kind': 'linux-xfs-project', 'filesystemUUID': str(uuid()), 'mountRoot': '/srv/quota',
+                'projectIds': {'first': 100, 'last': 110}, 'pool': {'bytes': 40960, 'inodes': 100},
+                'workspace': {'bytes': 4096, 'inodes': 10}}}
+            value['transport']['endpoint']['storage'] = storage
+            result = {**answer, 'result': {**answer['result'], 'storage': copy.deepcopy(storage)}}
+            self.assertEqual(t.health(self.root, value, api.NoRedirect)['endpoint']['storage'], storage)
+            result['result']['storage']['policy']['workspace']['bytes'] *= 2
+            self.assertIsNone(t.health(self.root, value, api.NoRedirect))
+            result = answer
             self.assertIsNone(t.health(self.root, value, api.NoRedirect))
             self.assertTrue(all(request == {'op': 'identity'} for request in requests))
         finally:

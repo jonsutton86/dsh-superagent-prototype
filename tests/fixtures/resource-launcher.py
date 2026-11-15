@@ -78,3 +78,39 @@ for key, value in [('cpuPercent', 99), ('memoryBytes', 2147483648), ('processes'
     except RuntimeError:
         pass
 print('Resource health contract passed')
+
+storage = {'endpointId': identity, 'socketPath': '/run/dsh/storage.sock', 'policy': {
+    'kind': 'linux-xfs-project', 'filesystemUUID': str(uuid.uuid4()), 'mountRoot': '/srv/quota',
+    'projectIds': {'first': 100, 'last': 110}, 'pool': {'bytes': 40960, 'inodes': 100},
+    'workspace': {'bytes': 4096, 'inodes': 10}}}
+configured = endpoint.configuration({'storage': storage})
+assert configured['storage'] == storage
+settings = {'port': 3084, 'endpointConfig': configured}
+status = {**result, 'storage': {'policy': storage['policy']}}
+del status['resources']
+assert health(status, settings)['endpoint']['storage'] == status['storage']
+assert health({key: value for key, value in status.items() if key != 'storage'}, settings) is None
+assert health(status, {'port': 3084, 'endpointConfig': endpoint.configuration({})}) is None
+changed = copy.deepcopy(status)
+changed['storage']['policy']['workspace']['bytes'] *= 2
+assert health(changed, settings) is None
+changed_settings = copy.deepcopy(settings)
+changed_settings['endpointConfig']['storage']['endpointId'] = str(uuid.uuid4())
+assert health(status, changed_settings) is None
+launch = endpoint.launch_patch(root, settings)
+assert launch[-1]['insert'][0]['config']['workspaceRoot'] == '/srv/quota/dsh-' + identity + '/workspaces'
+assert 'socketPath' not in endpoint.enrollment(root, {**settings, 'endpointId': identity}, health(status, settings))['storage']
+for invalid in [dict(storage, socketPath='/run/../sock'), dict(storage, endpointId='bad'),
+                {**storage, 'policy': {**storage['policy'], 'workspace': {'bytes': 40960, 'inodes': 10}}},
+                {**storage, 'policy': {**storage['policy'], 'projectIds': {'first': 100, 'last': 100}}},
+                {**storage, 'policy': {**storage['policy'], 'pool': {'bytes': True, 'inodes': 100}}}]:
+    try:
+        endpoint.configuration({'storage': invalid})
+        raise AssertionError('Accepted invalid storage configuration')
+    except RuntimeError:
+        pass
+try:
+    endpoint.validate_directory(Path('/srv/quota/private'), configured)
+    raise AssertionError('Accepted private control state inside quota volume')
+except RuntimeError:
+    pass

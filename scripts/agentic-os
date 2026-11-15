@@ -227,7 +227,8 @@ def initialize(root, args):
     if value['role'] == 'endpoint':
         agentic_endpoint.require_host()
         agentic_endpoint.validate_directory(root, value['endpointConfig'])
-        private_directory(root / 'workspaces')
+        if not value['endpointConfig'].get('storage'):
+            private_directory(root / 'workspaces')
     for name in ('home', 'state', 'sessions', 'logs'):
         private_directory(root / name)
     with private_log(root / 'install.log') as log:
@@ -396,7 +397,8 @@ def launch(root, installation, args):
     if installation['role'] == 'endpoint':
         agentic_endpoint.require_host()
         agentic_endpoint.validate_directory(root, installation['endpointConfig'])
-        private_directory(root / 'workspaces')
+        if not installation['endpointConfig'].get('storage'):
+            private_directory(root / 'workspaces')
         if read_json(root / 'launch.json') != agentic_endpoint.launch_patch(root, installation):
             raise RuntimeError('Endpoint launch configuration differs from its installation metadata.')
     for name in (('logs',) if installation['role'] == 'transport' else ('home', 'state', 'sessions', 'logs')):

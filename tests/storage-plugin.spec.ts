@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Config, StorageConnection, apply } from '../src/remote/endpoint-plugin.ts'
+import { IdentityMetadata } from '../src/environments/endpoint-model.ts'
 import type { Context } from '@deepseek-ai/cordis'
 
 const storage = { endpointId: '11111111-1111-4111-8111-111111111111', socketPath: '/run/dsh/storage.sock', policy: {
@@ -22,4 +23,12 @@ describe('Harness storage configuration', () => {
     const ctx = { webServer: { host: '127.0.0.1' }, get subprocess() { throw new Error('must not access subprocess') } } as unknown as Context
     await expect(apply(ctx, config)).rejects.toThrow('Workspace allocation must fit the pool budget')
   })
+})
+
+it('retains pinned storage policy in coordinator identity metadata', () => {
+  const identity = { protocol: 1, id: storage.endpointId, platform: 'linux', confinement: 'linux-bubblewrap',
+    storage: { policy: storage.policy }, capabilities: { filesystem: true, process: true, terminal: false,
+      interactiveStdin: false, controlChannel: false, outputWindow: 4096 } }
+  expect(IdentityMetadata.parse(identity).storage).toEqual({ policy: storage.policy })
+  expect(() => IdentityMetadata.parse({ ...identity, storage: { policy: { ...storage.policy, kind: 'estimate' } } })).toThrow()
 })
