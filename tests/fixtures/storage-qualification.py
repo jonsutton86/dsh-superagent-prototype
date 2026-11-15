@@ -16,7 +16,7 @@ def allocate(path, size):
         os.fsync(output.fileno())
 
 
-def denied(action, codes=(errno.EDQUOT,)):
+def denied(action, codes=(errno.ENOSPC,)):
     try:
         action()
     except OSError as error:
@@ -38,6 +38,7 @@ def worker(mode):
     if mode == 'accounting':
         allocate(root / 'accounting/over-limit', 20 * MIB)
         return {'accountingOnlyAllowsExcess': True}
+    assert os.statvfs(root).f_bavail * os.statvfs(root).f_frsize > 64 * MIB
     workspace, copy, other = (root / name for name in ['workspace', 'copy', 'other'])
     # Native allocation across two separate trees charged to the same project.
     allocate(workspace / 'source', 10 * MIB)
@@ -69,7 +70,7 @@ def worker(mode):
             try:
                 path.touch(exist_ok=False)
             except OSError as error:
-                assert error.errno == errno.EDQUOT, error
+                assert error.errno == errno.ENOSPC, error
                 break
             created.append(path)
         else:
@@ -83,7 +84,7 @@ def worker(mode):
     (copy / 'after-inode-release').touch(exist_ok=False)
     return {'sharedTrees': True, 'independentProject': True, 'inheritedMembership': True,
             'deletedOpenCharged': True, 'hardLinkDenied': True, 'membershipChangeDenied': True,
-            'byteLimitEDQUOT': True, 'inodeLimitEDQUOT': True, 'inodesCreatedBeforeLimit': len(created)}
+            'byteLimitENOSPC': True, 'inodeLimitENOSPC': True, 'inodesCreatedBeforeLimit': len(created)}
 
 
 def main():
