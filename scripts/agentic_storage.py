@@ -359,39 +359,56 @@ class StorageHost:
 
     def backup(self, output):
         """Consistent standalone registry snapshot, not a workspace or whole-system backup."""
+        with self.exclusive():
+            return self._backup_locked(output)
+
+    def capture_pair(self, output, capture_endpoint):
+        """Trusted local caller captures the endpoint while the shared host registry remains frozen.
+
+        The callback must acquire the original endpoint writer lock before snapshotting.
+        No RPC exposes this callback; it is an operator integration boundary.
+        """
+        with self.exclusive():
+            host = self._backup_locked(output)
+            endpoint = capture_endpoint()
+            return {'host': host, 'endpoint': endpoint, 'hostLockHeldThroughEndpointCapture': True,
+                    'workspaceFilesIncluded': False, 'executionQuiescenceVerified': False,
+                    'restoreVerified': False}
+
+    def _backup_locked(self, output):
+        """Consistent standalone registry snapshot, not a workspace or whole-system backup."""
         target = Path(output)
         require(target.is_absolute() and target.name not in ['', '.', '..'])
         parent = protected(target.parent, private=True)
         require(target == parent / target.name)
         require(not target.is_relative_to(self.registry) and not target.is_relative_to(self.mount))
-        with self.exclusive():
-            require(not self.db.in_transaction)
-            descriptor = os.open(target, os.O_CREAT | os.O_EXCL | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        require(not self.db.in_transaction)
+        descriptor = os.open(target, os.O_CREAT | os.O_EXCL | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        try:
+            destination = sqlite3.connect(target)
             try:
-                destination = sqlite3.connect(target)
-                try:
-                    deadline = time.monotonic() + 120
-                    def progress(_status, _remaining, _total):
-                        require(time.monotonic() < deadline)
-                    self.db.backup(destination, pages=256, progress=progress, sleep=0.01)
-                    require(destination.execute('PRAGMA journal_mode=DELETE').fetchone()[0] == 'delete')
-                    require(destination.execute('PRAGMA integrity_check').fetchall() == [('ok',)])
-                    tables = ['endpoints', 'namespaces', 'operations', 'repairs']
-                    counts = {table: destination.execute('SELECT count(*) FROM ' + table).fetchone()[0] for table in tables}
-                finally:
-                    destination.close()
-                info, named = os.fstat(descriptor), target.lstat()
-                require((info.st_dev, info.st_ino) == (named.st_dev, named.st_ino) and info.st_nlink == 1
-                        and stat.S_ISREG(info.st_mode) and info.st_uid == 0 and not info.st_mode & 0o077)
-                os.fsync(descriptor)
-                digest = hashlib.sha256()
-                while chunk := os.read(descriptor, 1024 * 1024):
-                    digest.update(chunk)
-                self.sync_directory(parent)
-                return {'kind': 'storage-host-registry', 'sha256': digest.hexdigest(), 'bytes': info.st_size,
-                        'records': counts, 'workspaceFilesIncluded': False, 'restoreVerified': False}
+                deadline = time.monotonic() + 120
+                def progress(_status, _remaining, _total):
+                    require(time.monotonic() < deadline)
+                self.db.backup(destination, pages=256, progress=progress, sleep=0.01)
+                require(destination.execute('PRAGMA journal_mode=DELETE').fetchone()[0] == 'delete')
+                require(destination.execute('PRAGMA integrity_check').fetchall() == [('ok',)])
+                tables = ['endpoints', 'namespaces', 'operations', 'repairs']
+                counts = {table: destination.execute('SELECT count(*) FROM ' + table).fetchone()[0] for table in tables}
             finally:
-                os.close(descriptor)  # Failed/uncertain output is retained; never overwrite or silently delete it.
+                destination.close()
+            info, named = os.fstat(descriptor), target.lstat()
+            require((info.st_dev, info.st_ino) == (named.st_dev, named.st_ino) and info.st_nlink == 1
+                    and stat.S_ISREG(info.st_mode) and info.st_uid == 0 and not info.st_mode & 0o077)
+            os.fsync(descriptor)
+            digest = hashlib.sha256()
+            while chunk := os.read(descriptor, 1024 * 1024):
+                digest.update(chunk)
+            self.sync_directory(parent)
+            return {'kind': 'storage-host-registry', 'sha256': digest.hexdigest(), 'bytes': info.st_size,
+                    'records': counts, 'workspaceFilesIncluded': False, 'restoreVerified': False}
+        finally:
+            os.close(descriptor)  # Failed/uncertain output is retained; never overwrite or silently delete it.
 
     def inspect(self, request):
         """Read-only evidence for operator reconciliation; never adopts roots or authorizes repair."""

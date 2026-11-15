@@ -1,5 +1,7 @@
 """SQLite/WAL snapshot behavior; host path/UID enforcement is covered by native CI."""
 import contextlib
+import fcntl
+import os
 import hashlib
 from pathlib import Path
 import sqlite3
@@ -37,6 +39,39 @@ class Backup(unittest.TestCase):
         self.stack = contextlib.ExitStack(); self.addCleanup(self.stack.close)
         self.stack.enter_context(patch.object(storage, 'protected', side_effect=lambda path, private=False: path))
         self.stack.enter_context(patch.object(storage.os, 'fstat', side_effect=root_stat))
+
+    def test_pair_keeps_host_lock_through_endpoint_capture(self):
+        lockfile = self.base / 'pair.lock'
+        self.host.lock = os.open(lockfile, os.O_CREAT | os.O_RDWR, 0o600)
+        contender = os.open(lockfile, os.O_RDWR)
+        self.addCleanup(os.close, self.host.lock); self.addCleanup(os.close, contender)
+        self.host.exclusive = storage.StorageHost.exclusive.__get__(self.host)
+        before = list(self.host.db.iterdump())
+        def capture():
+            with self.assertRaises(BlockingIOError): fcntl.flock(contender, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self.assertTrue((self.base / 'paired.sqlite').exists())
+            return {'endpointId': 'original', 'writerLockHeld': True}
+        result = self.host.capture_pair(self.base / 'paired.sqlite', capture)
+        self.assertTrue(result['hostLockHeldThroughEndpointCapture'])
+        self.assertFalse(result['executionQuiescenceVerified']); self.assertFalse(result['restoreVerified'])
+        self.assertEqual(result['endpoint']['endpointId'], 'original')
+        self.assertEqual(list(self.host.db.iterdump()), before)
+        fcntl.flock(contender, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(contender, fcntl.LOCK_UN)
+
+    def test_pair_failure_releases_lock_and_retains_original_backup(self):
+        lockfile = self.base / 'failed-pair.lock'
+        self.host.lock = os.open(lockfile, os.O_CREAT | os.O_RDWR, 0o600)
+        contender = os.open(lockfile, os.O_RDWR)
+        self.addCleanup(os.close, self.host.lock); self.addCleanup(os.close, contender)
+        self.host.exclusive = storage.StorageHost.exclusive.__get__(self.host)
+        def capture(): raise RuntimeError('endpoint snapshot refused')
+        target = self.base / 'failed-pair.sqlite'
+        with self.assertRaisesRegex(RuntimeError, 'endpoint snapshot refused'): self.host.capture_pair(target, capture)
+        self.assertTrue(target.exists())
+        fcntl.flock(contender, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(contender, fcntl.LOCK_UN)
+        with self.assertRaises(FileExistsError): self.host.capture_pair(target, lambda: self.fail('must not retry endpoint'))
 
     def test_committed_wal_all_tables_and_endpoints_are_preserved(self):
         before = list(self.host.db.iterdump()), self.host.db.total_changes
