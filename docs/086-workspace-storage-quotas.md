@@ -1516,3 +1516,18 @@ inference was requested. No new Linux, deployment or live restoration claim is m
 Source quiescence, target filesystem/quota validation, ownership/mode application,
 live installation and activation remain unfinished; workspace-bearing installation
 continues to refuse activation.
+
+### Bind traversal to the initial root identity
+
+VERIFIED at `51585b95aa2af7e3580db7fc6a88bc61faf13e0a`: the inventory now
+compares the root's traversal-time identity to its initial identity before collecting
+entries. Previously a directory replaced between these observations could yield a
+manifest with the old `sourceIdentity` and new contents. The regression fixture
+renames the original root and creates a real replacement after the first observation;
+capture now refuses and leaves no completed archive manifest. Both original and
+replacement contents are preserved. This closes an observed identity-binding gap;
+it does not establish source quiescence or a global capture epoch.
+
+Focused results: 44 recovery tests passed, one native-only skip; installed Harness
+maintenance test passed against the rebuilt plugin; typecheck and build passed.
+No user profile/default provider changes, live activation or Linux requalification.

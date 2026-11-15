@@ -1,0 +1,13 @@
+{
+  "date": "2026-11-15",
+  "testedRevision": "51585b95aa2af7e3580db7fc6a88bc61faf13e0a",
+  "finding": "VERIFIED: traversal root identity must equal initial source identity",
+  "regression": "Real root rename and replacement after first lstat; capture refuses without completed archive manifest",
+  "recoveryTests": { "passed": 44, "skipped": 1 },
+  "installedHarnessMaintenanceTests": { "passed": 1 },
+  "typecheck": "passed",
+  "build": "passed",
+  "sourceQuiescenceProven": false,
+  "liveActivationQualified": false,
+  "deployed": false
+}
