@@ -1,0 +1,42 @@
+{
+  "status": "VERIFIED_failure_unrepaired",
+  "revision": "822a29b7a130ef11a851a21902b5fcbde6dffd67",
+  "instrumentedTestSha256": "cd1cf35b28c9eee716d37cbb15c344b8b70414b18b6af81c1e235f915f7f5d48",
+  "command": "env -u GIT_CONFIG_GLOBAL ./node_modules/.bin/vitest run tests/runtime.spec.ts -t 'failed prepare fails at once'",
+  "exitCode": 1,
+  "logSha256": "a1bbb77cabc96b4474d72baba9c7d5882fa6f27740636c19983a012b0822b9c7",
+  "observation": {
+    "assignments": [
+      {
+        "id": "1def8a56f43cabcf7c8c498907f56fc9",
+        "state": "ended",
+        "started": false,
+        "report": "failed"
+      },
+      {
+        "id": "d0309b69fc34ac3429eabb443232f838",
+        "state": "pending",
+        "started": false
+      }
+    ],
+    "stops": [
+      {
+        "assignmentId": "1def8a56f43cabcf7c8c498907f56fc9",
+        "state": "unknown",
+        "proof": null,
+        "reason": "Original local registry continuity is unavailable; scoped operator evidence is required"
+      }
+    ],
+    "launch": [
+      {
+        "key": "d0309b69fc34ac3429eabb443232f838",
+        "launch_started": 0,
+        "attempts": 0
+      }
+    ]
+  },
+  "interpretation": "The failed pre-worker assignment has no retained quiet proof. Explicit retry remains pending behind original-stop uncertainty. No worker absence or generic error is accepted as termination proof.",
+  "next": "Inspect installed Harness subprocess done/process-group contract, then preserve typed original preparation outcome in the existing stop authority; cover exit, timeout and response loss.",
+  "repairAttempts": 0,
+  "instrumentationRemoved": true
+}
