@@ -4,6 +4,7 @@ The caller must be a privileged, authenticated host service with administrator-o
 configuration. A shared root-owned registry fences all managed endpoint ranges.
 """
 import contextlib
+import hashlib
 import fcntl
 import json
 import os
@@ -218,6 +219,54 @@ class StorageHost:
                               (self.endpoint, request['requestId'])).fetchone()
         require(row and row[0] == intent)
         return json.loads(row[1])
+
+    def inspect(self, request):
+        """Read-only evidence for operator reconciliation; never adopts roots or authorizes repair."""
+        with self.exclusive():
+            self.check_namespace()
+            expected = self.saved(request)
+            require(len(expected) == 2 and all(item is None or isinstance(item, dict)
+                    and set(item) == {'device', 'inode'} and all(isinstance(value, str) and value.isdigit() for value in item.values())
+                    for item in expected))
+            mount = self.check_mount()
+            roots = []
+            for path, identity in zip(self.roots(request), expected):
+                protected(path.parent)
+                item = {'path': str(path), 'recordedIdentity': identity}
+                try:
+                    before = path.lstat()
+                except FileNotFoundError:
+                    roots.append({**item, 'state': 'missing'})
+                    continue
+                actual = {'device': str(before.st_dev), 'inode': str(before.st_ino)}
+                item.update({'actualIdentity': actual, 'uid': before.st_uid, 'gid': before.st_gid,
+                             'mode': stat.S_IMODE(before.st_mode), 'ctimeNs': str(before.st_ctime_ns),
+                             'mtimeNs': str(before.st_mtime_ns)})
+                if not stat.S_ISDIR(before.st_mode):
+                    roots.append({**item, 'state': 'not-directory'})
+                    continue
+                if identity is None:
+                    roots.append({**item, 'state': 'unrecorded'})
+                    continue  # An orphan tree is not adopted or traversed merely because its path matches.
+                if actual != identity:
+                    roots.append({**item, 'state': 'identity-mismatch'})
+                    continue
+                require(canonical(path) == path)
+                text = run('xfs_io', '-r', '-c', 'stat', path)
+                project = re.findall(r'^fsxattr.projid\s*=\s*(\d+)\s*$', text, re.M)
+                flags = re.findall(r'^fsxattr.xflags\s*=\s*(0x[0-9a-fA-F]+)', text, re.M)
+                require(len(project) == 1 and len(flags) == 1)
+                with os.scandir(path) as entries:
+                    empty = next(entries, None) is None
+                after = path.lstat()
+                require((before.st_dev, before.st_ino, before.st_uid, before.st_gid, before.st_mode, before.st_ctime_ns, before.st_mtime_ns)
+                        == (after.st_dev, after.st_ino, after.st_uid, after.st_gid, after.st_mode, after.st_ctime_ns, after.st_mtime_ns))
+                roots.append({**item, 'state': 'recorded', 'projectId': int(project[0]),
+                              'inherits': bool(int(flags[0], 16) & 0x200), 'realtime': bool(int(flags[0], 16) & 0x101), 'empty': empty})
+            evidence = {'endpointId': self.endpoint, 'request': dict(request), 'policy': json.loads(json.dumps(self.policy)),
+                        'mountId': mount['id'], 'roots': roots, 'quota': self.quota(request['projectId'])}
+            digest = hashlib.sha256(json.dumps(evidence, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+            return {**evidence, 'snapshotHash': digest, 'authorizesRepair': False}
 
     def observe(self, request):
         with self.exclusive():

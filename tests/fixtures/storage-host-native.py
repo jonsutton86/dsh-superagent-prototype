@@ -83,6 +83,10 @@ try:
     path.rename(path.with_name('retained-original'))
     path.mkdir(mode=0o700)
     refused(lambda: host.observe(request))
+    inspected = host.inspect(request)
+    assert inspected['roots'][0]['state'] == 'identity-mismatch' and inspected['authorizesRepair'] is False
+    path.rmdir(); path.symlink_to(path.with_name('retained-original'))
+    assert host.inspect(request)['roots'][0]['state'] == 'not-directory'
     # A committed namespace intent without completed identities must never restart mkdir.
     uncertain_endpoint = str(uuid.uuid4())
     uncertain_config = {**config, 'endpointId': uncertain_endpoint, 'policy': {**config['policy'], 'projectIds': {'first': 200, 'last': 209}}}

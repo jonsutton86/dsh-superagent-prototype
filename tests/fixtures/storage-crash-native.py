@@ -74,6 +74,21 @@ for index, boundary in enumerate(cases):
                               (config['endpointId'], 'original')).fetchone()
         assert row and json.loads(row[0]) == request
         saved = list(host.db.iterdump())
+        evidence = host.inspect(request)
+        assert evidence['request'] == request and evidence['authorizesRepair'] is False
+        assert len(evidence['snapshotHash']) == 64
+        assert list(host.db.iterdump()) == saved
+        states = [item['state'] for item in evidence['roots']]
+        if boundary == 'intent-committed': assert states == ['missing', 'missing']
+        elif boundary == 'first-root-created': assert states == ['unrecorded', 'missing']
+        elif boundary in ['first-root-recorded', 'first-project-applied']: assert states == ['recorded', 'missing']
+        else: assert states == ['recorded', 'recorded']
+        if boundary == 'first-root-recorded': assert evidence['roots'][0]['projectId'] != first
+        if boundary == 'first-owner-applied': assert [item['uid'] for item in evidence['roots']] == [uid, 0]
+        if boundary in ['hard-limit-applied', 'first-owner-applied', 'complete-before-reply']:
+            assert evidence['quota']['hardBytes'] == config['policy']['workspace']['bytes']
+        assert host.inspect(request)['snapshotHash'] == evidence['snapshotHash']
+
         identities = [(str(path), path.stat().st_ino, path.stat().st_uid) for path in roots if path.exists()]
         original_run = storage.run
         def read_only(program, *args):
@@ -106,7 +121,7 @@ for index, boundary in enumerate(cases):
             pass
         assert host.db.execute('SELECT count(*) FROM operations WHERE endpoint=?', (config['endpointId'],)).fetchone()[0] == 2
         results.append({'boundary': boundary, 'originalIntentRetained': True, 'mutationReplay': False,
-                        'observation': 'verified' if boundary == 'complete-before-reply' else 'refused-incomplete', 'capacityRetained': True})
+                        'observation': 'verified' if boundary == 'complete-before-reply' else 'refused-incomplete', 'capacityRetained': True, 'inspectionStates': states, 'inspectionReadOnly': True})
     finally:
         host.close()
 print(json.dumps({'nativeStorageCrashBoundaries': results}), flush=True)
