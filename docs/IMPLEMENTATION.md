@@ -1396,3 +1396,9 @@ Increment 086 now includes an offline endpoint snapshot command to obtain the
 private endpoint artifact needed by encrypted storage checkpoint capture. It uses
 the original writer lock, preserves unsettled records, and emits a hash/size receipt.
 This does not yet establish cross-host capture consistency or enable storage restore.
+
+The storage operator CLI now supports paired capture with the host registry locked
+through an unprivileged endpoint export and artifact verification. Focused Linux
+qualification passed at f4c9ae5. Full endpoint/host record crosschecking still occurs
+in checkpoint capture; workspace data capture, process quiescence and storage
+restoration remain open. See increment 086 and its paired-capture evidence.

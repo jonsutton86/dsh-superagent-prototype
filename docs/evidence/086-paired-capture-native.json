@@ -1,0 +1,32 @@
+{
+  "revision": "f4c9ae55eebcac657b4659e7e32a4565384d0ca8",
+  "classification": "VERIFIED",
+  "workflow": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43706252687",
+  "conclusion": "success",
+  "scope": "storage",
+  "logSHA256": "b986e77c0596276f4ef46032d76e036493ef25d24914a0b59a2cbea907f2e1ba",
+  "observation": {
+    "nativeStoragePairedCapture": "passed",
+    "endpointRunsWithoutRoot": true,
+    "sourceUnchanged": true,
+    "hostLockHeldThroughCapture": true,
+    "recordBindingsVerified": false,
+    "restoreVerified": false
+  },
+  "validation": {
+    "localBackupContracts": 7,
+    "localBindingContracts": 3,
+    "localInstallationContracts": 2,
+    "localServiceContracts": 3,
+    "linuxRecoveryTests": 32,
+    "linuxXfsProbeTests": 12,
+    "linuxTypecheck": "passed",
+    "linuxBuild": "passed",
+    "nativeCrashCases": 12
+  },
+  "limits": [
+    "Endpoint records in the paired-capture fixture were seeded from retained host intents; full live endpoint capture with crosscheck is not yet qualified",
+    "No workspace contents or worker quiescence proof",
+    "No storage restore or deployment"
+  ]
+}

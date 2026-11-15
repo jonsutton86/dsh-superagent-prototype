@@ -1195,3 +1195,51 @@ endpoint exporter as its configured service user while this host lock remains he
 then verifies both returned artifacts and emits a pair receipt. That command is not
 implemented yet. The callback primitive alone does not prove an endpoint lock was
 acquired, establish whole-system capture consistency, or permit live restore.
+
+### Paired capture operator command
+
+The root operator CLI now invokes the endpoint snapshot exporter as the configured
+endpoint UID/GID, with no supplementary groups, inherited credentials or shell.
+The endpoint must already be stopped; its writer lock is still mandatory. Build
+the Agentic OS checkout first and supply absolute, canonical paths:
+
+```sh
+python3 scripts/agentic_storage_admin.py \
+  --config /root/storage/host.json --registry /root/storage/registry \
+  capture-pair --output /root/storage/backups/new-host.sqlite \
+  --node /usr/local/bin/node \
+  --exporter /opt/agentic-os/scripts/endpoint-storage-snapshot.mjs \
+  --endpoint-state /var/lib/agentic-endpoint/state \
+  --endpoint-output /var/lib/agentic-endpoint/backups/new-snapshot
+```
+
+The host destination parent is root-owned/private; the endpoint destination parent
+is private to its service user. Both outputs must be new. The exporter and its built
+bundle must be readable by that user. This command does not install or start either
+service. Existing installations need an explicitly reviewed package update to gain
+the new helper; this development work does not update a running installation.
+
+The shared host registry lock stays held from its backup through endpoint capture
+and artifact validation. Endpoint subprocess output is bounded to 64 KiB, with a
+120-second deadline, and failure terminates its process group. The parent checks
+the returned original endpoint ID, file ownership/mode/link count, bounded size,
+SHA-256, standalone SQLite header and stable file identity. Only validated metadata
+is returned. Failure retains partial artifacts, emits no successful pair, and never
+retries or overwrites a prior capture.
+
+The JSON result contains `pair.host` (including its path) and
+`pair.endpoint.endpoint`, which supply the checkpoint profile's two artifact
+descriptors. Capturing under overlapping locks establishes a stable control-record
+interval; it does not copy workspace contents, stop orphan worker processes, or
+prove their quiescence. `recordBindingsVerified` remains false here: checkpoint
+capture must still run the complete endpoint/host record crosscheck. Transfer the
+artifacts privately to the checkpoint operator with the required ownership and
+original hashes; do not grant the endpoint user access to the live root registry.
+
+The focused Linux [run](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43706252687)
+passed at `f4c9ae55eebcac657b4659e7e32a4565384d0ca8`: real root CLI to
+unprivileged Node exporter, source preservation, matching hashes and overwrite
+refusal. It also passed 32 recovery tests, 12 quota probes, the existing native
+launcher/repair/installation journeys, and 12 crash boundaries. The paired fixture
+seeds endpoint storage records from retained host intents; a full live-endpoint
+capture-to-checkpoint journey is still required. [Evidence](evidence/086-paired-capture-native.json).
