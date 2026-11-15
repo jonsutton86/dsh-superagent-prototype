@@ -86,3 +86,14 @@ For a new configured endpoint, add `workspace` alongside the existing `pool` and
 those values. Supply `cgroupRoot` in explicit endpoint configuration; delegated-service budget JSON omits that root because
 the launcher supplies its owned subtree. Existing running policies are pinned and cannot be edited this way.
 `evidence/085-config-ui.json` records configuration, displayed limits, plugin schema and delegated-service test scope.
+
+
+## Restart and attribution checks
+
+The focused resource suite now verifies populated nested scopes across resource-manager restart, empty-scope cleanup,
+original-effect liveness and sibling-preserving cancellation. A simulated population/removal race retains the uncertain
+workspace group. An endpoint integration test uses real local Harness filesystem/process services and test-only
+unconfined isolation to verify read, write and command attribution from the stored grant. A forged environment workspace
+label does not select another allocation. `evidence/085-recovery-attribution.json` records 17 passing resource tests (one
+native case skipped), the final write-attribution check and typecheck. These checks do not establish native cgroup
+limits, verification-stage coverage, complete Runtime restart or clean-host recovery.

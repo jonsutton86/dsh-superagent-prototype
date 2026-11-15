@@ -1,0 +1,33 @@
+{
+  "kind": "workspace-resource-restart-and-attribution",
+  "recordedAt": "2026-11-15T07:24:03.858582+00:00",
+  "runtimeRevision": "7821e01",
+  "testFileSha256": "af4c1b3bb8f8b0ee8fabdf11eabcfebe88417446b3f8468cfb80105a941d3bf3",
+  "verification": [
+    "Nested populated scopes survive resource-manager restart, empty original scopes removed without dispatch.",
+    "Cancellation kills original command group only; live sibling remains.",
+    "Workspace removal racing population preserves uncertain group.",
+    "Real endpoint read/write/process paths receive workspace from authenticated stored grant, ignoring forged environment label."
+  ],
+  "tests": [
+    {
+      "command": "vitest run tests/remote-resources.spec.ts",
+      "passed": 17,
+      "skipped": 1,
+      "log": "/tmp/dsh-085-recovery.log"
+    },
+    {
+      "command": "vitest run tests/remote-resources.spec.ts -t 'authenticated grant workspace'",
+      "passed": 1,
+      "deselected": 17,
+      "log": "/tmp/dsh-085-attribution-final.log",
+      "note": "Final added filesystem mutation assertion verified here."
+    }
+  ],
+  "typecheck": {
+    "exitCode": 0,
+    "log": "/tmp/dsh-085-recovery-typecheck.log"
+  },
+  "initialFailures": "Fixture isolation helper argument position corrected; hard-coded /bin/true absent on macOS replaced by Harness executable resolution.",
+  "limitations": "Kernel interface is simulated. Endpoint test uses actual local Harness FS/processes with test-only unconfined isolation, verifying attribution not cgroup enforcement. Verification-stage attribution, helper tamper, native Linux aggregate and whole-runtime restart remain pending."
+}

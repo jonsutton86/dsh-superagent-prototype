@@ -276,3 +276,74 @@ it('preserves the optional aggregate policy through the Harness endpoint plugin 
   const parsed = Config({ stateDir: '/private/endpoint', workspaceRoot: '/workspaces', resources: { ...policy, workspace } })
   expect(parsed.resources?.workspace).toEqual(workspace)
 })
+
+it('retains populated workspace scopes across restart while cleaning only empty original command groups', () => {
+  const configured = { ...policy, workspace: { ...policy.pool } }, h = fixture(new FakeCgroup(), configured)
+  h.resources.run('job:retained', () => h.runtime.spawn(h.spec), 'same-workspace')
+  h.resources.run('job:empty', () => h.runtime.spawn(h.spec), 'same-workspace')
+  const [live, empty] = vi.mocked(h.base.spawn).mock.calls.map(([spec]) => spec.argv[3]!)
+  h.io.population(live!, true)
+  h.resources.close()
+  const restored = new CgroupResources(configured, h.io); cleanup.push(restored)
+  restored.start(h.pool.slice(h.pool.lastIndexOf('dsh-') + 4))
+  expect(restored.hasLive('job:retained')).toBe(true)
+  expect(h.io.directories.has(live!)).toBe(true)
+  expect(h.io.directories.has(empty!)).toBe(false)
+  expect(h.io.directories.has(live!.slice(0, live!.lastIndexOf('/')))).toBe(true)
+  expect(h.base.spawn).toHaveBeenCalledTimes(2)
+})
+
+it('cancels only the original command group and preserves its live workspace sibling', async () => {
+  const h = fixture(new FakeCgroup(), { ...policy, workspace: { ...policy.pool } }), abort = new AbortController()
+  h.resources.run('job:cancel', () => h.runtime.spawn({ ...h.spec, signal: abort.signal }), 'shared')
+  h.resources.run('job:sibling', () => h.runtime.spawn(h.spec), 'shared')
+  const [original, sibling] = vi.mocked(h.base.spawn).mock.calls.map(([spec]) => spec.argv[3]!)
+  h.io.population(original!, true); h.io.population(sibling!, true)
+  abort.abort()
+  await vi.waitFor(() => expect(h.io.writes).toContainEqual([join(original!, 'cgroup.kill'), '1']))
+  expect(h.io.writes.filter(([path]) => path.endsWith('/cgroup.kill'))).toEqual([[join(original!, 'cgroup.kill'), '1']])
+  expect(h.resources.hasLive('job:sibling')).toBe(true)
+})
+
+it('preserves a workspace whose removal races a newly observed process', async () => {
+  const h = fixture(new FakeCgroup(), { ...policy, workspace: { ...policy.pool } })
+  const first = h.resources.run('job:first', () => h.runtime.spawn(h.spec), 'first')
+  const scope = vi.mocked(h.base.spawn).mock.calls[0]![0].argv[3]!, parent = scope.slice(0, scope.lastIndexOf('/'))
+  expect(await first.waitForExit()).toBe(true)
+  const remove = h.io.remove.bind(h.io)
+  vi.spyOn(h.io, 'remove').mockImplementation(path => { if (path === parent) h.io.population(path, true); remove(path) })
+  h.resources.run('job:second', () => h.runtime.spawn(h.spec), 'second')
+  expect(h.io.directories.has(parent)).toBe(true)
+  expect(h.io.read(join(parent, 'cgroup.events'))).toContain('populated 1')
+})
+
+it('attributes endpoint commands and filesystem helpers to the authenticated grant workspace', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'workspace attribution ')), ctx = new Context(), io = new FakeCgroup()
+  const filesystem = new LocalFileSystem(ctx, { cwd: directory, diffBasisMaxBytes: 1024 * 1024 }), subprocess = new LocalSubprocessRuntime(ctx)
+  const resources = new CgroupResources({ ...policy, workspace: { ...policy.pool } }, io)
+  const run = vi.spyOn(resources, 'run')
+  // Real endpoint/FS/process execution, simulated resource kernel: this verifies trusted attribution, not enforcement.
+  const isolation = { name: 'test-only-unconfined', wrap: async (argv: readonly string[], _root: string, _cwd: string, _network: boolean, _signal: AbortSignal, _env: Readonly<Record<string, string>>, helper?: string) =>
+    argv.map(arg => arg === '/run/dsh-filesystem.mjs' && helper ? helper : arg) }
+  const endpoint = new RemoteEndpoint({ filesystem, subprocess, resources, isolation,
+    stateDir: join(directory, 'state'), root: join(directory, 'work'),
+    filesystemRpc: confinedFilesystem(subprocess, isolation, resolve('lib/remote-fs-worker.js')),
+    commandHelper: resolve('lib/remote-command-worker.js'), snapshotHelper: resolve('lib/verification-snapshot-worker.js') })
+  try {
+    await endpoint.start()
+    const enrolled = await endpoint.rpc({ role: 'admin' }, { op: 'grant.create', requestId: 'allocation-grant', owner: 'test', workspace: 'trusted-workspace',
+      operations: ['fs.read', 'fs.write', 'process.spawn'], leaseMs: 300000 }) as GrantReceipt
+    const principal = { role: 'grant' as const, id: enrolled.grant.id, epoch: enrolled.grant.epoch }
+    await writeFile(join(enrolled.grant.root, 'proof.txt'), 'trusted')
+    expect(await endpoint.rpc(principal, { op: 'fs.read', path: join(enrolled.grant.root, 'proof.txt') })).toBe('trusted')
+    expect(run.mock.calls.some(([owner, , workspace]) => owner === 'read' && workspace === 'trusted-workspace')).toBe(true)
+    await endpoint.rpc(principal, { op: 'fs.write', requestId: 'allocation-write', path: join(enrolled.grant.root, 'written.txt'), content: 'scoped' })
+    expect(run.mock.calls.some(([owner, , workspace]) => owner === 'operation:allocation-write' && workspace === 'trusted-workspace')).toBe(true)
+    const request = { op: 'job.spawn' as const, requestId: 'allocation-job', revision: enrolled.grant.revision,
+      argv: [await subprocess.resolveExecutable('true')], cwd: enrolled.grant.root, graceMs: 100, env: { DSH_SUPERAGENT_WORKSPACE: 'forged-workspace' } }
+    await endpoint.rpc(principal, request)
+    await vi.waitFor(() => expect(endpoint.journal.job(request.requestId), JSON.stringify(endpoint.journal.job(request.requestId))).toMatchObject({ phase: 'settled', quiescent: true, outcome: { exitCode: 0 } }))
+    expect(run.mock.calls.filter(([owner]) => owner === 'job:' + request.requestId).map(([, , workspace]) => workspace)).toEqual(['trusted-workspace'])
+    expect(run.mock.calls.some(([, , workspace]) => workspace === 'forged-workspace')).toBe(false)
+  } finally { await endpoint.stop(); await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }) }
+})
