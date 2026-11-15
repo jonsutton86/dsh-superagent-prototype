@@ -13,6 +13,7 @@ import { recoverySourceHost } from './sources.ts'
 import { installCheckpoint, type InstallCheckpoint, type Installation } from './installation.ts'
 
 export { createCheckpoint, importCheckpointSessions, stageCheckpoint, verifyCheckpoint, type CheckpointManifest } from './checkpoint.ts'
+export { exportEndpointStorageSnapshot } from './endpoint-snapshot.ts'
 export { createRecoveryKey } from './crypto.ts'
 export { reserveCheckpointOwnership, type ReserveCheckpointOwnership, type RecoveryIntent } from './ownership.ts'
 export { auditCheckpointReceipts, type AuditCheckpointReceipts, type ReceiptAudit } from './audit.ts'

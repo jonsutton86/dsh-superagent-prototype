@@ -1,3 +1,5 @@
+import { exportEndpointStorageSnapshot } from '../src/recovery/endpoint-snapshot.ts'
+import { lockSync } from 'proper-lockfile'
 import { MessageId } from '@deepseek-ai/dsh-llm'
 import { Context } from '@deepseek-ai/cordis'
 import Jsonl from '@deepseek-ai/dsh-session-persistence-jsonl'
@@ -260,4 +262,28 @@ it('captures verified storage pairs in an encrypted checkpoint and preserves the
     } finally { key.fill(0) }
 
   } finally { db.close(); await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }) }
+})
+
+
+it('exports endpoint storage under its writer lock without initializing or altering source records', async () => {
+  const db = databases(), directory = await realpath(await mkdtemp(join(tmpdir(), 'endpoint-storage-export-')))
+  try {
+    const state = join(directory, 'state'); await mkdir(state, { mode: 0o700 })
+    const source = join(state, 'endpoint.sqlite'); db.endpoint.prepare('VACUUM INTO ?').run(source); await chmod(source, 0o600)
+    const before = await readFile(source), target = join(directory, 'snapshot')
+    const release = lockSync(state)
+    try { await expect(exportEndpointStorageSnapshot(state, target)).rejects.toThrow() } finally { release() }
+    const receipt = await exportEndpointStorageSnapshot(state, target)
+    expect(receipt).toMatchObject({ endpointId: db.value.endpoint.endpointId, writerLockHeld: true, executionQuiescenceVerified: false,
+      workspaceFilesIncluded: false, hostRegistryIncluded: false, restoreVerified: false })
+    expect(await readFile(source)).toEqual(before)
+    const artifact = await readFile(receipt.endpoint.path)
+    expect(artifact[18]).toBe(1); expect(artifact[19]).toBe(1)
+    expect(createHash('sha256').update(artifact).digest('hex')).toBe(receipt.endpoint.sha256)
+    expect(JSON.parse(await readFile(join(target, 'snapshot.json'), 'utf8'))).toEqual(receipt)
+    await expect(exportEndpointStorageSnapshot(state, target)).rejects.toThrow()
+    await expect(exportEndpointStorageSnapshot(state, join(state, 'nested'))).rejects.toThrow('separate')
+    await expect(exportEndpointStorageSnapshot(state, join(directory, 'cancelled'), AbortSignal.abort())).rejects.toThrow()
+    expect(await readFile(source)).toEqual(before)
+  } finally { db.close(); await rm(directory, { recursive: true, force: true }) }
 })
