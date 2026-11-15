@@ -1,0 +1,27 @@
+{
+  "kind": "offline-storage-registry-artifact-verification",
+  "revision": "61a96410567661009efd5d0a3c32d41ff11b9c2a",
+  "recordedAt": "2026-11-15T10:04:13.504933+00:00",
+  "workflowRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43702016501",
+  "result": "success",
+  "classification": "VERIFIED artifact integrity/format; restore NOT VERIFIED; NOT DEPLOYED",
+  "hashes": {
+    "scripts/agentic_storage.py": "bc2cb6b6b31ba3a7d0e5573bbb77f187892cb09a9ec57fd98b57375a6de0c490",
+    "scripts/agentic_storage_admin.py": "318077e7d2ed83e5ceeadc3a1a8a636c8de94209f6732e825efa4f15e39c892e",
+    "tests/fixtures/storage-backup-contract.py": "973ad93dd7c681afffb31f4a98843fce5e128d5526f494a63ab2ffad545dc8d9",
+    "tests/fixtures/storage-crash-native.py": "1518e0046679f879e7f05c87a472aed12c16af3683d724abc2618f75d8143df9"
+  },
+  "validation": [
+    "Five focused SQLite backup/verification contracts passed locally and in CI",
+    "Wrong expected hash, sidecar, and unexpected view refused",
+    "Root CLI verifies native crash-registry snapshot without live config/registry arguments",
+    "Native record counts match original snapshot and file hash remains unchanged",
+    "Existing scoped storage/crash/endpoint/coordinator/Harness checks passed",
+    "CI typecheck and builds passed"
+  ],
+  "limits": [
+    "Does not validate logical allocation/root/grant consistency or provenance beyond expected hash",
+    "Does not import records or authorize storage-backed restore",
+    "Authenticated recovery image binding, fencing and clean-host acceptance remain open"
+  ]
+}

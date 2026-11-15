@@ -1335,3 +1335,10 @@ run 43701534066. Root CLI produces a synchronized standalone SQLite snapshot of 
 allocations and repair approvals, with hash/count receipt and no overwrite. Native snapshot matched
 all rows including unresolved handoff. [Evidence](evidence/086-storage-registry-backup.json).
 Workspace/endpoint/coordinator capture, coordinated fencing, import/restore and final qualification remain open.
+
+
+086 offline registry artifact verification: VERIFIED at `61a96410567661009efd5d0a3c32d41ff11b9c2a`,
+scoped Linux run 43702016501. The root CLI checks the trusted expected hash, private file identity,
+standalone SQLite format and table structure without opening a live host. Five focused contracts and
+native verification passed. [Evidence](evidence/086-storage-backup-verification.json). Semantic binding
+to endpoint allocations, fenced restore and final qualification remain open; storage recovery stays refused.

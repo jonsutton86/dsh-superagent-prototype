@@ -908,3 +908,42 @@ standalone SQLite and overwrite refusal passed. Three local SQLite/WAL contracts
 scoped native integration/crash/systemd/Harness checks, typecheck and builds passed. See
 [registry backup evidence](evidence/086-storage-registry-backup.json). Coordinated export/restore,
 fencing and clean-host recovery remain open; this snapshot alone is not a restore procedure.
+
+### Offline registry artifact verification
+
+The installed root CLI accepts `verify-backup --input /root/agentic-backups/host-UNIQUE.sqlite
+--sha256 EXPECTED_HASH` without `--config` or `--registry`. The expected hash must come from the
+retained, independently trusted backup receipt. Computing a new hash from an unknown file and approving
+it does not establish provenance. No live host, mount, namespace or registry is opened by this command.
+
+Verification requires a private root-owned single-link regular file under protected parents, rejects
+SQLite sidecars and WAL-format headers, checks the expected hash and SQLite integrity, and requires
+the current four registry tables with the expected columns and no views/triggers. It opens SQLite
+immutable/read-only with trusted schema disabled, bounds verification time, and checks file identity,
+size and timestamps afterward. It prints counts and `artifactVerified: true`, while retaining
+`restoreVerified: false`. This is artifact integrity/format verification, not semantic reconciliation
+of individual grants, allocations, quotas, root identities or ownership epochs.
+
+Source investigation for the next integration step: `src/remote/endpoint.ts` still explicitly refuses
+`recovery.world` when managed storage is configured. Otherwise that path verifies the original grant,
+root identity, credentials, independent ownership, inventory revision and quiescence. Its consumer,
+`src/recovery/configuration.ts`, pins the original world and credential binding. `WorldConfigurationObservation`
+in `src/remote/recovery.ts` has no storage registry artifact binding, and the receipt image in
+`src/recovery/image.ts` has no storage-host snapshot member. Removing the refusal before adding those
+bindings would bypass current recovery invariants. CodeGraph context and direct source inspection
+confirm this gap; no storage-backed restore is enabled by the offline verifier.
+
+Remaining integration requires an authenticated image member for the host snapshot, a frozen endpoint
+storage inventory tied to the same original requests/project IDs/root identities, explicit preservation
+of reserved/uncertain allocations and repair approvals, fencing of the old host, and restore validation
+against the target filesystem before any endpoint may execute. A standalone SQLite hash alone cannot
+prove those properties. No default provider, runtime or live app configuration changes.
+
+
+VERIFIED at `61a96410567661009efd5d0a3c32d41ff11b9c2a`: scoped Linux
+[run 43702016501](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43702016501)
+passed offline root CLI verification without a live config/registry argument, expected-hash refusal,
+and unchanged native snapshot bytes/counts. Five local SQLite backup/verification contracts, the
+existing scoped native storage workflow, typecheck and builds passed. See
+[artifact verification evidence](evidence/086-storage-backup-verification.json). This verifies artifact
+integrity/format, not allocation semantics, filesystem restoration or clean-host recovery.
