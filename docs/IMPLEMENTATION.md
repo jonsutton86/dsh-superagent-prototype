@@ -1369,3 +1369,11 @@ Authenticated artifact opening, image membership, fencing and live restore integ
 tests. Expected snapshot bytes are verified into private copies before readonly SQLite normalization
 and cross-check; originals remain unchanged. [Evidence](evidence/086-storage-artifact-copies.json).
 Authenticated manifest membership, full host audit, ownership fencing and restore integration remain open.
+
+
+086 authenticated held-image storage members: VERIFIED at `c5e54b4`. Existing HMAC image verification
+now binds endpoint/host snapshot members and runs their private-copy record cross-check. Installation
+and activation loading remain refused for storage-bearing images. Typecheck/builds passed; broad
+recovery ring was 321 passed/4 stale-fixture failures, followed by passing focused repairs (3 source cases
+and 31 storage/resources/speculation tests). [Exact evidence](evidence/086-storage-image-members.json).
+Automatic capture/preparation, full host audit, frozen-epoch fencing and storage restore remain open.

@@ -1049,3 +1049,31 @@ passed, including real SQLite file copies, input immutability, hash/size refusal
 non-private files and WAL-header rejection. The initial extension-option spelling was corrected against
 the installed Node type definition before final validation. [Evidence](evidence/086-storage-artifact-copies.json).
 No native/full qualification or deployment for this read-only pipeline.
+
+
+### Authenticated held-image storage membership
+
+`ReceiptImage` now supports `storage-host` and `storage-endpoint` members plus explicit endpoint/member
+pairs. The existing receipt-image HMAC covers these fields; there is no second signing or approval
+system. Each endpoint must appear in the original image resource inventory. Endpoint members cannot
+be shared, host members may be shared by endpoints in one registry, and unbound/duplicate/wrong-role
+members are refused. After authentication and file verification, the existing private-copy pipeline
+checks the pair's saved allocation/grant bindings using hashes from the authenticated manifest.
+
+These are held evidence members. `installCheckpoint` and `readInstallation` explicitly refuse images
+containing storage until full host auditing, frozen-epoch fencing and restore integration are available.
+Older strict readers reject the new enum/field rather than treating storage as an ordinary world.
+Checkpoint capture and receipt preparation do not yet produce these members automatically; the tested
+path is construction/sealing/verification of a held image, not a deployed backup or restore workflow.
+
+VERIFIED at `c5e54b4087fcaa675feb65e76b711f07ffe392d8`: authenticated storage-image verification and
+installation refusal passed; final typecheck and all seven builds passed for this production source.
+The broader recovery ring initially passed 321 tests and failed four stale fixture cases: three expected
+three built-in sources where the catalog now registers five, and one expected speculative release
+while its simulated reporting turn remained running. Isolation and the adjacent speculation runtime
+suite reproduced the latter fixture omission. Fixtures now explicitly end the turn with Harness's idle
+event, assert the allocation stays held beforehand, and preserve the production stop guard.
+
+Focused retests passed all three affected source cases plus 31 storage/recovery-resource/speculation
+runtime tests. The entire broad ring was not repeated after test-only corrections; no full final matrix
+or native qualification is claimed. [Evidence](evidence/086-storage-image-members.json).

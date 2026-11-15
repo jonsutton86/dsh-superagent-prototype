@@ -1,0 +1,37 @@
+{
+  "kind": "authenticated-held-storage-image-members",
+  "revision": "c5e54b4087fcaa675feb65e76b711f07ffe392d8",
+  "recordedAt": "2026-11-15T10:27:10.046971+00:00",
+  "classification": "VERIFIED existing-manifest authentication and held-image storage verification; installation intentionally refused; NOT DEPLOYED",
+  "hashes": {
+    "src/recovery/image.ts": "bd3471fb40fe2421215597fd9db3089c6567cd44ba734a95bd52d6092317065f",
+    "src/recovery/installation.ts": "89e1acbf417cdb7c7e7f6487e5cd672f5556376673e394ec7f4a9f0ccf6e6673",
+    "tests/recovery-storage.spec.ts": "fe3da306881cc249601a06490adee76a940aac296ccab13d1b34d741a1b0b43e",
+    "tests/recovery-audit.spec.ts": "ab32a1044f38787be75dbded33655de5389bc488cee45c661f56a2e35b3d06a3",
+    "tests/recovery-resources.spec.ts": "b03e675c08b83f6128e9ff240447deec15e8b7ef619f371e7525fbd4bc7a3acd",
+    "tests/speculation-runtime.spec.ts": "3042e8f6befb9ef6c2653b74e0a67a62a75086bd404b6a4c2ebb284872f1df6c"
+  },
+  "validation": [
+    "Storage-host/storage-endpoint members and endpoint bindings are covered by existing receipt-image HMAC",
+    "Unbound/duplicate/wrong-role storage members refused; endpoint must belong to image resource inventory",
+    "Authenticated member hashes feed private-copy original-record cross-check",
+    "Tampered signed binding fails authentication; valid storage image remains non-installable",
+    "Broader recovery run: 321 passed and 4 failed due stale fixtures",
+    "Source-count expectations updated from 3 to current 5 built-in contracts; 3 affected cases passed on focused rerun",
+    "Speculation fixtures now explicitly emit Harness idle after reporting ready; 31 storage/resources/speculation tests passed",
+    "Typecheck passed; seven builds passed with final production source",
+    "CodeGraph broad transitive impact prompted the recovery-ring run"
+  ],
+  "failureAnalysis": [
+    "Three failures expected 3 sources though SourceCatalog registers 5",
+    "Speculation fixture left reporting worker running; original-stop hold correctly refused release",
+    "Focused isolation reproduced speculation failure, adjacent speculation-runtime suite exposed same fixture omission",
+    "Tests now assert no release before idle; no production stop guard weakened"
+  ],
+  "limits": [
+    "Checkpoint capture/preparation do not yet produce storage members automatically",
+    "Full host audit, frozen-epoch fencing and actual storage restore not implemented",
+    "Installer and readInstallation explicitly reject storage-bearing images",
+    "Broad recovery suite was not repeated after test-fixture-only corrections; full final matrix remains open"
+  ]
+}
