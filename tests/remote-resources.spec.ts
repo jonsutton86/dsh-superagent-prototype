@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:url'
 import { WorkspaceCaptures } from '../src/remote/workspace-capture.ts'
 import { captureWorkspaceRecovery } from '../src/recovery/workspace-archive.ts'
 import { createHash, randomUUID } from 'node:crypto'
@@ -272,6 +273,20 @@ it.runIf(!!process.env.DSH_RESOURCE_QUALIFICATION_ROOT)('qualifies actual cgroup
     await endpoint.stop(); endpoint = create(); await endpoint.start()
     expect(await endpoint.rpc(principal, request)).toMatchObject({ id: request.requestId, phase: 'settled', outcome: { exitCode: 0 }, quiescent: true })
     expect(await endpoint.rpc(principal, { op: 'job.get', id: oom.requestId })).toMatchObject({ id: oom.requestId, outcome: killed.outcome, resources: killed.resources, quiescent: true })
+    await endpoint.stop()
+    const built = await import(pathToFileURL(resolve('lib/remote-endpoint.js')).href)
+    const registered = vi.fn(), disposers: (() => Promise<void>)[] = [], receiptFile = join(directory, 'maintenance-result.json')
+    const maintenanceContext = { fs: filesystem, subprocess: local, webServer: { host: '127.0.0.1', register: registered },
+      logger: { info() {}, warn() {} }, effect: (effect: () => (() => Promise<void>)) => { disposers.push(effect()) } } as unknown as Context
+    const maintenanceRequest = { ...captureRequest, requestId: randomUUID(), destination: join(directory, 'native-maintenance-archive') }
+    try {
+      await built.apply(maintenanceContext, built.Config({ stateDir: join(directory, 'state'), workspaceRoot: join(directory, 'work'), resources: configured,
+        maintenance: { mode: 'capture', request: maintenanceRequest, receiptFile } }))
+      expect(registered).not.toHaveBeenCalled()
+      expect(JSON.parse(await readFile(receiptFile, 'utf8'))).toMatchObject({ mode: 'capture', executionOwnership: false,
+        capture: { phase: 'complete', request: maintenanceRequest } })
+    } finally { for (const dispose of disposers.reverse()) await dispose() }
+
   } finally {
     await endpoint.stop(); await ctx.fiber.dispose()
     // Kernel rmdir refuses a populated cgroup; never recursively delete or kill an unknown range here.
@@ -554,5 +569,21 @@ it('holds all endpoint admission during host capture and releases the fence afte
     await expect(endpoint.reconcileWorkspaceCapture(recoverable, '0'.repeat(64))).rejects.toThrow('reviewed digest')
 
 
+  } finally { await endpoint.stop(); await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }) }
+})
+
+it('maintenance startup preserves accepted jobs without dispatch and refuses normal RPC admission', async () => {
+  const directory = await realpath(await mkdtemp(join(tmpdir(), 'resource maintenance '))), ctx = new Context(), io = new FakeCgroup()
+  const endpoint = new RemoteEndpoint({ filesystem: new LocalFileSystem(ctx, { cwd: directory, diffBasisMaxBytes: 1024 * 1024 }),
+    subprocess: new LocalSubprocessRuntime(ctx), stateDir: join(directory, 'state'), root: join(directory, 'work'), resources: new CgroupResources(policy, io),
+    isolation: { name: 'test-only-unconfined', wrap: async (argv: readonly string[]) => argv } })
+  try {
+    const at = new Date().toISOString(), id = 'retained-accepted'
+    endpoint.journal.saveJob({ id, grantId: 'original-grant', epoch: 1, revision: 1, fingerprint: 'original', phase: 'accepted', createdAt: at, updatedAt: at,
+      request: { op: 'job.spawn', requestId: id, revision: 1, argv: ['/bin/false'], cwd: join(directory, 'work'), graceMs: 10, env: {} }, cancelRequested: false, quiescent: false })
+    await endpoint.start({ maintenance: true })
+    await expect(endpoint.rpc({ role: 'admin' }, { op: 'identity' })).rejects.toThrow('host-only maintenance')
+    await expect(endpoint.withRecoveryCapture(async () => 'must not capture')).rejects.toThrow('managed process quiescence')
+    expect(endpoint.journal.job(id)).toMatchObject({ phase: 'accepted', quiescent: false, cancelRequested: false })
   } finally { await endpoint.stop(); await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }) }
 })

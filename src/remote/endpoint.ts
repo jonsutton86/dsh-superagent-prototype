@@ -63,6 +63,7 @@ export class RemoteEndpoint {
   private closed = false
   private stopping?: Promise<void>
   private initialized = false
+  private maintenanceMode = false
   private root = ''
   constructor(private readonly host: EndpointHost) {
     this.journal = new RemoteJournal(host.stateDir, host.root, host.storage?.endpointId)
@@ -118,7 +119,8 @@ export class RemoteEndpoint {
     }
     catch (error) { this.journal.close(); throw error }
   }
-  async start(): Promise<void> {
+  async start(options: { maintenance?: boolean } = {}): Promise<void> {
+    this.maintenanceMode = options.maintenance === true
     this.root = await realpath(this.host.root)
     const control = await realpath(this.host.stateDir)
     for (const helper of [this.host.resourceHelper, this.host.commandHelper, this.host.snapshotHelper]) {
@@ -139,10 +141,12 @@ export class RemoteEndpoint {
     if (this.host.isolation.name === 'linux-bubblewrap') await this.verifyIsolation(control, proofRoot)
     if (this.host.resources) this.journal.db.prepare('INSERT OR IGNORE INTO endpoint_meta VALUES (?,?)').run('resource-policy', JSON.stringify(this.host.resources.policy))
     this.initialized = true
-    this.sweep()
-    this.timer = setInterval(() => this.sweep(), 250); this.timer.unref()
-    this.ownership?.start(error => this.host.report?.(error))
-    for (const job of this.journal.jobs()) if (job.phase === 'accepted') this.enqueue(job.id)
+    if (!this.maintenanceMode) {
+      this.sweep()
+      this.timer = setInterval(() => this.sweep(), 250); this.timer.unref()
+      this.ownership?.start(error => this.host.report?.(error))
+      for (const job of this.journal.jobs()) if (job.phase === 'accepted') this.enqueue(job.id)
+    }
   }
   private async verifyIsolation(control: string, parent: string): Promise<void> {
     if (!this.host.filesystemRpc) throw new Error('Confined filesystem runner is required')
@@ -597,6 +601,7 @@ export class RemoteEndpoint {
   }
   async rpc(principal: Principal, input: unknown, ownershipProof?: string): Promise<unknown> {
     if (!this.initialized || this.closing) throw new RemoteError(503, 'unavailable', 'Endpoint is not ready')
+    if (this.maintenanceMode) throw new RemoteError(503, 'maintenance', 'Endpoint is in host-only maintenance mode')
     if (this.recoveryCapture) throw new RemoteError(409, 'recovery_capture', 'Endpoint admission is held for recovery capture')
     const request = Rpc.parse(input)
     // Count before asynchronous ownership authorization, queueing or path resolution.

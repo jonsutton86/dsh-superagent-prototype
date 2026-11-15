@@ -1,3 +1,8 @@
+import { realpathSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { privateDirectory, privateFile } from '../environments/endpoint-files.ts'
+import { inside } from './journal.ts'
+import { WorkspaceCaptureRequest } from './workspace-capture.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import s from '@deepseek-ai/schemastery'
@@ -19,9 +24,13 @@ export const StorageConnection = z.object({ endpointId: z.string().uuid(),
     && !/[\0\n\r]/.test(value) && !value.split('/').slice(1).some(part => !part || part === '.' || part === '..')),
   policy: EndpointStorage }).strict()
 
+export const CaptureMaintenance = z.object({ mode: z.enum(['capture', 'reconcile']), request: WorkspaceCaptureRequest,
+  receiptFile: z.string().startsWith('/').max(4096).refine(value => !value.includes('\0')), expectedManifestHash: z.string().regex(/^[a-f0-9]{64}$/).optional() }).strict()
+  .refine(value => value.mode === 'reconcile' ? !!value.expectedManifestHash : !value.expectedManifestHash)
+
 export const name = 'dsh-superagent-execution-endpoint'
 export const inject = ['fs', 'subprocess', 'webServer']
-export interface EndpointConfig { stateDir: string; workspaceRoot: string; allowedEnv: string[]; maxRunning: number; outputMaxBytes: number; ownership?: ResourceOwnershipConfig; resources?: EndpointResources; storage?: z.infer<typeof StorageConnection> }
+export interface EndpointConfig { stateDir: string; workspaceRoot: string; allowedEnv: string[]; maxRunning: number; outputMaxBytes: number; ownership?: ResourceOwnershipConfig; resources?: EndpointResources; storage?: z.infer<typeof StorageConnection>; maintenance?: z.infer<typeof CaptureMaintenance> }
 const budget = s.object({ cpuPercent: s.number().min(1).max(6400).step(1).required(),
   memoryBytes: s.number().min(64 * 1024 * 1024).max(1024 ** 4).step(1).required(), processes: s.number().min(16).max(65536).step(1).required() })
 const storageBudget = s.object({ bytes: s.number().min(4096).max(1024 ** 4).step(4096).required(),
@@ -37,6 +46,9 @@ export const Config: s<Partial<EndpointConfig>, EndpointConfig> = s.object({
     policy: s.object({ kind: s.const('linux-xfs-project').required(), filesystemUUID: s.string().required(),
       mountRoot: s.string().required(), projectIds: s.object({ first: s.number().required(), last: s.number().required() }).required(),
       pool: storageBudget.required(), workspace: storageBudget.required() }).required() })]),
+  maintenance: s.union([s.object({ mode: s.union(['capture', 'reconcile']).required(), receiptFile: s.string().required(), expectedManifestHash: s.string(),
+    request: s.object({ requestId: s.string().required(), grantId: s.string().required(), epoch: s.number().required(), destination: s.string().required(),
+      maxEntries: s.number().required(), maxBytes: s.number().required() }).required() })]),
   ownership: s.union([s.object({ url: s.string().required(), authorityId: s.string().required(), coordinatorId: s.string().required(),
     resourceId: s.string().required(), credentialFile: s.string().pattern(/^\//).required(), timeoutMs: s.number().min(100).max(60_000).default(5000) })]),
 })
@@ -44,6 +56,18 @@ export const Config: s<Partial<EndpointConfig>, EndpointConfig> = s.object({
 /** Mount on a dedicated Linux Harness host; TLS or an authenticated tunnel terminates outside the loopback listener. */
 export async function apply(ctx: Context, config: EndpointConfig): Promise<void> {
   if (ctx.webServer.host !== '127.0.0.1') throw new Error('Execution endpoint requires a loopback listener behind TLS or a secure tunnel')
+  const maintenance = config.maintenance ? CaptureMaintenance.parse(config.maintenance) : undefined
+  if (maintenance) {
+    if (!config.resources) throw new Error('Capture maintenance requires configured kernel resource enforcement')
+    if (resolve(maintenance.receiptFile) !== maintenance.receiptFile
+      || inside(resolve(config.workspaceRoot), maintenance.receiptFile) || inside(resolve(maintenance.request.destination), maintenance.receiptFile))
+      throw new Error('Maintenance receipt must be separate from workspaces and archive content')
+    if (privateDirectory(dirname(maintenance.receiptFile)) !== dirname(maintenance.receiptFile)
+      || realpathSync(config.workspaceRoot) !== resolve(config.workspaceRoot)
+      || resolve(maintenance.request.destination) !== maintenance.request.destination
+      || realpathSync(dirname(maintenance.request.destination)) !== dirname(maintenance.request.destination))
+      throw new Error('Capture maintenance paths must use canonical directories')
+  }
   const storageConfig = config.storage ? StorageConnection.parse(config.storage) : undefined
   const storage = storageConfig ? { endpointId: storageConfig.endpointId, policy: storageConfig.policy, host: new LocalStorageHost(storageConfig.socketPath) } : undefined
   const resources = config.resources ? new CgroupResources(EndpointResources.parse(config.resources)) : undefined
@@ -57,7 +81,16 @@ export async function apply(ctx: Context, config: EndpointConfig): Promise<void>
     allowedEnv: config.allowedEnv, maxRunning: config.maxRunning, outputMaxBytes: config.outputMaxBytes, ownership: config.ownership,
     report: error => ctx.logger.warn('Endpoint ownership monitor: %s', error instanceof Error ? error.message : String(error)) })
   ctx.effect(() => () => endpoint.stop())
-  await endpoint.start()
+  await endpoint.start({ maintenance: !!maintenance })
+  if (maintenance) {
+    try {
+      const result = maintenance.mode === 'capture' ? await endpoint.captureWorkspace(maintenance.request)
+        : await endpoint.reconcileWorkspaceCapture(maintenance.request, maintenance.expectedManifestHash!)
+      privateFile(maintenance.receiptFile, JSON.stringify({ version: 1, mode: maintenance.mode, capture: result, executionOwnership: false }))
+      ctx.logger.info('Workspace capture maintenance recorded original operation %s in phase %s', result.request.requestId, result.phase)
+    } finally { await endpoint.stop() }
+    return
+  }
   ctx.effect(() => ctx.webServer.register({ kind: 'prefix', path: RPC_PATH, handler: remoteHandler(endpoint) }))
   ctx.logger.info('Execution endpoint ready: %s; administration token is in %s/admin.token', endpoint.journal.id, config.stateDir)
 }
