@@ -68,6 +68,7 @@ function databases() {
   host.exec('CREATE TABLE endpoints(id,filesystem,first,last,config); CREATE TABLE namespaces(endpoint,identities); CREATE TABLE operations(endpoint,request,workspace,filesystem,project,intent,roots); CREATE TABLE repairs(endpoint,id,request,intent,phase);')
   host.prepare('INSERT INTO endpoints VALUES(?,?,?,?,?)').run(value.host.endpointId, value.host.policy.filesystemUUID, 100, 109,
     JSON.stringify({ endpointId: value.host.endpointId, uid: 1001, gid: 1001, policy: value.host.policy }))
+  host.prepare('INSERT INTO namespaces VALUES(?,?)').run(value.host.endpointId, JSON.stringify([1, 2, 3].map(inode => ({ device: '1', inode: String(inode) }))))
   host.prepare('INSERT INTO operations VALUES(?,?,?,?,?,?,?)').run(value.host.endpointId, operation.intent.requestId, operation.intent.workspace,
     value.host.policy.filesystemUUID, operation.intent.projectId, JSON.stringify(operation.intent), JSON.stringify(operation.roots))
   return { value, endpoint, host, close() { endpoint.close(); host.close() } }
@@ -82,7 +83,7 @@ it('reads original SQLite rows without initializing services or changing the cap
     expect(auditStorageRecoveryBindings(endpoint.snapshot, host.snapshot)).toMatchObject({ provisioned: 1, restoreVerified: false })
     expect(endpoint.digest).toMatch(/^[a-f0-9]{64}$/); expect(host.digest).toMatch(/^[a-f0-9]{64}$/)
     expect([db.endpoint, db.host].map(value => value.prepare('SELECT total_changes() AS changes').get())).toEqual(before)
-    db.host.prepare('INSERT INTO repairs VALUES(?,?,?,?,?)').run(db.value.host.endpointId, 'repair', 'original', '{}', 'started')
+    db.host.prepare('INSERT INTO repairs VALUES(?,?,?,?,?)').run(db.value.host.endpointId, 'repair', 'original', JSON.stringify({ request: db.value.host.operations[0]!.intent, snapshotHash: 'a'.repeat(64) }), 'started')
     expect((await readHostStorageSnapshot(db.host, db.value.host.endpointId, signal)).digest).not.toBe(host.digest)
   } finally { db.close() }
 })
@@ -122,7 +123,7 @@ it('verifies expected artifact bytes before reading isolated SQLite copies', asy
     const input = { endpointId: db.value.endpoint.endpointId, endpoint, host }, signal = new AbortController().signal
     const result = await auditStorageRecoveryArtifacts(input, signal)
     expect(result).toMatchObject({ recordBindingsVerified: true, restoreVerified: false, liveFilesystemVerified: false,
-      hostRegistryAuditRequired: true, endpointArtifact: { sha256: endpoint.sha256 }, hostArtifact: { sha256: host.sha256 } })
+      hostRegistryAudit: { recordBindingsVerified: true, restoreVerified: false }, endpointArtifact: { sha256: endpoint.sha256 }, hostArtifact: { sha256: host.sha256 } })
     expect(createHash('sha256').update(await readFile(endpoint.path)).digest('hex')).toBe(endpoint.sha256)
     await expect(auditStorageRecoveryArtifacts({ ...input, host: { ...host, sha256: 'f'.repeat(64) } }, signal)).rejects.toThrow('digest')
     await expect(auditStorageRecoveryArtifacts({ ...input, endpoint: { ...endpoint, bytes: endpoint.bytes - 1 } }, signal)).rejects.toThrow('size')
@@ -159,4 +160,42 @@ it('verifies expected artifact bytes before reading isolated SQLite copies', asy
     await chmod(host.path, 0o644)
     await expect(auditStorageRecoveryArtifacts(input, signal)).rejects.toThrow('private owned')
   } finally { db.close(); await rm(directory, { recursive: true, force: true }) }
+})
+
+it.each(['orphan-repair', 'changed-repair', 'duplicate-repair', 'overlap', 'unrelated-config', 'partial-namespace', 'capacity', 'unknown-schema'])(
+  'audits the whole shared host registry and rejects %s', async kind => {
+    const db = databases(), id = db.value.host.endpointId, operation = db.value.host.operations[0]!
+    try {
+      if (kind.includes('repair')) {
+        const request = kind === 'changed-repair' ? { ...operation.intent, requestHash: 'f'.repeat(64) } : operation.intent
+        db.host.prepare('INSERT INTO repairs VALUES(?,?,?,?,?)').run(id, 'repair', kind === 'orphan-repair' ? 'missing' : 'original',
+          JSON.stringify({ request, snapshotHash: 'a'.repeat(64) }), 'started')
+        if (kind === 'duplicate-repair') db.host.exec('INSERT INTO repairs SELECT * FROM repairs')
+      }
+      if (kind === 'overlap' || kind === 'unrelated-config') {
+        const otherId = '44444444-4444-4444-8444-444444444444'
+        const policy = structuredClone(db.value.host.policy)
+        if (kind === 'unrelated-config') policy.projectIds = { first: 200, last: 209 }
+        db.host.prepare('INSERT INTO endpoints VALUES(?,?,?,?,?)').run(otherId, policy.filesystemUUID, policy.projectIds.first, policy.projectIds.last,
+          JSON.stringify({ endpointId: otherId, uid: kind === 'unrelated-config' ? 0 : 1002, gid: 1002, policy }))
+      }
+      if (kind === 'unknown-schema') db.host.exec('CREATE TABLE unknown_authority(value)')
+      if (kind === 'partial-namespace') db.host.exec("UPDATE namespaces SET identities='[null,null,null]'")
+      if (kind === 'capacity') for (let i = 1; i <= 2; i++) {
+        const intent = { ...operation.intent, requestId: `extra-${i}`, workspace: `extra-${i}`, projectId: 100 + i }
+        db.host.prepare('INSERT INTO operations VALUES(?,?,?,?,?,?,?)').run(id, intent.requestId, intent.workspace, db.value.host.policy.filesystemUUID,
+          intent.projectId, JSON.stringify(intent), JSON.stringify(operation.roots))
+      }
+      await expect(readHostStorageSnapshot(db.host, id, new AbortController().signal)).rejects.toThrow('recovery_host_storage_')
+    } finally { db.close() }
+  })
+
+
+it('retains an uninitialized namespace when no host operation has been admitted', async () => {
+  const db = databases()
+  try {
+    db.host.exec("DELETE FROM operations; UPDATE namespaces SET identities='[null,null,null]'")
+    const result = await readHostStorageSnapshot(db.host, db.value.host.endpointId, new AbortController().signal)
+    expect(result.audit).toMatchObject({ allocations: 0, incompleteNamespaces: 1, restoreVerified: false })
+  } finally { db.close() }
 })

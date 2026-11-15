@@ -52,7 +52,7 @@ export async function auditStorageRecoveryArtifacts(input: unknown, signal: Abor
     signal.throwIfAborted()
     return { ...result, endpointDigest: endpointRecords.digest, hostDigest: hostRecords.digest,
       endpointArtifact: { bytes: value.endpoint.bytes, sha256: value.endpoint.sha256 },
-      hostArtifact: { bytes: value.host.bytes, sha256: value.host.sha256 }, hostRegistryAuditRequired: true as const }
+      hostArtifact: { bytes: value.host.bytes, sha256: value.host.sha256 }, hostRegistryAudit: hostRecords.audit }
   } finally {
     try { endpoint?.close() } finally { try { host?.close() } finally { await rm(staging, { recursive: true, force: true }) } }
   }

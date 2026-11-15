@@ -98,35 +98,84 @@ export async function readEndpointStorageSnapshot(db: DatabaseSync, signal: Abor
   return { snapshot: endpointSnapshot.parse({ endpointId, policy, reservations, grants }), records: r.records, digest: r.digest() }
 }
 
-/** Selected endpoint view of a separately verified/audited root registry artifact; unrelated rows stay in its digest. */
+/** Audit the whole shared registry before selecting an endpoint view. All records contribute to its digest. */
 export async function readHostStorageSnapshot(db: DatabaseSync, endpointId: string, signal: AbortSignal) {
   signal.throwIfAborted()
   const r = new StateReader(db, signal, 'host_storage')
   r.parse(z.string().uuid(), endpointId, 'endpoint_id')
-  for (const table of ['endpoints', 'namespaces', 'operations', 'repairs'])
-    if (!r.tables.has(table)) r.fail('reference', table)
+  const schema = { endpoints: ['id', 'filesystem', 'first', 'last', 'config'], namespaces: ['endpoint', 'identities'],
+    operations: ['endpoint', 'request', 'workspace', 'filesystem', 'project', 'intent', 'roots'], repairs: ['endpoint', 'id', 'request', 'intent', 'phase'] }
+  r.same([...r.tables].sort(), Object.keys(schema).sort(), 'registry_tables')
+  if (db.prepare("SELECT 1 FROM sqlite_master WHERE type IN ('view','trigger') LIMIT 1").get()) r.fail('shape', 'registry_schema')
+  for (const [table, columns] of Object.entries(schema))
+    r.same(db.prepare(`PRAGMA table_info(${table})`).all().map(row => row.name), columns, 'registry_columns')
   const configSchema = z.object({ endpointId: z.string().uuid(), uid: z.number().int().positive().max(2 ** 31 - 1),
     gid: z.number().int().positive().max(2 ** 31 - 1), policy: EndpointStorage }).strict()
-  let policy: z.infer<typeof EndpointStorage> | undefined
+  const policies = new Map<string, z.infer<typeof EndpointStorage>>(), ranges = new Map<string, { first: number; last: number }[]>()
   for (const row of r.rows('endpoints')) {
-    if (row.id === endpointId) {
-      if (policy) r.fail('conflict', 'endpoint_id')
-      const config = r.json(row.config, configSchema, 'host_configuration'); policy = config.policy
-      r.same([row.id, row.filesystem, row.first, row.last], [config.endpointId, policy.filesystemUUID, policy.projectIds.first, policy.projectIds.last], 'host_configuration_keys')
-    }
+    const config = r.json(row.config, configSchema, 'host_configuration'), policy = config.policy
+    if (config.endpointId !== config.endpointId.toLowerCase() || policy.filesystemUUID !== policy.filesystemUUID.toLowerCase()
+      || !/^\/[A-Za-z0-9_/-]+$/.test(policy.mountRoot)) r.fail('shape', 'host_configuration')
+    if (policies.has(config.endpointId)) r.fail('conflict', 'endpoint_id')
+    r.same([row.id, row.filesystem, row.first, row.last], [config.endpointId, policy.filesystemUUID, policy.projectIds.first, policy.projectIds.last], 'host_configuration_keys')
+    policies.set(config.endpointId, policy)
+    const intervals = ranges.get(policy.filesystemUUID) ?? []; intervals.push(policy.projectIds); ranges.set(policy.filesystemUUID, intervals)
+    if (policies.size > 20000) r.fail('limit', 'endpoints')
     await r.step()
   }
-  const selectedPolicy = policy ?? r.fail('reference', 'endpoint_id')
+  for (const intervals of ranges.values()) {
+    intervals.sort((a, b) => a.first - b.first)
+    for (let i = 1; i < intervals.length; i++) {
+      if (intervals[i - 1]!.last >= intervals[i]!.first) r.fail('conflict', 'project_ranges')
+      await r.step()
+    }
+  }
+  const selectedPolicy = r.needed(policies, endpointId, 'endpoint_id')
+  const namespaces = new Map<string, z.infer<typeof identity>[] | null>()
+  for (const row of r.rows('namespaces')) {
+    const owner = r.parse(z.string().uuid(), row.endpoint, 'namespace_endpoint')
+    r.needed(policies, owner, 'namespace_endpoint')
+    if (namespaces.has(owner)) r.fail('conflict', 'namespace_endpoint')
+    const roots = r.json(row.identities, z.tuple([identity.nullable(), identity.nullable(), identity.nullable()]), 'namespace_roots')
+    namespaces.set(owner, roots.every(item => item !== null) ? roots : null)
+    await r.step()
+  }
+  const allocations = new Map<string, z.infer<typeof hostOperation>>(), workspaces = new Set<string>(), projects = new Set<string>(), counts = new Map<string, number>()
   const operations: z.infer<typeof hostOperation>[] = []
+  let incompleteRoots = 0
   for (const row of r.rows('operations')) {
-    if (row.endpoint === endpointId) {
-      const intent = r.json(row.intent, hostOperation.shape.intent, 'host_intent'), roots = r.json(row.roots, hostOperation.shape.roots, 'host_roots')
-      r.same([row.endpoint, row.request, row.workspace, row.filesystem, row.project],
-        [intent.endpointId, intent.requestId, intent.workspace, selectedPolicy.filesystemUUID, intent.projectId], 'host_intent_keys')
-      operations.push({ intent, roots }); if (operations.length > 20000) r.fail('limit', 'operations')
-    }
+    const intent = r.json(row.intent, hostOperation.shape.intent, 'host_intent'), roots = r.json(row.roots, hostOperation.shape.roots, 'host_roots')
+    const policy = r.needed(policies, intent.endpointId, 'operation_endpoint'), key = `${intent.endpointId}:${intent.requestId}`
+    r.same([row.endpoint, row.request, row.workspace, row.filesystem, row.project],
+      [intent.endpointId, intent.requestId, intent.workspace, policy.filesystemUUID, intent.projectId], 'host_intent_keys')
+    const workspaceKey = `${intent.endpointId}:${intent.workspace}`, projectKey = `${policy.filesystemUUID}:${intent.projectId}`
+    if (!namespaces.get(intent.endpointId) || allocations.has(key) || workspaces.has(workspaceKey) || projects.has(projectKey)
+      || intent.projectId < policy.projectIds.first || intent.projectId > policy.projectIds.last) r.fail('conflict', 'allocation_identity')
+    allocations.set(key, { intent, roots }); workspaces.add(workspaceKey); projects.add(projectKey)
+    const count = (counts.get(intent.endpointId) ?? 0) + 1; counts.set(intent.endpointId, count)
+    if (count * policy.workspace.bytes > policy.pool.bytes || count * policy.workspace.inodes > policy.pool.inodes) r.fail('conflict', 'allocation_capacity')
+    if (allocations.size > 20000) r.fail('limit', 'operations')
+    if (roots.some(item => item === null)) incompleteRoots++
+    if (intent.endpointId === endpointId) operations.push({ intent, roots })
     await r.step()
   }
-  for (const table of ['namespaces', 'repairs']) for (const _row of r.rows(table)) await r.step()
-  return { snapshot: hostSnapshot.parse({ endpointId, policy: selectedPolicy, operations }), records: r.records, digest: r.digest() }
+  const repairIntent = z.object({ request: hostOperation.shape.intent, snapshotHash: z.string().regex(/^[a-f0-9]{64}$/),
+    finishSnapshotHash: z.string().regex(/^[a-f0-9]{64}$/).optional() }).strict()
+  const repairs = new Set<string>(), repairedRequests = new Set<string>(); let unresolvedRepairs = 0
+  for (const row of r.rows('repairs')) {
+    const owner = r.parse(z.string().uuid(), row.endpoint, 'repair_endpoint'), id = r.parse(StorageIntent.shape.requestId, row.id, 'repair_id')
+    const request = r.parse(StorageIntent.shape.requestId, row.request, 'repair_request'), phase = r.parse(z.enum(['started', 'finishing', 'complete']), row.phase, 'repair_phase')
+    const saved = r.json(row.intent, repairIntent, 'repair_intent'), key = `${owner}:${request}`, repairKey = `${owner}:${id}`
+    const original = r.needed(allocations, key, 'repair_allocation')
+    r.same(saved.request, original.intent, 'repair_original_request')
+    if (repairs.has(repairKey) || repairedRequests.has(key) || phase === 'started' && saved.finishSnapshotHash !== undefined
+      || phase === 'finishing' && saved.finishSnapshotHash === undefined || phase !== 'started' && original.roots.some(item => item === null))
+      r.fail('conflict', 'repair_state')
+    repairs.add(repairKey); repairedRequests.add(key)
+    if (phase !== 'complete') unresolvedRepairs++
+    await r.step()
+  }
+  return { snapshot: hostSnapshot.parse({ endpointId, policy: selectedPolicy, operations }), records: r.records, digest: r.digest(),
+    audit: { recordBindingsVerified: true as const, endpoints: policies.size, allocations: allocations.size, repairs: repairs.size,
+      incompleteRoots, incompleteNamespaces: [...policies.keys()].filter(id => !namespaces.get(id)).length, unresolvedRepairs, liveFilesystemVerified: false as const, restoreVerified: false as const } }
 }
