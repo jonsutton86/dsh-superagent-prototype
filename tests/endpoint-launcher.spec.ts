@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { access, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createServer } from 'node:net'
@@ -25,15 +25,24 @@ it.runIf(process.env.DSH_ENDPOINT_LAUNCHER_QUALIFICATION === '1')('enrolls a con
       { timeout: 180_000, env: process.env }, (error, stdout, stderr) => error ? reject(new Error(`Launcher ${action}: ${stderr.trim() || 'command failed'}`)) : resolve(stdout))
   })
   try {
+    const storage = process.env.DSH_STORAGE_LAUNCHER_CONFIG ? JSON.parse(process.env.DSH_STORAGE_LAUNCHER_CONFIG) : undefined
+    const storageFile = join(root, 'endpoint-storage.json')
+    if (storage) await writeFile(storageFile, JSON.stringify({ storage }), { mode: 0o600 })
     const endpointPort = await unusedPort(), coordinatorPort = await unusedPort()
     for (const [directory, role, port] of [[endpoint, 'endpoint', endpointPort], [coordinator, 'workspace', coordinatorPort]] as const) {
-      await run(directory, 'init', '--role', role, '--checkout', resolve('.'), '--dsh', cli, '--port', String(port))
+      await run(directory, 'init', '--role', role, '--checkout', resolve('.'), '--dsh', cli, '--port', String(port), ...(role === 'endpoint' && storage ? ['--endpoint-config', storageFile] : []))
       started.push(directory)
       await run(directory, 'start', '--timeout', '60')
     }
     const endpointBefore = JSON.parse(await run(endpoint, 'status'))
     const originalMetadata = JSON.parse(await run(endpoint, 'enrollment'))
     expect(endpointBefore).toMatchObject({ ready: true, role: 'endpoint', endpoint: { id: originalMetadata.endpointId, confinement: 'linux-bubblewrap' } })
+    if (storage) {
+      expect(originalMetadata.endpointId).toBe(storage.endpointId)
+      expect(originalMetadata.storage).toEqual({ policy: storage.policy })
+      expect(endpointBefore.endpoint.storage).toEqual({ policy: storage.policy })
+      await expect(access(join(endpoint, 'workspaces'))).rejects.toMatchObject({ code: 'ENOENT' })
+    }
     ssh = await sshHost(join(root, 'SSH host'), endpointPort)
     const credentialFile = join(root, 'coordinator-admin.token'), enrollmentFile = join(root, 'endpoint-enrollment.json'), transportConfig = join(root, 'transport.json')
     await writeFile(credentialFile, await readFile(originalMetadata.credentialFile), { mode: 0o600 })
@@ -45,6 +54,7 @@ it.runIf(process.env.DSH_ENDPOINT_LAUNCHER_QUALIFICATION === '1')('enrolls a con
     await run(transport, 'start', '--timeout', '15')
     const metadata = JSON.parse(await run(transport, 'enrollment'))
     expect(metadata.endpointId).toBe(originalMetadata.endpointId)
+    if (storage) expect(metadata.storage).toEqual({ policy: storage.policy })
     expect(metadata.url).not.toBe(originalMetadata.url)
     const api = async (path: string, body?: unknown) => {
       const response = await fetch(`http://127.0.0.1:${coordinatorPort}/orchestrator/api/${path}`, {
@@ -67,8 +77,9 @@ it.runIf(process.env.DSH_ENDPOINT_LAUNCHER_QUALIFICATION === '1')('enrolls a con
     const remote = new RemoteClient({ url: metadata.url, endpointId: metadata.endpointId, credentialFile: config.credentialFile })
     const original = await remote.call<{ grant: RemoteGrant; authorized: boolean }>({ op: 'grant.status' })
     expect(original.authorized).toBe(true)
+    if (storage) expect(original.grant.root).toBe(`${storage.policy.mountRoot}/dsh-${storage.endpointId}/workspaces/launcher-proof`)
     const request = { op: 'job.spawn' as const, requestId: 'launcher-native-command', revision: original.grant.revision,
-      argv: ['/bin/sh', '-c', 'test ! -e "$1" && printf one >> invocation-count && sleep 3 && printf launcher-native-proof > proof.txt && cat proof.txt', 'launcher-test', metadata.credentialFile],
+      argv: ['/bin/sh', '-c', 'test ! -e "$1" && test ! -e "$2" && printf one >> invocation-count && sleep 3 && printf launcher-native-proof > proof.txt && cat proof.txt', 'launcher-test', metadata.credentialFile, storage?.socketPath ?? metadata.credentialFile],
       cwd: original.grant.root, graceMs: 1000 }
     const job = await remote.call<RemoteJob>(request)
     const connection = JSON.parse(await run(transport, 'status'))

@@ -25,6 +25,7 @@ python3 "$(dirname "$0")/storage-qualification.py" "$fixture/volume" "$1" "$2"
 xfs_quota -x -c 'enable -p' "$fixture/volume"
 # Run the unprivileged client before root-run Vitest creates shared tooling cache directories.
 python3 "$(dirname "$0")/storage-service-native.py" "$fixture/volume" "$1" "$2"
+python3 "$(dirname "$0")/storage-launcher-native.py" "$fixture/volume" "$1" "$2"
 DSH_STORAGE_PROBE_ROOT="$fixture/volume" pnpm exec vitest run tests/storage-probe.spec.ts
 
 python3 "$(dirname "$0")/storage-host-native.py" "$fixture/volume" "$1" "$2"
