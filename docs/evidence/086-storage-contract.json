@@ -1,0 +1,15 @@
+{
+  "kind": "workspace-storage-source-contract",
+  "classification": "VERIFIED source boundaries; DESIGN proposed enforcement; UNKNOWN native storage acceptance",
+  "revision": "8d1d78b4596bd6fdd19d0676791c3c3c4e74148b",
+  "recordedAt": "2026-11-15T07:37:26.251214+00:00",
+  "hashes": {
+    "src/remote/endpoint.ts": "8bcd94750c388602f140037d2e53c0ef6af1187b403bc1ce36f77c89fac56543",
+    "src/remote/isolation.ts": "db1fcff0800e27d6d29b0d94cacf483f012c5746f4fdf0131977292a396f6af2",
+    "src/remote/journal.ts": "5439979c5515c3ec491b584fe0446b67b0fa08f25d73542cfe175b4b9ba1320f",
+    "src/verification/runner.ts": "7dcc642dd5ecab48b9352fced87575b83298b7ffe59fe63bd032c4abfef647fa"
+  },
+  "method": "CodeGraph sync and runCapturedCheck symbol/caller query; direct source inspection; upstream xfs_quota manual",
+  "source": "https://www.man7.org/linux/man-pages/man8/xfs_quota.8.html",
+  "validation": "Documentation/source investigation only. No storage implementation, native test, deployment, or model request."
+}
