@@ -18,6 +18,7 @@ mkfs.xfs -f "$fixture/volume.img" >/dev/null
 mount -o loop,prjquota,nodev,nosuid "$fixture/volume.img" "$fixture/volume"
 python3 "$(dirname "$0")/storage-service-contract.py"
 python3 "$(dirname "$0")/storage-listener-contract.py"
+python3 "$(dirname "$0")/storage-install-contract.py"
 python3 "$(dirname "$0")/storage-qualification.py" "$fixture/volume" "$1" "$2"
 
 # Observe the same prepared filesystem through the real Harness subprocess runtime.
@@ -27,3 +28,5 @@ python3 "$(dirname "$0")/storage-service-native.py" "$fixture/volume" "$1" "$2"
 DSH_STORAGE_PROBE_ROOT="$fixture/volume" pnpm exec vitest run tests/storage-probe.spec.ts
 
 python3 "$(dirname "$0")/storage-host-native.py" "$fixture/volume" "$1" "$2"
+
+python3 "$(dirname "$0")/storage-install-native.py" "$fixture/volume" "$1" "$2"
