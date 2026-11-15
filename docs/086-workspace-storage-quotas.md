@@ -1326,3 +1326,18 @@ issue, fixed by exporting the workspace entry type; typecheck then passed. The
 This is private plaintext staging only. Archive verification, encryption/authenticated
 checkpoint membership, frozen-source authority, confined helper integration and
 restoration remain unfinished.
+
+### Workspace archive verification
+
+`verifyWorkspaceRecovery` now checks the private bounded manifest, version-1
+inventory digest, root/parent structure, unique paths, hard-link relationships,
+byte totals, complete one-to-one content membership and each member's streamed
+SHA-256. Extra members and missing files are refused. Symbolic links remain metadata
+and are never traversed or created. Five focused tests and typecheck passed;
+[receipt](evidence/086-workspace-archive-verification.json) records the exact revision.
+Tests include rehashed invalid tree manifests, not only corrupted hashes.
+
+Verification reports content integrity only; source authority, execution quiescence
+and restore permission remain false. Checkpoint integration must capture verified
+private copies or hold pinned inputs through consumption, rather than verify mutable
+paths and later reopen them. No extraction or running-app integration is enabled.

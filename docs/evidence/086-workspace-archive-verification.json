@@ -1,0 +1,28 @@
+{
+  "revision": "e47b6f617bcfbbe07f289c3176c3296b8d31924f",
+  "classification": "VERIFIED",
+  "validation": {
+    "workspaceTests": 5,
+    "typecheck": "passed"
+  },
+  "checks": [
+    "Bounded private manifest and member reads",
+    "Original inventory digest and byte totals",
+    "Unique paths with original parent directories",
+    "Hard-link content/mode/ownership relationships",
+    "Exactly one member per regular file, no extra files",
+    "Every member size and streamed SHA-256"
+  ],
+  "testedRefusals": [
+    "Changed file content",
+    "Unbound archive file",
+    "Rehashed traversal path",
+    "Rehashed missing parent directory"
+  ],
+  "limits": [
+    "Not source-authenticated or quiescence-verified",
+    "No extraction or restoration",
+    "Callers must not verify then reopen mutable inputs as trusted data; encrypted integration still needs pinned/private verified copies",
+    "Not integrated into running app or checkpoint membership"
+  ]
+}
