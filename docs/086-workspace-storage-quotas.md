@@ -1554,3 +1554,27 @@ VERIFIED: 47 focused recovery tests passed (one native-only skip), including cap
 refusal before candidate creation and unchanged source contents; one installed
 Harness maintenance test passed with the rebuilt plugin. Typecheck and build passed.
 No live app deployment or additional native Linux qualification is claimed.
+
+### Pool-wide kernel quiescence prerequisite
+
+Endpoint recovery observations now require `CgroupResources.quiescent()` whenever
+resource enforcement is configured, in addition to the existing journal, pending
+operation, ownership and storage checks. The resource observer verifies pinned pool
+limits and reads the pool's recursive `cgroup.events` population flag. Empty retained
+job journals no longer suffice if any descendant remains populated. Missing kernel
+evidence, changed limits, unstarted or closed pools return false. This includes
+processes whose scope names are absent from the journal's known-owner enumeration.
+
+VERIFIED: 42 focused local resource/recovery/ownership tests passed (one native-only
+skip) at implementation `4b0f7844e76adca060da88c175ba6a644d2afea1`, with typecheck.
+The initial scoped Linux workflow passed 27 tests plus typecheck/build. At test
+revision `9ae7c3e7e0a4222d1c6df7b687c8802bcc535ab6`, the strengthened native fixture
+explicitly checks pool emptiness before a real confined worker, population while it
+runs, and emptiness after its original stopped receipt. Scoped Linux qualification
+[43711116227](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43711116227)
+passed all 27 tests, typecheck and build.
+
+This observation is not a capture admission fence, a global snapshot epoch, or proof
+about processes outside the configured managed pool. Those remaining capture gates
+must be implemented before claiming consistent live workspace backup or activation.
+No running operator app was modified.

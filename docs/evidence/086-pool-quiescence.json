@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-15",
+  "implementationRevision": "4b0f7844e76adca060da88c175ba6a644d2afea1",
+  "nativeTestRevision": "9ae7c3e7e0a4222d1c6df7b687c8802bcc535ab6",
+  "localTests": { "passed": 42, "skipped": 1 },
+  "nativeRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43711116227",
+  "nativeTests": { "passed": 27, "skipped": 0 },
+  "nativeTypecheck": "passed",
+  "nativeBuild": "passed",
+  "verified": ["empty journals do not override populated pool", "unreadable pool evidence returns non-quiescent", "actual confined worker empty-populated-empty transition"],
+  "captureAdmissionFenceImplemented": false,
+  "globalSnapshotProven": false,
+  "deployed": false
+}
