@@ -1,0 +1,22 @@
+{
+  "kind": "workspace-verification-stage-attribution",
+  "recordedAt": "2026-11-15T07:27:51.968611+00:00",
+  "runtimeRevision": "3badaa2",
+  "testFileSha256": "d70e046887303bd609d9d6d493298cad1c29ce7d55def01e409f2a3a9f7c102f",
+  "command": "vitest run tests/remote-resources.spec.ts",
+  "passed": 17,
+  "skipped": 1,
+  "log": "/tmp/dsh-085-verification-attribution.log",
+  "typecheck": {
+    "exitCode": 0,
+    "log": "/tmp/dsh-085-verification-typecheck.log"
+  },
+  "verified": [
+    "Actual endpoint filesystem and process calls pass through production resource decorator.",
+    "Real snapshot/capture/check/recapture helpers allocate at least three separate command scopes under the same trusted workspace parent.",
+    "Verification receipt aggregates all command scopes under the original durable job.",
+    "Replay of the same accepted verification request creates no further scope and preserves usage."
+  ],
+  "simulation": "FakeCgroup supplies explicit kernel values. Test adapter strips only resource-helper argv wrapper and forwards original command to actual Harness subprocess runtime; isolation is test-only passthrough.",
+  "limitations": "Does not prove native resource enforcement, bubblewrap confinement, Linux scheduler behavior or deployment."
+}

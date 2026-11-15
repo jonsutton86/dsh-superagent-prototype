@@ -106,3 +106,13 @@ Both hierarchy layouts require exact limits and membership before exec. A change
 refuses before joining; unconfirmed membership refuses execution. Failure diagnostics contain neither the supplied
 argument nor environment payload. `evidence/085-helper-boundary.json` records hashes and typecheck. Native kernel,
 verification-stage attribution and full platform acceptance remain open.
+
+
+## Verification-stage integration
+
+The endpoint attribution fixture now routes real subprocesses through the production resource decorator, using a simulated
+kernel and a test adapter that strips only the trusted resource-helper prefix before forwarding commands to Harness.
+Actual snapshot capture, check and recapture helpers create separate command scopes under one authenticated workspace
+parent. The original verification receipt aggregates all scopes, and replay of that same request creates no further scope.
+All 17 resource tests pass with one native case skipped; typecheck passes. See `evidence/085-verification-attribution.json`.
+Native Linux aggregate enforcement, full-runtime restart/clean-host acceptance and final qualification remain open.

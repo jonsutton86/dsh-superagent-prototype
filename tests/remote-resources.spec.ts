@@ -322,12 +322,22 @@ it('attributes endpoint commands and filesystem helpers to the authenticated gra
   const filesystem = new LocalFileSystem(ctx, { cwd: directory, diffBasisMaxBytes: 1024 * 1024 }), subprocess = new LocalSubprocessRuntime(ctx)
   const resources = new CgroupResources({ ...policy, workspace: { ...policy.pool } }, io)
   const run = vi.spyOn(resources, 'run')
+  const scopes: string[] = []
+  // Strip only the trusted resource wrapper in this simulated-kernel fixture; execute actual snapshot/check helpers.
+  const simulated = new Proxy(subprocess, { get(target, property) {
+    if (property === 'spawn') return (spec: SubprocessSpawnSpec) => {
+      scopes.push(spec.argv[3]!); return target.spawn({ ...spec, argv: spec.argv.slice(5) })
+    }
+    const value = Reflect.get(target, property, target)
+    return typeof value === 'function' ? value.bind(target) : value
+  } })
+  const bounded = resources.decorate(simulated, resolve('lib/remote-resource-worker.js'))
   // Real endpoint/FS/process execution, simulated resource kernel: this verifies trusted attribution, not enforcement.
   const isolation = { name: 'test-only-unconfined', wrap: async (argv: readonly string[], _root: string, _cwd: string, _network: boolean, _signal: AbortSignal, _env: Readonly<Record<string, string>>, helper?: string) =>
     argv.map(arg => arg === '/run/dsh-filesystem.mjs' && helper ? helper : arg) }
-  const endpoint = new RemoteEndpoint({ filesystem, subprocess, resources, isolation,
+  const endpoint = new RemoteEndpoint({ filesystem, subprocess: bounded, resources, isolation,
     stateDir: join(directory, 'state'), root: join(directory, 'work'),
-    filesystemRpc: confinedFilesystem(subprocess, isolation, resolve('lib/remote-fs-worker.js')),
+    filesystemRpc: confinedFilesystem(bounded, isolation, resolve('lib/remote-fs-worker.js')),
     commandHelper: resolve('lib/remote-command-worker.js'), snapshotHelper: resolve('lib/verification-snapshot-worker.js') })
   try {
     await endpoint.start()
@@ -345,5 +355,20 @@ it('attributes endpoint commands and filesystem helpers to the authenticated gra
     await vi.waitFor(() => expect(endpoint.journal.job(request.requestId), JSON.stringify(endpoint.journal.job(request.requestId))).toMatchObject({ phase: 'settled', quiescent: true, outcome: { exitCode: 0 } }))
     expect(run.mock.calls.filter(([owner]) => owner === 'job:' + request.requestId).map(([, , workspace]) => workspace)).toEqual(['trusted-workspace'])
     expect(run.mock.calls.some(([, , workspace]) => workspace === 'forged-workspace')).toBe(false)
+    const originalParent = scopes.at(-1)!.slice(0, scopes.at(-1)!.lastIndexOf('/')), before = scopes.length
+    const check = { ...request, requestId: 'allocation-check', verification: { kind: 'check' as const, snapshot: { repository: 'none' as const } } }
+    await endpoint.rpc(principal, check)
+    await vi.waitFor(() => expect(endpoint.journal.job(check.requestId), JSON.stringify(endpoint.journal.job(check.requestId)))
+      .toMatchObject({ phase: 'settled', quiescent: true, outcome: { exitCode: 0 }, verification: { stage: 'finished', snapshotUnchanged: true, storageReleased: true } }), { timeout: 5000 })
+    const verificationScopes = scopes.slice(before)
+    expect(verificationScopes.length).toBeGreaterThanOrEqual(3)
+    expect(new Set(verificationScopes.map(path => path.slice(0, path.lastIndexOf('/'))))).toEqual(new Set([originalParent]))
+    expect(endpoint.journal.job(check.requestId).resources?.scopes).toBe(verificationScopes.length)
+    const count = scopes.length
+    await endpoint.rpc(principal, check)
+    expect(scopes).toHaveLength(count)
+    expect(endpoint.journal.job(check.requestId).resources?.scopes).toBe(verificationScopes.length)
+    expect(run.mock.calls.filter(([owner]) => owner === 'job:' + check.requestId).map(([, , workspace]) => workspace)).toEqual(['trusted-workspace'])
+
   } finally { await endpoint.stop(); await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }) }
 })
