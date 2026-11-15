@@ -321,3 +321,20 @@ Remaining work includes launcher/plugin/UI configuration and storage status, roo
 inventory/backup/restore/migration for both endpoint and host records, whole-volume/control-state headroom, operator
 reconciliation of partial effects, service/endpoint reboot and clean-host acceptance, and final whole-system qualification.
 The backend is not deployed to the running app; default models and provider routing were not changed.
+
+### Harness plugin configuration
+
+Source revision `c8592a3` exposes optional endpoint `storage: { endpointId, socketPath, policy }`.
+The policy is the strict `EndpointStorage` schema above. The endpoint ID and policy must match the
+administrator's root-owned storage-service configuration; the workspace parent must be
+`<mountRoot>/dsh-<endpointId>/workspaces`. The socket must be a canonical absolute pathname shorter
+than 104 bytes. Runtime checks additionally enforce the existing root-owned socket and parent contract.
+The plugin constructs `LocalStorageHost`; it does not launch or install a privileged service.
+Omitting storage preserves the existing endpoint behavior. Invalid connection/policy configuration
+is rejected before accessing subprocess services or constructing the endpoint journal.
+
+Validation of this source tree: 28 focused plugin/journal tests passed, typecheck passed, and all seven
+builds passed. Native storage evidence above remains tied to its earlier revision; it was not rerun
+for this configuration-only increment. Launcher/UI configuration, supported service installation,
+storage recovery export/restore, headroom and reboot/clean-host qualification remain incomplete.
+No running application was restarted and no model defaults or provider routing were changed.
