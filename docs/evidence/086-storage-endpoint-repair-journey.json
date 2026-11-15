@@ -1,0 +1,37 @@
+{
+  "kind": "endpoint-recovery-after-root-storage-repair",
+  "revision": "22c1c403352f5b02416d86db47863097a20b142f",
+  "recordedAt": "2026-11-15T09:35:19.143800+00:00",
+  "workflowRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43699646579",
+  "result": "success",
+  "classification": "native endpoint/root-operator receipt recovery VERIFIED; NOT DEPLOYED",
+  "hashes": {
+    "tests/fixtures/storage-repair-journey.py": "45200ccaddcc7c6d7c9b278858a7123bce157199d0f4e13483d6e8416f600b25",
+    "tests/storage-host-client.spec.ts": "b1586117b0cbe14aba50b3952d69104958e8a09f5c1b2fe83ff004c32eca8c41",
+    "tests/fixtures/storage-qualification.sh": "a407d61a18e91fd476e50c58cd05aad90945c3e78d3e7f590d6edf3554e7101d"
+  },
+  "journey": {
+    "nativeStorageRepairJourney": "passed",
+    "originalEndpointIntentRetained": true,
+    "rootOperatorRepair": true,
+    "endpointRestartAndOriginalGrantRecovery": true,
+    "duplicateAllocation": false
+  },
+  "validation": [
+    "original provisioning intent persisted with no grant published",
+    "root service killed before project setup",
+    "original host request inspected and repaired via CLI",
+    "pending endpoint reservation unchanged across restart",
+    "same grant request completed by observing repaired roots",
+    "native file/process/verification/quota-exhaustion checks continued",
+    "exactly two original host allocations and one original repair receipt",
+    "15 native Vitest test executions and existing scoped fixtures passed",
+    "typecheck and builds passed"
+  ],
+  "limits": [
+    "not coordinator-UI repair or managed launcher failure/retry",
+    "not power loss or whole-machine reboot",
+    "other partial-state reconciliation and storage restore remain open"
+  ],
+  "fullMatrix": "not run"
+}

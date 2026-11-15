@@ -757,3 +757,37 @@ This closes local root command packaging and its tested inspection/repair journe
 endpoint receipt recovery after host repair, orphan/worker-owned partial-state reconciliation,
 interrupted-repair manual resolution, storage backup/export/migration, headroom, machine reboot/clean-host
 recovery or final architecture qualification. No user-host service was installed, restarted or upgraded.
+
+### Endpoint receipt recovery after root repair
+
+A new disposable native journey starts the real root storage service with a fixture-only fault at the
+worker allocation's first project setup. Startup qualification is unaffected. The non-root endpoint
+submits its original grant request; the service dies after recording the root identity but before
+project setup. The endpoint must retain a `provisioning` storage reservation and publish no grant.
+
+The root fixture reads the original request from the host registry, inspects it through the operator
+command, and repairs the recorded/missing-root state with an explicit snapshot-bound repair ID. It
+then starts the normal unmodified service. The endpoint is stopped/reopened before retry: its original
+pending reservation must be unchanged. Retrying the same grant request observes the repaired host
+allocation, commits the endpoint receipt and continues the existing native file/process/verification,
+quota-exhaustion and restart checks. The root fixture requires exactly the original startup and worker
+allocations and one completed repair bound to the original request.
+
+This is an actual root service/operator CLI/non-root endpoint journey using Harness filesystem and
+subprocess implementations. It does not add production fault hooks or claim coordinator-UI repair,
+power-loss recovery, or an installed Harness launcher failure/retry journey. Local typecheck passed;
+recorded native results follow.
+
+VERIFIED at `22c1c403352f5b02416d86db47863097a20b142f`: native
+[run 43699646579](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43699646579)
+passed the new endpoint/root-operator recovery journey. The endpoint preserved the failed provisioning
+intent without publishing a grant, retained it unchanged across restart after repair, and completed the
+same original request. Native file/process/verification/quota-exhaustion checks then passed. The host
+retained exactly two allocations and one completed repair tied to the original request.
+
+The scoped run passed 15 native Vitest test executions (including normal and repaired variants of the
+endpoint test), the existing Python contracts and crash/systemd/Harness fixtures, typecheck and builds.
+Source hashes and exact scope: [endpoint repair journey evidence](evidence/086-storage-endpoint-repair-journey.json).
+This proves endpoint receipt recovery for the tested recorded/missing-root state, not every partial
+state, coordinator-UI repair, managed-launcher failure/retry, power loss, reboot or clean-host restore.
+Backup/export/migration, broader reconciliation, headroom and final architecture qualification remain open.

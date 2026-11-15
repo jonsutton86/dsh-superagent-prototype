@@ -1301,3 +1301,9 @@ command-process and installed-bundle checks. Existing-only registry access refus
 five supported repairs retain original IDs and snapshots. Missing registry stayed empty. See
 [086 operator evidence](evidence/086-storage-operator-command.json). Wider reconciliation and recovery
 remain open; no user-host deployment occurred.
+
+Endpoint recovery after host repair (`22c1c4`): native service termination, original intent retention,
+root CLI repair, endpoint restart and same-request grant recovery passed without duplicate allocations.
+The normal execution/verification checks passed afterward. See
+[086 endpoint repair journey](evidence/086-storage-endpoint-repair-journey.json); wider reconciliation,
+coordinator repair UX and full restoration/qualification remain incomplete.
