@@ -277,7 +277,7 @@ export async function prepareCheckpointReceipts(options: PrepareCheckpointReceip
           await syncRecoveryPath(join(staging, member))
         }
         const image = ReceiptImage.parse({ version: 1, requestId: intent.requestId, requestHash, checkpoint: manifest.id, digest: fingerprint(manifest),
-          auditId: audit.id, at: new Date().toISOString(), recovery: audit.recovery, epoch: audit.epoch, resources: audit.resources, applied, files, executionOwnership: false, administration, revocations,
+          auditId: audit.id, at: new Date().toISOString(), recovery: audit.recovery, epoch: audit.epoch, resources: audit.resources, applied, files, ...(manifest.storage ? { storage: manifest.storage } : {}), executionOwnership: false, administration, revocations,
           executionConfiguration: { worlds: configurationChecks.length, bindings: configurationChecks.reduce((total, check) => total + (check.original.grant.credentials?.length ?? 0), 0) }, sessionBackend, controlConfiguration, inferenceConfiguration, consumedInputs, sourceConfiguration, stateGraph, connectorState, workspaceState, resultState, registryState, contextState, budgetState, publicationState })
         const key = recoveryKey(options.keyFile)
         try { await writeFile(join(staging, 'prepared.json'), sealReceiptImage(image, key), { flag: 'wx', mode: 0o600 }) } finally { key.fill(0) }

@@ -1384,3 +1384,10 @@ typecheck and builds. Signed storage-image verification now audits every host re
 selecting the endpoint pair, including other endpoints and incomplete repairs. Deferred host audit
 is replaced by explicit historical audit results. [Evidence](evidence/086-storage-image-host-audit.json).
 Capture/preparation, fencing, live filesystem checks and actual restore remain unfinished and held.
+
+Storage recovery now captures explicitly supplied, verified endpoint/host snapshots
+inside encrypted checkpoints and retains their authenticated bindings through
+staging/preparation. The offline Harness maintenance profile exposes this option.
+See increment 086 for limits: coordinated live capture and storage installation
+remain unfinished; execution stays held. Optional Abliteration remains opt-in,
+with existing default-model configuration unchanged.

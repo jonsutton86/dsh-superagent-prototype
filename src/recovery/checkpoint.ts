@@ -17,6 +17,8 @@ import { privateDirectory } from '../environments/endpoint-files.ts'
 import { privateInput, recoveryKey, seal, unseal } from './crypto.ts'
 import { exportSession, importSession, inspectSession, ownSessions, type SessionArchive } from './sessions.ts'
 import { recoveryStateDigest } from './state.ts'
+import { ReceiptImage } from './image.ts'
+import { auditStorageRecoveryArtifacts, StorageRecoveryArtifacts } from './storage-artifacts.ts'
 import { readRecoveryBindings, resolveRecoveryRegistration } from './bindings.ts'
 
 const member = z.string().regex(/^[a-z0-9-]+\.bin$/), digest = z.string().regex(/^[a-f0-9]{64}$/)
@@ -24,18 +26,21 @@ const sealed = z.object({ member, iv: z.string().regex(/^[a-f0-9]{24}$/), tag: z
   sha256: digest, bytes: z.number().int().nonnegative().max(2 ** 40) }).strict()
 const envelope = z.object({ version: z.literal(1), id: z.string().uuid(), manifest: sealed }).strict()
 const manifestSchema = z.object({ version: z.literal(1), id: z.string().uuid(), createdAt: z.string().datetime(), sourceRoot: z.string(),
-  schema: z.literal(SCHEMA_VERSION), masterId: z.string(), files: z.array(sealed.extend({ kind: z.enum(['store', 'world', 'session']),
+  schema: z.literal(SCHEMA_VERSION), masterId: z.string(), files: z.array(sealed.extend({ kind: z.enum(['store', 'world', 'session', 'storage-host', 'storage-endpoint']),
     binding: digest.optional(), source: z.string().optional() }).strict()).min(1).max(20000),
+  storage: ReceiptImage.shape.storage,
   sessions: z.array(z.object({ id: z.string(), header: z.record(z.string(), z.unknown()), inheritedEventCount: z.number().int().nonnegative(),
     eventCount: z.number().int().nonnegative(), sha256: digest, bytes: z.number().int().nonnegative(), member }).strict()).max(10000),
   requiredFiles: z.array(z.string()).max(20000), executionWorkspaces: z.array(z.string()).max(20000),
   recovery: z.literal('fenced-until-ownership-reconciled') }).strict()
 export type CheckpointManifest = z.infer<typeof manifestSchema>
 export const RESTORE_HOLD = KV.recovery.hold
-interface CheckpointOptions {
+export interface CheckpointOptions {
   stateDir: string; outputDir: string; keyFile: string; persistence: SessionPersistence
   /** Dedicated profiles keep their world journals outside the coordinator Store; supply those directories explicitly. */
   worldDirectories?: string[]; signal?: AbortSignal
+  /** Explicit standalone snapshot evidence, not automatic live-host capture or restore authorization. */
+  storageArtifacts?: z.input<typeof StorageRecoveryArtifacts>[]
 }
 const table = (db: DatabaseSync, name: string) => !!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name)
 const values = <T>(db: DatabaseSync, name: 'ticket' | 'managed_world' | 'operator_endpoint' | 'execution_environment'): T[] => table(db, name)
@@ -131,7 +136,7 @@ export async function createCheckpoint(options: CheckpointOptions): Promise<{ pa
     // Plaintext never enters the backup destination, including an interrupted capture.
     const plain = scratch = await mkdtemp(join(tmpdir(), 'dsh-checkpoint-source-'))
     const files: CheckpointManifest['files'] = [], sessions: SessionArchive[] = []
-    const capture = async (source: string, kind: 'store' | 'world' | 'session', details: { binding?: string; source?: string } = {}) => {
+    const capture = async (source: string, kind: CheckpointManifest['files'][number]['kind'], details: { binding?: string; source?: string } = {}) => {
       const name = `member-${files.length}.bin`, item = await seal(source, join(staging!, name), key, id, name, signal)
       files.push({ ...item, kind, ...details }); return item
     }
@@ -139,6 +144,18 @@ export async function createCheckpoint(options: CheckpointOptions): Promise<{ pa
     for (const [binding, world] of worlds) {
       signal.throwIfAborted(); const file = join(plain, `${binding}.sqlite`)
       await backup(world.db, file); await chmod(file, 0o600); await capture(file, 'world', { binding, source: world.source })
+    }
+    const storage: NonNullable<CheckpointManifest['storage']> = []
+    const storageInputs = z.array(StorageRecoveryArtifacts).max(256).parse(options.storageArtifacts ?? [])
+    const registered = new Set(values<{ id: string }>(store, 'operator_endpoint').map(item => item.id))
+    for (const world of worlds.values()) registered.add(JSON.parse(String(world.db.prepare('SELECT value FROM execution_world WHERE id=1').get()!.value)).endpointId)
+    for (const input of storageInputs) {
+      if (!registered.has(input.endpointId) || storage.some(item => item.endpointId === input.endpointId))
+        throw new Error('Storage capture requires a unique original registered endpoint')
+      await auditStorageRecoveryArtifacts(input, signal, async paths => {
+        const endpoint = await capture(paths.endpoint, 'storage-endpoint'), host = await capture(paths.host, 'storage-host')
+        storage.push({ endpointId: input.endpointId, endpointMember: endpoint.member, hostMember: host.member })
+      })
     }
     for (const handle of handles) {
       const file = join(plain, `session-${sessions.length}.jsonl`), name = `member-${files.length}.bin`
@@ -154,7 +171,7 @@ export async function createCheckpoint(options: CheckpointOptions): Promise<{ pa
       ...values<{ url: string; credentialFile: string }>(store, 'operator_endpoint').map(item => resolveRecoveryRegistration(bindings, item).credentialFile),
       ...bindings?.registrations.map(item => item.credentialFile) ?? []])]
     const manifest = manifestSchema.parse({ version: 1, id, createdAt: new Date().toISOString(), sourceRoot: root, schema: SCHEMA_VERSION,
-      masterId, files, sessions, requiredFiles, executionWorkspaces: workspaces, recovery: 'fenced-until-ownership-reconciled' })
+      masterId, files, ...(storage.length ? { storage } : {}), sessions, requiredFiles, executionWorkspaces: workspaces, recovery: 'fenced-until-ownership-reconciled' })
     const manifestFile = join(plain, 'manifest.json'); await writeFile(manifestFile, JSON.stringify(manifest), { mode: 0o600 })
     const sealedManifest = await seal(manifestFile, join(staging, 'manifest.bin'), key, id, 'manifest.bin', signal)
     await writeFile(join(staging, 'checkpoint.json'), JSON.stringify({ version: 1, id, manifest: sealedManifest }), { mode: 0o600 })
@@ -204,6 +221,19 @@ async function unpack(path: string, keyFile: string, signal: AbortSignal): Promi
         } finally { db.close() }
       }
     }
+    const storageMembers = new Set<string>(), storageEndpoints = new Set<string>(), endpointMembers = new Set<string>()
+    for (const pair of manifest.storage ?? []) {
+      const endpoint = manifest.files.find(file => file.member === pair.endpointMember), host = manifest.files.find(file => file.member === pair.hostMember)
+      if (!endpoint || endpoint.kind !== 'storage-endpoint' || !host || host.kind !== 'storage-host'
+        || storageEndpoints.has(pair.endpointId) || endpointMembers.has(pair.endpointMember)) throw new Error('Invalid checkpoint storage member binding')
+      storageEndpoints.add(pair.endpointId); endpointMembers.add(pair.endpointMember)
+      storageMembers.add(pair.endpointMember); storageMembers.add(pair.hostMember)
+      await auditStorageRecoveryArtifacts({ endpointId: pair.endpointId,
+        endpoint: { path: join(directory, endpoint.member), bytes: endpoint.bytes, sha256: endpoint.sha256 },
+        host: { path: join(directory, host.member), bytes: host.bytes, sha256: host.sha256 } }, signal)
+    }
+    if (manifest.files.some(file => file.kind.startsWith('storage-') && !storageMembers.has(file.member)))
+      throw new Error('Unbound checkpoint storage member')
     if (new Set(manifest.sessions.map(item => item.id)).size !== manifest.sessions.length
       || new Set(manifest.sessions.map(item => item.member)).size !== manifest.sessions.length) throw new Error('Duplicate checkpoint Session identities')
     for (const session of manifest.sessions) {

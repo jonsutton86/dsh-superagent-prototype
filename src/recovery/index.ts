@@ -4,7 +4,7 @@ import s from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-session-persistence'
 import { basename, dirname, isAbsolute, join } from 'node:path'
 import { privateDirectory, privateFile } from '../environments/endpoint-files.ts'
-import { createCheckpoint, importCheckpointSessions, stageCheckpoint, verifyCheckpoint } from './checkpoint.ts'
+import { createCheckpoint, importCheckpointSessions, stageCheckpoint, verifyCheckpoint, type CheckpointOptions } from './checkpoint.ts'
 import { reserveCheckpointOwnership, type ReserveCheckpointOwnership } from './ownership.ts'
 import { prepareCheckpointReceipts, type PrepareCheckpointReceipts } from './prepare.ts'
 import { auditCheckpointReceipts, type AuditCheckpointReceipts, type ReceiptAudit } from './audit.ts'
@@ -45,9 +45,12 @@ export const Config: s<Partial<RecoveryConfig>, RecoveryConfig> = s.object({ mod
   installation: s.union([s.object({ requestId: s.string().required(), preparationId: s.string().required(), target: s.string().pattern(/^\//).required(),
     launch: s.union([s.object({ port: s.number().min(1).max(65535).step(1), sessionRoot: s.string().pattern(/^\//) })]),
     credentials: s.array(s.object({ from: s.string().pattern(/^\//).required(), to: s.string().pattern(/^\//).required() })).default([]) })]),
+  storageArtifacts: s.array(s.object({ endpointId: s.string().required(),
+    endpoint: s.object({ path: s.string().pattern(/^\//).required(), bytes: s.number().min(1).step(1).required(), sha256: s.string().pattern(/^[a-f0-9]{64}$/).required() }).required(),
+    host: s.object({ path: s.string().pattern(/^\//).required(), bytes: s.number().min(1).step(1).required(), sha256: s.string().pattern(/^[a-f0-9]{64}$/).required() }).required() })).default([]),
   worldDirectories: s.array(s.string()).default([]) })
 interface RecoveryConfig { mode: 'checkpoint' | 'verify' | 'stage' | 'import-sessions' | 'reserve-ownership' | 'audit-receipts' | 'prepare-receipts' | 'install'; keyFile: string; stateDir?: string; outputDir?: string;
-  checkpoint?: string; destination?: string; receiptFile?: string; worldDirectories?: string[];
+  checkpoint?: string; destination?: string; receiptFile?: string; worldDirectories?: string[]; storageArtifacts?: CheckpointOptions['storageArtifacts'];
   reservation?: Pick<ReserveCheckpointOwnership, 'requestId' | 'epoch' | 'generation' | 'authority'>;
   preparation?: Pick<PrepareCheckpointReceipts, 'requestId' | 'auditId'>;
   installation?: Pick<InstallCheckpoint, 'requestId' | 'preparationId' | 'target' | 'credentials' | 'launch'>;
@@ -67,7 +70,7 @@ export async function apply(ctx: Context, config: RecoveryConfig): Promise<void>
     ctx.logger.info('Checkpoint %s installed; Runtime startup must verify Sessions and acquire independent ownership', checkpoint)
   } else if (config.mode === 'checkpoint') {
     const result = await createCheckpoint({ stateDir: required(config.stateDir, 'stateDir'), outputDir: required(config.outputDir, 'outputDir'),
-      keyFile: config.keyFile, worldDirectories: config.worldDirectories, persistence: ctx.sessionPersistence, signal: abort.signal })
+      keyFile: config.keyFile, worldDirectories: config.worldDirectories, storageArtifacts: config.storageArtifacts, persistence: ctx.sessionPersistence, signal: abort.signal })
     ctx.logger.info('Checkpoint %s created at %s (%s Sessions)', result.manifest.id, result.path, result.manifest.sessions.length)
     checkpoint = result.manifest.id; path = result.path
   } else if (config.mode === 'prepare-receipts') {

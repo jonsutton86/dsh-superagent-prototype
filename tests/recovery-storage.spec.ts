@@ -1,3 +1,10 @@
+import { MessageId } from '@deepseek-ai/dsh-llm'
+import { Context } from '@deepseek-ai/cordis'
+import Jsonl from '@deepseek-ai/dsh-session-persistence-jsonl'
+import { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import { Store } from '../src/app/store.ts'
+import { KV } from '../src/kv.ts'
+import { createCheckpoint, verifyCheckpoint, stageCheckpoint } from '../src/recovery/checkpoint.ts'
 import { ReceiptImage, sealReceiptImage, verifyReceiptImage, requireInstallableStorageImage } from '../src/recovery/image.ts'
 import { createRecoveryKey, recoveryKey } from '../src/recovery/crypto.ts'
 import { createHash, randomUUID } from 'node:crypto'
@@ -198,4 +205,40 @@ it('retains an uninitialized namespace when no host operation has been admitted'
     const result = await readHostStorageSnapshot(db.host, db.value.host.endpointId, new AbortController().signal)
     expect(result.audit).toMatchObject({ allocations: 0, incompleteNamespaces: 1, restoreVerified: false })
   } finally { db.close() }
+})
+
+
+it('captures verified storage pairs in an encrypted checkpoint and preserves their bindings in held staging', async () => {
+  const db = databases(), ctx = new Context(), directory = await realpath(await mkdtemp(join(tmpdir(), 'dsh-storage-checkpoint-test-')))
+  try {
+    const stateDir = join(directory, 'state'), outputDir = join(directory, 'backups'), keyFile = join(directory, 'key')
+    await mkdir(stateDir, { mode: 0o700 }); createRecoveryKey(keyFile)
+    const store = new Store(join(stateDir, 'orchestrator.sqlite'))
+    store.set(KV.runtime.masterId, 'storage-master')
+    store.db.exec('CREATE TABLE IF NOT EXISTS operator_endpoint(id TEXT PRIMARY KEY,value TEXT NOT NULL)')
+    store.db.prepare('INSERT INTO operator_endpoint VALUES(?,?)').run(db.value.endpoint.endpointId,
+      JSON.stringify({ id: db.value.endpoint.endpointId, credentialFile: keyFile }))
+    store.close()
+    await ctx.plugin(Jsonl, { root: join(directory, 'sessions'), compression: 'none' })
+    const writer = await ctx.sessionPersistence.create(Session.create(SessionId('storage-master')).header)
+    await writer.append([{ type: 'user/message', seq: SessionSeq(0), time: 0, surfaceOp: 'append',
+      data: { role: 'user', id: MessageId('storage-message'), source: { kind: 'dsh-superagent', form: 'relay' }, content: [{ type: 'text', text: 'Storage checkpoint fixture' }] } }])
+    await writer.close()
+    const capture = async (source: DatabaseSync, name: string) => {
+      const path = join(directory, name); source.prepare('VACUUM INTO ?').run(path); await chmod(path, 0o600)
+      const bytes = await readFile(path)
+      return { path, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') }
+    }
+    const pair = { endpointId: db.value.endpoint.endpointId, endpoint: await capture(db.endpoint, 'endpoint.sqlite'), host: await capture(db.host, 'host.sqlite') }
+    const options = { stateDir, outputDir, keyFile, persistence: ctx.sessionPersistence, storageArtifacts: [pair] }
+    const checkpoint = await createCheckpoint(options)
+    expect(checkpoint.manifest.storage).toHaveLength(1)
+    expect(checkpoint.manifest.files.filter(file => file.kind.startsWith('storage-'))).toHaveLength(2)
+    expect(await verifyCheckpoint(checkpoint.path, keyFile)).toEqual(checkpoint.manifest)
+    const target = join(directory, 'held'); await stageCheckpoint(checkpoint.path, keyFile, target)
+    const restored = new DatabaseSync(join(target, 'orchestrator.sqlite'), { readOnly: true })
+    try { expect(restored.prepare('SELECT value FROM kv WHERE key=?').get(KV.recovery.hold)).toBeTruthy() } finally { restored.close() }
+    await expect(createCheckpoint({ ...options, storageArtifacts: [{ ...pair, host: { ...pair.host, sha256: 'f'.repeat(64) } }] })).rejects.toThrow('digest')
+    await expect(createCheckpoint({ ...options, storageArtifacts: [pair, pair] })).rejects.toThrow('unique original registered endpoint')
+  } finally { db.close(); await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }) }
 })

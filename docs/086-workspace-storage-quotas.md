@@ -1102,3 +1102,25 @@ ranges, capacity excess, missing namespaces and invalid/orphan/duplicate repairs
 integration and retained uncertainty. [Evidence](evidence/086-storage-image-host-audit.json).
 Automatic capture/preparation, frozen-epoch fencing, live filesystem validation, target import/restore
 and final platform qualification remain open. Installation of storage-bearing images stays refused.
+
+### Explicit storage artifacts in encrypted checkpoints
+
+The offline Harness recovery profile now accepts `storageArtifacts`, an array of
+`{ endpointId, endpoint: { path, bytes, sha256 }, host: { path, bytes, sha256 } }`.
+Paths must identify private standalone SQLite snapshots. Capture checks original
+registered endpoint IDs, rejects duplicate pairs, verifies both artifact hashes,
+audits the entire shared host registry, and crosschecks endpoint allocations.
+It encrypts the verified private copies directly, avoiding a second read of the
+caller-owned paths. Checkpoint verification repeats the record checks, rejects
+unbound storage members, and staging retains the execution hold. Preparation
+preserves the authenticated storage member bindings.
+
+This is explicit evidence capture, not coordinated live capture or filesystem
+backup. Supplied hashes do not establish a globally frozen capture epoch. Storage
+installation remains refused pending live filesystem validation and ownership
+fencing; no storage restore or deployed capability is claimed.
+
+Validation: the checkpoint/storage/installation suites passed 80 tests before the
+maintenance-profile forwarding change. Optional-provider checks passed 12 tests;
+the installed-Harness test was skipped in that invocation. Typecheck passed after
+profile wiring. No external inference or default-model changes were performed.
