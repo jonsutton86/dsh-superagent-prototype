@@ -1250,3 +1250,9 @@ Storage listener continuation (`9dba3cf`): exclusive listener fencing and verifi
 recovery passed native Linux run `43695915638`, including an idle SIGKILL/restart with unchanged
 host registry. Installation and in-flight mutation/machine-reboot recovery remain open; see
 [086 listener evidence](evidence/086-storage-listener-recovery.json).
+
+Storage installation continuation (`3ca345e`): explicit root-owned service snapshot/configuration,
+manifest and systemd unit installation now pass native first-install, unchanged reinstall, rejection
+of changed/partial installs, provision/kill/restart/observe and registry/mount-identity preservation.
+See [086 installation evidence](evidence/086-storage-installation.json). Deployment remains separate;
+combined managed Harness launch, full recovery, workspace controls and final qualification remain open.

@@ -417,3 +417,58 @@ contracts, and the XFS mechanism/host/service fixtures. The native service repor
 `crashRestartPreservedRegistry: true` and `duplicateListenerRefused: true`.
 Exact scope and source hashes: [listener evidence](evidence/086-storage-listener-recovery.json).
 No full matrix was run and no running user installation was changed.
+
+### Explicit privileged service installation
+
+`scripts/agentic_storage_install.py` creates a root-owned installation containing the service/library
+snapshot, private host configuration, matching endpoint storage settings, a systemd unit and SHA-256
+manifest. It never invokes systemctl or starts a process. Existing files must exactly match the supplied
+configuration and current source snapshot; changed or incomplete installations are preserved and refused.
+No automatic upgrade, overwrite, uninstall, registry deletion, or partial-install repair is provided.
+
+Operator sequence (deployment approval and a prepared Linux host are required before executing):
+
+1. Prepare a dedicated XFS mount with project quota accounting/enforcement and root-owned protected
+   parent directories. Reserve an exclusive project-ID range. All managed services on a filesystem must
+   use one shared host registry; separately managed quotas still require administrator coordination.
+2. Prepare a root-owned mode-0600 JSON file with exactly `endpointId`, non-root numeric `uid` and `gid`,
+   and `policy` matching the endpoint configuration above. The UID/GID belong to the Harness endpoint.
+   The service configuration contains no model or provider credentials.
+3. As root, run `python3 scripts/agentic_storage_install.py --directory /opt/agentic-storage/ENDPOINT
+   --registry /var/lib/agentic-os-storage --config /etc/agentic-storage/ENDPOINT.json`, substituting
+   real canonical paths. Parent directories must already be root-owned and protected. The installation,
+   registry and quota mount must be separate non-overlapping paths. This installs files only.
+4. Review the returned `unitFile` and manifest. Separately link/enable that exact unit with systemctl,
+   reload the manager and start it. Activation is an explicit operator action. The unit runs the root
+   host service with a fixed config/registry and a per-endpoint `/run` socket. Automatic restart is off;
+   manual restart must inspect uncertain effects rather than resubmit writes.
+5. Copy the generated `endpoint-storage.json` settings into the endpoint's private `--endpoint-config`
+   input, retaining any existing resource/ownership settings. Start the Harness endpoint as its configured
+   non-root UID. Its startup proof verifies real quota operations and confinement; service-manager active
+   status alone is not endpoint readiness.
+
+The unit uses control-group termination and a 120-second stop timeout. Its runtime directory may be
+removed by systemd after a stopped/failed unit, but the host registry and quota roots remain outside that
+runtime directory. It deliberately avoids changing filesystem namespaces while mount IDs are pinned.
+The installer requires Linux root; pure planning tests run without privileges. Systemd lifecycle tests
+run only in the disposable GitHub Linux fixture, never against the user's running application.
+
+VERIFIED at `3ca345e28740e7505b75c9f8749dc8f621e3896c`: native Linux
+[run 43696255462](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43696255462)
+passed the actual systemd installation lifecycle. The fixture verified the generated unit, installed
+and started it, provisioned one original quota operation as the configured non-root peer, killed the
+service, restarted it and observed that same operation. Directory and mount identities and the complete
+host registry remained unchanged. Unchanged reinstall preserved file timestamps; changed configuration
+and a partial installation were refused. Cleanup stopped and unlinked only the fixture's unit.
+
+The same run passed nine Python contract tests, 13 native Vitest tests, the existing XFS mechanism,
+host and service fixtures, typecheck and seven builds. Two planning tests also passed locally without
+root. CodeGraph identified the installation fixtures (and a generic-name delegation false positive);
+direct inspection selected the storage scope. Exact source hashes and limits are in
+[installation evidence](evidence/086-storage-installation.json).
+
+This closes first-install/service-lifecycle qualification for the tested Linux configuration. It does
+not close the combined managed Harness launcher journey, machine reboot/clean-host recovery, in-flight
+quota mutation recovery, explicit upgrades/uninstall/partial-install reconciliation, storage export and
+restore, volume headroom, workspace controls, or final whole-system qualification. No user-host deployment
+or default/provider model change occurred.

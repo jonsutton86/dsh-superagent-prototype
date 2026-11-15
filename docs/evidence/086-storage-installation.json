@@ -1,0 +1,38 @@
+{
+  "kind": "storage-service-installation",
+  "revision": "3ca345e28740e7505b75c9f8749dc8f621e3896c",
+  "recordedAt": "2026-11-15T08:50:54.248772+00:00",
+  "workflowRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43696255462",
+  "result": "success",
+  "classification": "explicit Linux installation IMPLEMENTED and native systemd TESTED; NOT DEPLOYED to user host",
+  "hashes": {
+    "scripts/agentic_storage_install.py": "7d42e0f664c68764e115e0a6c6a15ecd9b29ade3109a9b0fa352384a3fe67ab3",
+    "scripts/agentic_storage_service.py": "84af9f6184aed424acc32f613147381457ffc1451913efb4511d7ea58411a513",
+    "tests/fixtures/storage-install-native.py": "6ebdaec1978959c3c2ba9d0fbc293b07f482c1b886942092812697d960e20fb0",
+    "tests/fixtures/storage-install-contract.py": "79b7c981a4da303f9a3f6c70a826104dda1de493aaced26a0d15cfc45bb70185",
+    "tests/fixtures/storage-qualification.sh": "55b53708cf85f456786db42aef5f5dec610ffba6cec763f2f6ae4b1c2645b1f6"
+  },
+  "validation": {
+    "installationPlanningTests": 2,
+    "listenerContracts": 4,
+    "transportContracts": 3,
+    "nativeVitestTests": 13,
+    "nativeTypecheck": "passed",
+    "nativeBuilds": 7,
+    "systemdUnitVerification": "passed",
+    "unchangedReinstall": "same files and timestamps",
+    "changedAndPartialInstallation": "refused",
+    "originalQuotaOperationAfterServiceKill": "observed with same roots, mount ID, original intent and unchanged registry",
+    "fullMatrix": "not run"
+  },
+  "remaining": [
+    "native managed Harness launcher plus installed storage service",
+    "whole-machine reboot and clean-host recovery",
+    "in-flight quota mutation recovery",
+    "explicit upgrade/uninstall and partial-install reconciliation",
+    "storage backup/export/restore/migration",
+    "volume and control-state headroom",
+    "workspace storage controls and usage",
+    "final full-system qualification"
+  ]
+}
