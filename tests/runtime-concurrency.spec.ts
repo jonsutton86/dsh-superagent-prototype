@@ -640,7 +640,7 @@ describe('a worker whose work runs in the background', () => {
     const one = await h.acceptedTicket(feishu('1', '@bot 修一'))
     const job = h.jobs.run(one.sessionId)
     h.runtime.executor.resume()
-    expect(h.agents.get(one.sessionId)!.cancel).toHaveBeenCalledWith({ kind: 'user' }, { keepInbox: true })
+    await vi.waitFor(() => expect(h.agents.get(one.sessionId)!.cancel).toHaveBeenCalledWith({ kind: 'user' }, { keepInbox: true }))
     await vi.waitFor(() => expect(h.jobs.service.kill).toHaveBeenCalledWith(job, one.sessionId, expect.any(String)))
     expect(h.runtime.store.tickets.get(one.ticket.id)!.inputs).toEqual([expect.objectContaining({ kind: 'text', text: expect.stringContaining('host restarted') })])
   })
@@ -729,6 +729,15 @@ describe('what a worker read', () => {
     h.ctx.on('agent/inbox/claimed', ({ message }) => { claimed.push(message.id) })
     // The replacement launch removes the retained copy before replaying the input once under the new assignment.
     h.runtime.executor.resume()
+    await h.runtime.idle()
+    expect(copies()).toHaveLength(1)
+    expect(h.agents.has(one.sessionId)).toBe(false)
+    const stop = h.runtime.executor.stops.list(one.ticket.id).items[0]!
+    expect(stop.state).toBe('unknown')
+    const result = await h.runtime.executor.stops.attest(stop.id, { schema: 1, requestId: 'crash-inbox-original-stop',
+      expectedRevision: stop.revision, executionBindingHash: stop.executionBindingHash, scopeHash: stop.scopeHash,
+      confirmed: true, note: 'Fixture operator inspected the original crashed scope and confirmed no work remains.' })
+    expect(result.receipt.phase).toBe('accepted')
     await vi.waitFor(() => expect(copies()).toHaveLength(2))
     h.step(one.sessionId); await h.runtime.idle(); await later()
     await vi.waitFor(() => expect(claimed).toContain(copies()[0]![0].id))
@@ -771,6 +780,15 @@ describe('what a worker read', () => {
     const waiting: string[][] = [], launch = agent.followup.getMockImplementation()!
     agent.followup.mockImplementation(message => { waiting.push([...agent.inbox.nextTurn, ...agent.inbox.nextStep].map(item => item.id)); launch(message) })
     h.runtime.executor.resume()
+    await h.runtime.idle()
+    expect(copies()).toHaveLength(1)
+    expect(h.agents.has(one.sessionId)).toBe(false)
+    const stop = h.runtime.executor.stops.list(one.ticket.id).items[0]!
+    expect(stop.state).toBe('unknown')
+    const result = await h.runtime.executor.stops.attest(stop.id, { schema: 1, requestId: 'crash-inbox-original-stop',
+      expectedRevision: stop.revision, executionBindingHash: stop.executionBindingHash, scopeHash: stop.scopeHash,
+      confirmed: true, note: 'Fixture operator inspected the original crashed scope and confirmed no work remains.' })
+    expect(result.receipt.phase).toBe('accepted')
     await vi.waitFor(() => expect(copies()).toHaveLength(2))
     // The launch's message found no copy of it waiting, which its step would take beside the copy delivered after.
     expect(waiting[0]).not.toContain(copies()[0]![0].id)

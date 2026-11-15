@@ -1,0 +1,19 @@
+{
+  "kind": "original-stop-restart-focused",
+  "recordedAt": "2026-11-15T06:56:22.176777+00:00",
+  "baseRevision": "2c8dee2",
+  "workingTree": "Concurrent preparation repair in progress; this is focused test evidence, not qualification of a clean commit.",
+  "testFileSha256": "faefc7f99337b9999c38aa293330dc2b831a21360a5ab8550ccb746736c304f2",
+  "command": "env -u GIT_CONFIG_GLOBAL ./node_modules/.bin/vitest run tests/runtime-concurrency.spec.ts -t 'restart in this process left|message a crash left waiting'",
+  "tests": {
+    "passed": 2,
+    "deselected": 59
+  },
+  "typecheck": "pnpm typecheck passed",
+  "logs": [
+    "/tmp/dsh-083-restart-focused.log",
+    "/tmp/dsh-083-restart-typecheck.log"
+  ],
+  "scope": "Same-process cancellation follows committed intent; crash-inbox delivery remains held with missing original Agent until original-scope operator attestation, then retained input is replayed once.",
+  "remaining": "Three other selected runtime-concurrency cases still fail: background-limit assertion, failing-kill teardown, ended-ticket resume."
+}
