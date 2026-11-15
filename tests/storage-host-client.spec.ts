@@ -14,6 +14,8 @@ import { EndpointStorage } from '../src/remote/storage-model.ts'
 import { StorageReservations, storageRoots } from '../src/remote/storage-journal.ts'
 import { LocalStorageHost } from '../src/remote/storage-host-client.ts'
 import { RemoteEndpoint } from '../src/remote/endpoint.ts'
+import { CgroupResources } from '../src/remote/resources.ts'
+import type { WorkspaceCaptureRecord } from '../src/remote/workspace-capture.ts'
 import { BubblewrapIsolation } from '../src/remote/isolation.ts'
 import { confinedFilesystem } from '../src/remote/filesystem-runner.ts'
 import type { GrantReceipt, Principal, RemoteJob } from '../src/remote/protocol.ts'
@@ -24,12 +26,23 @@ it.runIf(!!process.env.DSH_STORAGE_SERVICE_CONFIG)('starts, enrolls, executes an
   const policy = EndpointStorage.parse(config.policy), directory = await mkdtemp(join(tmpdir(), 'dsh-storage-client-'))
   const state = join(directory, 'state'), assignedRoot = `${policy.mountRoot}/dsh-${config.endpointId}/workspaces`
   const ctx = new Context(), filesystem = new LocalFileSystem(ctx, { cwd: directory, diffBasisMaxBytes: 1024 * 1024 })
-  const subprocess = new LocalSubprocessRuntime(ctx), isolation = new BubblewrapIsolation(subprocess)
+  const local = new LocalSubprocessRuntime(ctx)
   const client = new LocalStorageHost(process.env.DSH_STORAGE_SERVICE_SOCKET!)
-  const host = { stateDir: state, root: assignedRoot, filesystem, subprocess, isolation,
-    filesystemRpc: confinedFilesystem(subprocess, isolation, resolve('lib/remote-fs-worker.js')),
-    snapshotHelper: resolve('lib/verification-snapshot-worker.js'), storage: { endpointId: config.endpointId, policy, host: client } }
-  let endpoint = new RemoteEndpoint(host)
+  const create = () => {
+    const resources = process.env.DSH_RESOURCE_QUALIFICATION_ROOT ? new CgroupResources({
+      cgroupRoot: process.env.DSH_RESOURCE_QUALIFICATION_ROOT,
+      pool: { cpuPercent: 200, memoryBytes: 1024 ** 3, processes: 128 },
+      command: { cpuPercent: 100, memoryBytes: 256 * 1024 ** 2, processes: 32 },
+    }) : undefined
+    const subprocess = resources ? resources.decorate(local, resolve('lib/remote-resource-worker.js')) : local
+    const isolation = new BubblewrapIsolation(subprocess)
+    return new RemoteEndpoint({ stateDir: state, root: assignedRoot, filesystem, subprocess, isolation, resources,
+      ...(resources ? { resourceHelper: resolve('lib/remote-resource-worker.js') } : {}),
+      filesystemRpc: confinedFilesystem(subprocess, isolation, resolve('lib/remote-fs-worker.js')),
+      snapshotHelper: resolve('lib/verification-snapshot-worker.js'), storage: { endpointId: config.endpointId, policy, host: client } })
+  }
+  let endpoint = create()
+  let capture: WorkspaceCaptureRecord | undefined
   const server = createServer((request, response) => { void remoteHandler(endpoint)(request, response).catch(() => response.destroy()) })
   let store: Store | undefined, coordinator: Endpoints | undefined
   const openCoordinator = () => {
@@ -60,7 +73,7 @@ it.runIf(!!process.env.DSH_STORAGE_SERVICE_CONFIG)('starts, enrolls, executes an
       expect(endpoint.journal.grants()).toHaveLength(0)
       await writeFile(join(process.env.DSH_STORAGE_REPAIR_EXCHANGE, 'ready'), 'waiting', { mode: 0o600 })
       await vi.waitFor(async () => expect(await readFile(join(process.env.DSH_STORAGE_REPAIR_EXCHANGE!, 'done'), 'utf8')).toBe('repaired'), { timeout: 30000, interval: 100 })
-      await endpoint.stop(); endpoint = new RemoteEndpoint(host); await endpoint.start()
+      await endpoint.stop(); endpoint = create(); await endpoint.start()
       const retained = new StorageReservations(endpoint.journal, policy).list().find(item => item.workspace === enrollment.workspace)!
       expect(retained).toEqual(pending)
       expect(await coordinator!.storageStatus(config.endpointId, { workspace: enrollment.workspace })).toMatchObject({
@@ -98,7 +111,7 @@ it.runIf(!!process.env.DSH_STORAGE_SERVICE_CONFIG)('starts, enrolls, executes an
     const original = allocations.find(item => item.workspace === 'socket-one')!
     expect(original.phase).toBe('provisioned')
     await expect(endpoint.rpc({ role: 'admin' }, { ...enrollment, requestId: 'reserved', workspace: '__dsh_startup' })).rejects.toThrow('reserved')
-    await endpoint.stop(); endpoint = new RemoteEndpoint(host); await endpoint.start()
+    await endpoint.stop(); endpoint = create(); await endpoint.start()
     const replay = await endpoint.rpc({ role: 'admin' }, enrollment) as GrantReceipt
     expect(replay.grant.id).toBe(receipt.grant.id)
     expect(new StorageReservations(endpoint.journal, policy).list()).toHaveLength(2)
@@ -107,12 +120,21 @@ it.runIf(!!process.env.DSH_STORAGE_SERVICE_CONFIG)('starts, enrolls, executes an
     await expect(client.observe(policy, forged, storageRoots(policy, forged), AbortSignal.timeout(20000))).rejects.toThrow('Storage host response')
     await expect(client.observe(policy, original, ['/unassigned'], AbortSignal.timeout(20000))).rejects.toThrow('Storage host response')
     await expect(client.observe(policy, original, storageRoots(policy, original), AbortSignal.abort())).rejects.toThrow()
+    if (process.env.DSH_STORAGE_CAPTURE_STATE) {
+      expect(process.env.DSH_RESOURCE_QUALIFICATION_ROOT).toBeTruthy()
+      await endpoint.stop(); endpoint = create(); await endpoint.start({ maintenance: true })
+      capture = await endpoint.captureWorkspace({ requestId: randomUUID(), grantId: receipt.grant.id,
+        epoch: receipt.grant.epoch, destination: join(directory, 'workspace-archive'), maxEntries: 100, maxBytes: 16 * 1024 ** 2 })
+      expect(capture).toMatchObject({ phase: 'complete', binding: { storage: { requestId: original.requestId, projectId: original.projectId } },
+        result: { managedQuiescenceObserved: true, globalSnapshotVerified: false, restoreVerified: false } })
+      expect(await endpoint.captureWorkspace(capture.request)).toEqual(capture)
+    }
     captureReady = true
   } finally {
     await coordinator?.stop(); store?.close()
     if (server.listening) { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())) }
     await endpoint.stop(); await ctx.fiber.dispose()
     if (captureReady && process.env.DSH_STORAGE_CAPTURE_STATE)
-      await writeFile(process.env.DSH_STORAGE_CAPTURE_STATE, JSON.stringify({ directory, state }), { mode: 0o600 })
+      await writeFile(process.env.DSH_STORAGE_CAPTURE_STATE, JSON.stringify({ directory, state, capture }), { mode: 0o600 })
     else await rm(directory, { recursive: true, force: true }) }
 }, 90000)

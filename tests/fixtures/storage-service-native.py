@@ -48,8 +48,13 @@ try:
         assert json.loads(connection.recv(4096)) == {'ok': False, 'error': 'storage_host_refused'}
     env = {'PATH': os.environ['PATH'], 'DSH_STORAGE_SERVICE_CONFIG': json.dumps(config),
            'DSH_STORAGE_SERVICE_SOCKET': str(socket_path), 'CI': 'true', 'DSH_STORAGE_CAPTURE_STATE': str(exchange / 'state.json')}
-    result = subprocess.run(['node', 'node_modules/vitest/vitest.mjs', 'run', 'tests/storage-host-client.spec.ts', '--no-cache'],
-                            user=uid, group=gid, extra_groups=[], env=env, capture_output=True, text=True, timeout=90)
+    result = subprocess.run(['systemd-run', '--wait', '--pipe', '--collect', '--service-type=exec',
+        '--unit=agentic-storage-capture-' + str(uuid.uuid4()), '--uid=' + str(uid), '--gid=' + str(gid),
+        '--property=Delegate=cpu memory pids', '--property=WorkingDirectory=' + str(Path.cwd()),
+        *['--setenv=' + key + '=' + value for key, value in env.items()],
+        '/bin/bash', str(Path('tests/fixtures/resource-qualification.sh').resolve()),
+        'node', 'node_modules/vitest/vitest.mjs', 'run', 'tests/storage-host-client.spec.ts', '--no-cache'],
+        capture_output=True, text=True, timeout=120)
     print(result.stdout, flush=True)
     assert result.returncode == 0, result.stderr
     retained = json.loads((exchange / 'state.json').read_text())
@@ -66,7 +71,7 @@ try:
     descriptor = {'endpointId': config['endpointId'], 'endpoint': pair['endpoint']['endpoint'],
                   'host': {'path': str(host_copy), 'bytes': pair['host']['bytes'], 'sha256': pair['host']['sha256']}}
     checked = subprocess.run(['node', 'node_modules/vitest/vitest.mjs', 'run', 'tests/recovery-storage.spec.ts', '-t', 'live endpoint pair', '--no-cache'],
-        user=uid, group=gid, extra_groups=[], env={**env, 'DSH_STORAGE_CAPTURE_PAIR': json.dumps(descriptor)}, capture_output=True, text=True, timeout=60)
+        user=uid, group=gid, extra_groups=[], env={**env, 'DSH_STORAGE_CAPTURE_PAIR': json.dumps(descriptor), 'DSH_STORAGE_WORKSPACE_CAPTURE': json.dumps(retained['capture'])}, capture_output=True, text=True, timeout=60)
     print(checked.stdout, flush=True)
     assert checked.returncode == 0, checked.stderr
     print(json.dumps({'nativeLiveStorageCheckpoint': 'passed', 'originalEndpointRecords': True, 'heldStaging': True, 'restoreVerified': False}), flush=True)

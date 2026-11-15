@@ -379,7 +379,12 @@ it.runIf(!!process.env.DSH_STORAGE_CAPTURE_PAIR)('captures a live endpoint pair 
     await writer.append([{ type: 'user/message', seq: SessionSeq(0), time: 0, surfaceOp: 'append', data: {
       role: 'user', id: MessageId('live-storage-message'), source: { kind: 'dsh-superagent', form: 'relay' }, content: [{ type: 'text', text: 'Native capture checkpoint' }] } }])
     await writer.close()
-    const checkpoint = await createCheckpoint({ stateDir, outputDir: join(directory, 'backups'), keyFile, persistence: ctx.sessionPersistence, storageArtifacts: [pair] })
+    const capture = JSON.parse(process.env.DSH_STORAGE_WORKSPACE_CAPTURE!)
+    expect(audit.captureRecords).toContainEqual(capture)
+    const checkpoint = await createCheckpoint({ stateDir, outputDir: join(directory, 'backups'), keyFile,
+      persistence: ctx.sessionPersistence, storageArtifacts: [pair], workspaceArtifacts: [capture.result.path],
+      workspaceCaptureSelections: [{ source: capture.binding.root, endpointId: pair.endpointId, requestId: capture.request.requestId }] })
+    expect(checkpoint.manifest.workspaceArchives?.[0]?.capture).toEqual({ endpointId: pair.endpointId, requestId: capture.request.requestId })
     expect((await verifyCheckpoint(checkpoint.path, keyFile)).storage?.[0]?.endpointId).toBe(pair.endpointId)
     const target = join(directory, 'held'); await stageCheckpoint(checkpoint.path, keyFile, target)
     const restored = new DatabaseSync(join(target, 'orchestrator.sqlite'), { readOnly: true })
