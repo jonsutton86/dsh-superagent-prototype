@@ -1,7 +1,14 @@
 # 086 — Workspace storage quotas (design checkpoint)
 
-Status: quota-backed endpoint startup, grants, filesystem/process execution and verification are integrated and native-tested. Operator configuration/install, recovery export, capacity headroom and full qualification remain unfinished. This increment does not advertise
-storage protection in endpoint capabilities. Harness remains the executor and existing provider defaults are unchanged.
+Status: quota-backed endpoint startup, grants, filesystem/process execution and verification are integrated and native-tested.
+Explicit operator configuration/install and original-ID repair tooling are implemented. Paired host/endpoint control-state
+capture, complete record crosschecking, encrypted checkpoint verification and held staging passed focused native Linux
+qualification at `ab4301943ed56964917986ed79986a2e636b0066` ([receipt](evidence/086-live-storage-checkpoint.json)).
+Workspace-content capture, storage-bearing installation/restore, capacity headroom and full qualification remain unfinished.
+Harness remains the runtime; existing provider defaults and the running app are unchanged.
+
+The design and incremental results below are chronological history. Earlier “not implemented” or “unfinished” statements
+apply to their recorded revisions; the current scope is summarized above and in the latest evidence sections.
 
 ## Observed write boundaries
 
@@ -20,7 +27,7 @@ accounting and enforcement, hard block/inode limits, and inherited project membe
 can cover multiple roots. See the upstream [xfs_quota manual](https://www.man7.org/linux/man-pages/man8/xfs_quota.8.html),
 Quota Administration and Directory Tree Quota. Do not infer support for ext4, APFS, or nested aggregate project limits.
 
-Design decisions (not implemented):
+Original design decisions (implementation status is recorded in subsequent sections):
 
 - Bind a nonzero project ID to endpoint identity and authenticated workspace identity in the existing endpoint journal.
   Never derive it solely from a truncated hash or accept an agent-provided ID. A host-controlled allocation range must
