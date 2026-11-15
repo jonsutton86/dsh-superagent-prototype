@@ -190,6 +190,9 @@ export class ExecutorStops {
   detail(id: string): StopDetail {
     const record = this.require(id)
     return { ...stopSummary(record), createdAt: record.createdAt, settledAt: record.settledAt,
+      coverageConsumed: record.coverageConsumed,
+      ...(record.preparation ? { preparation: { phase: record.preparation.phase, command: record.preparation.command,
+        exitCode: record.preparation.exitCode, quiescence: record.preparation.quiescence } } : {}),
       execution: record.execution, world: record.world, targets: { jobIds: record.jobIds, sessions: record.sessions },
       canRecheck: stopHeld(record), canAttest: record.state === 'unknown' && record.world === null && !!record.execution && !this.preparing.has(id) && !this.pending.has(id) && !this.draining(record) }
   }

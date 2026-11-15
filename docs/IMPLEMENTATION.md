@@ -1096,8 +1096,10 @@ endurance, live alerts, further narrow recovery policies and cross-host quiescen
 Increment 082 adds isolated endurance tooling that preserves production job limits and uses native job-completion wakeups
 across bounded chunks. Its two-minute installed boundary and full suites passed on macOS and native Linux at `59497bc`;
 eight-hour duration acceptance remains pending. A controlled
-Runtime reproduction also confirms an ordinary-retry stop boundary: a replacement and queued input may dispatch while the
-old job is still running after its stop wait expires. Repairing that boundary is the next recovery implementation item.
+Runtime reproduction exposed an ordinary-retry stop boundary: replacement and queued input could dispatch while the
+old job remained running after a stop wait. Increment 083 now retains original stop authority, repairs preparation retry,
+and verifies the retry barrier against an installed native Harness job. The workspace exposes preparation outcomes and
+historical coverage. Abrupt host-loss acceptance and the final platform matrix remain open; see the increment evidence.
 
 ### 2. Compute/state/environment contracts and remote execution — whole-profile mission integration implemented
 

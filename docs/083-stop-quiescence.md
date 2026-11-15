@@ -94,6 +94,15 @@ termination; a foreign-instance completion cannot settle it. This is database re
 abrupt host/process kill or complete Runtime crash/restore acceptance. Native coordinator preparation fault injection
 and the final platform matrix remain unqualified.
 
+## Preparation evidence in the workspace
+
+The original-stop detail response includes bounded preparation outcome fields (phase, command exit, exit code and
+managed-range observation), plus whether later work consumed the receipt's coverage. It does not expose the preparation
+command or its digest. The recovery panel shows command exit separately from process termination, preserves zero exit
+codes, and explicitly labels historical coverage as insufficient for later execution. These are read-only facts; they do
+not alter recheck or operator-confirmation admission. Rendered UI and API/authority checks are recorded in
+`docs/evidence/083-preparation-view.json`. Browser deployment acceptance remains separate.
+
 ## Qualification still required
 
 Targeted cases cover running/failed stop waits, rejected or uncertain control, known eventual termination, old-target

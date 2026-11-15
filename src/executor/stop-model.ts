@@ -42,7 +42,8 @@ export interface StopHoldSummary {
 export interface StopDetail extends StopHoldSummary {
   createdAt: string; settledAt: string | null; targets: { jobIds: string[]; sessions: string[] };
   execution: StopRecord['execution']; world: string | null;
-  canRecheck: boolean; canAttest: boolean;
+  canRecheck: boolean; canAttest: boolean; coverageConsumed: boolean;
+  preparation?: Pick<z.infer<typeof PreparationReceipt>, 'phase' | 'command' | 'exitCode' | 'quiescence'>;
 }
 export const StopAttestationRequest = z.object({ schema: z.literal(1), requestId: id, expectedRevision: z.number().int().positive(),
   executionBindingHash: digest, scopeHash: digest, confirmed: z.literal(true), note: z.string().trim().min(1).max(2000) }).strict()

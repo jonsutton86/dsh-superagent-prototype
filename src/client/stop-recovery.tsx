@@ -182,6 +182,13 @@ function StopFacts({ stop }: { stop: StopDetail }) {
     <p>{t('stopHold.scope')}: {t(`stopHold.scope.${stop.scope}`)}</p>
     <p>{t('term.assignment')}: <code>{stop.assignmentId}</code> · <SessionButton sessionId={stop.sessionId} /></p>
     <p>{t('stopHold.proof')}: {t(`stopHold.proof.${stop.proof ?? 'none'}`)}</p>
+    {stop.coverageConsumed && <p role="note">{t('stopHold.consumed')}</p>}
+    {stop.preparation && <section aria-label={t('stopHold.preparation')}>
+      <h5>{t('stopHold.preparation')}</h5>
+      <p>{t(`stopHold.preparation.${stop.preparation.command}`)}</p>
+      {stop.preparation.command === 'exited' && <p>{t('stopHold.exitCode')}: {stop.preparation.exitCode ?? t('stopHold.unknown')}</p>}
+      <p>{t(`stopHold.range.${stop.preparation.quiescence}`)}</p>
+    </section>}
     {stop.legacy && <p>{t('stopHold.legacy')}</p>}
     <p>{t('stopHold.originalLocation')}: <code>{stop.execution?.directory ?? t('stopHold.unknown')}</code></p>
     {stop.execution?.environment && <p>{t('execution.grant')}: <code>{stop.execution.environment.environmentId}</code> · {stop.execution.environment.epoch}</p>}

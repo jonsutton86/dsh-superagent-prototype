@@ -24,7 +24,7 @@ beforeEach(() => {
   sessionStorage.clear(); sent.length = 0; receipt = null; lookupUnavailable = false; losePost = false; refusePost = false
   detail = { id: 'stop-original', ticketId: 'ticket', assignmentId: 'original-assignment', sessionId: 'worker-ticket', revision: 1,
     scope: 'all', state: 'unknown', reason: 'Original work is not confirmed stopped', executionBindingHash: 'a'.repeat(64), scopeHash: 'b'.repeat(64),
-    proof: null, legacy: false, execution: { directory: '/original-host/work', mode: 'local' }, world: null,
+    proof: null, legacy: false, coverageConsumed: false, execution: { directory: '/original-host/work', mode: 'local' }, world: null,
     createdAt: '2026-01-01T00:00:00.000Z', settledAt: null, targets: { jobIds: ['original-job'], sessions: ['worker-ticket'] }, canRecheck: true, canAttest: true }
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
     const path = String(url), method = init?.method ?? 'GET', body = init?.body ? JSON.parse(String(init.body)) : undefined
@@ -150,4 +150,24 @@ it('shows original hold and pending replacement separately, including for a sing
   expect(container.textContent).toContain('Original work is not confirmed stopped')
   expect(container.textContent).toContain('Pending replacement assignment: saved-replacement')
   expect(container.textContent).toContain('2 saved message(s)')
+})
+
+
+it('shows exited preparation with unconfirmed related processes without implying successful recovery', async () => {
+  detail.preparation = { phase: 'observed', command: 'exited', exitCode: 9, quiescence: 'unknown' }
+  detail.canAttest = false
+  await mount()
+  expect(container.textContent).toContain('Command exited.')
+  expect(container.textContent).toContain('Exit code: 9')
+  expect(container.textContent).toContain('Related Harness-managed processes are not confirmed stopped.')
+  expect(container.textContent).not.toContain('This receipt covers earlier work only.')
+})
+
+it('marks consumed preparation proof as historical coverage rather than evidence for later execution', async () => {
+  detail = { ...detail, state: 'quiet', proof: 'preparation', coverageConsumed: true, canAttest: false, canRecheck: false,
+    preparation: { phase: 'observed', command: 'exited', exitCode: 0, quiescence: 'confirmed' } }
+  await mount()
+  expect(container.textContent).toContain('This receipt covers earlier work only. Later execution needs its own stop evidence.')
+  expect(container.textContent).toContain('Related Harness-managed processes are confirmed stopped.')
+  expect(container.textContent).toContain('Exit code: 0')
 })

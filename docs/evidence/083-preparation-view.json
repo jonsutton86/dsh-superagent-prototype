@@ -1,0 +1,39 @@
+{
+  "kind": "workspace-preparation-evidence",
+  "recordedAt": "2026-11-15T07:13:51.474371+00:00",
+  "baseRevision": "81040dd494913d3d5e5dba9f40e546fce44a0546",
+  "fileHashes": {
+    "src/executor/stop-model.ts": "3e1a258ba51bc539c4896697500c1c0de8e6559528edb8965f16b91f9fcf4028",
+    "src/executor/stops.ts": "0322c8374c09c89603f7ae33034c7cf2284b0ded0e58339d77b4fd8f982e3b9b",
+    "src/client/stop-recovery.tsx": "e33333330106a4d77c4b246fec2bc4cc23a26489b97e5498f82a5148eeca07cc",
+    "src/client/locales.ts": "f0bdc60c2a075568ca2c627c106b61300c1329ec419018f22d5726122984750c",
+    "tests/stop-recovery-ui.spec.tsx": "c2ced683771c0da9a0fab2d50b63cd6fe253f4a2309f07734316073d8e8e2526",
+    "tests/executor-stop.spec.ts": "f3a9dd877d5544a0a75eef4c37a2af731b0fa4a6fd5ebee9ecdca66fe7efb128"
+  },
+  "change": "Read-only preparation outcome and consumed coverage in original-stop detail and recovery panel. No command text or digest exposed. No admission/recovery authorization changes.",
+  "validation": [
+    {
+      "command": "vitest run tests/stop-recovery-ui.spec.tsx tests/stop-http.spec.ts tests/executor-stop.spec.ts tests/locales.spec.ts",
+      "passed": 56,
+      "log": "/tmp/dsh-083-preparation-view.log"
+    },
+    {
+      "command": "vitest run tests/executor-stop.spec.ts -t 'retains settled failed preparation|consumes successful preparation'",
+      "passed": 2,
+      "log": "/tmp/dsh-083-preparation-detail.log",
+      "note": "Runs final detail assertions added after initial four-suite run."
+    },
+    {
+      "command": "pnpm typecheck",
+      "exitCode": 0,
+      "log": "/tmp/dsh-083-preparation-view-typecheck.log"
+    },
+    {
+      "command": "pnpm build",
+      "exitCode": 0,
+      "log": "/tmp/dsh-083-preparation-view-build.log"
+    }
+  ],
+  "impactAnalysis": ".artifacts/resume-2026-11-15/preparation-view-affected.json",
+  "limitations": "Rendered DOM integration, not served-browser or deployed user-app acceptance. No full platform qualification or vendor traffic."
+}
