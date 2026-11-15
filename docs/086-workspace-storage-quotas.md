@@ -199,3 +199,37 @@ TypeScript StorageHost observation contract, endpoint enrollment and snapshot-ro
 whole-volume/control-state headroom, operator reconciliation for partial native creation, migration and clean-host/reboot
 acceptance. The endpoint startup guard remains. This library was exercised only on the disposable CI volume; it has not
 been installed or activated on the operator's app or any persistent host.
+
+## Authenticated local service and endpoint client
+
+The root-side `scripts/agentic_storage_service.py` and TypeScript `LocalStorageHost` now connect the provisioning
+orchestrator to the native host library. Configuration is a root-owned, single-link, owner-only regular file below
+protected parents. The caller cannot submit policy, uid/gid or filesystem paths. Requests contain only a fixed operation
+and the original endpoint/request/hash/workspace/project identity. The service accepts the configured endpoint UID using
+Linux SO_PEERCRED, not user-supplied identity fields. Its pathname socket is root-owned mode 0660 under a protected parent;
+the client checks those properties and socket identity before/after the exchange. No TCP listener or bearer secret is added.
+
+The service reads at most 4096 request bytes, requires EOF for one complete JSON message, has a per-read timeout, and emits
+only a fixed refusal on malformed input/host failure. Replies bind original IDs/hash and normalize observations to the
+existing schema. The client bounds responses, applies an overall timeout/cancellation, validates policy and assigned roots,
+and never retries a transport failure. The host retains committed operations after a lost connection. Shutdown removes
+only the socket inode this process bound; startup refuses an existing/stale socket rather than blindly unlinking it.
+
+Native validation at `d8cdf02909fd14ae57ad2a50583cd22e40f1f61b`: [run 43693280862](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43693280862)
+passed the real root service with the TypeScript client running as the configured non-root endpoint user. The test used
+the actual endpoint SQLite journal and StorageProvisioning, created protected roots, reopened the journal, observed the
+original allocation, and rejected forged endpoint IDs, unassigned roots and cancelled calls. A root client that could
+open the socket was still refused by peer-UID authentication. Authorized peers sending extra configuration, concatenated
+JSON or oversized frames received only the fixed refusal. Service shutdown removed its own socket. The 12 native probe
+tests and host/mechanism fixtures also passed; this is 13 Vitest tests plus the explicit Python fixture assertions.
+
+The first service run (`43693089132`) stopped before client execution because an earlier root Vitest invocation created
+an unwritable tooling cache. The fixture now runs the unprivileged client first; it does not elevate the client or loosen
+application permissions. Run `43693160017` passed that repair; the final run also covers refusing non-Linux hosts before
+host effects. Local typecheck passed. No build or whole-system matrix was run.
+
+Still required: supported root-owned installation/systemd assets and fixed registry policy, endpoint enrollment and snapshot
+paths, dispatch fencing and namespace isolation of the service socket, stale-socket/partial-creation operator recovery,
+whole-volume/control-state headroom, service endurance/adversarial framing acceptance, migration and clean-host/reboot
+qualification. A live observation and historical provisioned row still do not authorize general endpoint execution.
+The storage startup guard remains; this service was started only in disposable CI and is not installed on the user's app.

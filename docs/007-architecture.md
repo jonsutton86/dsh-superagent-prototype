@@ -390,6 +390,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/remote/storage-probe.ts` | Read-only Harness host observation of pinned XFS mount, root identities, project inheritance and exact enforced quota; not provisioning or dispatch authority |
 | `src/remote/storage-provisioning.ts` | Original-intent provisioning orchestration and fresh-observation recovery; trusted privileged host adapter and endpoint integration still unfinished |
 | `scripts/agentic_storage.py` | Privileged host library: root-private range registry, protected quota-root creation and original-operation observation; authenticated transport/install path still unfinished |
+| `scripts/agentic_storage_service.py`, `src/remote/storage-host-client.ts` | Fixed-policy root host service and bounded Unix-socket client, kernel peer-UID authentication, original-ID observation; not yet endpoint dispatch integration |
 | `src/verification/model.ts`, `snapshot.ts`, `snapshot-worker.ts`, `runner.ts` | Bounded host-captured file/Git manifests, private copied inputs, revision-pinned checks, output digests and quiescence-bound cleanup through Harness |
 | `src/verification/git-tree.ts` | Canonical Git blob/tree reconstruction from captured bytes and modes, independent of index and local objects |
 | `src/verification/contracts.ts`, `definitions.ts` | Strict operator-authored check contracts, immutable versions, scope/worker authority, durable command receipts and metadata limits |
@@ -630,6 +631,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/storage-journal.spec.ts` | Actual SQLite restart, original intent replay, budget/range exhaustion, policy pinning, migration refusal, corruption and audit rollback; unenforced endpoint startup refusal |
 | `tests/storage-probe.spec.ts` | Strict quota report parsing and opt-in native Harness probe with enforcement, limit and membership mismatch refusals |
 | `tests/fixtures/storage-host-native.py` | Native XFS host provisioning, response-loss replay without mutation, range/identity/capacity refusal and descriptor cleanup |
+| `tests/fixtures/storage-service-native.py`, `tests/storage-host-client.spec.ts` | Real root service with unprivileged TypeScript client and actual SQLite recovery; peer-UID and malformed-frame refusals, socket cleanup |
 | `tests/fixtures/storage-qualification.sh`, `storage-qualification.py` | Disposable hosted-CI XFS mechanism investigation: shared roots, independent project, hard limits, membership confinement, deferred release and accounting-only counterexample; not endpoint integration |
 | `tests/remote-harness.spec.ts` | Opt-in installed Harness qualification with a configured model, remote artifacts, restart, maintenance-plugin checkpoint/import/reservation and ownership-authority process handoff |
 | `tests/recovery.spec.ts` | Official JSONL round trips, exclusive ownership, corruption/cancellation refusal, fork imports, held restore, original reservation retries, competing restores and preserved remote receipts |

@@ -1,0 +1,52 @@
+{
+  "kind": "authenticated-storage-host-service",
+  "revision": "d8cdf02909fd14ae57ad2a50583cd22e40f1f61b",
+  "recordedAt": "2026-11-15T08:13:12.301705+00:00",
+  "classification": "IMPLEMENTED and native TESTED service/client; NOT endpoint-integrated or deployed",
+  "workflowRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43693280862",
+  "result": "success",
+  "hashes": {
+    "scripts/agentic_storage_service.py": "24c6d215ce6684f08de1affcf9541255fbd2d6c54a1ea3a81abdf51c82e02aed",
+    "scripts/agentic_storage.py": "74214bb4ce3fee39f282705553184192985d902f0e15f3eb73ec63f82cbf7fbe",
+    "src/remote/storage-host-client.ts": "b4e8773fc8be00e8a0c3a63177e196621ef5c11712d0da9b24f86cfdbccf648e",
+    "tests/storage-host-client.spec.ts": "494d7e229ef29f155e40b1eadffebc1620af8270248050d0d153928803596b0a",
+    "tests/fixtures/storage-service-native.py": "fc572cd5ce03e4aab21579dfa31188151a1181e6e9bd58c051c06d6cbf94f987",
+    "tests/fixtures/storage-qualification.sh": "cac31b76694d6e1293665dc307eabb052db52c9bc113d9e0ca1a45ba6a888718"
+  },
+  "validation": {
+    "nativeVitestPassed": 13,
+    "nativeVitestSkipped": 0,
+    "pythonFixtures": [
+      "mechanism and inheritance",
+      "host creation/recovery/range checks",
+      "service peer UID and malformed-frame refusal, shutdown socket cleanup"
+    ],
+    "clientPrivilege": "configured non-root endpoint uid",
+    "state": "real endpoint SQLite reopened; original allocation observed",
+    "localTypecheck": "passed",
+    "fullMatrix": "not run",
+    "build": "not run"
+  },
+  "priorRuns": [
+    {
+      "id": 43693089132,
+      "result": "failure",
+      "cause": "root-created tooling cache prevented unprivileged client startup",
+      "repair": "run endpoint-user fixture before root-run Vitest"
+    },
+    {
+      "id": 43693160017,
+      "result": "success"
+    }
+  ],
+  "remaining": [
+    "root-owned supported service install and fixed shared registry",
+    "endpoint enrollment/verification roots",
+    "pre-exec fencing and socket isolation",
+    "stale socket/partial creation operator recovery",
+    "whole-volume/control-state capacity",
+    "adversarial framing and endurance",
+    "migration and clean-host/reboot",
+    "deployment"
+  ]
+}
