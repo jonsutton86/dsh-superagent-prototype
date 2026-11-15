@@ -107,6 +107,8 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm typecheck
           pnpm build
+      - name: Verify storage checkpoint and offline snapshot contracts
+        run: pnpm exec vitest run tests/recovery-storage.spec.ts
       - name: Install pinned Harness for storage launcher qualification
         run: |
           npm install --prefix "$RUNNER_TEMP/agentic-storage-harness" --no-audit --no-fund @deepseek-ai/dsh@0.2.1-rc.3

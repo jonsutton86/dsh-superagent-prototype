@@ -287,3 +287,44 @@ it('exports endpoint storage under its writer lock without initializing or alter
     expect(await readFile(source)).toEqual(before)
   } finally { db.close(); await rm(directory, { recursive: true, force: true }) }
 })
+
+
+it('includes committed WAL records and retains uncertain operations without replaying them', async () => {
+  const fixture = databases(), directory = await realpath(await mkdtemp(join(tmpdir(), 'endpoint-storage-wal-')))
+  let source: DatabaseSync | undefined
+  try {
+    const state = join(directory, 'state'); await mkdir(state, { mode: 0o700 })
+    const path = join(state, 'endpoint.sqlite'); fixture.endpoint.prepare('VACUUM INTO ?').run(path); await chmod(path, 0o600)
+    source = new DatabaseSync(path)
+    source.exec('PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0; CREATE TABLE remote_operation(id TEXT PRIMARY KEY,value TEXT NOT NULL)')
+    const operation = JSON.stringify({ id: 'original-operation', phase: 'unknown', error: 'Response lost; effect unsettled' })
+    source.prepare('INSERT INTO remote_operation VALUES(?,?)').run('original-operation', operation)
+    const before = source.prepare('SELECT * FROM remote_storage').all()
+    const receipt = await exportEndpointStorageSnapshot(state, join(directory, 'snapshot'))
+    const copy = new DatabaseSync(receipt.endpoint.path, { readOnly: true })
+    try {
+      expect(copy.prepare('SELECT value FROM remote_operation WHERE id=?').get('original-operation')?.value).toBe(operation)
+      expect(copy.prepare('SELECT * FROM remote_storage').all()).toEqual(before)
+    } finally { copy.close() }
+    expect(source.prepare('SELECT value FROM remote_operation WHERE id=?').get('original-operation')?.value).toBe(operation)
+    expect(source.prepare('SELECT * FROM remote_storage').all()).toEqual(before)
+    expect(receipt.executionQuiescenceVerified).toBe(false)
+  } finally { source?.close(); fixture.close(); await rm(directory, { recursive: true, force: true }) }
+})
+
+it('retains a failed snapshot without a success receipt and releases the source lock', async () => {
+  const fixture = databases(), directory = await realpath(await mkdtemp(join(tmpdir(), 'endpoint-storage-failed-')))
+  try {
+    const state = join(directory, 'state'); await mkdir(state, { mode: 0o700 })
+    const path = join(state, 'endpoint.sqlite'); fixture.endpoint.prepare('VACUUM INTO ?').run(path); await chmod(path, 0o600)
+    const source = new DatabaseSync(path)
+    try { source.exec("DELETE FROM endpoint_meta WHERE key='storage-policy'") } finally { source.close() }
+    const target = join(directory, 'failed'), before = await readFile(path)
+    await expect(exportEndpointStorageSnapshot(state, target)).rejects.toThrow('storage_configuration')
+    await expect(readFile(join(target, 'snapshot.json'))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await readFile(join(target, 'endpoint.sqlite'))).toBeTruthy()
+    expect(await readFile(path)).toEqual(before)
+    const release = lockSync(state); release()
+    await expect(exportEndpointStorageSnapshot(state, target)).rejects.toMatchObject({ code: 'EEXIST' })
+  } finally { fixture.close(); await rm(directory, { recursive: true, force: true }) }
+})
