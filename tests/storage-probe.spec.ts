@@ -57,5 +57,5 @@ it.runIf(!!process.env.DSH_STORAGE_PROBE_ROOT)('observes actual XFS through Harn
     await expect(observe()).rejects.toThrow('Storage observation')
     quota('limit -p bhard=16m 17')
     await expect(observeStorage(runtime, configured, reservation, [root + '/other'], AbortSignal.timeout(20000))).rejects.toThrow('Storage observation')
-  } finally { quota('enable -p'); quota('limit -p bhard=16m 17'); await ctx.dispose() }
+  } finally { quota('enable -p'); quota('limit -p bhard=16m 17'); await ctx.fiber.dispose() }
 }, 60000)
