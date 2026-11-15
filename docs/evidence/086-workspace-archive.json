@@ -1,0 +1,20 @@
+{
+  "revision": "9d046cf07c6cbc364714e67907736c3ea6f727a3",
+  "classification": "VERIFIED",
+  "validation": {
+    "focused": "4 workspace inventory/archive tests passed before the final type-export-only fix",
+    "typecheck": "passed after exporting the archive return entry type"
+  },
+  "behavior": [
+    "Exact bytes captured in private generated members using bounded streaming writes",
+    "Git contents and original link/mode metadata retained",
+    "Existing or source-nested destinations refused",
+    "Incomplete capture retains bytes without a completed manifest"
+  ],
+  "limits": [
+    "Plaintext private archive, not yet encrypted checkpoint membership",
+    "No globally frozen source or quiescence proof",
+    "No archive reader/verifier or restoration yet",
+    "No live integration or deployment"
+  ]
+}

@@ -1304,3 +1304,25 @@ Two focused tests and typecheck passed at the revision in
 helper dispatch, authenticated checkpoint membership and target restoration remain
 unfinished. The API explicitly reports `contentArchived: false`,
 `executionQuiescenceVerified: false` and `restoreVerified: false`.
+
+### Streamed private workspace content archive
+
+`captureWorkspaceRecovery` now streams the bytes observed by the inventory reader
+into generated private `content-N.bin` members in a new private directory. It does
+not reopen caller paths for a second content read. Original paths, modes and link
+relationships remain metadata; no links are created in the archive. Hard-link aliases
+currently get separate content members and retain their shared-identity relation.
+
+File writes handle partial writes, honor cancellation and sync completed members.
+The manifest is written only after the entire inventory and identity rechecks
+succeed. Existing destinations and destinations nested with the source are refused.
+Failures preserve output for inspection and do not automatically retry. A completed
+manifest is a local capture result, not an authenticated remote claim or restore
+permission; consumers must verify it before use.
+
+Four focused inventory/archive tests passed. Typecheck exposed a declaration-export
+issue, fixed by exporting the workspace entry type; typecheck then passed. The
+[evidence receipt](evidence/086-workspace-archive.json) records the resulting revision.
+This is private plaintext staging only. Archive verification, encryption/authenticated
+checkpoint membership, frozen-source authority, confined helper integration and
+restoration remain unfinished.
