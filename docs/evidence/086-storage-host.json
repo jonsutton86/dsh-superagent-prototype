@@ -1,0 +1,49 @@
+{
+  "kind": "privileged-storage-host-native",
+  "revision": "b1ab8c0f68b4ee41327c96ca6ccd397d82a356de",
+  "recordedAt": "2026-11-15T08:04:25.768801+00:00",
+  "classification": "IMPLEMENTED host library; native TESTED; NOT INTEGRATED or DEPLOYED",
+  "workflowRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43692647748",
+  "result": "success",
+  "hashes": {
+    "scripts/agentic_storage.py": "df525f828e7df0d10b548ad0e3d3316ca6ef9f1bdf8c23541a5306ff74cfbe8d",
+    "tests/fixtures/storage-host-native.py": "312afa633526fe10b986f48df8ce91fdda582da0ddc13e97265a2aabd2683f10",
+    "tests/fixtures/storage-qualification.sh": "4f6d08ea82c43987b2fbf9d30a3164d91736c0b2f38dbf23bc8e3ee35493f9da"
+  },
+  "validation": [
+    "native XFS protected-root creation and exact limits",
+    "registry reopen replay observes only; quota-setting commands forbidden",
+    "forged endpoint, traversal and out-of-range request refused before intent",
+    "overlapping ranges refused",
+    "incomplete original intent preserved without recreation",
+    "capacity held by uncertain operation",
+    "root inode replacement refused",
+    "rejected registration flock handle closed",
+    "all descriptors released after final close",
+    "12 native Harness probe tests passed",
+    "sandbox mechanism and inheritance checks passed"
+  ],
+  "priorRuns": [
+    {
+      "id": 43692375225,
+      "result": "success",
+      "scope": "initial host library"
+    },
+    {
+      "id": 43692529615,
+      "result": "failure",
+      "reason": "cleanup test counted shared SQLite descriptors while another connection remained open",
+      "repair": "assert immediate flock handle cleanup and total descriptor cleanup after all connections close"
+    }
+  ],
+  "remaining": [
+    "authenticated local service transport and fixed admin configuration",
+    "TypeScript adapter normalization",
+    "endpoint and verification-root integration",
+    "pre-exec fencing",
+    "whole-volume/control-state capacity",
+    "partial-creation operator reconciliation",
+    "migration and clean-host/reboot acceptance",
+    "deployment"
+  ]
+}

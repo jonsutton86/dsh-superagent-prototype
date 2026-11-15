@@ -1118,7 +1118,8 @@ enrollment/kernel integration is still WIP and persisted storage policies cannot
 The read-only host probe passed 12 native checks through Harness at `65f346e` (`docs/evidence/086-storage-probe.json`);
 its point-in-time result does not yet authorize dispatch or establish protected roots.
 Provisioning orchestration now preserves original effects across response loss and validates persisted observations
-(`docs/evidence/086-storage-provisioning.json`); the production privileged adapter and endpoint wiring remain unfinished.
+(`docs/evidence/086-storage-provisioning.json`). The privileged host library passed real XFS creation/recovery checks
+at `b1ab8c0` (`docs/evidence/086-storage-host.json`); authenticated service transport, endpoint wiring and deployment remain unfinished.
 
 Introduce an environment registry in the existing state store. Each environment has a stable ID, endpoint identity,
 capabilities, availability, grant revision and lease epoch. Bind a ticket's execution to that environment and grant revision.

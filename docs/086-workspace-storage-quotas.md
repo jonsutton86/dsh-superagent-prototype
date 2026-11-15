@@ -159,3 +159,43 @@ project-range exclusivity, identity-pinned empty-root creation and recoverable p
 enrollment and snapshot roots; validate/fence dispatch; add operator configuration and recovery paths. The new `StorageHost`
 interface has no production implementation yet. Neither this checkpoint nor a `provisioned` journal row means storage
 protection has been integrated or deployed.
+
+## Privileged host library and native creation/recovery
+
+`scripts/agentic_storage.py` implements the privileged host primitive. It is an importable library, not a setuid program,
+installed service, agent tool, or public endpoint. Its caller must already be an authenticated privileged service with a
+fixed administrator-owned configuration and a single shared root-private registry. No caller-supplied configuration may
+be exposed through an eventual endpoint transport.
+
+The host registry pins each endpoint's policy and OS uid/gid, refuses overlapping ranges for the same filesystem UUID,
+and maintains unique project/workspace/request claims. This separate registry is required by the privilege boundary:
+the unprivileged endpoint journal cannot authoritatively claim host-wide ranges or attest which root inodes a privileged
+process created. It does not allocate replacement IDs or release uncertain capacity. A root-owned flock serializes
+host operations; SQLite FULL commits the original intent before filesystem effects. Host quota tools use fixed system
+paths, a clean locale/environment, no shell and no retries.
+
+Provisioning checks the actual XFS mount and enforcement, rejects preexisting nonzero quota usage/limits, creates roots
+under root-owned parents, records their device/inode identities, applies membership and exact limits, and only then
+assigns the configured endpoint uid/gid. It never recursively adopts an existing tree. A duplicate request is observation
+only. Missing/partial original identities require operator reconciliation; they do not cause another creation attempt.
+Observation checks protected ancestors, root identity and ownership, membership/inheritance, mount identity and hard limits.
+Host-managed range exclusion does not protect against an administrator assigning the same IDs outside this registry;
+exclusive range assignment remains a prepared-host requirement.
+
+Native validation passed at `b1ab8c0f68b4ee41327c96ca6ccd397d82a356de` in [run 43692647748](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43692647748).
+The real library created two roots with enforced 16 MiB/128-inode limits; reopening the registry and repeating the original
+request performed no quota-setting commands. Forged endpoint IDs, traversal, out-of-range projects, overlapping endpoint
+ranges, changed request hashes, an uncertain intent with no created roots, exhausted capacity and root replacement were
+refused. Rejected registration released its flock descriptor, and all host descriptors closed after final shutdown.
+The existing sandbox mechanism fixture and all 12 native Harness probe tests also passed at that revision.
+
+An earlier cleanup assertion failed in run `43692529615`: it counted shared SQLite descriptors while the first connection
+remained open. The corrected test checks immediate flock cleanup separately and requires total descriptor return to the
+baseline after all connections close. The preceding initial host-library run `43692375225` passed but is superseded by
+this final revision. No TypeScript changed, so no additional typecheck/build or full matrix was run for this slice.
+
+Remaining: authenticated local host-service transport and its fixed configuration/install path, normalization to the
+TypeScript StorageHost observation contract, endpoint enrollment and snapshot-root wiring, fresh pre-exec fencing,
+whole-volume/control-state headroom, operator reconciliation for partial native creation, migration and clean-host/reboot
+acceptance. The endpoint startup guard remains. This library was exercised only on the disposable CI volume; it has not
+been installed or activated on the operator's app or any persistent host.
