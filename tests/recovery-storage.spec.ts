@@ -328,3 +328,29 @@ it('retains a failed snapshot without a success receipt and releases the source 
     await expect(exportEndpointStorageSnapshot(state, target)).rejects.toMatchObject({ code: 'EEXIST' })
   } finally { fixture.close(); await rm(directory, { recursive: true, force: true }) }
 })
+
+it.runIf(!!process.env.DSH_STORAGE_CAPTURE_PAIR)('captures a live endpoint pair in a verified encrypted checkpoint with held staging', async () => {
+  const pair = JSON.parse(process.env.DSH_STORAGE_CAPTURE_PAIR!), ctx = new Context()
+  const directory = await realpath(await mkdtemp(join(tmpdir(), 'live-storage-checkpoint-')))
+  try {
+    const audit = await auditStorageRecoveryArtifacts(pair, new AbortController().signal)
+    expect(audit).toBeTruthy()
+    const stateDir = join(directory, 'state'), keyFile = join(directory, 'key')
+    await mkdir(stateDir, { mode: 0o700 }); createRecoveryKey(keyFile)
+    const store = new Store(join(stateDir, 'orchestrator.sqlite'))
+    store.set(KV.runtime.masterId, 'live-storage-master')
+    store.db.exec('CREATE TABLE IF NOT EXISTS operator_endpoint(id TEXT PRIMARY KEY,value TEXT NOT NULL)')
+    store.db.prepare('INSERT INTO operator_endpoint VALUES(?,?)').run(pair.endpointId, JSON.stringify({ id: pair.endpointId, credentialFile: keyFile }))
+    store.close()
+    await ctx.plugin(Jsonl, { root: join(directory, 'sessions'), compression: 'none' })
+    const writer = await ctx.sessionPersistence.create(Session.create(SessionId('live-storage-master')).header)
+    await writer.append([{ type: 'user/message', seq: SessionSeq(0), time: 0, surfaceOp: 'append', data: {
+      role: 'user', id: MessageId('live-storage-message'), source: { kind: 'dsh-superagent', form: 'relay' }, content: [{ type: 'text', text: 'Native capture checkpoint' }] } }])
+    await writer.close()
+    const checkpoint = await createCheckpoint({ stateDir, outputDir: join(directory, 'backups'), keyFile, persistence: ctx.sessionPersistence, storageArtifacts: [pair] })
+    expect((await verifyCheckpoint(checkpoint.path, keyFile)).storage?.[0]?.endpointId).toBe(pair.endpointId)
+    const target = join(directory, 'held'); await stageCheckpoint(checkpoint.path, keyFile, target)
+    const restored = new DatabaseSync(join(target, 'orchestrator.sqlite'), { readOnly: true })
+    try { expect(restored.prepare('SELECT value FROM kv WHERE key=?').get(KV.recovery.hold)).toBeTruthy() } finally { restored.close() }
+  } finally { await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }) }
+})

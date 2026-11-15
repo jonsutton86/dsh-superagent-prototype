@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import selectors
+import shutil
 import socket
 import sqlite3
 import subprocess
@@ -37,6 +38,8 @@ def start():
     except BaseException:
         process.kill(); process.wait(); raise
 
+exchange = base / 'capture-exchange'; exchange.mkdir(mode=0o700); os.chown(exchange, uid, gid)
+retained = None
 process = start()
 try:
     # Root can open the mode-0660 socket but is not the configured peer UID. Payload must not override peer credentials.
@@ -44,11 +47,29 @@ try:
         connection.settimeout(5); connection.connect(str(socket_path))
         assert json.loads(connection.recv(4096)) == {'ok': False, 'error': 'storage_host_refused'}
     env = {'PATH': os.environ['PATH'], 'DSH_STORAGE_SERVICE_CONFIG': json.dumps(config),
-           'DSH_STORAGE_SERVICE_SOCKET': str(socket_path), 'CI': 'true'}
+           'DSH_STORAGE_SERVICE_SOCKET': str(socket_path), 'CI': 'true', 'DSH_STORAGE_CAPTURE_STATE': str(exchange / 'state.json')}
     result = subprocess.run(['node', 'node_modules/vitest/vitest.mjs', 'run', 'tests/storage-host-client.spec.ts', '--no-cache'],
                             user=uid, group=gid, extra_groups=[], env=env, capture_output=True, text=True, timeout=90)
     print(result.stdout, flush=True)
     assert result.returncode == 0, result.stderr
+    retained = json.loads((exchange / 'state.json').read_text())
+    assert retained['directory'].startswith('/tmp/dsh-storage-client-') and Path(retained['directory']).stat().st_uid == uid
+    host_output = registry.parent / 'live-capture'; host_output.mkdir(mode=0o700)
+    paired = subprocess.run([sys.executable, '-B', 'scripts/agentic_storage_admin.py', '--config', str(config_path), '--registry', str(registry),
+        'capture-pair', '--output', str(host_output / 'host.sqlite'), '--node', str(Path(shutil.which('node')).resolve()),
+        '--exporter', str(Path('scripts/endpoint-storage-snapshot.mjs').resolve()), '--endpoint-state', retained['state'],
+        '--endpoint-output', str(exchange / 'endpoint')], capture_output=True, text=True, timeout=140)
+    assert paired.returncode == 0, paired.stderr
+    pair = json.loads(paired.stdout)['pair']
+    host_copy = exchange / 'host.sqlite'; shutil.copyfile(host_output / 'host.sqlite', host_copy)
+    os.chmod(host_copy, 0o600); os.chown(host_copy, uid, gid)
+    descriptor = {'endpointId': config['endpointId'], 'endpoint': pair['endpoint']['endpoint'],
+                  'host': {'path': str(host_copy), 'bytes': pair['host']['bytes'], 'sha256': pair['host']['sha256']}}
+    checked = subprocess.run(['node', 'node_modules/vitest/vitest.mjs', 'run', 'tests/recovery-storage.spec.ts', '-t', 'live endpoint pair', '--no-cache'],
+        user=uid, group=gid, extra_groups=[], env={**env, 'DSH_STORAGE_CAPTURE_PAIR': json.dumps(descriptor)}, capture_output=True, text=True, timeout=60)
+    print(checked.stdout, flush=True)
+    assert checked.returncode == 0, checked.stderr
+    print(json.dumps({'nativeLiveStorageCheckpoint': 'passed', 'originalEndpointRecords': True, 'heldStaging': True, 'restoreVerified': False}), flush=True)
     # Authorized peer still cannot send configuration, multiple commands, or an oversized frame.
     client = '''import json,socket,sys
 s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM);s.settimeout(10);s.connect(sys.argv[1])
@@ -111,3 +132,4 @@ finally:
         process.kill(); process.wait(); raise AssertionError('Storage service did not stop cleanly')
     assert process.returncode == 0, process.stderr.read()
     assert not socket_path.exists(), 'Service did not remove its own socket'
+    if retained: shutil.rmtree(retained['directory'])

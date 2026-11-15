@@ -37,6 +37,7 @@ it.runIf(!!process.env.DSH_STORAGE_SERVICE_CONFIG)('starts, enrolls, executes an
     coordinator = new Endpoints({ store, stateDir: join(directory, 'coordinator'), lifetime: new AbortController().signal,
       workerRoots: () => [assignedRoot] })
   }
+  let captureReady = false
   try {
     await endpoint.start()
     expect(endpoint.journal.id).toBe(config.endpointId)
@@ -106,8 +107,12 @@ it.runIf(!!process.env.DSH_STORAGE_SERVICE_CONFIG)('starts, enrolls, executes an
     await expect(client.observe(policy, forged, storageRoots(policy, forged), AbortSignal.timeout(20000))).rejects.toThrow('Storage host response')
     await expect(client.observe(policy, original, ['/unassigned'], AbortSignal.timeout(20000))).rejects.toThrow('Storage host response')
     await expect(client.observe(policy, original, storageRoots(policy, original), AbortSignal.abort())).rejects.toThrow()
+    captureReady = true
   } finally {
     await coordinator?.stop(); store?.close()
     if (server.listening) { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())) }
-    await endpoint.stop(); await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }) }
+    await endpoint.stop(); await ctx.fiber.dispose()
+    if (captureReady && process.env.DSH_STORAGE_CAPTURE_STATE)
+      await writeFile(process.env.DSH_STORAGE_CAPTURE_STATE, JSON.stringify({ directory, state }), { mode: 0o600 })
+    else await rm(directory, { recursive: true, force: true }) }
 }, 90000)
