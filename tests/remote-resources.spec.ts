@@ -179,9 +179,10 @@ it.runIf(!!process.env.DSH_RESOURCE_QUALIFICATION_ROOT)('qualifies actual cgroup
   const directory = await mkdtemp(join(tmpdir(), 'resource native ')), ctx = new Context()
   const filesystem = new LocalFileSystem(ctx, { cwd: directory, diffBasisMaxBytes: 1024 * 1024 }), local = new LocalSubprocessRuntime(ctx)
   const configured = { ...policy, command: { ...policy.command, cpuPercent: 25 }, workspace: { cpuPercent: 25, memoryBytes: 512 * 1024 ** 2, processes: 64 }, cgroupRoot: process.env.DSH_RESOURCE_QUALIFICATION_ROOT! }
-  let endpoint: RemoteEndpoint
+  let endpoint: RemoteEndpoint, resources: CgroupResources
   const create = () => {
-    const resources = new CgroupResources(configured), subprocess = resources.decorate(local, resolve('lib/remote-resource-worker.js'))
+    resources = new CgroupResources(configured)
+    const subprocess = resources.decorate(local, resolve('lib/remote-resource-worker.js'))
     const isolation = new BubblewrapIsolation(subprocess)
     return new RemoteEndpoint({ filesystem, subprocess, resources, isolation, resourceHelper: resolve('lib/remote-resource-worker.js'), stateDir: join(directory, 'state'), root: join(directory, 'work'),
       filesystemRpc: confinedFilesystem(subprocess, isolation, resolve('lib/remote-fs-worker.js')),
@@ -205,9 +206,12 @@ it.runIf(!!process.env.DSH_RESOURCE_QUALIFICATION_ROOT)('qualifies actual cgroup
     expect(await settled(request.requestId)).toMatchObject({ phase: 'settled', outcome: { exitCode: 0 } })
     expect(await endpoint.rpc(principal, { op: 'fs.read', path: join(enrolled.grant.root, 'proof.txt') })).toBe('resource-proof')
     const node = await local.resolveExecutable('node')
-    const cpu = { ...request, requestId: 'native-resource-cpu', argv: [node, '-e', 'const end=Date.now()+2000; while(Date.now()<end) {}'] }
+    const cpu = { ...request, requestId: 'native-resource-cpu', argv: [node, '-e', 'const end=Date.now()+5000; while(Date.now()<end) {}'] }
+    expect(resources!.quiescent()).toBe(true)
     await endpoint.rpc(principal, cpu)
+    await vi.waitFor(() => expect(resources!.quiescent()).toBe(false), { timeout: 4000, interval: 20 })
     const throttled = await settled(cpu.requestId)
+    expect(resources!.quiescent()).toBe(true)
     expect(throttled.outcome?.exitCode).toBe(0); expect(throttled.resources?.complete).toBe(true)
     const workspacePath = (name: string) => join(pool, 'w-' + createHash('sha256').update('workspace:' + name).digest('hex').slice(0, 32))
     const parent = workspacePath(enrolled.grant.workspace)
