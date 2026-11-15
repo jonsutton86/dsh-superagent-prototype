@@ -439,6 +439,7 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
   'POST credentials/:name': { body: true, answer: () => refuse(409, 'Credential fixture not configured') },
   'DELETE credentials/:name': { answer: () => ({ deleted: false }) },
   'GET providers': { answer: () => ({ items: [], verified: false }) },
+  'GET model-route': { query: ['task', 'monthlyBudgetUsd'], answer: () => ({ ok: false, task: 'coding', reason: 'no_providers', detail: 'no model provider is configured', verified: false }) },
   'GET audit': { answer: () => ({ items: [], nextCursor: null }) },
   'GET emergency': { answer: () => ({ version: 1, engaged: false, reason: '', actor: '', at: null, revision: 0, requestId: null, action: null }) },
   'POST emergency': { body: true, answer: () => refuse(409, 'Emergency fixture not configured') },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { routeProvider, TaskKind } from '../src/security/model-routing.ts'
+import { routeCandidates, routeProvider, TaskKind } from '../src/security/model-routing.ts'
 import type { ProviderConfig } from '../src/security/providers.ts'
 
 const first: ProviderConfig = {
@@ -119,6 +119,37 @@ describe('routeProvider', () => {
       provider: first,
       model: 'first-model',
       monthlyBudgetUsd: 20
+    })
+  })
+})
+
+describe('routeCandidates', () => {
+  it('returns every eligible provider in configured order', () => {
+    expect(routeCandidates([first, second], 'coding')).toEqual({
+      ok: true,
+      task: 'coding',
+      candidates: [
+        { provider: first, model: 'first-model', monthlyBudgetUsd: 20 },
+        { provider: second, model: 'second-model', monthlyBudgetUsd: 10 }
+      ]
+    })
+  })
+
+  it('filters fallbacks by ceiling and keeps the first selection', () => {
+    const result = routeCandidates([first, second], 'fast', { monthlyBudgetUsd: 10 })
+    expect(result.ok && result.candidates.map(candidate => candidate.provider.id)).toEqual(['deepseek'])
+    expect(routeProvider([first, second], 'fast', { monthlyBudgetUsd: 10 })).toMatchObject({
+      provider: second,
+      model: 'second-model'
+    })
+  })
+
+  it('returns the same refusal reasons as routeProvider', () => {
+    expect(routeCandidates([], 'coding')).toMatchObject({ ok: false, reason: 'no_providers' })
+    expect(routeCandidates([first], 'bad')).toMatchObject({ ok: false, reason: 'invalid_task' })
+    expect(routeCandidates([first], 'coding', { monthlyBudgetUsd: 1 })).toMatchObject({
+      ok: false,
+      reason: 'no_eligible_provider'
     })
   })
 })

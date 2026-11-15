@@ -100,6 +100,13 @@ it('exposes redacted credential and provider views through the management API', 
   expect(providers.body).toMatchObject({ verified: false, items: [expect.objectContaining({ id: 'openai-compatible', verified: false,
     credential: { name: 'provider-key', present: true } })] })
   expect(JSON.stringify(providers.body)).not.toContain(SECRET)
+  const routed = await h.api('GET', 'model-route?task=coding&monthlyBudgetUsd=5')
+  expect(routed.status).toBe(200)
+  expect(routed.body).toEqual({ ok: true, task: 'coding', verified: false,
+    candidates: [{ provider: 'openai-compatible', model: 'model-a', monthlyBudgetUsd: 5 }] })
+  expect(JSON.stringify(routed.body)).not.toContain(SECRET)
+  expect((await h.api('GET', 'model-route?task=unknown')).status).toBe(400)
+  expect((await h.api('GET', 'model-route?task=coding&monthlyBudgetUsd=-1')).status).toBe(400)
   const state = await h.api('GET', 'state')
   expect(JSON.stringify(state.body)).not.toContain(SECRET)
   const audit = h.runtime.audit.list(20, undefined)
@@ -116,6 +123,7 @@ it('denies credential writes to a viewer while allowing provider reads', async (
   const h = host = await startRuntime(undefined, { executionMode: 'local', noAccounts: true })
   const headers = { authorization: `Bearer ${TOKEN}` }
   expect((await h.api('GET', 'providers', undefined, headers)).status).toBe(200)
+  expect((await h.api('GET', 'model-route?task=fast', undefined, headers)).status).toBe(200)
   const denied = await h.api('POST', 'credentials/viewer-key', { requestId: 'viewer-1', value: SECRET }, headers)
   expect(denied.status).toBe(403)
   expect(h.runtime.credentials.get('viewer-key')).toBeUndefined()

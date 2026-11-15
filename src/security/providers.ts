@@ -1,6 +1,8 @@
 /** Validated model-provider configuration. Configuration never asserts verification; live checks remain explicit. */
 import { z } from 'zod'
 import type { CredentialVault } from './credentials.ts'
+import { routeCandidates } from './model-routing.ts'
+import type { RoutingCandidatesResult } from './model-routing.ts'
 
 export const ProviderId = z.enum(['openai', 'deepseek', 'openrouter', 'openai-compatible'])
 export type ProviderId = z.infer<typeof ProviderId>
@@ -67,6 +69,11 @@ export class ProviderRegistry {
       credential: provider.credential ? { name: provider.credential, present: this.credentials?.has(provider.credential) ?? false } : null,
       verified: false,
     }))
+  }
+
+  /** Ordered local fallback candidates. It never calls a provider or asserts capability. */
+  route(task: unknown, options: { monthlyBudgetUsd?: number } = {}): RoutingCandidatesResult {
+    return routeCandidates(this.providers, task, options)
   }
 
   get(id: string): ProviderConfig | undefined { return this.providers.find(provider => provider.id === id) }

@@ -600,7 +600,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/admin-access.spec.ts` | No-token loopback default, bearer-token authentication, role capability denial with audit facts, connector deny-by-default grants, and malformed configuration that does not echo secrets |
 | `tests/credentials.spec.ts` | Atomic 0600 vault storage, names-only listing, traversal/symlink refusal, provider URL/model validation, redacted API views, audit without values, and viewer denial |
 | `tests/memory.spec.ts` | Memory persistence across restart, FTS/tag search, scope isolation, dedup/upsert, bounded advisory context, conversation capture/retention, extractive digests, profile upserts, consent-gated imports, prompt injection, ticket grants, worker tools, hard deletion, API flows and viewer denial |
-| `tests/model-routing.spec.ts` | Deterministic provider selection, budget/ceiling boundaries, refusals, default-model preference and task validation |
+| `tests/model-routing.spec.ts` | Deterministic provider selection, ordered fallback candidates, budget/ceiling boundaries, refusals, default-model preference and task validation |
 | `tests/environments.spec.ts` | Runtime/API enrollment, persistent grants, paired-provider proof, races, revocation, replacement and legacy task binding |
 | `tests/environments-ui.spec.tsx` | Rendered enrollment/recovery and exact mutation retry after response loss and polling |
 | `tests/world-pool.spec.ts` | Independent paired worlds, per-action dispatch, revocation/recovery, credential fencing and revoked receipts |

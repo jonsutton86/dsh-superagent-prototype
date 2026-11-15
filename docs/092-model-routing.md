@@ -8,8 +8,15 @@ call, no network, no credential use, no capability verification. It does not com
 `src/security/model-routing.ts` exposes:
 
 - `TaskKind` — `reasoning`, `coding`, `summarize`, `fast` (zod-validated);
-- `routeProvider(providers, task, { monthlyBudgetUsd? })` returning either a `RouteSelection` or a `RouteRefusal`
-  (`invalid_task`, `no_providers`, `no_eligible_provider`).
+- `routeCandidates(providers, task, { monthlyBudgetUsd? })` — every eligible provider/model in configured order, or a
+  `RouteRefusal` (`invalid_task`, `no_providers`, `no_eligible_provider`);
+- `routeProvider(...)` — the first candidate, kept for single-selection callers;
+- `ProviderRegistry.route(...)` — the same ordered candidates through the existing read-only registry.
+
+The operator API exposes the ordered list without calling anything:
+`GET model-route?task=coding&monthlyBudgetUsd=5` (`runtime:read`, same-origin) returns either
+`{ ok: true, task, candidates: [{ provider, model, monthlyBudgetUsd }], verified: false }` or the refusal with
+`verified: false`. Provider credentials are not included in this view.
 
 Selection is deliberately conservative and deterministic:
 
@@ -30,14 +37,16 @@ routing remain Phase 3 work and require live credentials.
 
 ## Qualification
 
-`tests/model-routing.spec.ts` (22 tests) covers invalid tasks, empty providers, zero-budget and ceiling skipping,
-boundary inclusion, default-model preference, first-model fallback, deterministic order, undeclared budgets, invalid
-ceilings and all task labels. GoalForge returned the isolated changes with passing `tsc`, focused Vitest and
+`tests/model-routing.spec.ts` (25 tests) covers invalid tasks, empty providers, zero-budget and ceiling skipping,
+boundary inclusion, default-model preference, first-model fallback, ordered fallback candidates, deterministic order,
+undeclared budgets, invalid ceilings and all task labels. `tests/credentials.spec.ts` also checks the operator route's
+selection, refusal status codes and viewer read access. GoalForge returned the isolated changes with passing `tsc`, focused Vitest and
 file-existence checks; the changes were reviewed and applied to the feature branch.
 
 ## Remaining work
 
 - Capability/quality-aware routing after measured evaluation, not assumptions.
-- Fallback chains, retries and unknown-outcome handling tied to the existing executor stop semantics.
+- Executing the ordered fallback chain, retries and unknown-outcome handling tied to the existing executor stop
+  semantics; the current list is selection-only.
 - Usage/budget enforcement wiring (the current routing only compares declared metadata).
 - Codex delegation and worker specialization against verified interfaces.

@@ -220,6 +220,12 @@ export interface Api {
   'POST credentials/:name': { body: { requestId: string; value: string }; response: CredentialMetadata }
   'DELETE credentials/:name': { response: { deleted: boolean } }
   'GET providers': { response: { items: ProviderView[]; verified: false } }
+  'GET model-route': {
+    query: { task: string; monthlyBudgetUsd?: string }
+    response:
+      | { ok: true; task: string; candidates: { provider: ProviderView['id']; model: string; monthlyBudgetUsd: number | null }[]; verified: false }
+      | { ok: false; task: string; reason: string; detail: string; verified: false }
+  }
   'GET memory/search': { query: { q?: string; scope?: string; kinds?: string; limit?: number; cursor?: string }; response: MemoryPage }
   'POST memory': { body: MemoryInput; response: { record: MemoryRecord; created: boolean } }
   'GET memory/:id': { response: { record: MemoryRecord; events: MemoryEvent[] } }

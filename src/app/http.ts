@@ -69,6 +69,7 @@ import type { Access, Capability } from '../security/access.ts'
 import type { AuditLog } from '../security/audit.ts'
 import { CREDENTIAL_NAME, type CredentialVault } from '../security/credentials.ts'
 import type { ProviderRegistry } from '../security/providers.ts'
+import { TaskKind } from '../security/model-routing.ts'
 import { MEMORY_KINDS, MemoryAccess, MemoryError, MemoryInputSchema, parseScopeKey, type Memory } from '../memory/service.ts'
 import { ImportInputSchema, importMemory } from '../memory/import.ts'
 
@@ -113,7 +114,7 @@ export interface HttpHost {
   readonly access?: Access
   readonly audit?: Pick<AuditLog, 'append' | 'list'>
   readonly credentials?: Pick<CredentialVault, 'list' | 'set' | 'delete'>
-  readonly providers?: Pick<ProviderRegistry, 'view'>
+  readonly providers?: Pick<ProviderRegistry, 'view' | 'route'>
   readonly memory?: Memory
   readonly masterId: string
   /** Resolves once startup finishes or setup determines what is still missing. */
@@ -589,6 +590,29 @@ function routes(runtime: HttpHost): Routes {
     'GET providers': () => {
       allow('runtime:read')
       return { items: runtime.providers?.view() ?? [], verified: false }
+    },
+    'GET model-route': ({ query }) => {
+      allow('runtime:read')
+      const task = TaskKind.safeParse(query.task)
+      if (!task.success) throw new RouteError(400, 'Invalid task kind')
+      let ceiling: number | undefined
+      if (query.monthlyBudgetUsd !== undefined) {
+        ceiling = Number(query.monthlyBudgetUsd)
+        if (!Number.isFinite(ceiling) || ceiling < 0) throw new RouteError(400, 'Invalid monthly budget ceiling')
+      }
+      if (!runtime.providers) throw new RouteError(409, 'Provider routing is unavailable')
+      const result = runtime.providers.route(task.data, { monthlyBudgetUsd: ceiling })
+      if (!result.ok) return { ...result, verified: false }
+      return {
+        ok: true,
+        task: result.task,
+        candidates: result.candidates.map(candidate => ({
+          provider: candidate.provider.id,
+          model: candidate.model,
+          monthlyBudgetUsd: candidate.monthlyBudgetUsd
+        })),
+        verified: false
+      }
     },
     'GET audit': ({ query }) => {
       allow('audit:read')
