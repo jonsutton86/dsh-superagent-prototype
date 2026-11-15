@@ -49,9 +49,10 @@ export const Config: s<Partial<RecoveryConfig>, RecoveryConfig> = s.object({ mod
   storageArtifacts: s.array(s.object({ endpointId: s.string().required(),
     endpoint: s.object({ path: s.string().pattern(/^\//).required(), bytes: s.number().min(1).step(1).required(), sha256: s.string().pattern(/^[a-f0-9]{64}$/).required() }).required(),
     host: s.object({ path: s.string().pattern(/^\//).required(), bytes: s.number().min(1).step(1).required(), sha256: s.string().pattern(/^[a-f0-9]{64}$/).required() }).required() })).default([]),
+  workspaceArtifacts: s.array(s.string().pattern(/^\//)).default([]),
   worldDirectories: s.array(s.string()).default([]) })
 interface RecoveryConfig { mode: 'checkpoint' | 'verify' | 'stage' | 'import-sessions' | 'reserve-ownership' | 'audit-receipts' | 'prepare-receipts' | 'install'; keyFile: string; stateDir?: string; outputDir?: string;
-  checkpoint?: string; destination?: string; receiptFile?: string; worldDirectories?: string[]; storageArtifacts?: CheckpointOptions['storageArtifacts'];
+  checkpoint?: string; destination?: string; receiptFile?: string; worldDirectories?: string[]; storageArtifacts?: CheckpointOptions['storageArtifacts']; workspaceArtifacts?: string[];
   reservation?: Pick<ReserveCheckpointOwnership, 'requestId' | 'epoch' | 'generation' | 'authority'>;
   preparation?: Pick<PrepareCheckpointReceipts, 'requestId' | 'auditId'>;
   installation?: Pick<InstallCheckpoint, 'requestId' | 'preparationId' | 'target' | 'credentials' | 'launch'>;
@@ -71,7 +72,7 @@ export async function apply(ctx: Context, config: RecoveryConfig): Promise<void>
     ctx.logger.info('Checkpoint %s installed; Runtime startup must verify Sessions and acquire independent ownership', checkpoint)
   } else if (config.mode === 'checkpoint') {
     const result = await createCheckpoint({ stateDir: required(config.stateDir, 'stateDir'), outputDir: required(config.outputDir, 'outputDir'),
-      keyFile: config.keyFile, worldDirectories: config.worldDirectories, storageArtifacts: config.storageArtifacts, persistence: ctx.sessionPersistence, signal: abort.signal })
+      keyFile: config.keyFile, worldDirectories: config.worldDirectories, storageArtifacts: config.storageArtifacts, workspaceArtifacts: config.workspaceArtifacts, persistence: ctx.sessionPersistence, signal: abort.signal })
     ctx.logger.info('Checkpoint %s created at %s (%s Sessions)', result.manifest.id, result.path, result.manifest.sessions.length)
     checkpoint = result.manifest.id; path = result.path
   } else if (config.mode === 'prepare-receipts') {

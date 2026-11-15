@@ -1,3 +1,4 @@
+import { WorkspaceArchiveBindings, validateWorkspaceMembers, verifyWorkspaceMembers } from './workspace-members.ts'
 /** Authenticated prepared state is a held recovery artifact, never an execution permit. */
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
 import { lstat, open, readdir, realpath } from 'node:fs/promises'
@@ -17,8 +18,9 @@ export const ReceiptImage = z.object({ version: z.literal(1), requestId: z.strin
   applied: z.object({ commands: z.number().int().nonnegative(), mutations: z.number().int().nonnegative(), publications: z.number().int().nonnegative(),
     repositoryPublications: z.number().int().nonnegative().optional() }).strict(),
   files: z.array(z.object({ member: z.string().regex(/^(?:orchestrator\.sqlite|[a-z0-9-]+\.bin)$/),
-    kind: z.enum(['store', 'world', 'session', 'storage-host', 'storage-endpoint']), bytes: z.number().int().nonnegative().max(2 ** 40), sha256: digest,
+    kind: z.enum(['store', 'world', 'session', 'storage-host', 'storage-endpoint', 'workspace-manifest', 'workspace-content']), bytes: z.number().int().nonnegative().max(2 ** 40), sha256: digest,
     binding: digest.optional() }).strict()).min(1).max(20000),
+  workspaceArchives: WorkspaceArchiveBindings,
   storage: z.array(z.object({ endpointId: z.string().uuid(), hostMember: z.string().regex(/^[a-z0-9-]+\.bin$/),
     endpointMember: z.string().regex(/^[a-z0-9-]+\.bin$/) }).strict()).min(1).max(256).optional(),
   administration: z.object({ verified: z.number().int().nonnegative(), recovered: z.number().int().nonnegative(), superseded: z.number().int().nonnegative() }).strict().optional(),
@@ -84,6 +86,7 @@ export const ReceiptImage = z.object({ version: z.literal(1), requestId: z.strin
 export type ReceiptImage = z.infer<typeof ReceiptImage>
 /** Storage members are held evidence. They cannot be silently treated as ordinary world/session files. */
 export function validateStorageImageMembers(manifest: ReceiptImage): void {
+  validateWorkspaceMembers(manifest.workspaceArchives, manifest.files)
   const bindings = manifest.storage ?? [], endpoints = new Set<string>(), endpointMembers = new Set<string>(), referenced = new Set<string>()
   const files = new Map(manifest.files.map(file => [file.member, file]))
   if (files.size !== manifest.files.length) throw new Error('Recovery image has duplicate members')
@@ -100,6 +103,7 @@ export function validateStorageImageMembers(manifest: ReceiptImage): void {
 }
 export function requireInstallableStorageImage(manifest: ReceiptImage): void {
   validateStorageImageMembers(manifest)
+  if (manifest.workspaceArchives?.length) throw new Error('Workspace recovery installation requires source fencing and restore integration')
   if (manifest.storage?.length) throw new Error('Storage recovery installation requires host auditing, fencing and restore integration')
 }
 const envelope = z.object({ manifest: ReceiptImage, mac: digest }).strict()
@@ -149,5 +153,6 @@ export async function verifyReceiptImage(path: string, keyFile: string, signal =
       endpoint: { path: join(root, endpoint.member), bytes: endpoint.bytes, sha256: endpoint.sha256 },
       host: { path: join(root, host.member), bytes: host.bytes, sha256: host.sha256 } }, signal)
   }
+  await verifyWorkspaceMembers(root, value.manifest.workspaceArchives, value.manifest.files, signal)
   signal.throwIfAborted(); return value.manifest
 }

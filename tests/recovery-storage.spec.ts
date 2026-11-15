@@ -1,3 +1,4 @@
+import { captureWorkspaceRecovery } from '../src/recovery/workspace-archive.ts'
 import { exportEndpointStorageSnapshot } from '../src/recovery/endpoint-snapshot.ts'
 import { lockSync } from 'proper-lockfile'
 import { MessageId } from '@deepseek-ai/dsh-llm'
@@ -214,9 +215,14 @@ it('captures verified storage pairs in an encrypted checkpoint and preserves the
   const db = databases(), ctx = new Context(), directory = await realpath(await mkdtemp(join(tmpdir(), 'dsh-storage-checkpoint-test-')))
   try {
     const stateDir = join(directory, 'state'), outputDir = join(directory, 'backups'), keyFile = join(directory, 'key')
+    const workspace = join(directory, 'workspace'); await mkdir(workspace, { mode: 0o700 })
+    await writeFile(join(workspace, 'retained.txt'), 'workspace content')
+    const workspaceArchive = await captureWorkspaceRecovery(workspace, join(directory, 'workspace-archive'), { maxEntries: 100, maxBytes: 1024 })
     await mkdir(stateDir, { mode: 0o700 }); createRecoveryKey(keyFile)
     const store = new Store(join(stateDir, 'orchestrator.sqlite'))
     store.set(KV.runtime.masterId, 'storage-master')
+    store.db.exec('CREATE TABLE IF NOT EXISTS execution_environment(id TEXT PRIMARY KEY,value TEXT NOT NULL)')
+    store.db.prepare('INSERT INTO execution_environment VALUES(?,?)').run('original-workspace', JSON.stringify({ root: workspace, configuredRoot: workspace }))
     store.db.exec('CREATE TABLE IF NOT EXISTS operator_endpoint(id TEXT PRIMARY KEY,value TEXT NOT NULL)')
     store.db.prepare('INSERT INTO operator_endpoint VALUES(?,?)').run(db.value.endpoint.endpointId,
       JSON.stringify({ id: db.value.endpoint.endpointId, credentialFile: keyFile }))
@@ -232,8 +238,11 @@ it('captures verified storage pairs in an encrypted checkpoint and preserves the
       return { path, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') }
     }
     const pair = { endpointId: db.value.endpoint.endpointId, endpoint: await capture(db.endpoint, 'endpoint.sqlite'), host: await capture(db.host, 'host.sqlite') }
-    const options = { stateDir, outputDir, keyFile, persistence: ctx.sessionPersistence, storageArtifacts: [pair] }
+    const options = { stateDir, outputDir, keyFile, persistence: ctx.sessionPersistence, storageArtifacts: [pair], workspaceArtifacts: [workspaceArchive.path] }
     const checkpoint = await createCheckpoint(options)
+    expect(checkpoint.manifest.workspaceArchives).toHaveLength(1)
+    expect(checkpoint.manifest.files.filter(file => file.kind.startsWith('workspace-'))).toHaveLength(2)
+    expect(() => requireInstallableStorageImage({ ...checkpoint.manifest, storage: undefined, files: checkpoint.manifest.files.filter(file => !file.kind.startsWith('storage-')) } as unknown as ReceiptImage)).toThrow('Workspace recovery installation')
     expect(checkpoint.manifest.storage).toHaveLength(1)
     expect(checkpoint.manifest.files.filter(file => file.kind.startsWith('storage-'))).toHaveLength(2)
     expect(await verifyCheckpoint(checkpoint.path, keyFile)).toEqual(checkpoint.manifest)

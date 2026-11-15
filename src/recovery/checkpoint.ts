@@ -1,6 +1,8 @@
+import { verifyWorkspaceRecovery } from './workspace-verify.ts'
+import { verifyWorkspaceMembers } from './workspace-members.ts'
 /** Offline coordinator checkpoints: acquire every writer before capturing databases and logical Harness Session prefixes. */
 import { createHash, randomUUID } from 'node:crypto'
-import { chmod, copyFile, lstat, mkdir, mkdtemp, open, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises'
+import { chmod, copyFile, lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { backup, DatabaseSync } from 'node:sqlite'
@@ -26,9 +28,10 @@ const sealed = z.object({ member, iv: z.string().regex(/^[a-f0-9]{24}$/), tag: z
   sha256: digest, bytes: z.number().int().nonnegative().max(2 ** 40) }).strict()
 const envelope = z.object({ version: z.literal(1), id: z.string().uuid(), manifest: sealed }).strict()
 const manifestSchema = z.object({ version: z.literal(1), id: z.string().uuid(), createdAt: z.string().datetime(), sourceRoot: z.string(),
-  schema: z.literal(SCHEMA_VERSION), masterId: z.string(), files: z.array(sealed.extend({ kind: z.enum(['store', 'world', 'session', 'storage-host', 'storage-endpoint']),
+  schema: z.literal(SCHEMA_VERSION), masterId: z.string(), files: z.array(sealed.extend({ kind: z.enum(['store', 'world', 'session', 'storage-host', 'storage-endpoint', 'workspace-manifest', 'workspace-content']),
     binding: digest.optional(), source: z.string().optional() }).strict()).min(1).max(20000),
   storage: ReceiptImage.shape.storage,
+  workspaceArchives: ReceiptImage.shape.workspaceArchives,
   sessions: z.array(z.object({ id: z.string(), header: z.record(z.string(), z.unknown()), inheritedEventCount: z.number().int().nonnegative(),
     eventCount: z.number().int().nonnegative(), sha256: digest, bytes: z.number().int().nonnegative(), member }).strict()).max(10000),
   requiredFiles: z.array(z.string()).max(20000), executionWorkspaces: z.array(z.string()).max(20000),
@@ -40,6 +43,7 @@ export interface CheckpointOptions {
   /** Dedicated profiles keep their world journals outside the coordinator Store; supply those directories explicitly. */
   worldDirectories?: string[]; signal?: AbortSignal
   /** Explicit standalone snapshot evidence, not automatic live-host capture or restore authorization. */
+  workspaceArtifacts?: string[]
   storageArtifacts?: z.input<typeof StorageRecoveryArtifacts>[]
 }
 const table = (db: DatabaseSync, name: string) => !!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name)
@@ -157,6 +161,20 @@ export async function createCheckpoint(options: CheckpointOptions): Promise<{ pa
         storage.push({ endpointId: input.endpointId, endpointMember: endpoint.member, hostMember: host.member })
       })
     }
+    const workspaceArchives: NonNullable<CheckpointManifest['workspaceArchives']> = []
+    for (const archive of z.array(z.string().startsWith('/')).max(256).parse(options.workspaceArtifacts ?? [])) {
+      await verifyWorkspaceRecovery(archive, signal, async verified => {
+        const inventory = JSON.parse(await readFile(join(verified, 'manifest.json'), 'utf8'))
+        if (!workspaces.includes(inventory.source) || workspaceArchives.some(item => item.source === inventory.source))
+          throw new Error('Workspace archive requires a unique original coordinator workspace')
+        const manifest = await capture(join(verified, 'manifest.json'), 'workspace-manifest')
+        const content: { name: string; member: string }[] = []
+        for (const name of (await readdir(verified)).filter(name => name !== 'manifest.json').sort()) {
+          const file = await capture(join(verified, name), 'workspace-content'); content.push({ name, member: file.member })
+        }
+        workspaceArchives.push({ source: inventory.source, manifestMember: manifest.member, content })
+      })
+    }
     for (const handle of handles) {
       const file = join(plain, `session-${sessions.length}.jsonl`), name = `member-${files.length}.bin`
       const session = await exportSession(handle, file, name, signal), encrypted = await capture(file, 'session')
@@ -171,7 +189,7 @@ export async function createCheckpoint(options: CheckpointOptions): Promise<{ pa
       ...values<{ url: string; credentialFile: string }>(store, 'operator_endpoint').map(item => resolveRecoveryRegistration(bindings, item).credentialFile),
       ...bindings?.registrations.map(item => item.credentialFile) ?? []])]
     const manifest = manifestSchema.parse({ version: 1, id, createdAt: new Date().toISOString(), sourceRoot: root, schema: SCHEMA_VERSION,
-      masterId, files, ...(storage.length ? { storage } : {}), sessions, requiredFiles, executionWorkspaces: workspaces, recovery: 'fenced-until-ownership-reconciled' })
+      masterId, files, ...(workspaceArchives.length ? { workspaceArchives } : {}), ...(storage.length ? { storage } : {}), sessions, requiredFiles, executionWorkspaces: workspaces, recovery: 'fenced-until-ownership-reconciled' })
     const manifestFile = join(plain, 'manifest.json'); await writeFile(manifestFile, JSON.stringify(manifest), { mode: 0o600 })
     const sealedManifest = await seal(manifestFile, join(staging, 'manifest.bin'), key, id, 'manifest.bin', signal)
     await writeFile(join(staging, 'checkpoint.json'), JSON.stringify({ version: 1, id, manifest: sealedManifest }), { mode: 0o600 })
@@ -211,7 +229,7 @@ async function unpack(path: string, keyFile: string, signal: AbortSignal): Promi
     for (const file of manifest.files) {
       await regular(join(path, file.member), file.bytes)
       await unseal(join(path, file.member), join(directory, file.member), key, header.id, file, signal)
-      if (file.kind !== 'session') {
+      if (file.kind !== 'session' && !file.kind.startsWith('workspace-')) {
         const db = await database(join(directory, file.member))
         try {
           if (file.kind === 'world') {
@@ -221,6 +239,7 @@ async function unpack(path: string, keyFile: string, signal: AbortSignal): Promi
         } finally { db.close() }
       }
     }
+    await verifyWorkspaceMembers(directory, manifest.workspaceArchives, manifest.files, signal)
     const storageMembers = new Set<string>(), storageEndpoints = new Set<string>(), endpointMembers = new Set<string>()
     for (const pair of manifest.storage ?? []) {
       const endpoint = manifest.files.find(file => file.member === pair.endpointMember), host = manifest.files.find(file => file.member === pair.hostMember)
@@ -256,6 +275,12 @@ async function unpack(path: string, keyFile: string, signal: AbortSignal): Promi
     try {
       if (identity(store) !== manifest.masterId || kv(store, RESTORE_HOLD)) throw new Error('Coordinator identity or recovery state differs from its checkpoint')
       references(store, new Set(manifest.sessions.map(session => session.id)), new Set(bindings))
+      const originalWorkspaces = new Set([
+        ...values<Ticket>(store, 'ticket').flatMap(ticket => ticket.execution?.directory ? [ticket.execution.directory] : []),
+        ...values<EnvironmentRecord>(store, 'execution_environment').flatMap(item => [item.root, item.configuredRoot]),
+      ])
+      if (manifest.workspaceArchives?.some(item => !originalWorkspaces.has(item.source)))
+        throw new Error('Workspace archive is absent from the original coordinator')
       for (const endpoint of values<{ id: string }>(store, 'operator_endpoint')) sourceEndpoints.add(endpoint.id)
       for (const pair of manifest.storage ?? []) if (!sourceEndpoints.has(pair.endpointId))
         throw new Error('Checkpoint storage endpoint is absent from the original coordinator and execution worlds')
