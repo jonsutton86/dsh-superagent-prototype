@@ -1,0 +1,67 @@
+{
+  "status": "implemented_integrated_targeted_tested_not_deployed",
+  "testedSourceRevision": "30ed9ddc31f36ee690c002a593b2c04b805fc779",
+  "receiptBaseRevision": "d0bfeef12ae4adb44ea63ef72b3c79378e8ae81b",
+  "snapshotNote": "Source and targeted tests are committed at testedSourceRevision. Concurrent d0bfeef adds only the already-present local-execution test fix and adjacent-check documentation; no production edits followed the tested source commit.",
+  "sources": {
+    "src/app/migration.ts": "9658a36b68b58ac7548f1b318e18ffb0d2bcfaf8823739a17df7d75828481b77",
+    "src/app/store.ts": "1fd3da484819f4d81a0ce092bbeebb2994cb0e3d049add90d6438bc44e1b9046",
+    "src/client/locales.ts": "bca5ed30449738e383641db8fc3f306a26aede10cc911b5f46c4dfbe03b9afff",
+    "src/executor/dsh.ts": "b99292d49202b0b99915b114f76d370989df7718e185530322277531c3c52bcc",
+    "src/executor/preparation-outcome.ts": "ce7eca4617aee2c41b069deef8326d58263a4af72cc499db46108101bbe0dc46",
+    "src/executor/stop-model.ts": "65ce8cffc124d243d56f32411031985c605db6a6c472d9f07dc630b1f4dd38f1",
+    "src/executor/stop-store.ts": "8e9c9eea066d88c6d6de4d500694333abcce6d4554dcd02ae8eee8c56761a854",
+    "src/executor/stops.ts": "1a193c1626b6f187d54f27d9803c220e687e291e471faf0364dd27dce01cdcb4",
+    "tests/executor-stop.spec.ts": "bad43db4f01b379cf340c1a6ee8f443de3139b61a681d005761a009461188b61",
+    "tests/fixtures/host.ts": "9be2861fbe5a0220d9dadd43ff0b845706ccab255199b60219d8ca08fc258ee0",
+    "tests/migration.spec.ts": "e9c7de566f1dfe9b02c818a861b6ea134eb05b354cbf764189a31169ac718c77",
+    "tests/preparation-outcome.spec.ts": "27269567de949b22f76b67a6e5093e0cfe5b2f407add8430ba0b05c6b9e3c159",
+    "tests/runtime.spec.ts": "f70d18244c554503e4fd03c8d057fb67695555cc71d1349e8cdaba944027a063",
+    "tests/stop-http.spec.ts": "dc3366d82e30fa27194487b0d0f23a8366b98113d908c26cb7c04d405bcf70d8",
+    "tests/stop-recovery-ui.spec.tsx": "3b14a704ea5387d86d634e3e72e560cb37fff07783b280354ee213e282d6e66c",
+    "tests/stop-views.spec.ts": "005d1dc46b67c2a6fee1bc12f14b3fe80e39c730f16c42de7e87f109a2479ee7",
+    "tests/verification-snapshot.spec.ts": "f6882420f47eb0e6a79cd61013e91bb6a7261dee425d86cbb9c1bd64cec8e894"
+  },
+  "contracts": [
+    "Original local preparation intent is committed in executor_stop before subprocess spawn; no second preparation journal.",
+    "Command exit and provider-managed-range quiet are separate observations. Only exited plus confirmed range settles preparation proof.",
+    "Definite failed preparation retains its original stop receipt after failed report/launch retirement, allowing explicit retry.",
+    "Successful preparation consumes limited coverage before later launch work; observed outcomes and consumed coverage are immutable.",
+    "Crash, timeout, response loss, spawn uncertainty and unavailable/live managed range retain original unknown hold; ordinary registry recheck cannot upgrade it.",
+    "In-process active preparation refuses operator attestation. Existing exact-original operator evidence remains available after observation ends.",
+    "Schema 14 prevents older schema-13 readers from opening new state; schema-13 stop identities survive upgrade.",
+    "Remote preparation uses existing endpoint-owned receipts. A loaded worker Session or non-pristine launch cannot mint local preparation-only proof."
+  ],
+  "validation": {
+    "command": "env -u GIT_CONFIG_GLOBAL ./node_modules/.bin/vitest run tests/executor-stop.spec.ts tests/preparation-outcome.spec.ts tests/migration.spec.ts tests/stop-http.spec.ts tests/stop-views.spec.ts tests/stop-recovery-ui.spec.tsx tests/verification-snapshot.spec.ts tests/runtime.spec.ts",
+    "exitCode": 0,
+    "filesPassed": 8,
+    "testsPassed": 185,
+    "durationSeconds": 6.07,
+    "logSha256": "81479173e1ef2e56ae7030a2a0dc45097d73f30b0fcad9d1437313f5edd72d9b"
+  },
+  "typecheck": {
+    "command": "./node_modules/.bin/tsc --noEmit",
+    "exitCode": 0,
+    "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "earlierAttempts": [
+    {
+      "logSha256": "7f9673767fd25baf8c9ee1aba6575bc05f8eff6e43f8e39a9767bc8120e01f34",
+      "result": "Failed prepare test exposed loss of existing stderr summary; retained bounded stderr diagnostic, without using it as stop authority."
+    },
+    {
+      "logSha256": "8092e85ceba58b76112bcc7958c46beeecc7b5158ee66911f135a573f16748c7",
+      "result": "Five preparation checks passed; following slot-reuse check failed because new test mock implementation leaked. Restored fixture implementation in finally; six-case slice then passed."
+    },
+    {
+      "logSha256": "3a2250bba4ac9f4243838a0dfcd12ce558f1ea47a7ebaf5c1bfcdd5983dc4d6c",
+      "result": "Whole runtime suite initially 96 passed / 2 failed: old tests expected retry delivery before original stop evidence. Fixtures now explicitly observe original quiescence or use original-bound attestation; final 98 runtime cases pass."
+    }
+  ],
+  "limitations": [
+    "Synthetic subprocess handles and local runtime/restore integration only; installed native preparation fault injection remains pending.",
+    "No build or full macOS/Linux matrix in this repair; provider-managed scope is not proof about arbitrary escaped processes.",
+    "No deployment, live provider traffic, default-model change, live-checkout edit or Harness replacement. Full Agentic OS remains incomplete."
+  ]
+}

@@ -16,6 +16,10 @@ The completed-milestone history below remains unchanged.
 Current continuation: [083 Original-worker stop holds](083-stop-quiescence.md) is in integration and qualification. It adds
 canonical original-scope stop records to the main Store, holds replacement/delivery/model/tool admission while termination
 is unknown, and exposes original-ID observation and operator confirmation in the workspace and independent console.
+Local preparation now retains original intent and typed exit/range evidence in that canonical stop authority, so a
+definitely stopped failed prepare can be explicitly retried while uncertain work remains held. Schema 14 supplies the
+older-reader barrier. The focused runtime/stop/recovery ring passed 185 tests and typecheck at `30ed9dd`;
+[preparation evidence](evidence/083-preparation-recovery.json) records the exact source snapshot and earlier failures.
 The installed real-process retry boundary and full platform qualification have not yet run on this increment. No deployment
 to the running user app has occurred. The preceding qualified runtime and interrupted independent endurance run are below.
 
