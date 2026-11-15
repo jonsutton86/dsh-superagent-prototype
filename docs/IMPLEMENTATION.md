@@ -1391,3 +1391,8 @@ staging/preparation. The offline Harness maintenance profile exposes this option
 See increment 086 for limits: coordinated live capture and storage installation
 remain unfinished; execution stays held. Optional Abliteration remains opt-in,
 with existing default-model configuration unchanged.
+
+Increment 086 now includes an offline endpoint snapshot command to obtain the
+private endpoint artifact needed by encrypted storage checkpoint capture. It uses
+the original writer lock, preserves unsettled records, and emits a hash/size receipt.
+This does not yet establish cross-host capture consistency or enable storage restore.

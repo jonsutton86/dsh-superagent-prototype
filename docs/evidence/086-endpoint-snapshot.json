@@ -1,0 +1,20 @@
+{
+  "revision": "521f572abefcb24d1070003c432aa1d4c53212a7",
+  "classification": "VERIFIED",
+  "sourceEvidence": [
+    "RemoteJournal acquires proper-lockfile lock on endpoint state directory",
+    "Read-only SQLite backup preserves retained endpoint records without RemoteJournal initialization"
+  ],
+  "validation": {
+    "tests": "30 passed in recovery-storage.spec.ts",
+    "typecheck": "passed",
+    "build": "passed",
+    "builtCLI": "Executed Node CLI against private SQLite fixture; checked original endpoint identity and restoreVerified=false"
+  },
+  "limits": [
+    "Endpoint writer exclusion is not process quiescence",
+    "No workspace content capture",
+    "No coordinated host snapshot epoch",
+    "No storage installation authorization"
+  ]
+}

@@ -1134,3 +1134,33 @@ has been removed is rejected; encryption alone does not prove this relationship.
 The affected checkpoint/storage suites passed 63 tests and typecheck passed.
 See [evidence](evidence/086-storage-source-authority.json). Live capture and restore
 qualification remain open.
+
+### Offline endpoint snapshot command
+
+Build the checkout, then run as the endpoint's service user while its server is
+stopped (the command refuses its active writer lock):
+
+```sh
+pnpm build
+node scripts/endpoint-storage-snapshot.mjs /absolute/endpoint-state /absolute/new-snapshot-directory
+```
+
+The destination's parent must already be a private directory owned by that user.
+The destination must be new and outside endpoint state. The command opens the
+original database read-only without constructing an endpoint or changing operation
+phases. It creates a standalone private SQLite backup, validates storage records,
+and writes `snapshot.json` containing `endpointId` and the `{path, bytes, sha256}`
+endpoint descriptor required by the checkpoint profile's `storageArtifacts` entry.
+Combine that descriptor with the separately verified host-registry backup descriptor.
+Keep these state artifacts private; the command prints metadata, not database rows
+or credentials. Failure retains any partial output for inspection; never infer
+success from an output directory's existence or overwrite it on retry.
+
+Holding the endpoint writer lock does not prove worker-process quiescence or a
+shared host/endpoint capture epoch. The receipt explicitly reports no workspace
+files, no host registry, no verified execution quiescence and no verified restore.
+Those remaining boundaries must be resolved before live storage installation.
+
+The focused storage suite passed 30 tests, typecheck and build passed, and the
+built Node command successfully exported a private SQLite fixture. The tested
+implementation revision is recorded in [evidence](evidence/086-endpoint-snapshot.json).
