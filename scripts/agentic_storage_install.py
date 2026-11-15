@@ -63,7 +63,7 @@ StandardError=journal
 WantedBy=multi-user.target
 '''
     source = Path(__file__).resolve().parent
-    files = {file: (source / file).read_bytes() for file in ('agentic_storage.py', 'agentic_storage_service.py', 'agentic_storage_admin.py')}
+    files = {file: (source / file).read_bytes() for file in ('agentic_storage.py', 'agentic_storage_service.py', 'agentic_storage_admin.py', 'agentic_storage_capture.py')}
     files['host.json'] = encode(config)
     files[name + '.service'] = unit.encode()
     files['endpoint-storage.json'] = encode({'storage': {'endpointId': endpoint, 'socketPath': socket, 'policy': policy}})

@@ -309,6 +309,39 @@ assert bindings['recordBindingsVerified'] is True and bindings['unresolvedRepair
 assert bindings['restoreVerified'] is False and bindings['liveFilesystemVerified'] is False
 assert receipt['sha256'] == hashlib.sha256(backup_path.read_bytes()).hexdigest()
 
+# Root operator pairs a host snapshot with the real Node exporter running as the endpoint UID.
+import shutil
+endpoint_parent = mount.parent / 'pair-endpoint'; endpoint_parent.mkdir(mode=0o700); os.chown(endpoint_parent, uid, gid)
+endpoint_state = endpoint_parent / 'state'; endpoint_state.mkdir(mode=0o700); os.chown(endpoint_state, uid, gid)
+endpoint_database = endpoint_state / 'endpoint.sqlite'
+with sqlite3.connect(endpoint_database) as saved, sqlite3.connect(registry / 'host.sqlite') as original:
+    saved.executescript('CREATE TABLE endpoint_meta(key TEXT PRIMARY KEY,value TEXT NOT NULL); CREATE TABLE remote_storage(workspace TEXT PRIMARY KEY,request_id TEXT,project_id INTEGER,value TEXT); CREATE TABLE remote_grant(id TEXT PRIMARY KEY,value TEXT);')
+    saved.executemany('INSERT INTO endpoint_meta VALUES(?,?)', [('id', config['endpointId']), ('storage-policy', json.dumps(config['policy']))])
+    for encoded, in original.execute('SELECT intent FROM operations WHERE endpoint=?', (config['endpointId'],)):
+        value = {**json.loads(encoded), 'phase': 'provisioning', 'createdAt': '2026-11-15T00:00:00.000Z'}
+        saved.execute('INSERT INTO remote_storage VALUES(?,?,?,?)', (value['workspace'], value['requestId'], value['projectId'], json.dumps(value)))
+os.chmod(endpoint_database, 0o600); os.chown(endpoint_database, uid, gid)
+source_bytes = endpoint_database.read_bytes()
+pair_command = [sys.executable, '-B', 'scripts/agentic_storage_admin.py', '--config', str(config_path), '--registry', str(registry),
+                'capture-pair', '--output', str(backup_dir / 'paired-host.sqlite'), '--node', str(Path(shutil.which('node')).resolve()),
+                '--exporter', str(Path('scripts/endpoint-storage-snapshot.mjs').resolve()), '--endpoint-state', str(endpoint_state),
+                '--endpoint-output', str(endpoint_parent / 'snapshot')]
+paired = subprocess.run(pair_command, capture_output=True, text=True, timeout=140)
+assert paired.returncode == 0, paired.stderr
+pair = json.loads(paired.stdout)
+assert pair['recordBindingsVerified'] is False
+assert pair['pair']['hostLockHeldThroughEndpointCapture'] is True and pair['pair']['restoreVerified'] is False
+endpoint_receipt = pair['pair']['endpoint']
+assert endpoint_receipt['endpointId'] == config['endpointId'] and endpoint_receipt['artifactVerified'] is True
+artifact = Path(endpoint_receipt['endpoint']['path'])
+assert artifact.stat().st_uid == uid and artifact.stat().st_mode & 0o777 == 0o600
+assert endpoint_receipt['endpoint']['sha256'] == hashlib.sha256(artifact.read_bytes()).hexdigest()
+assert endpoint_database.read_bytes() == source_bytes
+repeated_pair = subprocess.run(pair_command, capture_output=True, text=True, timeout=30)
+assert repeated_pair.returncode == 1 and json.loads(repeated_pair.stderr)['state'] == 'unverified'
+print(json.dumps({'nativeStoragePairedCapture': 'passed', 'endpointRunsWithoutRoot': True, 'sourceUnchanged': True,
+                  'hostLockHeldThroughCapture': True, 'recordBindingsVerified': False, 'restoreVerified': False}), flush=True)
+
 print(json.dumps({'nativeStorageCrashBoundaries': results, 'missingRegistryUnchanged': True,
                   'registryBackup': {'allRecordsRetained': True, 'uncertainRepairRetained': True,
                                      'overwriteRefused': True, 'standaloneSQLite': True, 'offlineArtifactVerification': True, 'recordBindingsVerified': True}}), flush=True)

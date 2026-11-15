@@ -6,6 +6,7 @@ import json
 import os
 
 from agentic_storage import StorageHost, require
+from agentic_storage_capture import endpoint_capture
 from agentic_storage_service import configuration
 
 
@@ -15,13 +16,17 @@ def execute(args):
         return {'ok': True, 'backup': StorageHost.verify_backup(args.input, args.sha256, audit=args.action == 'audit-backup')}
     require(args.config is not None and args.registry is not None)
     config = configuration(args.config)
-    value = None if args.action == 'backup' else configuration(args.request if args.action == 'inspect' else args.approval)
+    value = None if args.action in ['backup', 'capture-pair'] else configuration(args.request if args.action == 'inspect' else args.approval)
     if args.action == 'repair':
         require(isinstance(value, dict) and set(value) == {'request', 'repairId', 'snapshotHash'})
     if args.action == 'finish-repair':
         require(isinstance(value, dict) and set(value) == {'request', 'repairId', 'snapshotHash', 'finishSnapshotHash'})
     host = StorageHost(args.registry, config, existing_only=True)
     try:
+        if args.action == 'capture-pair':
+            pair = host.capture_pair(args.output, lambda: endpoint_capture(config, args.node, args.exporter, args.endpoint_state, args.endpoint_output))
+            pair['host']['path'] = args.output
+            return {'ok': True, 'pair': pair, 'recordBindingsVerified': False}
         if args.action == 'backup':
             return {'ok': True, 'backup': host.backup(args.output)}
         if args.action == 'inspect':
@@ -43,6 +48,9 @@ def main():
         verify.add_argument('--input', required=True)
         verify.add_argument('--sha256', required=True)
     actions.add_parser('backup').add_argument('--output', required=True)
+    pair = actions.add_parser('capture-pair')
+    for name in ['output', 'node', 'exporter', 'endpoint-state', 'endpoint-output']:
+        pair.add_argument('--' + name, required=True)
     actions.add_parser('inspect').add_argument('--request', required=True)
     actions.add_parser('repair').add_argument('--approval', required=True)
     actions.add_parser('finish-repair').add_argument('--approval', required=True)
