@@ -20,7 +20,9 @@ Local preparation now retains original intent and typed exit/range evidence in t
 definitely stopped failed prepare can be explicitly retried while uncertain work remains held. Schema 14 supplies the
 older-reader barrier. The focused runtime/stop/recovery ring passed 185 tests and typecheck at `30ed9dd`;
 [preparation evidence](evidence/083-preparation-recovery.json) records the exact source snapshot and earlier failures.
-The installed real-process retry boundary and full platform qualification have not yet run on this increment. No deployment
+The installed real-process retry boundary passed on macOS with a synthetic local provider;
+`docs/evidence/083-installed-stop.json` records original hold, exactly-once release and confirmed process-group cleanup.
+Native preparation fault injection and final platform qualification remain pending. No deployment
 to the running user app has occurred. The preceding qualified runtime and interrupted independent endurance run are below.
 
 Previous continuation: [082 Sustained supervision qualification](082-supervision-endurance.md) adds a plan-first operator

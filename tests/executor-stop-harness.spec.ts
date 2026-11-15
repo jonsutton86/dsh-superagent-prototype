@@ -195,7 +195,7 @@ it.runIf(process.env.DSH_EXECUTOR_STOP_QUALIFICATION === '1')('holds replacement
       expect(provider.failures).toEqual([]); quiet = await api(stopPath)
       expect(quiet).toMatchObject({ id: held.id, state: 'quiet', proof: 'registry', assignmentId: originalAssignment })
       completed = await api('tickets/' + item.id)
-      expect(completed.assignments).toHaveLength(2); expect(completed.assignments[1]).toMatchObject({ id: replacementId, state: 'running', report: { state: 'ready' } })
+      expect(completed.assignments).toHaveLength(2); expect(completed.assignments[1]).toMatchObject({ id: replacementId, state: 'ended', report: { state: 'ready' } })
       expect(completed.inputs.filter((value: any) => value.id === inputId)).toHaveLength(1)
       expect(completed.inputs.find((value: any) => value.id === inputId)).toMatchObject({ delivered: true, deliveredTo: replacementId, readAt: expect.any(String) })
     }, { timeout: 45000, interval: 100 })

@@ -1,0 +1,56 @@
+{
+  "kind": "installed-harness-original-stop-boundary",
+  "recordedAt": "2026-11-15T07:06:57.953308+00:00",
+  "runtimeRevision": "3f5fc4ae8909eb163404483ce1c7f2a43911024a",
+  "testModification": "One assertion corrected: a ready local assignment ends under core/assignments.ts; it does not remain running.",
+  "testFileHashes": {
+    "tests/executor-stop-harness.spec.ts": "5e46ab1a29e1acbbe6ae55e1f8724133686bd0381b983edcff666ee5526d0aa7",
+    "tests/fixtures/executor-stop-probe.mjs": "59d5cc52462380948ed7a4f1227472ae19e5136929d0e5fa413592d490db43f7",
+    "tests/fixtures/executor-stop-provider.ts": "103518fe118df0d0d101346d049c4cd8acda1e4340a87dc218271e6cb3c0b493"
+  },
+  "platform": "macOS native",
+  "toolchain": {
+    "harness": "0.2.1-rc.3",
+    "pnpm": "11.25.0"
+  },
+  "result": {
+    "passed": 1,
+    "failed": 0,
+    "durationSeconds": 48.12
+  },
+  "observed": {
+    "builtDigest": "029075b60bed082ed678f957d69027d87f4fa902057be8ee7b50ad9eb070d394",
+    "originalAssignment": "c5b3ef9fb3a91105abba10b3d28d6447",
+    "replacementId": "8cdfb67f974de1e8fc24f3e4295211d2",
+    "inputId": "d76cb3a4cd799a21b1b7d6699505ef0b",
+    "stopId": "55be2ae9-d57e-42ca-b23b-1090be4cd428",
+    "waitReturnedRunning": true,
+    "continuedHeartbeatSeconds": 12.055094334,
+    "originalKillDispatches": 1,
+    "originalSamples": 177,
+    "nativeUnawaitedSettlement": true,
+    "nativeHeldMessageObserved": true,
+    "replacementLaunches": 1,
+    "queuedInputDeliveries": 1,
+    "quietProof": "registry",
+    "cleanup": "confirmed_owned_group_absent"
+  },
+  "build": "pnpm build passed in integration checkout only",
+  "typecheck": "pnpm typecheck passed",
+  "logs": [
+    "/tmp/dsh-083-installed-build.log",
+    "/tmp/dsh-083-installed-stop-repair.log",
+    "/tmp/dsh-083-installed-stop-typecheck.log"
+  ],
+  "attempts": [
+    {
+      "log": "/tmp/dsh-083-installed-stop.log",
+      "result": "Installation refused by pnpm9.12 workspace-root check, before worker dispatch."
+    },
+    {
+      "log": "/tmp/dsh-083-installed-stop-pnpm11.log",
+      "result": "Original hold/release reached; outdated running-state assertion failed after replacement ready report ended assignment."
+    }
+  ],
+  "limitations": "One ignored jobs.kill injection, not resistance to SIGKILL. Synthetic loopback model only. No live app deployment, vendor inference, native preparation fault injection, Linux or full matrix qualification."
+}

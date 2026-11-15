@@ -95,7 +95,16 @@ operator recovery and unchanged assessment budgets. An installed private Harness
 a real 45-second heartbeat worker, one explicitly ignored original kill, a ten-second wait returning running and at least
 twelve more seconds of productive output while replacement and input delivery remain held. Natural termination must precede
 one replacement and one original-ID input delivery. PID/start identity, hash history and process-group absence establish the
-fixture's cleanup; this fault does not claim a process resisted native SIGKILL. Installed execution remains pending.
+fixture's cleanup; this fault does not claim a process resisted native SIGKILL.
+
+The macOS installed-Harness boundary passed on November 15 with runtime `3f5fc4a` and the test digest recorded in
+[evidence](evidence/083-installed-stop.json). After the ten-second running wait, the original job produced another
+12.055 seconds of verified output while replacement and input remained held. Natural termination released one replacement
+and one retained input; original and replacement process groups were confirmed absent. The observed native completion
+message arrived while the hold still existed, without admitting tool/model work. Build and typecheck passed. The first
+installation attempt exposed pnpm 9's workspace-root refusal; the successful isolated run used pnpm 11.25.0. The first
+runtime attempt exposed an outdated test expectation that a ready local assignment stays running; the domain correctly
+ends it. Neither attempt is counted as a pass. Linux and native preparation fault injection remain pending.
 
 Record the exact tested revision, focused results, typecheck/build, full macOS/native Linux and installed-boundary results
 before calling this increment qualified. [082](082-supervision-endurance.md) remains the preceding qualified runtime; its
