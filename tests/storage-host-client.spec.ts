@@ -1,3 +1,7 @@
+import { createServer } from 'node:http'
+import { remoteHandler } from '../src/remote/http.ts'
+import { Store } from '../src/app/store.ts'
+import { Endpoints } from '../src/environments/endpoints.ts'
 import { mkdtemp, rm, writeFile, readFile, access } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -26,6 +30,13 @@ it.runIf(!!process.env.DSH_STORAGE_SERVICE_CONFIG)('starts, enrolls, executes an
     filesystemRpc: confinedFilesystem(subprocess, isolation, resolve('lib/remote-fs-worker.js')),
     snapshotHelper: resolve('lib/verification-snapshot-worker.js'), storage: { endpointId: config.endpointId, policy, host: client } }
   let endpoint = new RemoteEndpoint(host)
+  const server = createServer((request, response) => { void remoteHandler(endpoint)(request, response).catch(() => response.destroy()) })
+  let store: Store | undefined, coordinator: Endpoints | undefined
+  const openCoordinator = () => {
+    store = new Store(join(directory, 'coordinator.sqlite'))
+    coordinator = new Endpoints({ store, stateDir: join(directory, 'coordinator'), lifetime: new AbortController().signal,
+      workerRoots: () => [assignedRoot] })
+  }
   try {
     await endpoint.start()
     expect(endpoint.journal.id).toBe(config.endpointId)
@@ -33,7 +44,16 @@ it.runIf(!!process.env.DSH_STORAGE_SERVICE_CONFIG)('starts, enrolls, executes an
     const enrollment = { op: 'grant.create', requestId: 'socket-original', owner: 'coordinator', workspace: 'socket-one',
       operations: ['fs.read', 'fs.write', 'process.spawn'], leaseMs: 300000 }
     if (process.env.DSH_STORAGE_REPAIR_EXCHANGE) {
-      await expect(endpoint.rpc({ role: 'admin' }, enrollment)).rejects.toThrow()
+      await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+      openCoordinator()
+      await coordinator!.register({ requestId: 'register-storage', endpointId: config.endpointId,
+        url: `http://127.0.0.1:${(server.address() as { port: number }).port}`, name: 'Storage recovery',
+        credentialFile: join(state, 'admin.token'), revision: 0 })
+      expect(await coordinator!.submit(config.endpointId, { revision: 1, request: enrollment })).toMatchObject({
+        id: enrollment.requestId, phase: 'unknown' })
+      const command = coordinator!.commands(config.endpointId).items[0]!
+      await coordinator!.stop(); store!.close(); openCoordinator()
+      expect(coordinator!.commands(config.endpointId).items[0]).toEqual(command)
       const pending = new StorageReservations(endpoint.journal, policy).list().find(item => item.workspace === enrollment.workspace)!
       expect(pending).toMatchObject({ requestId: enrollment.requestId, phase: 'provisioning' })
       expect(endpoint.journal.grants()).toHaveLength(0)
@@ -42,6 +62,13 @@ it.runIf(!!process.env.DSH_STORAGE_SERVICE_CONFIG)('starts, enrolls, executes an
       await endpoint.stop(); endpoint = new RemoteEndpoint(host); await endpoint.start()
       const retained = new StorageReservations(endpoint.journal, policy).list().find(item => item.workspace === enrollment.workspace)!
       expect(retained).toEqual(pending)
+      expect(await coordinator!.storageStatus(config.endpointId, { workspace: enrollment.workspace })).toMatchObject({
+        state: 'observed', phase: 'provisioning', reservedAllocations: 2 })
+      expect(coordinator!.commands(config.endpointId).items[0]).toEqual(command)
+      const recovered = await coordinator!.retry(config.endpointId, enrollment.requestId)
+      expect(recovered).toMatchObject({ id: enrollment.requestId, phase: 'done', result: { grant: { workspace: enrollment.workspace } } })
+      expect(endpoint.journal.grants()).toHaveLength(1)
+      expect(await coordinator!.retry(config.endpointId, enrollment.requestId)).toEqual(recovered)
     }
     const receipt = await endpoint.rpc({ role: 'admin' }, enrollment) as GrantReceipt
     const principal: Principal = { role: 'grant', id: receipt.grant.id, epoch: receipt.grant.epoch }
@@ -79,5 +106,8 @@ it.runIf(!!process.env.DSH_STORAGE_SERVICE_CONFIG)('starts, enrolls, executes an
     await expect(client.observe(policy, forged, storageRoots(policy, forged), AbortSignal.timeout(20000))).rejects.toThrow('Storage host response')
     await expect(client.observe(policy, original, ['/unassigned'], AbortSignal.timeout(20000))).rejects.toThrow('Storage host response')
     await expect(client.observe(policy, original, storageRoots(policy, original), AbortSignal.abort())).rejects.toThrow()
-  } finally { await endpoint.stop(); await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }) }
+  } finally {
+    await coordinator?.stop(); store?.close()
+    if (server.listening) { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())) }
+    await endpoint.stop(); await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }) }
 }, 90000)
