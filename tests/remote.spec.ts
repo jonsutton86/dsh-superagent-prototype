@@ -579,7 +579,10 @@ async function remoteMission(native: boolean) {
   const runningId = h.endpoint.journal.jobs().find(job => job.request.argv.includes(longScript))!.id
   await host.runTool(id, 'orchestrator_report', { state: 'ready', summary: 'Remote result is ready for review' })
   expect(host.runtime.library.read(artifact.id).content).toBe('remote result')
-  expect(host.runtime.workspace.get(mission.id).actions[0]!.status).toBe('review')
+  // A report is not proof that the original running process range has stopped.
+  expect(host.runtime.workspace.get(mission.id).actions[0]).toMatchObject({
+    status: 'blocked', ticket: { stopHold: { held: true } },
+  })
   await expect(host.withTool(id, 'bash', async () => {})).rejects.toThrow('Ticket ended')
   expect((await host.api('POST', `tickets/${ticketId}/execution/${runningId}/cancel`, { requestId: 'operator-stop' })).status).toBe(200)
   await long.done

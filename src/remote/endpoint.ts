@@ -72,6 +72,9 @@ export class RemoteEndpoint {
         remember: value => { this.journal.db.prepare('INSERT INTO endpoint_meta VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('ownership-floor', JSON.stringify(value)) },
         fence: keep => this.fenceOwnership(keep), quiescent: keep => this.ownershipQuiescent(keep),
       })
+      // Storage provisioning is not integrated yet: never run a pinned storage endpoint without enforcement.
+      if (this.journal.db.prepare('SELECT value FROM endpoint_meta WHERE key=?').get('storage-policy'))
+        throw new Error('Persisted storage policy requires storage enforcement before this endpoint can start')
       const resourcePolicy = this.journal.db.prepare('SELECT value FROM endpoint_meta WHERE key=?').get('resource-policy')?.value
       if (resourcePolicy && String(resourcePolicy) !== JSON.stringify(host.resources?.policy))
         throw new Error('Persisted endpoint resource limits cannot be removed or replaced')
