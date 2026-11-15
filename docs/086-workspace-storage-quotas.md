@@ -1357,3 +1357,25 @@ archive content inside the callback, confirms the private bytes remain original,
 re-verifies the private copy, and checks cleanup on success and callback failure.
 [Receipt](evidence/086-workspace-verified-handoff.json). Encryption and authenticated
 checkpoint membership are next; source quiescence and restoration remain unverified.
+
+### Encrypted workspace archives
+
+`encryptWorkspaceRecovery` consumes verified private copies and uses the existing
+recovery AES-GCM/key functions. The workspace manifest, including original paths,
+is encrypted alongside every content member. The clear index contains generated
+member names, sizes, plaintext digests and encryption metadata; it does not contain
+original paths or file bytes. The key must be private and outside the input archive,
+output and original workspace. Outputs are exclusive and incomplete output remains
+retained without automatic retry.
+
+`verifyEncryptedWorkspaceRecovery` checks bounded index membership, authenticates
+and decrypts members into temporary private storage, then reruns the full archive
+verifier. Its optional consumer receives verified private copies, and temporary
+plaintext is removed on success or failure. Key buffers are cleared on exit.
+
+Seven focused tests and typecheck passed, including exact round trip, wrong key,
+changed ciphertext, existing output and original-workspace key refusal.
+[Evidence](evidence/086-workspace-encryption.json). This is a standalone encrypted
+archive; coordinator checkpoint membership, frozen-source ownership, live helper
+integration and restoration remain unfinished. Encryption authenticity does not
+establish source authority or permission to resume execution.

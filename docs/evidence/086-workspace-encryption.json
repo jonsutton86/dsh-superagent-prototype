@@ -1,0 +1,21 @@
+{
+  "revision": "4e4fc709855508de330184b42608e0339faa2447",
+  "classification": "VERIFIED",
+  "validation": {
+    "workspaceTests": 7,
+    "typecheck": "passed"
+  },
+  "evidence": [
+    "Existing recovery AES-GCM seal/unseal and private key resolver reused",
+    "Verified private copies encrypted; original paths appear only in encrypted manifest",
+    "Encrypted round trip preserves exact content and metadata",
+    "Wrong key and altered ciphertext rejected",
+    "Existing outputs and keys within original workspace refused"
+  ],
+  "limits": [
+    "Standalone encrypted workspace archive, not coordinator checkpoint membership",
+    "Index reveals generated member count, byte lengths and plaintext digests as existing recovery records do",
+    "No source authority, process quiescence, live integration or restoration claim",
+    "Failed encrypted output is retained; no blind overwrite or retry"
+  ]
+}
