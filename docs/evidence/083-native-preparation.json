@@ -1,0 +1,32 @@
+{
+  "kind": "native-preparation-subprocess-observation",
+  "recordedAt": "2026-11-15T07:09:06.584549+00:00",
+  "runtimeRevision": "d303f37e6d8b382bc74b66db1d668092ee58b4f3",
+  "fileHashes": {
+    "tests/preparation-harness.spec.ts": "732714b61f893af2fb3b4ef22a808a94af6ea7e2df578ff3003b8cd4a0f5f952",
+    "tests/fixtures/preparation-harness.mjs": "77e7fd87b0e6a12c0c454d0ec98ed8918ae44586f614ba9d836787388611c1e1",
+    "src/executor/preparation-outcome.ts": "ce7eca4617aee2c41b069deef8326d58263a4af72cc499db46108101bbe0dc46"
+  },
+  "harnessSubprocessLocal": "0.2.1-rc.3",
+  "platform": "macOS native",
+  "node": "25.9.0",
+  "command": "DSH_PREPARATION_HARNESS_PACKAGE=/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-subprocess-local ./node_modules/.bin/vitest run tests/preparation-harness.spec.ts",
+  "result": {
+    "passed": 1,
+    "failed": 0,
+    "durationSeconds": 2.25
+  },
+  "verified": [
+    "Native exit7 with confirmed empty managed range.",
+    "Native exit9 while original descendant sleep remains active; 100ms observer abort returns unknown termination.",
+    "Original handle later confirms managed range empty.",
+    "All owned handles terminated and range cleanup confirmed before context disposal."
+  ],
+  "initialAttempt": "Fixture omitted mandatory graceMs; Harness rejected spawn before process creation. Corrected to100ms, with10second spawn lifetime bound.",
+  "typecheck": "pnpm typecheck passed",
+  "logs": [
+    "/tmp/dsh-083-native-preparation.log",
+    "/tmp/dsh-083-native-preparation-typecheck.log"
+  ],
+  "limitations": "Native subprocess/production observer boundary only. Does not test coordinator crash/restore around native preparation, escaped descendants, Linux, live inference or deployment."
+}

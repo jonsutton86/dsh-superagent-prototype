@@ -85,7 +85,11 @@ Schema 14 provides the older-reader barrier. Schema 13 records retain their iden
 tables are rejected. Restore verifies original execution bindings and rejects unconsumed preparation-only coverage after
 worker dispatch. Observed outcomes, command identity and consumed coverage cannot be rewritten to authorize a new action.
 Focused synthetic/runtime and restore checks are recorded in [preparation recovery evidence](evidence/083-preparation-recovery.json).
-Installed native preparation fault injection and the final platform matrix remain unqualified.
+A native preparation subprocess check now verifies nonzero command exit with an empty range, and command exit with a
+live descendant whose bounded observation remains unknown until the original range empties.
+`docs/evidence/083-native-preparation.json` records the installed Harness version and tested scope. This is the actual
+subprocess/observer boundary, not coordinator crash/restore acceptance. Native coordinator preparation fault injection
+and the final platform matrix remain unqualified.
 
 ## Qualification still required
 
