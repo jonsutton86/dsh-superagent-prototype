@@ -1,0 +1,26 @@
+{
+  "classification": "VERIFIED_source_contract_runtime_acceptance_pending",
+  "revision": "29eeb43cc6f0841823304264f254092ef2969acc",
+  "sources": {
+    "src/infra/environment.ts": "10c4a9cd50dcd4267053b85582304fe7b1b114cc4065b635603fb15f52e9189a",
+    "src/executor/dsh.ts": "b9264524df84e68e640492d0123a52b7a49566181682a1c46ead065b9cd47bbc",
+    "src/executor/stops.ts": "ca20888677c9b5b51d962445b798880bac31f395e311660b25d9e2e1b83b4bbb",
+    "src/executor/stop-store.ts": "1e354891866ace3e5953fac84dd66561a47a20e6a51753d1dac19e2e12c23bbc",
+    "node_modules/@deepseek-ai/dsh-subprocess/lib/types/types.d.ts": "d3c79f91d4a52ca09046d1f4af48ee220d3fe8f1f2efae24f7b12cda3bd2848d",
+    "node_modules/@deepseek-ai/dsh-subprocess-local/README.md": "8762a15f2f35ad1de1b19330ea0824b05027e8370b66fff62062bef2dc41af60",
+    "node_modules/@deepseek-ai/dsh-subprocess-local/lib/index.js": "20c29aded30123bb9b4ec5cf9df64bf3f2f26fb60cd6f48ad67b31b6e56c5ce3"
+  },
+  "findings": [
+    "SubprocessHandle.done resolves command exit facts; it rejects spawn/provider failures.",
+    "SubprocessHandle.waitForExit(signal) returns true only when the provider-managed range is empty, false on observation abort, and throws when observation is unavailable.",
+    "runAsWorker awaits done only, then returns output or throws CliError. prepareDirectory wraps that error in PrepareFailed, losing structured outcome information.",
+    "Local containment is provider-scoped; fallback hosts cannot prove termination of every escaped descendant."
+  ],
+  "designDecision": "Retain a typed preparation outcome tied to the original assignment and execution binding. Only a true managed-range wait may produce scoped termination proof. Exit code, missing Agent, timeout, generic error and unavailable observation are insufficient. Keep uncertainty held without automatically repeating preparation.",
+  "nextImplementation": [
+    "Introduce a preparation-specific subprocess result retaining command outcome separately from managed-range quiescence; preserve ordinary command callers.",
+    "Persist original preparation intent before spawn and settled scoped proof in existing authority before retiring launch evidence.",
+    "Cover nonzero exit with empty range, surviving descendants, aborted wait, provider rejection and lost acknowledgement; then rerun the failed-prepare integration case."
+  ],
+  "limitations": "Source inspection only; no new runtime test or full qualification claimed."
+}
