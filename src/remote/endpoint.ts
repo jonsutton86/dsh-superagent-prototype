@@ -1,3 +1,4 @@
+import { reinspectWorkspaceCapture } from '../recovery/workspace-reconcile.ts'
 import { WorkspaceCaptures, WorkspaceCaptureRequest } from './workspace-capture.ts'
 import { captureWorkspaceRecovery } from '../recovery/workspace-archive.ts'
 import { createHash, randomUUID } from 'node:crypto'
@@ -549,6 +550,30 @@ export class RemoteEndpoint {
       if (!this.ownershipQuiescent()) throw new RemoteError(409, 'recovery_busy', 'Managed process quiescence changed before capture receipt')
       return captures.complete(request, { path: archive.path, inventoryHash: archive.manifest.sha256, manifestHash,
         managedQuiescenceObserved: true, globalSnapshotVerified: false, restoreVerified: false })
+    }, requestedSignal)
+  }
+  /** Explicit host reconciliation of a retained attempt. The reviewed digest is not inferred or auto-approved. */
+  async reconcileWorkspaceCapture(input: unknown, expectedManifestHash: string, requestedSignal = new AbortController().signal) {
+    if (!/^[a-f0-9]{64}$/.test(expectedManifestHash)) throw new Error('Capture reconciliation requires the reviewed manifest digest')
+    const request = WorkspaceCaptureRequest.parse(input), captures = new WorkspaceCaptures(this.journal), prior = captures.read(request)
+    if (!prior) throw new RemoteError(409, 'capture_missing', 'Capture reconciliation requires the original retained intent')
+    if (prior.phase === 'complete') {
+      if (prior.result!.manifestHash !== expectedManifestHash) throw new RemoteError(409, 'capture_conflict', 'Completed capture differs from reviewed digest')
+      return prior
+    }
+    return this.withRecoveryCapture(async signal => {
+      const grant = this.journal.grant(request.grantId)
+      if (grant.epoch !== prior.binding.epoch || grant.revision !== prior.binding.revision || grant.root !== prior.binding.root
+        || grant.rootIdentity !== prior.binding.rootIdentity || grant.workspace !== prior.binding.workspace)
+        throw new RemoteError(409, 'grant_changed', 'Capture reconciliation requires the original grant and root')
+      await this.verifyRoot(grant)
+      const allocation = this.storage?.reservations.list().find(item => item.workspace === grant.workspace)
+      const storage = allocation ? { requestId: allocation.requestId, projectId: allocation.projectId, policyHash: fingerprint(this.storage!.reservations.policy) } : undefined
+      if (JSON.stringify(storage) !== JSON.stringify(prior.binding.storage)) throw new Error('Capture storage binding changed')
+      const result = await reinspectWorkspaceCapture(prior, expectedManifestHash, signal)
+      await this.verifyRoot(grant); signal.throwIfAborted()
+      if (!this.ownershipQuiescent()) throw new RemoteError(409, 'recovery_busy', 'Managed process quiescence changed during reconciliation')
+      return captures.complete(request, { ...result, reconciled: true, managedQuiescenceObserved: true, globalSnapshotVerified: false, restoreVerified: false })
     }, requestedSignal)
   }
   /** Trusted host-only capture scope. Not an RPC, durable checkpoint epoch or ownership grant.

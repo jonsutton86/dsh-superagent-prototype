@@ -9,7 +9,7 @@ export const WorkspaceCaptureRequest = z.object({ requestId: z.string().uuid(), 
 export const WorkspaceCaptureBinding = z.object({ endpointId: z.string().uuid(), grantId: z.string().uuid(), epoch: z.number().int().positive(),
   revision: z.number().int().positive(), workspace: z.string(), root: path, rootIdentity: z.string(),
   storage: z.object({ requestId: z.string(), projectId: z.number().int().positive(), policyHash: hash }).strict().optional() }).strict()
-const result = z.object({ path, inventoryHash: hash, manifestHash: hash, managedQuiescenceObserved: z.literal(true),
+const result = z.object({ path, inventoryHash: hash, manifestHash: hash, reconciled: z.literal(true).optional(), managedQuiescenceObserved: z.literal(true),
   globalSnapshotVerified: z.literal(false), restoreVerified: z.literal(false) }).strict()
 export const WorkspaceCaptureRecordSchema = z.object({ version: z.literal(1), request: WorkspaceCaptureRequest, requestHash: hash, binding: WorkspaceCaptureBinding,
   phase: z.enum(['started', 'complete']), startedAt: z.string().datetime(), completedAt: z.string().datetime().optional(), result: result.optional() }).strict()

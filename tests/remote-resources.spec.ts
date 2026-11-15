@@ -1,3 +1,4 @@
+import { WorkspaceCaptures } from '../src/remote/workspace-capture.ts'
 import { captureWorkspaceRecovery } from '../src/recovery/workspace-archive.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { join, resolve } from 'node:path'
@@ -212,6 +213,14 @@ it.runIf(!!process.env.DSH_RESOURCE_QUALIFICATION_ROOT)('qualifies actual cgroup
     const captureReceipt = await endpoint.captureWorkspace(captureRequest)
     expect(captureReceipt).toMatchObject({ phase: 'complete', result: { managedQuiescenceObserved: true, globalSnapshotVerified: false } })
     expect(await endpoint.captureWorkspace(captureRequest)).toEqual(captureReceipt)
+    const interruptedCapture = { ...captureRequest, requestId: randomUUID(), destination: join(directory, 'native-interrupted-archive') }
+    const completionFault = vi.spyOn(WorkspaceCaptures.prototype, 'complete').mockImplementationOnce(() => { throw new Error('native completion interruption') })
+    try { await expect(endpoint.captureWorkspace(interruptedCapture)).rejects.toThrow('native completion interruption') } finally { completionFault.mockRestore() }
+    expect(await endpoint.captureWorkspace(interruptedCapture)).toMatchObject({ phase: 'started' })
+    const reviewedDigest = createHash('sha256').update(await readFile(join(interruptedCapture.destination, 'manifest.json'))).digest('hex')
+    expect(await endpoint.reconcileWorkspaceCapture(interruptedCapture, reviewedDigest)).toMatchObject({ phase: 'complete', request: interruptedCapture,
+      result: { reconciled: true, managedQuiescenceObserved: true, globalSnapshotVerified: false } })
+
     const node = await local.resolveExecutable('node')
     const cpu = { ...request, requestId: 'native-resource-cpu', argv: [node, '-e', 'const end=Date.now()+5000; while(Date.now()<end) {}'] }
     expect(resources!.quiescent()).toBe(true)
@@ -523,6 +532,27 @@ it('holds all endpoint admission during host capture and releases the fence afte
     expect(held).toMatchObject({ phase: 'started', request: interrupted })
     expect(held.result).toBeUndefined()
     expect(await endpoint.captureWorkspace(interrupted)).toEqual(held)
+    await expect(endpoint.reconcileWorkspaceCapture(interrupted, '0'.repeat(64))).rejects.toThrow()
+    const recoverable = { ...request, requestId: randomUUID(), destination: join(directory, 'recoverable-archive') }
+    const saveFailure = vi.spyOn(WorkspaceCaptures.prototype, 'complete').mockImplementationOnce(() => { throw new Error('lost completion write') })
+    try { await expect(endpoint.captureWorkspace(recoverable)).rejects.toThrow('lost completion write') } finally { saveFailure.mockRestore() }
+    const originalIntent = await endpoint.captureWorkspace(recoverable)
+    expect(originalIntent.phase).toBe('started')
+    const manifestBefore = await readFile(join(recoverable.destination, 'manifest.json'))
+    const digest = createHash('sha256').update(manifestBefore).digest('hex')
+    await expect(endpoint.reconcileWorkspaceCapture(recoverable, '0'.repeat(64))).rejects.toThrow('reviewed manifest')
+    const sourceBefore = await readFile(join(grant.grant.root, 'data'))
+    await writeFile(join(grant.grant.root, 'data'), 'changed source')
+    await expect(endpoint.reconcileWorkspaceCapture(recoverable, digest)).rejects.toThrow('freshly observed source')
+    expect(await endpoint.captureWorkspace(recoverable)).toEqual(originalIntent)
+    await writeFile(join(grant.grant.root, 'data'), sourceBefore)
+    const reconciled = await endpoint.reconcileWorkspaceCapture(recoverable, digest)
+    expect(reconciled).toMatchObject({ request: recoverable, binding: originalIntent.binding, startedAt: originalIntent.startedAt,
+      phase: 'complete', result: { reconciled: true, manifestHash: digest, globalSnapshotVerified: false, restoreVerified: false } })
+    expect(await readFile(join(recoverable.destination, 'manifest.json'))).toEqual(manifestBefore)
+    expect(await endpoint.reconcileWorkspaceCapture(recoverable, digest)).toEqual(reconciled)
+    await expect(endpoint.reconcileWorkspaceCapture(recoverable, '0'.repeat(64))).rejects.toThrow('reviewed digest')
+
 
   } finally { await endpoint.stop(); await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }) }
 })
