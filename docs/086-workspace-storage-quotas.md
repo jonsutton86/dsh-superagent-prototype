@@ -386,3 +386,34 @@ UNKNOWN/unqualified: actual storage-backed managed Harness/SSH launch and reboot
 service installation, UI storage controls/status, complete storage backup/restore, volume headroom,
 partial-effect reconciliation and final clean-host/full-system qualification remain open. No service
 was installed or restarted and no provider/default model changes were made by this increment.
+
+### Listener crash recovery and installation prerequisite
+
+The service now holds a separate root-private, single-link, non-followed listener lock for its entire
+lifetime. The lock file remains in place after shutdown. A duplicate listener fails before opening the
+host registry. A leftover socket is reclaimed only if its type, root owner, configured group and 0660
+mode match, a bounded connect attempt returns ECONNREFUSED, and its identity/metadata are unchanged
+when inspected again. A live listener, symlink, regular file, changed inode, wrong permissions, or
+uncertain probe is refused. Reclaiming this transport socket does not remove or retry host operations.
+
+Local deterministic listener tests exercise duplicate locking, unchanged lock inode, dead/live sockets,
+foreign path types/modes and an uncertain probe. Ownership/protected-parent checks are mocked only in
+that non-root fixture; native qualification checks the real root service separately. The native fixture
+now includes an idle SIGKILL/restart and compares the entire host registry before/after, plus a duplicate
+service startup refusal. This does not prove recovery during an in-flight quota mutation or machine reboot.
+
+Installation design constraint: do not silently introduce a service-private mount namespace before
+mount-identity recovery is defined and qualified. Existing observation reconciliation pins mount IDs;
+service isolation options that change the visible mount topology may invalidate those observations.
+Systemd documents filesystem namespace behavior and persistent/runtime directory lifecycle in its
+[official execution manual](https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html).
+Supported installation assets and a native systemd lifecycle test remain required; this increment
+implements their stale-socket recovery prerequisite and does not install or activate a service.
+
+VERIFIED at `9dba3cf965cc374dbb7396f2c3a32d486164ee2e`: native
+[run 43695915638](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43695915638)
+passed typecheck, seven builds, 13 native Vitest tests, four listener contracts, three transport
+contracts, and the XFS mechanism/host/service fixtures. The native service reported both
+`crashRestartPreservedRegistry: true` and `duplicateListenerRefused: true`.
+Exact scope and source hashes: [listener evidence](evidence/086-storage-listener-recovery.json).
+No full matrix was run and no running user installation was changed.

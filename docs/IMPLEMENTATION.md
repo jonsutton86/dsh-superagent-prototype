@@ -1245,3 +1245,8 @@ pin the optional quota policy; coordinator identity retains it as configuration,
 Focused validation and remaining native launcher/install/recovery gates are recorded in
 [086-workspace-storage-quotas.md](086-workspace-storage-quotas.md). No deployment or full-project
 completion is claimed.
+
+Storage listener continuation (`9dba3cf`): exclusive listener fencing and verified stale-socket
+recovery passed native Linux run `43695915638`, including an idle SIGKILL/restart with unchanged
+host registry. Installation and in-flight mutation/machine-reboot recovery remain open; see
+[086 listener evidence](evidence/086-storage-listener-recovery.json).

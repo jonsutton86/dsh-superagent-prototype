@@ -1,0 +1,33 @@
+{
+  "kind": "storage-listener-crash-recovery",
+  "revision": "9dba3cf965cc374dbb7396f2c3a32d486164ee2e",
+  "recordedAt": "2026-11-15T08:46:18.323634+00:00",
+  "workflowRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43695915638",
+  "result": "success",
+  "classification": "IMPLEMENTED and native TESTED; NOT DEPLOYED",
+  "hashes": {
+    "scripts/agentic_storage_service.py": "84af9f6184aed424acc32f613147381457ffc1451913efb4511d7ea58411a513",
+    "tests/fixtures/storage-service-native.py": "c85cd20ef091d700b93e6d0799e145a2375f000ab8bb844d2709cda0ab6f2dcb",
+    "tests/fixtures/storage-listener-contract.py": "9ffe74bf739e4fc4ccfe1e1fbe6a1387fb91c97aac3abf8c6bbe9cfa5814a477",
+    "tests/fixtures/storage-qualification.sh": "3c0b967d516eb84cdb1f76a0881e60eb39cb1c747e41d84bebe785301a9e25d9"
+  },
+  "validation": {
+    "listenerContracts": 4,
+    "transportContracts": 3,
+    "nativeVitestTests": 13,
+    "nativeTypecheck": "passed",
+    "nativeBuilds": 7,
+    "idleServiceSigkillRestart": "registry unchanged; stale socket recovered",
+    "duplicateListener": "refused; socket and registry unchanged",
+    "fullMatrix": "not run"
+  },
+  "remaining": [
+    "in-flight host mutation crash recovery",
+    "supported service installation and managed launcher lifecycle",
+    "machine reboot and clean-host recovery",
+    "storage export/restore/migration",
+    "whole-volume/control-state headroom",
+    "workspace storage controls/status",
+    "final full-system qualification"
+  ]
+}
