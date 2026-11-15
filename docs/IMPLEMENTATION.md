@@ -1256,3 +1256,9 @@ manifest and systemd unit installation now pass native first-install, unchanged 
 of changed/partial installs, provision/kill/restart/observe and registry/mount-identity preservation.
 See [086 installation evidence](evidence/086-storage-installation.json). Deployment remains separate;
 combined managed Harness launch, full recovery, workspace controls and final qualification remain open.
+
+Storage managed-launcher continuation (`638b8fd`): installed root service + pinned Harness endpoint
+and coordinator + SSH enrollment passed the real native journey, including command/transport recovery,
+endpoint/coordinator restarts and exactly the original two quota allocations. Scoped run `43696531434`
+passed 14 native tests, nine Python contracts, typecheck and seven builds. See
+[086 managed-launcher evidence](evidence/086-storage-managed-launcher.json) for scope and open gates.

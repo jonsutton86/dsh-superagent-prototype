@@ -472,3 +472,34 @@ not close the combined managed Harness launcher journey, machine reboot/clean-ho
 quota mutation recovery, explicit upgrades/uninstall/partial-install reconciliation, storage export and
 restore, volume headroom, workspace controls, or final whole-system qualification. No user-host deployment
 or default/provider model change occurred.
+
+### Combined managed Harness launch qualification
+
+The scoped storage workflow now installs pinned Harness `0.2.1-rc.3` and SSH tooling. A root fixture
+installs/starts a fresh storage service, then runs the existing real endpoint/coordinator/SSH launcher
+journey as the configured non-root UID. Optional storage input preserves the existing no-storage test
+path. The storage variant checks launcher and SSH enrollment policy, the assigned protected workspace
+root, absence of the old private-installation workspace directory, and that both the admin credential
+and privileged storage socket are hidden from the worker. It exercises a real command, transport loss,
+endpoint restart, coordinator restart, retained output and original request reuse. Afterward the root
+fixture checks that the host registry contains only the original startup and worker allocations.
+
+This test does not use inference, publish to another repository, or change the user's running app.
+It is an integration qualification of the supported launcher path, not a machine-reboot or clean-host
+restore test. Local typecheck passed; native results must be tied to the run/revision recorded below.
+
+VERIFIED at `638b8fd814ffc0b2e07d5936546f7fd1c2a8d712`: native
+[run 43696531434](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43696531434)
+passed the combined journey using the installed service and pinned Harness. The fixture reported
+`realHarness`, `sshEnrollment`, `endpointAndCoordinatorRestart`, and `originalAllocationsRetained`
+all true. The scoped run passed 14 native Vitest tests, nine Python contract tests, the existing
+mechanism/host/service/systemd fixtures, typecheck and seven builds. No native tests were skipped
+inside this selected storage scope. The full workflow's unrelated Linux matrix job was deliberately
+skipped. CodeGraph selected the existing endpoint-launcher suite; the root fixture supplied the real
+storage installation rather than replacing that journey with a synthetic health response.
+
+See [managed-launcher evidence](evidence/086-storage-managed-launcher.json). Remaining storage work:
+whole-machine reboot and clean-host recovery, in-flight quota mutation recovery, backup/export/restore
+and migration, explicit upgrade/uninstall/partial-install reconciliation, volume/control-state headroom,
+workspace controls and live usage, and final full-system qualification. The user's app was not deployed
+or restarted and model defaults remain unchanged.

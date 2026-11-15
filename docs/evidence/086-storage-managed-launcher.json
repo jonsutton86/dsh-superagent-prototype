@@ -1,0 +1,42 @@
+{
+  "kind": "managed-harness-storage-launcher",
+  "revision": "638b8fd814ffc0b2e07d5936546f7fd1c2a8d712",
+  "recordedAt": "2026-11-15T08:55:55.559199+00:00",
+  "workflowRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43696531434",
+  "result": "success",
+  "classification": "managed Harness + installed storage + SSH path INTEGRATED and native TESTED; NOT DEPLOYED to user host",
+  "hashes": {
+    "tests/endpoint-launcher.spec.ts": "34a44853d74a828aa937b145e18537750a8962417f6868e538fd8d52f1ebbf8f",
+    "tests/fixtures/storage-launcher-native.py": "be4f5ff98aa78842f64dbfce479e0398a2bfa02638cb1bcb3e2d9aeec3b70c8d",
+    "tests/fixtures/storage-qualification.sh": "2b0f40606f1a0ca7ed16c319524e6baa3c7fd49d89866ffc8bc5b82b1d24d270",
+    ".github/workflows/remote-execution.yml": "33b3acb4da4986f1416c0ef7a7e9e2c071fd3bfc0cb3b9a8eac71b0a0a564e5b"
+  },
+  "validation": {
+    "harnessVersion": "0.2.1-rc.3",
+    "nativeVitestTests": 14,
+    "pythonContracts": 9,
+    "typecheck": "passed locally and natively",
+    "nativeBuilds": 7,
+    "journey": [
+      "installed root service",
+      "non-root managed endpoint and coordinator",
+      "pinned storage policy in launcher and SSH enrollment",
+      "protected quota root",
+      "admin credential and storage socket hidden from worker",
+      "command and SSH transport loss recovery",
+      "endpoint and coordinator restart",
+      "same original request and file contents",
+      "exactly original startup and worker host allocations"
+    ],
+    "fullMatrix": "not run"
+  },
+  "remaining": [
+    "whole-machine reboot and clean-host recovery",
+    "in-flight quota mutation recovery",
+    "storage backup/export/restore/migration",
+    "upgrade/uninstall and partial-install reconciliation",
+    "whole-volume/control-state headroom",
+    "workspace storage controls and usage",
+    "final full-system qualification"
+  ]
+}
