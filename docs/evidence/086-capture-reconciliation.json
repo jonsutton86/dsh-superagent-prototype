@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-15",
+  "testedRevision": "655d47615c901dfa75a30db9ea2e56b5399b6a73",
+  "localTests": { "passed": 57, "skipped": 2 },
+  "nativeRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43712976279",
+  "nativeTests": { "passed": 29, "skipped": 0 },
+  "typecheck": "passed locally and in Linux CI",
+  "build": "passed locally and in Linux CI",
+  "verified": ["completion-write failure retains original started request", "partial/wrong-digest/changed-source refusal", "fresh fenced reinspection completes original ID", "archive manifest unchanged"],
+  "operatorUIIntegrated": false,
+  "globalSnapshotProven": false,
+  "nativeStorageBackedCaptureQualified": false,
+  "deployed": false
+}

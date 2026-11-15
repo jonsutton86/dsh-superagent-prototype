@@ -1712,3 +1712,34 @@ one native-only skip. A rebuilt installed-Harness maintenance test passed separa
 typecheck/build passed. The encrypted checkpoint test now includes explicit capture
 selection, verification and held staging against synthetic storage records. No new
 native storage or deployed-app claim is made.
+
+### Explicit reconciliation of interrupted captures
+
+`RemoteEndpoint.reconcileWorkspaceCapture(request, expectedManifestHash)` is a
+trusted host-only operation. It requires the retained original request and a reviewed
+SHA-256 digest, never a newly inferred approval. A started attempt is reinspected
+under fresh admission fencing and kernel quiescence. The current grant generation,
+revision, root identity and storage allocation must still match its original binding.
+The complete retained archive is independently verified, its manifest must match the
+reviewed digest and original source identity, and a fresh bounded source inventory
+must match the archive. The original grant/root and kernel state are checked again
+before the original record transitions to complete with `reconciled: true`.
+
+No workspace or archive bytes are overwritten. Partial archives, source changes,
+wrong review digests and changed original bindings remain unresolved. Repeating an
+already completed reconciliation returns the same receipt only for its saved digest.
+The original request ID, binding and started timestamp remain unchanged. This is a
+new observed consistency check, not a claim that an interrupted earlier run succeeded.
+Global snapshot/restore flags remain false; no agent RPC, workspace UI or automatic
+retry is introduced. Operator-facing review integration and a coordinated multi-store
+capture epoch remain unfinished.
+
+VERIFIED at `655d47615c901dfa75a30db9ea2e56b5399b6a73`: 57 focused local
+resource/capture/storage/membership tests passed (two native-only skips); typecheck
+and build passed. [Scoped Linux run 43712976279](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43712976279)
+passed 29 tests, typecheck and build. Fault injection prevents the completion write
+after an archive is created; the native endpoint retains the started request and then
+reconciles that same ID. Local cases also refuse a partial archive, wrong reviewed
+digest and changed source, preserve the unresolved record on refusal, and verify
+unchanged archive manifest bytes after successful reconciliation. This is not native
+storage-backed capture or a full clean-host recovery qualification.

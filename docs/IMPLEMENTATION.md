@@ -35,8 +35,10 @@ Native confined-worker capture/refusal checks pass. Host capture now retains ori
 request IDs, started/completed records and grant/root/storage bindings in the endpoint
 database, with replay-free retrieval qualified across reopen. Explicit source/endpoint/request selections now link completed captures to authenticated
 checkpoint archive manifests and inventory digests; checkpoint and prepared-image
-verification repeat the check. Interrupted-attempt reconciliation, a coordinated capture
-epoch and clean-host activation remain unfinished.
+verification repeat the check. Host-only interrupted-attempt reconciliation now verifies
+a reviewed archive digest against the original binding and fresh fenced source contents,
+without recopying. Operator-facing review integration, a coordinated capture epoch and
+clean-host activation remain unfinished.
 
 The immediate recovery sequence remains: capture workspace content under verified process quiescence; bind that content
 to the original storage allocations and authenticated checkpoint; implement target filesystem/quota verification and
