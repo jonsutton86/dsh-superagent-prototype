@@ -229,6 +229,8 @@ function AdministrationReceipt({ record, endpoint, changed }: { record: Operator
     <details><summary>{t('endpoint.inspectRequest')}</summary><pre>{JSON.stringify(record.request, null, 2)}</pre></details>
     {record.result?.grant && <p>{t('execution.grant')}: <code>{record.result.grant.id}</code> / {record.result.grant.epoch}</p>}
     {record.problem && <p role="status">{record.problem}</p>}
+    {record.request.op === 'grant.create' && (record.phase === 'pending' || record.phase === 'unknown') &&
+      <WorkspaceStorage endpoint={endpoint} workspace={record.request.workspace} />}
     {(record.phase === 'pending' || record.phase === 'unknown') && <Button disabled={command.busy} onClick={() => {
       void command.run(record.id, () => call('POST endpoints/:id/commands/:command/retry', { id: endpoint, command: record.id }))
     }}>{t('endpoint.retry')}</Button>}

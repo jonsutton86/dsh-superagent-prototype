@@ -154,3 +154,24 @@ it('checks quota usage on demand and removes the old reading when refresh fails'
   expect(container!.textContent).not.toContain('Used 0.00390625 / 16 MiB')
   expect(container!.textContent).not.toContain('private host diagnostic')
 })
+
+
+it('inspects storage for an uncertain grant before a workspace exists without resubmitting it', async () => {
+  const h = await fixture(), rpc = h.endpoint.rpc.bind(h.endpoint)
+  const calls: unknown[] = []
+  vi.spyOn(h.endpoint, 'rpc').mockImplementation(async (principal, input, proof) => {
+    calls.push(input)
+    if ((input as { op: string }).op === 'grant.create') throw new Error('Provisioning outcome unconfirmed')
+    return rpc(principal, input, proof)
+  })
+  await enter('Workspace identifier', 'pending-storage'); await click('Create workspace grant')
+  await vi.waitFor(() => expect(button('Retry original request')).toBeTruthy())
+  const original = h.host.runtime.endpoints.commands(h.endpoint.journal.id).items[0]!
+  expect(h.endpoint.journal.grants().some(grant => grant.workspace === 'pending-storage')).toBe(false)
+  const receipt = button('Retry original request')!.closest('article')!
+  await click('Check storage status', receipt)
+  await vi.waitFor(() => expect(calls).toContainEqual({ op: 'storage.status', workspace: 'pending-storage' }))
+  expect(calls.filter(input => (input as { op: string }).op === 'grant.create')).toHaveLength(1)
+  expect(h.host.runtime.endpoints.commands(h.endpoint.journal.id).items[0]).toEqual(original)
+  expect(button('Retry original request', receipt)).toBeTruthy()
+})

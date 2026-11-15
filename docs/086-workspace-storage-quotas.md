@@ -791,3 +791,16 @@ Source hashes and exact scope: [endpoint repair journey evidence](evidence/086-s
 This proves endpoint receipt recovery for the tested recorded/missing-root state, not every partial
 state, coordinator-UI repair, managed-launcher failure/retry, power loss, reboot or clean-host restore.
 Backup/export/migration, broader reconciliation, headroom and final architecture qualification remain open.
+
+### Pending workspace request inspection
+
+Administration receipts for pending/unknown grant creation now expose the existing read-only storage
+status control, using the original request's workspace identifier even when no grant was published.
+Inspection does not retry creation, settle the receipt, or generate a replacement request ID. The
+existing explicit original-request retry remains available. This closes the UI visibility gap for
+failed provisioning; privileged repair still requires the local operator workflow.
+
+Validation: endpoint UI/coordinator suites passed 16 tests; optional-provider contracts passed 12
+with the separately gated Harness integration test skipped. Typecheck and all build targets passed.
+No running app restart, live provider inference, or new native Linux qualification was performed for
+this UI-only change. Full architecture and broader recovery gates remain open.
