@@ -1,3 +1,4 @@
+import type { StorageStatus } from '../remote/storage-model.ts'
 /** Type-only management API contract between the web panel and host routes, imported by the panel without bundling host code. */
 import type { ModelCatalog } from '@deepseek-ai/dsh-api-session-controller/types'
 import type { PromptConfig, Prompts } from './prompts.ts'
@@ -118,6 +119,7 @@ export interface Api {
   'POST personas/:id/archive': { body: ArchivePersonaInput; response: PersonaRecord }
   'GET endpoints': { query?: { offset?: number }; response: EndpointList<EndpointRegistration> }
   'POST endpoints': { body: RegisterEndpointInput; response: EndpointRegistration }
+  'GET endpoints/:id/storage': { query: { workspace: string }; response: StorageStatus & { receivedAt: string } }
   'GET endpoints/:id/catalog': { query?: { offset?: number }; response: EndpointCatalog }
   'GET endpoints/:id/commands': { query?: { offset?: number }; response: EndpointList<OperatorCommand> }
   'POST endpoints/:id/commands': { body: EndpointCommandInput; response: OperatorCommand }

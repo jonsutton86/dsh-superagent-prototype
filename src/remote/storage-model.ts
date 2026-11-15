@@ -43,3 +43,26 @@ export const StorageReservation = StorageIntent.extend({
   createdAt: z.string().datetime(),
 }).strict().refine(value => (value.phase === 'provisioned') === !!value.observation, 'Provisioned state requires its observation')
 export type StorageReservation = z.infer<typeof StorageReservation>
+
+const StatusSummary = z.object({ configured: z.literal(true), policy: EndpointStorage,
+  reservationsObservedAt: z.string().datetime(), reservedAllocations: count, unreservedAllocations: count,
+  workspace: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/) })
+const begun = z.enum(['provisioning', 'provisioned'])
+export const StorageStatus = z.union([
+  z.object({ configured: z.literal(false) }).strict(),
+  StatusSummary.extend({ state: z.literal('unallocated') }).strict(),
+  StatusSummary.extend({ state: z.literal('not-provisioned'), phase: z.literal('reserved') }).strict(),
+  StatusSummary.extend({ state: z.literal('unavailable'), phase: begun }).strict(),
+  StatusSummary.extend({ state: z.literal('observed'), phase: begun,
+    quota: StorageObservation.shape.quota, observedAt: z.string().datetime() }).strict(),
+]).superRefine((value, ctx) => {
+  if (!value.configured) return
+  const policy = value.policy, capacity = Math.min(Math.floor(policy.pool.bytes / policy.workspace.bytes),
+    Math.floor(policy.pool.inodes / policy.workspace.inodes), policy.projectIds.last - policy.projectIds.first + 1)
+  if (value.reservedAllocations + value.unreservedAllocations !== capacity
+    || value.state !== 'unallocated' && value.reservedAllocations === 0)
+    ctx.addIssue({ code: 'custom', message: 'Storage reservation counts do not match policy capacity' })
+  if (value.state === 'observed' && (value.quota.hardBytes !== policy.workspace.bytes || value.quota.hardInodes !== policy.workspace.inodes))
+    ctx.addIssue({ code: 'custom', message: 'Observed hard limits differ from the registered workspace policy' })
+})
+export type StorageStatus = z.infer<typeof StorageStatus>

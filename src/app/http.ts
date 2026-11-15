@@ -78,7 +78,7 @@ export interface HttpHost {
   readonly remoteRoot?: string
   readonly remoteEffects?: Pick<RemoteWorld, 'effects' | 'refreshEffects' | 'cancelEffect' | 'status'>
   readonly environments: Environments
-  readonly endpoints: Pick<Endpoints, 'list' | 'register' | 'catalog' | 'commands' | 'submit' | 'retry' | 'profile'>
+  readonly endpoints: Pick<Endpoints, 'list' | 'register' | 'catalog' | 'storageStatus' | 'commands' | 'submit' | 'retry' | 'profile'>
   readonly personas: Pick<Personas, 'list' | 'get' | 'version' | 'create' | 'update' | 'archive'>
   readonly worlds: Pick<WorldPool, 'list' | 'activate' | 'refresh' | 'revoke' | 'lookup'>
   readonly inbox: Inbox
@@ -329,6 +329,7 @@ function routes(runtime: HttpHost): Routes {
     'POST personas/:id/archive': async ({ params, body }) => runtime.personas.archive(params.id, await body()),
     'GET endpoints': ({ query }) => runtime.endpoints.list(query),
     'POST endpoints': async ({ body }) => runtime.endpoints.register(await body()),
+    'GET endpoints/:id/storage': ({ params, query }) => runtime.endpoints.storageStatus(params.id, query),
     'GET endpoints/:id/catalog': ({ params, query }) => runtime.endpoints.catalog(params.id, query),
     'GET endpoints/:id/commands': ({ params, query }) => runtime.endpoints.commands(params.id, query),
     'POST endpoints/:id/commands': async ({ params, body }) => runtime.endpoints.submit(params.id, await body()),

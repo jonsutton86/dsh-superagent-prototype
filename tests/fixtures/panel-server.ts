@@ -382,6 +382,7 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
   'POST personas/:id/archive': { body: true, answer: () => refuse(409, 'Persona fixture not configured') },
   'GET endpoints': { query: ['offset'], answer: () => ({ items: [], nextOffset: null }) },
   'POST endpoints': { body: true, answer: () => refuse(409, 'Endpoint fixture not configured') },
+  'GET endpoints/:id/storage': { query: ['workspace'], answer: () => refuse(409, 'Endpoint fixture not configured') },
   'GET endpoints/:id/catalog': { query: ['offset'], answer: () => refuse(409, 'Endpoint fixture not configured') },
   'GET endpoints/:id/commands': { query: ['offset'], answer: () => ({ items: [], nextOffset: null }) },
   'POST endpoints/:id/commands': { body: true, answer: () => refuse(409, 'Endpoint fixture not configured') },

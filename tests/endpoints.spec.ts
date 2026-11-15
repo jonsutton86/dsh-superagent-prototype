@@ -1,3 +1,4 @@
+import type { EndpointStorage } from '../src/remote/storage-model.ts'
 import { chmod, link, readFile, symlink, writeFile } from 'node:fs/promises'
 import { existsSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
@@ -14,8 +15,9 @@ const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => { for (const dispose of cleanup.reverse()) await dispose(); cleanup.length = 0; vi.restoreAllMocks() })
 const create = (workspace = 'operator-work') => ({ op: 'grant.create' as const, requestId: randomUUID(), owner: 'coordinator', workspace,
   operations: ['fs.read', 'fs.write', 'process.spawn'] as RemoteGrant['operations'], leaseMs: 300_000 })
-async function fixture() {
+async function fixture(storage?: EndpointStorage) {
   const h = await remoteFixture(cleanup), database = join(h.directory, 'operator.sqlite'), stateDir = join(h.directory, 'operator')
+  if (storage) vi.spyOn(h.endpoint, 'identity').mockReturnValue({ ...h.endpoint.identity(), storage: { policy: storage } })
   let store = new Store(database), endpoints = new Endpoints({ store, stateDir, lifetime: new AbortController().signal, workerRoots: () => [h.enrolled.grant.root] })
   const input = { requestId: randomUUID(), endpointId: h.endpoint.journal.id, url: h.url, name: 'Research endpoint', credentialFile: h.connection.credentialFile, revision: 0 }
   const record = await endpoints.register(input)
@@ -172,6 +174,8 @@ it('exposes enrollment and administration through Runtime management routes with
   expect((await host.api('POST', `${path}/commands/${request.requestId}/retry`)).body).toEqual(result.body)
   expect((await host.api('GET', `${path}/commands`)).body).toMatchObject({ items: [result.body] })
   expect((await host.api('GET', `${path}/catalog`)).status).toBe(200)
+  expect((await host.api('GET', `${path}/storage?workspace=task`)).body).toMatchObject({ configured: false, receivedAt: expect.any(String) })
+  expect((await host.api('GET', `${path}/storage`)).status).toBe(400)
   expect((await host.api('GET', `${path}/catalog?offset=-1`)).status).toBe(400)
   expect((await host.api('POST', `${path}/commands/${request.requestId}/profile`, { port: 3084 })).status).toBe(409)
   vi.spyOn(h.endpoint, 'identity').mockReturnValue({ ...h.endpoint.identity(), confinement: 'linux-bubblewrap' })
@@ -197,3 +201,26 @@ it('keeps administrative catalog pages below the transport cap even when command
   expect(JSON.stringify(first)).not.toContain('private-payload-')
   expect(JSON.stringify(first).length).toBeLessThan(100_000)
 }, 20_000)
+
+
+it('validates storage observations against the registered policy and requested workspace', async () => {
+  const policy: EndpointStorage = { kind: 'linux-xfs-project', filesystemUUID: randomUUID(), mountRoot: '/srv/quota',
+    projectIds: { first: 100, last: 109 }, pool: { bytes: 32768, inodes: 80 }, workspace: { bytes: 16384, inodes: 40 } }
+  const h = await fixture(policy), original = h.endpoint.rpc.bind(h.endpoint)
+  let reply: unknown = { configured: true, policy, workspace: 'task', reservationsObservedAt: new Date().toISOString(),
+    reservedAllocations: 1, unreservedAllocations: 1, state: 'observed', phase: 'provisioned', observedAt: new Date().toISOString(),
+    quota: { accounting: true, enforcement: true, usedBytes: 4096, hardBytes: 16384, usedInodes: 2, hardInodes: 40 } }
+  const valid = structuredClone(reply) as Record<string, unknown>
+  vi.spyOn(h.endpoint, 'rpc').mockImplementation(async (principal, input, proof) =>
+    (input as { op: string }).op === 'storage.status' ? reply : original(principal, input, proof))
+  expect(await h.registry().storageStatus(h.record.id, { workspace: 'task' })).toMatchObject({ state: 'observed', receivedAt: expect.any(String) })
+  for (const invalid of [{ ...valid, workspace: 'another' }, { ...valid, reservedAllocations: 2 },
+    { ...valid, policy: { ...policy, mountRoot: '/other' } }, { configured: false },
+    { ...valid, state: 'unavailable' }, { ...valid, quota: { ...(valid.quota as object), enforcement: false } }]) {
+    reply = invalid
+    await expect(h.registry().storageStatus(h.record.id, { workspace: 'task' })).rejects.toThrow()
+  }
+  reply = { ...valid, state: 'unavailable' }; delete (reply as Record<string, unknown>).quota; delete (reply as Record<string, unknown>).observedAt
+  expect(await h.registry().storageStatus(h.record.id, { workspace: 'task' })).toMatchObject({ state: 'unavailable' })
+  await expect(h.registry().storageStatus(h.record.id, { workspace: '../other' })).rejects.toThrow()
+})

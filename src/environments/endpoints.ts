@@ -1,4 +1,6 @@
 /** Host-only endpoint administration with durable request identities and immutable grant generation files. */
+import { z } from 'zod'
+import { StorageStatus } from '../remote/storage-model.ts'
 import { lstatSync, realpathSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import type { Store } from '../app/store.ts'
@@ -129,6 +131,18 @@ export class Endpoints {
     ])
     return { grants: { ...grants, items: grants.items.map(value => GrantMetadata.parse(value)) }, credentials: { ...credentials, items: credentials.items.map(value => CredentialMetadata.parse(value)) },
       jobs: { ...jobs, items: jobs.items.map(jobView) }, operations: { ...operations, items: operations.items.map(operationView) } }
+  }
+  async storageStatus(id: string, input: unknown): Promise<StorageStatus & { receivedAt: string }> {
+    const { workspace } = z.object({ workspace: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/) }).strict().parse(input)
+    const registration = this.get(id)
+    const result = StorageStatus.parse(await this.client(registration).call({ op: 'storage.status', workspace }))
+    if (this.get(id).revision !== registration.revision)
+      throw new EnvironmentError(409, 'Endpoint registration changed while observing storage')
+    const expected = registration.identity.storage
+    if (result.configured !== !!expected || result.configured && (result.workspace !== workspace
+      || fingerprint(result.policy) !== fingerprint(expected!.policy)))
+      throw new EnvironmentError(409, 'Storage response differs from the requested workspace or registered policy')
+    return { ...result, receivedAt: stamp() }
   }
   private findCommand(endpoint: string, id: string): Command | undefined {
     const row = this.host.store.db.prepare('SELECT value FROM operator_endpoint_command WHERE id=? AND endpoint=?').get(`${endpoint}:${id}`, endpoint)

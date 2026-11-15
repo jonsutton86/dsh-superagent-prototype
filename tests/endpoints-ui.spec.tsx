@@ -128,3 +128,29 @@ it('shows an ambiguous endpoint mutation and retries its durable ID from the adm
   expect(h.host.runtime.endpoints.commands(h.endpoint.journal.id).items[0]).toMatchObject({ id: original.id, phase: 'done' })
   expect(h.endpoint.journal.grants().filter(grant => grant.workspace === 'ui-uncertain')).toHaveLength(1)
 })
+
+it('checks quota usage on demand and removes the old reading when refresh fails', async () => {
+  const policy: EndpointStorage = { kind: 'linux-xfs-project', filesystemUUID: '11111111-1111-4111-8111-111111111111',
+    mountRoot: '/private/quota', projectIds: { first: 100, last: 109 }, pool: { bytes: 32 * 1024 ** 2, inodes: 256 },
+    workspace: { bytes: 16 * 1024 ** 2, inodes: 128 } }
+  const h = await fixture(undefined, policy), original = h.endpoint.rpc.bind(h.endpoint)
+  let fail = false
+  const observe = vi.spyOn(h.endpoint, 'rpc').mockImplementation(async (principal, input, proof) => {
+    if ((input as { op: string }).op !== 'storage.status') return original(principal, input, proof)
+    if (fail) throw new Error('private host diagnostic')
+    return { configured: true, policy, workspace: 'task', reservationsObservedAt: new Date().toISOString(),
+      reservedAllocations: 2, unreservedAllocations: 0, state: 'observed', phase: 'provisioning', observedAt: new Date().toISOString(),
+      quota: { accounting: true, enforcement: true, usedBytes: 4096, hardBytes: policy.workspace.bytes, usedInodes: 2, hardInodes: 128 } }
+  })
+  expect(observe).not.toHaveBeenCalled()
+  await click('Check storage status')
+  await vi.waitFor(() => expect(container!.textContent).toContain('Used 0.00390625 / 16 MiB'))
+  expect(container!.textContent).toContain('2 allocations reserved; 0 remain in the policy budget')
+  expect(container!.textContent).toContain('Provisioning receipt remains incomplete')
+  expect(container!.textContent).toContain('not continuously monitored')
+  fail = true
+  await click('Check storage status')
+  await vi.waitFor(() => expect(container!.textContent).toContain('Current storage status could not be verified'))
+  expect(container!.textContent).not.toContain('Used 0.00390625 / 16 MiB')
+  expect(container!.textContent).not.toContain('private host diagnostic')
+})

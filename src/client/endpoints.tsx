@@ -1,3 +1,4 @@
+import type { ApiResponse } from '../app/api.ts'
 import { useState, type FormEvent } from 'react'
 import type { EndpointAction, EndpointCatalog, EndpointRegistration, OperatorCommand, RemoteProfileView } from '../environments/endpoint-model.ts'
 import type { EndpointCredential, RemoteGrant } from '../remote/protocol.ts'
@@ -151,7 +152,33 @@ function Reconcile({ id, kind, submit, busy }: { id: string; kind: 'job' | 'oper
     <Button type="submit" disabled={busy || !confirmed}>{t('endpoint.reconcile')}</Button>
   </form></details>
 }
-function Catalog({ data, submit, busy }: { data: EndpointCatalog; submit: Submit; busy: boolean }) {
+function WorkspaceStorage({ endpoint, workspace }: { endpoint: string; workspace: string }) {
+  const { call, t } = usePanel()
+  const [value, setValue] = useState<ApiResponse<'GET endpoints/:id/storage'>>()
+  const [busy, setBusy] = useState(false), [failed, setFailed] = useState(false)
+  const refresh = async () => {
+    setBusy(true); setFailed(false); setValue(undefined)
+    try { setValue(await call('GET endpoints/:id/storage', { id: endpoint, query: { workspace } })) }
+    catch { setFailed(true) }
+    finally { setBusy(false) }
+  }
+  return <section aria-label={t('endpoint.storageStatus')}>
+    <Button disabled={busy} onClick={() => { void refresh() }}>{t('endpoint.storageCheck')}</Button>
+    {busy && <p role="status">{t('endpoint.storageChecking')}</p>}
+    {failed && <p role="alert">{t('endpoint.storageUnavailable')}</p>}
+    {value && (!value.configured ? <p>{t('endpoint.storageUnreported')}</p> : <>
+      <p>{t('endpoint.storageReservations', { reserved: value.reservedAllocations, unreserved: value.unreservedAllocations })}</p>
+      <p>{t('endpoint.storageSample')} <When at={value.reservationsObservedAt} /></p>
+      {value.state === 'observed' ? <>
+        <p>{t('endpoint.storageUsage', { used: value.quota.usedBytes / 1024 ** 2, limit: value.quota.hardBytes / 1024 ** 2,
+          entries: value.quota.usedInodes, entryLimit: value.quota.hardInodes })}</p>
+        <p>{t('endpoint.storageSample')} <When at={value.observedAt} /></p>
+        {value.phase === 'provisioning' && <p>{t('endpoint.storagePending')}</p>}
+      </> : <p>{t(value.state === 'unavailable' ? 'endpoint.storageUnavailable' : value.state === 'unallocated' ? 'endpoint.storageUnallocated' : 'endpoint.storagePending')}</p>}
+    </>)}
+  </section>
+}
+function Catalog({ endpoint, data, submit, busy }: { endpoint: string; data: EndpointCatalog; submit: Submit; busy: boolean }) {
   const { t } = usePanel()
   return <>
     <h4>{t('endpoint.grants')}</h4><GrantForm credentials={data.credentials.items} submit={submit} busy={busy} />
@@ -160,6 +187,7 @@ function Catalog({ data, submit, busy }: { data: EndpointCatalog; submit: Submit
       <p>{t(grant.enabled ? 'environment.enabled' : 'environment.revoked')} · {t('endpoint.expires')}: <When at={new Date(grant.leaseUntil).toISOString()} /></p>
       <p><code>{grant.root}</code> · {grant.operations.join(', ')}</p>
       {!!grant.credentials?.length && <ul>{grant.credentials.map(binding => <li key={binding.id}>{binding.id} · {binding.variable} · <code>{binding.version}</code></li>)}</ul>}
+      <WorkspaceStorage endpoint={endpoint} workspace={grant.workspace} />
       <GrantForm grant={grant} credentials={data.credentials.items} submit={submit} busy={busy} />
     </article>)}
     <h4>{t('environment.credentials')}</h4><CredentialForm submit={submit} busy={busy} />
@@ -228,7 +256,7 @@ function EndpointDetails({ record }: { record: EndpointRegistration }) {
     <Button onClick={changed}>{t('mission.refresh')}</Button>
     {(catalog.error || receipts.error) && <p role="alert" className="dt-error">{catalog.error?.message || receipts.error?.message}</p>}
     <CommandError command={command} />
-    {catalog.data && <Catalog data={catalog.data} submit={submit} busy={command.busy} />}
+    {catalog.data && <Catalog endpoint={record.id} data={catalog.data} submit={submit} busy={command.busy} />}
     {!!(offset || next) && <Pages offset={offset} next={next} change={setOffset} />}
     <h4>{t('endpoint.requests')}</h4><p className="dt-hint">{t('endpoint.requestsHint')}</p>
     {receipts.data?.items.map(item => <AdministrationReceipt key={item.id} record={item} endpoint={record.id} changed={changed} />)}

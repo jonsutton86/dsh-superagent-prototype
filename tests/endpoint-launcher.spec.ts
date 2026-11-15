@@ -99,6 +99,15 @@ it.runIf(process.env.DSH_ENDPOINT_LAUNCHER_QUALIFICATION === '1')('enrolls a con
     const restored = await api(`worlds/${world.id}/refresh`, {})
     expect(restored).toMatchObject({ id: world.id, ready: true })
     expect(await remote.call<RemoteJob>({ op: 'job.get', id: job.id })).toMatchObject({ phase: 'settled', quiescent: true, outcome: { exitCode: 0 } })
+    if (storage) {
+      const usage = await api(`endpoints/${registration.id}/storage?workspace=launcher-proof`)
+      expect(usage).toMatchObject({ configured: true, workspace: 'launcher-proof', state: 'observed', phase: 'provisioned',
+        reservedAllocations: 2, unreservedAllocations: 0, quota: { accounting: true, enforcement: true,
+          hardBytes: storage.policy.workspace.bytes, hardInodes: storage.policy.workspace.inodes } })
+      expect(usage.quota.usedBytes).toBeGreaterThan(0)
+      expect(usage.observedAt).toEqual(expect.any(String))
+      expect(usage.receivedAt).toEqual(expect.any(String))
+    }
     await run(endpoint, 'stop', '--stop-timeout', '60')
     expect(await run(endpoint, 'start', '--respect-stop')).toContain('skipped')
   } catch (error) {
