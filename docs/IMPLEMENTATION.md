@@ -1107,7 +1107,9 @@ Next implementation: [085 Workspace aggregate resource allocation](085-workspace
 verified missing aggregate ceiling and the cross-layer implementation sequence. Optional nested workspace limits and
 original-grant attribution are now implemented in the backend, with 12 focused tests passing (one native case skipped),
 typecheck and build. Launcher configuration, plugin schema and rendered environment limits are now connected;
-`docs/evidence/085-config-ui.json` records their focused checks. Recovery/attribution coverage and native acceptance remain unfinished; disk quotas
+`docs/evidence/085-config-ui.json` records their focused checks. Resource-manager restart, authenticated job/filesystem/verification attribution and trusted-helper checks now pass.
+Focused native Linux qualification passed all 25 resource tests at `2c6bbfc`, with typecheck and build;
+`docs/evidence/085-native-qualification.json` records the exact run. Whole-system acceptance remains unfinished; disk quotas
 and other compute/environment requirements remain open. `docs/evidence/085-backend-progress.json` records this WIP scope.
 
 Introduce an environment registry in the existing state store. Each environment has a stable ID, endpoint identity,

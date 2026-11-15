@@ -1,6 +1,6 @@
 # 085 Workspace aggregate resource allocation
 
-Status: backend implementation in progress; not fully integrated or qualified. This continues the complete architecture's compute and
+Status: workspace aggregate limits implemented with focused local and native Linux qualification. Whole-system qualification remains open. This continues the complete architecture's compute and
 environment contract. DeepSeek Harness remains the execution runtime. Disk quotas, fleet setup, transport, ownership,
 clean-host recovery and the other ledger requirements remain in scope.
 
@@ -126,3 +126,19 @@ throttling. The existing OOM/process-limit/replay checks remain. These native ad
 acceptance evidence. Disposal now removes empty workspace parents after command cleanup, preserving populated/unknown
 parents; the regression proves the empty parent exists before disposal. Local resource checks passed 18 tests with one
 native skip, plus the tightened disposal assertion, typecheck and build. `evidence/085-native-gate.json` records scope.
+
+
+## Native result
+
+The focused resource workflow passed at exact revision `2c6bbfce796c3006f60635a1b166c15e6f7641b6` on hosted Ubuntu 22.04:
+25 tests passed, none skipped, typecheck and seven builds passed. The delegated kernel hierarchy exercised concurrent
+commands sharing one workspace ceiling, an independently populated second workspace, exact workspace/pool CPU settings
+and actual workspace throttling. Native OOM, process-limit, namespace confinement and original-receipt replay checks also
+passed. [The run](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43690282529) and
+`evidence/085-native-qualification.json` identify the gate. Earlier statements that the native assertions were unrun describe
+those earlier checkpoints and are superseded by this result. This is not full-suite or whole-product acceptance.
+
+The existing workflow now accepts manual `scope=resources`; `full` remains the default. Resource-only dispatch skips pinned
+CLI installation and native service/SSH gates, runs the focused suites in the dedicated delegated unit, and does not
+silently count skipped broader gates as success. Disk quotas, policy migration, fairness, fleet setup, clean-host recovery
+and the remaining implementation ledger are still open.

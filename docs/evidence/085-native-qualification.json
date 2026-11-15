@@ -1,0 +1,32 @@
+{
+  "kind": "focused-native-workspace-resource-qualification",
+  "recordedAt": "2026-11-15T07:33:25.070773+00:00",
+  "testedRevision": "2c6bbfce796c3006f60635a1b166c15e6f7641b6",
+  "workflowRun": 43690282529,
+  "url": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43690282529",
+  "scope": "resources",
+  "status": "completed",
+  "conclusion": "success",
+  "platform": "GitHub-hosted ubuntu-22.04, dedicated delegated systemd worker subtree",
+  "tests": {
+    "passed": 25,
+    "failed": 0,
+    "skipped": 0,
+    "files": [
+      "tests/remote-resources.spec.ts",
+      "tests/resource-worker.spec.ts"
+    ]
+  },
+  "typecheck": "passed",
+  "build": "seven bundles passed",
+  "verified": [
+    "Two simultaneous populated command children share workspace CPU ceiling.",
+    "Second workspace uses a distinct populated group.",
+    "Workspace and endpoint pool exact CPU ceilings verified.",
+    "Workspace parent throttling observed through kernel cpu.stat.",
+    "Native confinement, OOM, process limit and original-receipt replay assertions passed."
+  ],
+  "logSha256": "67baa2286414aaa8f9b497304019fa76dfdfb9cebc92f57aee22ad464e9f412c",
+  "log": "/tmp/dsh-085-linux.log",
+  "limitations": "Focused resource gate, not full platform suite, clean-host restore, arbitrary host/provider coverage, disk quotas or deployment. Existing running application/default model unchanged."
+}
