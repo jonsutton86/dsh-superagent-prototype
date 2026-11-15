@@ -1104,8 +1104,10 @@ historical coverage. Abrupt host-loss acceptance and the final platform matrix r
 ### 2. Compute/state/environment contracts and remote execution — whole-profile mission integration implemented
 
 Next implementation: [085 Workspace aggregate resource allocation](085-workspace-resource-allocation.md) records the
-verified missing aggregate ceiling and the cross-layer implementation sequence. It is designed, not implemented; disk
-quotas and other compute/environment requirements remain open.
+verified missing aggregate ceiling and the cross-layer implementation sequence. Optional nested workspace limits and
+original-grant attribution are now implemented in the backend, with 12 focused tests passing (one native case skipped),
+typecheck and build. Launcher/UI, recovery/attribution coverage and native acceptance remain unfinished; disk quotas
+and other compute/environment requirements remain open. `docs/evidence/085-backend-progress.json` records this WIP scope.
 
 Introduce an environment registry in the existing state store. Each environment has a stable ID, endpoint identity,
 capabilities, availability, grant revision and lease epoch. Bind a ticket's execution to that environment and grant revision.

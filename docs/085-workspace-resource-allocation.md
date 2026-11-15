@@ -1,6 +1,6 @@
 # 085 Workspace aggregate resource allocation
 
-Status: investigated and designed; not implemented or qualified. This continues the complete architecture's compute and
+Status: backend implementation in progress; not fully integrated or qualified. This continues the complete architecture's compute and
 environment contract. DeepSeek Harness remains the execution runtime. Disk quotas, fleet setup, transport, ownership,
 clean-host recovery and the other ledger requirements remain in scope.
 
@@ -56,3 +56,21 @@ The initial impact graph is retained privately at
 `.artifacts/resume-2026-11-15/workspace-resources-affected.json`. Start with `tests/remote-resources.spec.ts`,
 `tests/fixtures/cgroup.ts`, the trusted helper and endpoint attribution calls. No host provisioning, policy mutation,
 service restart or default-model change is authorized by this design record alone.
+
+
+## First backend implementation
+
+Optional `workspace` process budgets now validate command <= workspace <= pool. The resource manager creates workspace
+parents and command children; the pre-exec helper checks all configured levels. The endpoint passes the persisted grant's
+workspace for jobs and filesystem helpers, separately from the original job/operation usage identity. Unattributed internal
+work uses a separate bounded internal allocation. Existing configurations retain their original two-level hierarchy.
+Grant creation already refuses a second grant for an enrolled workspace; grant revisions/epochs preserve the same workspace
+identity. Workspace group names hash that endpoint-local identity, not command or environment text.
+
+Discovery and original-effect liveness traverse nested groups. Empty workspace parents can be removed, while unknown or
+populated groups remain; workspace group capacity is bounded at 256. Simulated-kernel tests check shared versus separate
+workspace parents, original-effect liveness, nested policy projection, changed-policy refusal and budget validation.
+
+Still required before calling this feature integrated: launcher configuration support, rendered environment controls,
+end-to-end endpoint attribution tests including verification stages, restart/cleanup race tests, helper tamper coverage,
+recovery-policy checks, and native Linux aggregate enforcement. No host or existing resource policy has been changed.

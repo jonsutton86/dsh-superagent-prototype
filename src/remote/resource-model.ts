@@ -11,8 +11,11 @@ export const EndpointResources = z.object({
   cgroupRoot: z.string().min(1).max(4096).refine(value => value.startsWith('/') && !/[\0\n\r]/.test(value)),
   pool: ProcessBudget,
   command: ProcessBudget,
+  workspace: ProcessBudget.optional(),
 }).strict().refine(value => value.command.cpuPercent <= value.pool.cpuPercent && value.command.memoryBytes <= value.pool.memoryBytes
-  && value.command.processes <= value.pool.processes, 'Command limits cannot exceed the shared worker pool')
+  && value.command.processes <= value.pool.processes, 'Command limits cannot exceed the shared worker pool').refine(value => !value.workspace ||
+  (['cpuPercent', 'memoryBytes', 'processes'] as const).every(key => value.command[key] <= value.workspace![key] && value.workspace![key] <= value.pool[key]),
+  'Command limits must fit within workspace limits, and workspace limits within the pool')
 export type EndpointResources = z.infer<typeof EndpointResources>
 export interface ResourceStatus {
   kind: 'linux-cgroup-v2'; policy: EndpointResources; ready: boolean

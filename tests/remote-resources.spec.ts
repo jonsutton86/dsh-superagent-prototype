@@ -19,8 +19,8 @@ const policy: EndpointResources = { cgroupRoot: '/delegated', pool: { cpuPercent
   command: { cpuPercent: 100, memoryBytes: 256 * 1024 ** 2, processes: 32 } }
 const cleanup: CgroupResources[] = []
 afterEach(() => { for (const resources of cleanup.splice(0)) resources.close(); vi.restoreAllMocks() })
-function fixture(io = new FakeCgroup()) {
-  const resources = new CgroupResources(policy, io), id = randomUUID(); cleanup.push(resources); resources.start(id)
+function fixture(io = new FakeCgroup(), configured = policy) {
+  const resources = new CgroupResources(configured, io), id = randomUUID(); cleanup.push(resources); resources.start(id)
   const pool = join(io.root, 'dsh-' + id), done = Promise.withResolvers<SubprocessOutcome>()
   const handle: SubprocessHandle = { stdin: undefined, stdout: undefined, stderr: undefined, control: undefined, collected: {},
     done: done.promise, terminate: vi.fn(), waitForExit: vi.fn(async () => true) }
@@ -231,3 +231,40 @@ it.runIf(!!process.env.DSH_RESOURCE_QUALIFICATION_ROOT)('qualifies actual cgroup
     await rm(directory, { recursive: true, force: true })
   }
 }, 60000)
+
+
+it('groups concurrent commands by trusted workspace while retaining distinct effect scopes', () => {
+  const workspace = { cpuPercent: 150, memoryBytes: 512 * 1024 ** 2, processes: 64 }
+  const h = fixture(new FakeCgroup(), { ...policy, workspace })
+  h.resources.run('job:one', () => h.runtime.spawn(h.spec), 'alpha')
+  h.resources.run('job:two', () => h.runtime.spawn(h.spec), 'alpha')
+  h.resources.run('operation:three', () => h.runtime.spawn(h.spec), 'beta')
+  const paths = vi.mocked(h.base.spawn).mock.calls.map(([spec]) => spec.argv[3]!)
+  const parent = (path: string) => path.slice(0, path.lastIndexOf('/'))
+  expect(parent(paths[0]!)).toBe(parent(paths[1]!))
+  expect(paths[0]).not.toBe(paths[1])
+  expect(parent(paths[0]!)).not.toBe(parent(paths[2]!))
+  for (const path of paths) {
+    for (const [file, value] of Object.entries(budgetFiles(workspace, false))) expect(h.io.read(join(parent(path), file))).toBe(value)
+  }
+  const encoded = JSON.parse(vi.mocked(h.base.spawn).mock.calls[0]![0].argv[4]!)
+  expect(encoded.workspace).toEqual(budgetFiles(workspace, false))
+  h.io.population(paths[0]!, true)
+  expect(h.resources.hasLive('job:one')).toBe(true)
+  expect(h.resources.hasLive('job:two')).toBe(false)
+})
+
+it('rejects workspace ceilings outside the command and pool interval', () => {
+  expect(EndpointResources.safeParse({ ...policy, workspace: { ...policy.command, cpuPercent: 99 } }).success).toBe(false)
+  expect(EndpointResources.safeParse({ ...policy, workspace: { ...policy.pool, memoryBytes: 2 * 1024 ** 3 } }).success).toBe(false)
+})
+
+it('refuses changed workspace limits before admitting another command', () => {
+  const workspace = { ...policy.command }
+  const h = fixture(new FakeCgroup(), { ...policy, workspace })
+  h.resources.run('job:one', () => h.runtime.spawn(h.spec), 'alpha')
+  const path = vi.mocked(h.base.spawn).mock.calls[0]![0].argv[3]!
+  h.io.files.set(join(path.slice(0, path.lastIndexOf('/')), 'memory.max'), 'max')
+  expect(() => h.resources.run('job:two', () => h.runtime.spawn(h.spec), 'alpha')).toThrow('pinned endpoint policy')
+  expect(h.base.spawn).toHaveBeenCalledOnce()
+})

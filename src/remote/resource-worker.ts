@@ -6,8 +6,11 @@ try {
   const [group, encoded, command, ...args] = process.argv.slice(2)
   if (process.platform !== 'linux' || !group || !encoded || !command || !process.execve)
     throw new Error('Unsupported resource launch')
-  const expected = JSON.parse(encoded) as { command: Record<string, string>; pool: Record<string, string> }
-  for (const [directory, settings] of [[group, expected.command], [dirname(group), expected.pool]] as const) {
+  const expected = JSON.parse(encoded) as { command: Record<string, string>; pool: Record<string, string>; workspace?: Record<string, string> }
+  const levels: [string, Record<string, string>][] = [[group, expected.command]]
+  if (expected.workspace) levels.push([dirname(group), expected.workspace], [dirname(dirname(group)), expected.pool])
+  else levels.push([dirname(group), expected.pool])
+  for (const [directory, settings] of levels) {
     if (!isAbsolute(directory) || realpathSync(directory) !== directory || statfsSync(directory).type !== 0x63677270)
       throw new Error('Not a canonical cgroup v2 directory')
     const info = lstatSync(directory)

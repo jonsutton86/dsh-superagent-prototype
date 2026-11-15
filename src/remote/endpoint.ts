@@ -340,7 +340,7 @@ export class RemoteEndpoint {
   private enqueue(id: string): void {
     if (this.pending.has(id) || this.closing) return
     const running = Promise.resolve().then(async () => {
-      const launch = () => this.host.resources ? this.host.resources.run('job:' + id, () => this.launch(id)) : this.launch(id)
+      const launch = () => this.host.resources ? this.host.resources.run('job:' + id, () => this.launch(id), this.journal.grant(this.journal.job(id).grantId).workspace) : this.launch(id)
       if (!this.ownership) return launch()
       try {
         const guard = await this.ownership.resume(this.journal.job(id).ownership)
@@ -663,7 +663,7 @@ export class RemoteEndpoint {
   }
   private filesystem(grant: RemoteGrant, request: RpcRequest, signal: AbortSignal): Promise<unknown> {
     const run = () => this.host.filesystemRpc!(grant, request, signal)
-    return this.host.resources ? this.host.resources.run(request.op === 'fs.write' || request.op === 'fs.edit' ? 'operation:' + request.requestId : 'read', run) : run()
+    return this.host.resources ? this.host.resources.run(request.op === 'fs.write' || request.op === 'fs.edit' ? 'operation:' + request.requestId : 'read', run, grant.workspace) : run()
   }
   stop(): Promise<void> { return this.stopping ??= this.close() }
   private async close(): Promise<void> {

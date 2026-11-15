@@ -1,0 +1,37 @@
+{
+  "kind": "workspace-aggregate-backend-progress",
+  "recordedAt": "2026-11-15T07:18:24.561927+00:00",
+  "baseRevision": "5ae4035",
+  "files": {
+    "src/remote/resource-model.ts": "ff7b50f4809004b4fe6f911535a5053d1ed26b7016fa606a4f6e335c7e14a7dc",
+    "src/remote/resources.ts": "a0436a4f25229e6506830d25fc025c07b21b7560b6229104fee0fa1ffdc0d951",
+    "src/remote/resource-worker.ts": "6b6025fe081299b956e955774ffc206a2b831d3d53b4adfab4400e62272d9b5c",
+    "src/remote/endpoint.ts": "8bcd94750c388602f140037d2e53c0ef6af1187b403bc1ce36f77c89fac56543",
+    "tests/remote-resources.spec.ts": "f6dbd49db30018e1d887c54a6cf9f5deb388bf3fce1125855ccae9b8cf4cacb5"
+  },
+  "tests": {
+    "command": "vitest run tests/remote-resources.spec.ts",
+    "passed": 12,
+    "skipped": 1,
+    "log": "/tmp/dsh-085-resources.log"
+  },
+  "typecheck": {
+    "exitCode": 0,
+    "log": "/tmp/dsh-085-typecheck.log"
+  },
+  "build": {
+    "exitCode": 0,
+    "log": "/tmp/dsh-085-build.log"
+  },
+  "status": "Backend WIP, not full integration or native qualification",
+  "remaining": [
+    "Launcher optional workspace config",
+    "Environment UI",
+    "Endpoint attribution and verification integration tests",
+    "Restart and cleanup races",
+    "Helper tamper validation",
+    "Recovery policy validation",
+    "Native Linux aggregate enforcement"
+  ],
+  "limitations": "Simulated kernel only. No host provisioning, runtime policy mutation, deployment or provider/default changes."
+}

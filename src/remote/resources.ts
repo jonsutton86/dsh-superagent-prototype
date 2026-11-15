@@ -33,7 +33,7 @@ interface Scope { path: string; owner: string; handle?: SubprocessHandle; exited
 /** Cgroup v2 limits the whole worker pool and every managed process tree before untrusted execution. */
 export class CgroupResources {
   readonly policy: EndpointResources
-  private readonly owners = new AsyncLocalStorage<string>()
+  private readonly owners = new AsyncLocalStorage<{ owner: string; workspace: string }>()
   private readonly scopes = new Map<string, Scope>()
   private readonly usage = new Map<string, ResourceUsage>()
   private pool = ''
@@ -89,7 +89,11 @@ export class CgroupResources {
   }
   private groups(): string[] {
     if (!this.pool || this.closed) throw failure('Resource pool is not running')
-    return this.io.children(this.pool).filter(name => scopeName.test(name)).map(name => join(this.pool, name))
+    const parents = this.policy.workspace ? this.io.children(this.pool).filter(name => /^w-[a-f0-9]{32}$/.test(name)).map(name => join(this.pool, name)) : [this.pool]
+    return parents.flatMap(parent => {
+      if (this.policy.workspace) this.check(parent, budgetFiles(this.policy.workspace, false))
+      return this.io.children(parent).filter(name => scopeName.test(name)).map(name => join(parent, name))
+    })
   }
   private cleanUnclaimed(): void {
     // An empty old group can be removed atomically. A late pre-exec helper then refuses execution when joining fails.
@@ -125,13 +129,37 @@ export class CgroupResources {
       try { this.remove(scope) } catch { /* A changed or populated group is retained; never report cleanup as quiescence. */ }
     }
   }
-  run<T>(owner: string, action: () => T): T { return this.owners.run(owner, action) }
+  run<T>(owner: string, action: () => T, workspace?: string): T {
+    return this.owners.run({ owner, workspace: workspace === undefined ? 'internal' : 'workspace:' + workspace }, action)
+  }
+  private cleanWorkspaces(): void {
+    if (!this.policy.workspace || !this.pool) return
+    for (const name of this.io.children(this.pool).filter(name => /^w-[a-f0-9]{32}$/.test(name))) {
+      const path = join(this.pool, name)
+      try {
+        if (!this.io.children(path).some(child => scopeName.test(child)) && !this.populated(path)) this.io.remove(path)
+      } catch { /* Preserve unknown or concurrently populated groups. */ }
+    }
+  }
+  private workspace(identity: string): string {
+    if (!this.policy.workspace) return this.pool
+    this.cleanWorkspaces()
+    const path = join(this.pool, 'w-' + tag(identity))
+    if (!this.io.children(this.pool).includes('w-' + tag(identity))
+      && this.io.children(this.pool).filter(name => /^w-[a-f0-9]{32}$/.test(name)).length >= 256)
+      throw new RemoteError(429, 'resource_capacity', 'Workspace resource capacity is reserved')
+    if (this.io.mkdir(path)) for (const [key, value] of Object.entries(budgetFiles(this.policy.workspace, false))) this.io.write(join(path, key), value)
+    this.check(path, budgetFiles(this.policy.workspace, false))
+    if (this.io.read(join(path, 'cgroup.procs'))) throw failure('Workspace group must not contain direct processes')
+    this.enable(path)
+    return path
+  }
   takeUsage(owner: string): ResourceUsage | undefined {
     const value = this.usage.get(owner); this.usage.delete(owner)
     if (value && [...this.scopes.values()].some(scope => scope.owner === owner)) value.complete = false
     return value
   }
-  hasLive(owner: string): boolean { const prefix = 's-' + tag(owner) + '-'; return this.groups().some(path => path.slice(this.pool.length + 1).startsWith(prefix) && this.populated(path)) }
+  hasLive(owner: string): boolean { const prefix = 's-' + tag(owner) + '-'; return this.groups().some(path => path.split('/').at(-1)!.startsWith(prefix) && this.populated(path)) }
   status(): ResourceStatus {
     const result: ResourceStatus = { kind: 'linux-cgroup-v2', policy: this.policy, ready: false, memoryBytes: null, processes: null, activeScopes: null }
     try {
@@ -159,8 +187,9 @@ export class CgroupResources {
     this.check(this.pool, budgetFiles(this.policy.pool, false))
     this.cleanFinished()
     if (this.groups().length >= 256) throw new RemoteError(429, 'resource_capacity', 'Resource-scope capacity is reserved')
-    const owner = this.owners.getStore() ?? 'internal'
-    const path = join(this.pool, `s-${tag(owner)}-${randomUUID().replaceAll('-', '')}`)
+    const allocation = this.owners.getStore() ?? { owner: 'internal', workspace: 'internal' }, owner = allocation.owner
+    const parent = this.workspace(allocation.workspace)
+    const path = join(parent, `s-${tag(owner)}-${randomUUID().replaceAll('-', '')}`)
     if (!this.io.mkdir(path)) throw failure('Resource scope already exists')
     const scope: Scope = { path, owner, exited: false }
     this.scopes.set(path, scope)
@@ -171,7 +200,8 @@ export class CgroupResources {
       this.io.info(join(path, 'cgroup.kill'))
       const handle = runtime.spawn({ ...spec, env: { ...spec.env, NODE_OPTIONS: undefined, NODE_PATH: undefined },
         argv: [process.execPath, '--no-warnings', helper, path,
-          JSON.stringify({ command: budgetFiles(this.policy.command), pool: budgetFiles(this.policy.pool, false) }), ...spec.argv] })
+          JSON.stringify({ command: budgetFiles(this.policy.command), pool: budgetFiles(this.policy.pool, false),
+            ...(this.policy.workspace ? { workspace: budgetFiles(this.policy.workspace, false) } : {}) }), ...spec.argv] })
       scope.handle = handle
       const cancel = () => {
         handle.terminate()
