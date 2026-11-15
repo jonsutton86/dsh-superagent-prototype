@@ -1,0 +1,13 @@
+{
+  "date": "2026-11-15",
+  "testedRevision": "6240dfa64b82badeb2432be03856f912804231fe",
+  "localTests": { "passed": 72, "skipped": 3 },
+  "nativeRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43713479342",
+  "nativeTests": { "passed": 30, "skipped": 0 },
+  "typecheck": "passed locally and in Linux CI",
+  "build": "passed locally and in Linux CI",
+  "verified": ["explicit maintenance configuration", "accepted jobs preserved without replay", "normal RPC admission refused", "built plugin writes private status without registering RPC"],
+  "installedHarnessMaintenanceLoaderQualified": false,
+  "nativeStorageBackedMaintenanceQualified": false,
+  "deployed": false
+}

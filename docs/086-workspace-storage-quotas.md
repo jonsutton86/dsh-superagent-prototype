@@ -1743,3 +1743,59 @@ reconciles that same ID. Local cases also refuse a partial archive, wrong review
 digest and changed source, preserve the unresolved record on refusal, and verify
 unchanged archive manifest bytes after successful reconciliation. This is not native
 storage-backed capture or a full clean-host recovery qualification.
+
+### Endpoint Harness maintenance configuration
+
+The existing execution-endpoint plugin now accepts an optional `maintenance` block.
+Normal configuration remains unchanged. Maintenance startup skips accepted-job replay,
+periodic lease/cleanup sweeps and ownership monitoring, and normal RPC admission is
+refused. The plugin registers no endpoint RPC handler in this mode. It runs the
+selected host capture operation, writes a private status file and stops the endpoint.
+Existing accepted/unknown work is not cancelled or settled to make capture possible;
+it continues to block the managed-quiescence requirement.
+
+Use the original stopped endpoint's dedicated Harness configuration, preserving all
+pinned state, workspace, resource, storage and ownership settings. Add this block to
+that endpoint entry's complete config (Harness entry config patches replace rather
+than merge). Do not launch concurrently with the normal service: the existing writer
+lock refuses another owner.
+
+```json
+{
+  "maintenance": {
+    "mode": "capture",
+    "request": {
+      "requestId": "11111111-1111-4111-8111-111111111111",
+      "grantId": "22222222-2222-4222-8222-222222222222",
+      "epoch": 1,
+      "destination": "/private/capture-archive",
+      "maxEntries": 100000,
+      "maxBytes": 1073741824
+    },
+    "receiptFile": "/private/operator-results/capture-status.json"
+  }
+}
+```
+
+Use actual original request/grant identifiers, not these examples. For explicit
+reconciliation use `mode: reconcile`, the same retained request, a fresh result-file
+path, and `expectedManifestHash` containing the reviewed manifest SHA-256. Capture
+mode forbids that field; reconciliation requires it. Resource enforcement is required.
+Result directories must be canonical, private and outside workspace/archive content.
+The status file reports the retained phase and `executionOwnership: false`; a started
+phase is unresolved, not success. Existing conflicting status files are not overwritten.
+
+This configuration exposes host maintenance only. It is not workspace UI integration,
+a deployment to the running app, or full stopped-endpoint read-only export: startup
+still performs the established runtime/isolation qualification before the selected
+operation. Operator-facing orchestration and the coordinated capture epoch remain open.
+
+VERIFIED at `6240dfa64b82badeb2432be03856f912804231fe`: 72 local plugin,
+resource, ownership and remote tests passed (three native-only skips), with typecheck
+and build. [Scoped Linux run 43713479342](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43713479342)
+passed 30 tests, typecheck and build. Its native fixture invokes the built production
+endpoint plugin against real confined services and an existing endpoint, checks the
+private maintenance result and confirms no RPC handler registration. This directly
+qualifies the built plugin entry with a supplied host context, not a fresh installed
+Harness profile-loader invocation. That loader boundary and native storage-backed
+maintenance remain unqualified.
