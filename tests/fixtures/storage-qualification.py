@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import time
 
 MIB = 1024 * 1024
 
@@ -54,7 +55,18 @@ def worker(mode):
         (copy / 'held').unlink()
     finally:
         held.close()
-    allocate(copy / 'released', 10 * MIB)
+    # XFS inode inactivation can defer quota release after close; observe, never assume it.
+    deadline = time.monotonic() + 5
+    while True:
+        try:
+            allocate(copy / 'released', 10 * MIB)
+            break
+        except OSError as error:
+            if error.errno != errno.ENOSPC or time.monotonic() >= deadline:
+                raise
+            (copy / 'released').unlink()
+            os.sync()
+            time.sleep(0.05)
     assert project(copy / 'released') == 17
     denied(lambda: os.link(other / 'independent', workspace / 'cross-project'), (errno.EXDEV,))
     # Do not trust xfs_io exit status; observe membership after the attempted change.
@@ -81,6 +93,7 @@ def worker(mode):
     finally:
         for path in created:
             path.unlink()
+    os.sync()
     (copy / 'after-inode-release').touch(exist_ok=False)
     return {'sharedTrees': True, 'independentProject': True, 'inheritedMembership': True,
             'deletedOpenCharged': True, 'hardLinkDenied': True, 'membershipChangeDenied': True,
