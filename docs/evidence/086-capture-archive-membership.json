@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-15",
+  "testedRevision": "93cbf0018b08e777f12d1c3de19035fdd47cc29d",
+  "initialFocusedRun": { "passed": 99, "failed": 1, "skipped": 1, "failure": "outdated assertion expected no return value instead of verified inventory digest" },
+  "affectedRerun": { "passed": 15, "failed": 0 },
+  "coveredFocusedTestsAfterFix": { "passed": 100, "skipped": 1 },
+  "installedHarnessMaintenanceTests": { "passed": 1 },
+  "typecheck": "passed",
+  "build": "passed",
+  "verified": ["explicit original-ID archive selection", "manifest and inventory digest match", "interrupted/ambiguous/mismatched evidence refusal", "encrypted checkpoint verification and held staging"],
+  "globalSnapshotProven": false,
+  "nativeStorageBackedCaptureQualified": false,
+  "deployed": false
+}

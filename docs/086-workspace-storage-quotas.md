@@ -1666,3 +1666,49 @@ storage, checkpoint and installation tests passed (one native-only skip); typech
 and build passed. Initial fixture setup used an UPSERT against a deliberately simple
 metadata table without a unique constraint; the test setup was corrected before the
 successful run. No new native run or deployment is claimed for this read-only audit change.
+
+### Authenticated capture-to-archive membership
+
+Checkpoint configuration now accepts optional `workspaceCaptureSelections`, an array
+of `{ source, endpointId, requestId }`. Each source selects one original completed
+capture from a supplied, independently audited storage endpoint/host pair. Duplicate
+source selections and selections without corresponding workspace archives are refused.
+Existing `workspaceArtifacts` without selections remain supported without gaining a
+managed-capture claim.
+
+Creation records the selected endpoint/request ID in authenticated workspace member
+metadata only after checking the capture's source root, exact manifest SHA-256 and
+verified inventory digest. Missing, duplicate, started or substituted capture records
+fail. Verification repeats this link after decrypting/authenticating checkpoint members
+and auditing their storage snapshots. Prepared receipt images perform the same checks.
+Workspace content verification still validates every member byte and link relationship;
+a capture receipt never replaces content verification. Selected identifiers survive held
+workspace staging and candidate reauthentication through the original checkpoint.
+
+Example maintenance-profile checkpoint fields (identifiers must come from the retained
+host capture; do not generate replacement IDs after response loss):
+
+```json
+{
+  "workspaceArtifacts": ["/private/captured-workspace"],
+  "workspaceCaptureSelections": [{
+    "source": "/original/workspace",
+    "endpointId": "11111111-1111-4111-8111-111111111111",
+    "requestId": "22222222-2222-4222-8222-222222222222"
+  }]
+}
+```
+
+The matching `storageArtifacts` pair must also be supplied. This establishes retained
+capture/content membership, not a shared capture epoch across coordinator, endpoint,
+workspace and privileged host registry. Native storage-backed capture, interruption
+reconciliation, ownership/mode application and clean-host activation remain open.
+
+Validation at `93cbf0018b08e777f12d1c3de19035fdd47cc29d`: the six-suite focused
+run initially passed 99 tests with one outdated return-value assertion and one native
+skip. After updating the assertion to check the newly returned inventory digest, both
+affected suites passed all 15 tests; the resulting covered set is 100 passing tests,
+one native-only skip. A rebuilt installed-Harness maintenance test passed separately;
+typecheck/build passed. The encrypted checkpoint test now includes explicit capture
+selection, verification and held staging against synthetic storage records. No new
+native storage or deployed-app claim is made.

@@ -33,8 +33,10 @@ resources must be quiescent, pending RPC/cleanup must be absent, all RPC admissi
 periodic cleanup remain held during capture, and completion rechecks managed quiescence.
 Native confined-worker capture/refusal checks pass. Host capture now retains original
 request IDs, started/completed records and grant/root/storage bindings in the endpoint
-database, with replay-free retrieval qualified across reopen. Interrupted-attempt
-reconciliation and authenticated checkpoint consumption of those bindings remain unfinished.
+database, with replay-free retrieval qualified across reopen. Explicit source/endpoint/request selections now link completed captures to authenticated
+checkpoint archive manifests and inventory digests; checkpoint and prepared-image
+verification repeat the check. Interrupted-attempt reconciliation, a coordinated capture
+epoch and clean-host activation remain unfinished.
 
 The immediate recovery sequence remains: capture workspace content under verified process quiescence; bind that content
 to the original storage allocations and authenticated checkpoint; implement target filesystem/quota verification and
