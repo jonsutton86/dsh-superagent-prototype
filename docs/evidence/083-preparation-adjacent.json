@@ -1,0 +1,30 @@
+{
+  "kind": "preparation-adjacent-contracts",
+  "recordedAt": "2026-11-15T07:01:48.564294+00:00",
+  "baseRevision": "518fdd0",
+  "scope": "Concurrent preparation source repair plus local mission fixture change; not clean-revision full qualification.",
+  "localExecutionSha256": "f290c04e3c20ba30bcaa77adb0536cb27539797b394e3bde76bfa523a9df0446",
+  "runs": [
+    {
+      "command": "env -u GIT_CONFIG_GLOBAL ./node_modules/.bin/vitest run tests/local-execution.spec.ts tests/environment.spec.ts tests/executor-failure.spec.ts tests/personas-runtime.spec.ts",
+      "passed": 31,
+      "failed": 1,
+      "log": "/tmp/dsh-083-preparation-adjacent.log",
+      "failure": "Local mission reviewed stale execution revision before original stop observation settled."
+    },
+    {
+      "command": "env -u GIT_CONFIG_GLOBAL ./node_modules/.bin/vitest run tests/local-execution.spec.ts",
+      "passed": 5,
+      "failed": 0,
+      "log": "/tmp/dsh-083-local-execution-focused.log",
+      "change": "Fixture separately ends the original worker turn and observes quiet before reading the reviewed execution revision."
+    }
+  ],
+  "typecheck": {
+    "command": "pnpm typecheck",
+    "exitCode": 0,
+    "log": "/tmp/dsh-083-runtime-final-typecheck.log"
+  },
+  "impactAnalysis": ".artifacts/resume-2026-11-15/preparation-affected.json",
+  "limitations": "Local synthetic contract checks only. No live provider inference, Linux qualification or user-app deployment."
+}
