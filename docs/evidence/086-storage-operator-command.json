@@ -1,0 +1,177 @@
+{
+  "kind": "local-root-storage-operator",
+  "revision": "6d03d95547afba39047fecb5e5d201769ab758fe",
+  "recordedAt": "2026-11-15T09:28:54.151196+00:00",
+  "workflowRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43699200686",
+  "result": "success",
+  "classification": "local root operator command IMPLEMENTED, packaged and native TESTED; NOT DEPLOYED",
+  "hashes": {
+    "scripts/agentic_storage.py": "1e3071867b83e127c05a8c43e4b21dbec620e393bffdfde03c4ac3d9138dc7cd",
+    "scripts/agentic_storage_admin.py": "1c9b7a3419895e5561d9e2c3d0ed271aa90ffb2c2a9689f86eedb1b9f5a2e4bb",
+    "scripts/agentic_storage_install.py": "4c6174c856797589d56648001ff86ac1413ab171382ca7bd91bcecf97ebc7abe",
+    "tests/fixtures/storage-crash-native.py": "8688b060f7dcc3ae3304342925f371853216eb9028ca11c0f90634d0831aae07",
+    "tests/fixtures/storage-install-native.py": "76c7762b45fd372289d1304d0098d7f28184562de68cbae25e7d99b1a54bda86"
+  },
+  "cases": {
+    "nativeStorageCrashBoundaries": [
+      {
+        "boundary": "intent-committed",
+        "originalIntentRetained": true,
+        "mutationReplay": false,
+        "observation": "refused-incomplete",
+        "capacityRetained": true,
+        "inspectionStates": [
+          "missing",
+          "missing"
+        ],
+        "inspectionReadOnly": true,
+        "operatorInspection": true,
+        "explicitRepair": "verified"
+      },
+      {
+        "boundary": "first-root-created",
+        "originalIntentRetained": true,
+        "mutationReplay": false,
+        "observation": "refused-incomplete",
+        "capacityRetained": true,
+        "inspectionStates": [
+          "unrecorded",
+          "missing"
+        ],
+        "inspectionReadOnly": true,
+        "operatorInspection": true,
+        "explicitRepair": "refused"
+      },
+      {
+        "boundary": "first-root-recorded",
+        "originalIntentRetained": true,
+        "mutationReplay": false,
+        "observation": "refused-incomplete",
+        "capacityRetained": true,
+        "inspectionStates": [
+          "recorded",
+          "missing"
+        ],
+        "inspectionReadOnly": true,
+        "operatorInspection": true,
+        "explicitRepair": "verified"
+      },
+      {
+        "boundary": "first-project-applied",
+        "originalIntentRetained": true,
+        "mutationReplay": false,
+        "observation": "refused-incomplete",
+        "capacityRetained": true,
+        "inspectionStates": [
+          "recorded",
+          "missing"
+        ],
+        "inspectionReadOnly": true,
+        "operatorInspection": true,
+        "explicitRepair": "verified"
+      },
+      {
+        "boundary": "second-project-applied",
+        "originalIntentRetained": true,
+        "mutationReplay": false,
+        "observation": "refused-incomplete",
+        "capacityRetained": true,
+        "inspectionStates": [
+          "recorded",
+          "recorded"
+        ],
+        "inspectionReadOnly": true,
+        "operatorInspection": true,
+        "explicitRepair": "verified"
+      },
+      {
+        "boundary": "hard-limit-applied",
+        "originalIntentRetained": true,
+        "mutationReplay": false,
+        "observation": "refused-incomplete",
+        "capacityRetained": true,
+        "inspectionStates": [
+          "recorded",
+          "recorded"
+        ],
+        "inspectionReadOnly": true,
+        "operatorInspection": true,
+        "explicitRepair": "verified"
+      },
+      {
+        "boundary": "first-owner-applied",
+        "originalIntentRetained": true,
+        "mutationReplay": false,
+        "observation": "refused-incomplete",
+        "capacityRetained": true,
+        "inspectionStates": [
+          "recorded",
+          "recorded"
+        ],
+        "inspectionReadOnly": true,
+        "operatorInspection": true,
+        "explicitRepair": "refused"
+      },
+      {
+        "boundary": "complete-before-reply",
+        "originalIntentRetained": true,
+        "mutationReplay": false,
+        "observation": "verified",
+        "capacityRetained": true,
+        "inspectionStates": [
+          "recorded",
+          "recorded"
+        ],
+        "inspectionReadOnly": true,
+        "operatorInspection": true,
+        "explicitRepair": "refused"
+      },
+      {
+        "boundary": "repair-before-ownership",
+        "originalIntentRetained": true,
+        "mutationReplay": false,
+        "observation": "refused-incomplete",
+        "capacityRetained": true,
+        "inspectionStates": [
+          "missing",
+          "missing"
+        ],
+        "inspectionReadOnly": true,
+        "operatorInspection": true,
+        "explicitRepair": "interrupted-replay-verified"
+      },
+      {
+        "boundary": "repair-complete-before-reply",
+        "originalIntentRetained": true,
+        "mutationReplay": false,
+        "observation": "refused-incomplete",
+        "capacityRetained": true,
+        "inspectionStates": [
+          "missing",
+          "missing"
+        ],
+        "inspectionReadOnly": true,
+        "operatorInspection": true,
+        "explicitRepair": "interrupted-replay-verified"
+      }
+    ],
+    "missingRegistryUnchanged": true
+  },
+  "validation": [
+    "operator inspection across ten crash/repair states",
+    "five safe repairs through actual command process",
+    "installed command inspected live service registry",
+    "unchanged reinstall after command imports",
+    "missing registry remained empty",
+    "existing scoped storage/Harness/systemd checks, typecheck and builds passed"
+  ],
+  "remaining": [
+    "endpoint receipt recovery after host repair journey",
+    "worker-owned partial state and orphan reconciliation",
+    "interrupted-repair manual reconciliation",
+    "backup/export/restore/migration",
+    "headroom and machine reboot/clean-host qualification",
+    "final architecture qualification"
+  ],
+  "fullMatrix": "not run"
+}

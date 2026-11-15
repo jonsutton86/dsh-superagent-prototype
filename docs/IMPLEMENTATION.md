@@ -1295,3 +1295,9 @@ repair-interruption scenarios. Repairs bind original intent and fresh inspection
 repairs observe rather than repeat effects. Unsafe or unrecorded roots remain refused. See
 [086 repair evidence](evidence/086-storage-repair.json). Operator integration, general reconciliation
 and wider storage recovery remain incomplete.
+
+Local storage operator command (`6d03d9`): packaged root-only inspect/repair commands passed native
+command-process and installed-bundle checks. Existing-only registry access refuses initialization;
+five supported repairs retain original IDs and snapshots. Missing registry stayed empty. See
+[086 operator evidence](evidence/086-storage-operator-command.json). Wider reconciliation and recovery
+remain open; no user-host deployment occurred.

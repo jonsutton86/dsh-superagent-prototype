@@ -709,3 +709,51 @@ worker-owned partial states, general quiescence, interrupted-repair manual recon
 migration, headroom, reboot/clean-host recovery and final architecture qualification remain open. The new
 `repairs` table is part of the host registry and must be included by future backup/migration support.
 No running user-host service was changed.
+
+### Local operator inspection and repair command
+
+The root-owned installation now includes `agentic_storage_admin.py`. It supports `inspect` and `repair`
+locally on the execution host; no peer-socket operation, model tool or remote root privilege is added.
+Both commands open the original registry in existing-only mode: its private lock/database, WAL mode,
+required tables, pinned endpoint configuration and namespace must already exist. This mode does not
+create a registry, migrate schema, enroll an endpoint or initialize a namespace. An older/incomplete
+registry must be handled explicitly rather than silently upgraded by inspection.
+
+Operator sequence, after the separate deployment/installation action:
+
+1. Copy the original five-field host request (`endpointId`, `requestId`, `requestHash`, `workspace`,
+   `projectId`) from retained records into a root-owned mode-0600 JSON file under a protected directory.
+   Do not invent a replacement request ID or project ID.
+2. Run `/usr/bin/python3 -E -s -B /opt/agentic-storage/ENDPOINT/agentic_storage_admin.py
+   --config /opt/agentic-storage/ENDPOINT/host.json --registry /var/lib/agentic-os-storage
+   inspect --request /root/storage-request.json`, using the actual installation/registry paths.
+3. Review the returned inspection, including root identities, ownership, quota state and `snapshotHash`.
+   Inspection never authorizes repair by itself. For an intended repair, prepare a separate root-owned
+   mode-0600 JSON file containing exactly `request` (the same original five fields), `repairId` (a stable
+   unique operator operation ID), and `snapshotHash` (the reviewed hash).
+4. Run the same command prefix with `repair --approval /root/storage-repair.json`. The backend obtains
+   fresh evidence and refuses any mismatch or inadmissible state before committing a repair intent.
+   On response loss, preserve the exact request, repair ID and approval file; the same repair only
+   observes existing effects and cannot blindly repeat them. Do not substitute a new ID to bypass refusal.
+
+Successful commands emit structured JSON. Refusal exits nonzero with `state: unverified` and a generic
+message, preserving retained records. Python bytecode writing is disabled so operator imports do not
+modify the immutable installed bundle. The command does not enable/restart services or change provider
+credentials. Original endpoint-side grant/receipt recovery is a separate step after a host repair.
+
+Native tests now invoke the operator command to inspect all crash states and perform the five admissible
+repairs, exercise the installed command against a live service, verify unchanged reinstall afterward,
+and require a missing registry to remain empty. Run/revision evidence follows.
+
+VERIFIED at `6d03d95547afba39047fecb5e5d201769ab758fe`: native
+[run 43699200686](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43699200686)
+passed operator inspection across ten interruption states and all five supported repairs through actual
+CLI processes. The installed command inspected a live service registry, and unchanged reinstall afterward
+confirmed no extra bundle files. Missing-registry inspection failed without creating files. Existing
+scoped storage/Harness/systemd checks, typecheck and builds passed. Local installation-planning tests
+also passed. Exact cases/source hashes: [operator command evidence](evidence/086-storage-operator-command.json).
+
+This closes local root command packaging and its tested inspection/repair journey. It does not close
+endpoint receipt recovery after host repair, orphan/worker-owned partial-state reconciliation,
+interrupted-repair manual resolution, storage backup/export/migration, headroom, machine reboot/clean-host
+recovery or final architecture qualification. No user-host service was installed, restarted or upgraded.
