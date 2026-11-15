@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile, access } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile, readFile, access } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -32,6 +32,17 @@ it.runIf(!!process.env.DSH_STORAGE_SERVICE_CONFIG)('starts, enrolls, executes an
     await expect(writeFile(join(assignedRoot, 'unprivileged-parent-write'), 'no')).rejects.toMatchObject({ code: 'EACCES' })
     const enrollment = { op: 'grant.create', requestId: 'socket-original', owner: 'coordinator', workspace: 'socket-one',
       operations: ['fs.read', 'fs.write', 'process.spawn'], leaseMs: 300000 }
+    if (process.env.DSH_STORAGE_REPAIR_EXCHANGE) {
+      await expect(endpoint.rpc({ role: 'admin' }, enrollment)).rejects.toThrow()
+      const pending = new StorageReservations(endpoint.journal, policy).list().find(item => item.workspace === enrollment.workspace)!
+      expect(pending).toMatchObject({ requestId: enrollment.requestId, phase: 'provisioning' })
+      expect(endpoint.journal.grants()).toHaveLength(0)
+      await writeFile(join(process.env.DSH_STORAGE_REPAIR_EXCHANGE, 'ready'), 'waiting', { mode: 0o600 })
+      await vi.waitFor(async () => expect(await readFile(join(process.env.DSH_STORAGE_REPAIR_EXCHANGE!, 'done'), 'utf8')).toBe('repaired'), { timeout: 30000, interval: 100 })
+      await endpoint.stop(); endpoint = new RemoteEndpoint(host); await endpoint.start()
+      const retained = new StorageReservations(endpoint.journal, policy).list().find(item => item.workspace === enrollment.workspace)!
+      expect(retained).toEqual(pending)
+    }
     const receipt = await endpoint.rpc({ role: 'admin' }, enrollment) as GrantReceipt
     const principal: Principal = { role: 'grant', id: receipt.grant.id, epoch: receipt.grant.epoch }
     await endpoint.rpc(principal, { op: 'fs.write', requestId: 'write', path: 'hello', content: 'quota-backed', expected: { kind: 'createIfAbsent' } })
