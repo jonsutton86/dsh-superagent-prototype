@@ -1363,3 +1363,9 @@ ownership/live-filesystem validation remain required. Storage-backed recovery st
 preceding 41-test adjacent run. Bounded read-only SQLite readers check original SQL keys against JSON,
 preserve the journals and digest retained namespace/repair records. [Evidence](evidence/086-storage-row-readers.json).
 Authenticated artifact opening, image membership, fencing and live restore integration remain unfinished.
+
+
+086 verified storage artifact copies: VERIFIED at `9e21316` with final typecheck and 42 focused/adjacent
+tests. Expected snapshot bytes are verified into private copies before readonly SQLite normalization
+and cross-check; originals remain unchanged. [Evidence](evidence/086-storage-artifact-copies.json).
+Authenticated manifest membership, full host audit, ownership fencing and restore integration remain open.

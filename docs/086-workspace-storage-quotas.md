@@ -1026,3 +1026,26 @@ type-only narrowing correction; typecheck and all 18 recovery-storage tests then
 correction. Tests cover direct SQLite normalization, unchanged mutation counters, mismatched keys,
 missing tables, cancellation and repair-row digest changes. No native/full suite was rerun for these
 read-only readers. [Evidence](evidence/086-storage-row-readers.json). Full recovery integration remains open.
+
+
+### Verified private artifact copies
+
+`src/recovery/storage-artifacts.ts` composes expected-hash/size verification, private input checks,
+isolated snapshot copies, bounded original-row readers and the endpoint/host cross-check. It uses the
+existing recovery `privateInput` boundary, creates a private temporary directory, streams into exclusive
+0600 files with bounded size and cancellation, and refuses non-standalone SQLite headers. Only the
+verified copies are opened read-only, with trusted schema and extension loading disabled. Temporary
+copies are removed on success or failure; original artifact files are not modified.
+
+The result includes expected file hashes/sizes and captured record digests, keeps live-filesystem and
+restore verification false, and explicitly reports `hostRegistryAuditRequired: true`. Expected hashes
+must come from the existing authenticated recovery manifest; the helper does not authenticate arbitrary
+caller-supplied hashes or create a parallel approval envelope. Manifest membership, the full root-registry
+audit, ownership/frozen-epoch checks and recovery integration remain unfinished. No existing storage
+restore refusal is removed.
+
+VERIFIED at `9e21316fa56de091a41a4ad8224e1b33b8160088`: final typecheck and 42 focused/adjacent tests
+passed, including real SQLite file copies, input immutability, hash/size refusal, cancellation,
+non-private files and WAL-header rejection. The initial extension-option spelling was corrected against
+the installed Node type definition before final validation. [Evidence](evidence/086-storage-artifact-copies.json).
+No native/full qualification or deployment for this read-only pipeline.

@@ -1,0 +1,24 @@
+{
+  "kind": "verified-storage-artifact-copies",
+  "revision": "9e21316fa56de091a41a4ad8224e1b33b8160088",
+  "recordedAt": "2026-11-15T10:19:06.061858+00:00",
+  "classification": "VERIFIED private copy/hash/read/cross-check pipeline; NOT CONNECTED to authenticated image membership; NOT DEPLOYED",
+  "hashes": {
+    "src/recovery/storage-artifacts.ts": "25a88d40ba7750042473d2fe0aa253baebe74bce145580e5fe52f6ef0ccb093d",
+    "tests/recovery-storage.spec.ts": "e7e6ef9fc7e4474a021f1dbec0155cf9e019b997ca9809bac3e0cf432f1349b0"
+  },
+  "validation": [
+    "42 focused/adjacent tests and final typecheck passed",
+    "Real SQLite snapshot files verified and copied privately before readonly reads",
+    "Wrong hash, exceeded expected size, cancellation, non-private input and WAL-dependent headers rejected",
+    "Source snapshot bytes unchanged on successful audit",
+    "Expected hashes and record capture digests returned without source paths",
+    "CodeGraph selected recovery-storage.spec.ts"
+  ],
+  "limits": [
+    "Expected hashes must still originate from authenticated receipt-image membership; caller-supplied hashes are not authentication",
+    "Full host-registry audit remains required and explicitly reported",
+    "No artifact registration, fencing, import, live filesystem or restore readiness",
+    "No new native/full matrix for this local read-only pipeline"
+  ]
+}
