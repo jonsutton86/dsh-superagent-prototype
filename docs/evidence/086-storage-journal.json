@@ -1,0 +1,37 @@
+{
+  "kind": "durable-storage-allocation-backend",
+  "revision": "09d38200bae2574e95e3737173abf8c388e8443a",
+  "recordedAt": "2026-11-15T07:47:17.820689+00:00",
+  "classification": "IMPLEMENTED and locally TESTED allocation boundary; NOT INTEGRATED kernel enforcement",
+  "hashes": {
+    "src/remote/storage-model.ts": "eac7fad56246f7972cdaa02151825d7f2f9571ad0e6c1c7b407c374398c9d17e",
+    "src/remote/storage-journal.ts": "c1055f75f4f12ca9d34fcbc38a8dd6a28937538bd69c9ed1594c9652297a5b5b",
+    "src/remote/endpoint.ts": "4cc29d6b481216678d5ee94bf8431783ccd1822fd0d36598cdb20d6800a5a481",
+    "tests/storage-journal.spec.ts": "2a54f781cb3386d9ca34a05baabcfce8f9793240c62b2174c6dac96d771d4012",
+    "tests/remote.spec.ts": "564ee9e79b0f3c63f46b353ecbf735be6393d1b790cb2f421f12a1f60dbe1aa4"
+  },
+  "validation": {
+    "command": "pnpm exec vitest run tests/storage-journal.spec.ts tests/remote.spec.ts tests/stop-views.spec.ts",
+    "passed": 48,
+    "skipped": 2,
+    "failed": 0,
+    "typecheck": "passed",
+    "build": "not run; no deployment"
+  },
+  "initialFailure": {
+    "test": "remote mission artifact and durable revocation",
+    "observed": "blocked while original process still running; old fixture expected review",
+    "evidence": "focused reproduction; workspace/service.ts applies canonical stopHold override",
+    "repair": "assert blocked and held; preserve cancellation/revocation checks",
+    "focusedRepair": "passed"
+  },
+  "limitations": [
+    "not wired into grant enrollment",
+    "no host provisioning or quota observation helper",
+    "no execution-time storage guard",
+    "no release/migration workflow",
+    "host-wide project range exclusivity not verified",
+    "no workspace storage UI",
+    "native storage fixture is mechanism evidence, not this integration acceptance"
+  ]
+}

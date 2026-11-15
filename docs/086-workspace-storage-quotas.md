@@ -84,3 +84,27 @@ This supersedes the earlier unrun-native status for these specific mechanism che
 provisioning recovery, concurrent admission, migration, filesystem identity checks, tmpfs accounting, retained control-state
 capacity, clean-host recovery and full qualification remain unimplemented or unverified. No TypeScript source changed;
 only fixture syntax and this native mechanism gate ran, not typecheck/build or the broader matrix.
+
+## Durable allocation backend checkpoint
+
+Implemented at `09d38200bae2574e95e3737173abf8c388e8443a`: strict optional-policy types and a `StorageReservations` component in the existing endpoint
+SQLite database. This component is not yet wired into enrollment. It pins the filesystem/project-range/budget policy,
+reserves both bytes and inodes, assigns monotonically increasing project IDs, and journals the original request identity
+before provisioning. Only the first transition into `provisioning` permits a future host effect; a replay returns false
+and requires observation. Reservations have no release API, because neither revocation nor unlink proves reclaimed storage.
+Policy objects are frozen; missing policy with retained rows, corrupt row identity, changed policy, and implicit adoption
+of existing endpoint grants/jobs/operations fail closed. Audit failure rolls back allocation atomically.
+
+The endpoint constructor now refuses a persisted storage policy until enforcement integration exists. This intentional
+WIP guard prevents running a partially provisioned endpoint without its pinned protection. Existing endpoints with no
+storage policy retain their behavior. No configuration is installed into the running application.
+
+Validation: 48 tests passed across storage-journal, remote, and stop-view suites; two native-only remote cases skipped on
+macOS; typecheck passed. The adjacent remote mission fixture initially expected review while a command was still running.
+A focused reproduction and source inspection confirmed the canonical stop ledger deliberately exposes a hold; the test
+now asserts blocked plus stopHold, and continues through actual command cancellation and endpoint revocation. The repaired
+focused case and the final three-suite run passed without unhandled errors. No runtime stop behavior was relaxed.
+
+Next: implement a trusted filesystem/quota observation and provisioning boundary, bind the existing reservations to actual
+host effects, integrate enrollment and verification roots, and remove the WIP startup guard only when dispatch enforces
+those pinned records. Local project uniqueness does not establish host-wide exclusivity of the configured ID range.
