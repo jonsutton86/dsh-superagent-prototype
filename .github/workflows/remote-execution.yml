@@ -38,7 +38,6 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
       - name: Install pinned Harness for real endpoint launch qualification
-        if: github.event_name != 'workflow_dispatch' || inputs.scope != 'resources'
         run: |
           npm install --prefix "$RUNNER_TEMP/agentic-endpoint-harness" --no-audit --no-fund @deepseek-ai/dsh@0.2.1-rc.3
           echo "DSH_ENDPOINT_QUALIFICATION_CLI=$RUNNER_TEMP/agentic-endpoint-harness/node_modules/.bin/dsh" >> "$GITHUB_ENV"

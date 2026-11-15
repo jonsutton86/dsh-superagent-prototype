@@ -1,3 +1,4 @@
+import { qualifyCaptureMaintenance } from './fixtures/capture-maintenance-harness.ts'
 import { pathToFileURL } from 'node:url'
 import { WorkspaceCaptures } from '../src/remote/workspace-capture.ts'
 import { captureWorkspaceRecovery } from '../src/recovery/workspace-archive.ts'
@@ -286,6 +287,10 @@ it.runIf(!!process.env.DSH_RESOURCE_QUALIFICATION_ROOT)('qualifies actual cgroup
       expect(JSON.parse(await readFile(receiptFile, 'utf8'))).toMatchObject({ mode: 'capture', executionOwnership: false,
         capture: { phase: 'complete', request: maintenanceRequest } })
     } finally { for (const dispose of disposers.reverse()) await dispose() }
+    if (!process.env.DSH_ENDPOINT_QUALIFICATION_CLI) throw new Error('Installed Harness CLI is required for native capture maintenance qualification')
+    await qualifyCaptureMaintenance(process.env.DSH_ENDPOINT_QUALIFICATION_CLI, { stateDir: join(directory, 'state'), workspaceRoot: join(directory, 'work'), resources: configured },
+      { ...captureRequest, requestId: randomUUID(), destination: join(directory, 'native-installed-maintenance-archive') })
+
 
   } finally {
     await endpoint.stop(); await ctx.fiber.dispose()
@@ -293,7 +298,7 @@ it.runIf(!!process.env.DSH_RESOURCE_QUALIFICATION_ROOT)('qualifies actual cgroup
     await rmdir(pool)
     await rm(directory, { recursive: true, force: true })
   }
-}, 60000)
+}, 180000)
 
 
 it('groups concurrent commands by trusted workspace while retaining distinct effect scopes', () => {
