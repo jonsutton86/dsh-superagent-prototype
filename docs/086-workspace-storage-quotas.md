@@ -1578,3 +1578,31 @@ This observation is not a capture admission fence, a global snapshot epoch, or p
 about processes outside the configured managed pool. Those remaining capture gates
 must be implemented before claiming consistent live workspace backup or activation.
 No running operator app was modified.
+
+### Trusted host capture admission fence
+
+`RemoteEndpoint.withRecoveryCapture` now provides a host-only scope for workspace
+capture. It is deliberately absent from the agent RPC schema. Entry requires a
+started endpoint with configured kernel resources, empty managed pool, settled
+original effects, no pending request (including asynchronous ownership authorization)
+and no verification-copy cleanup. The admission flag is set synchronously with those
+checks. During the callback all RPC admission is refused, including filesystem reads
+that may spawn helpers, and periodic cleanup/lease sweeps are suspended. Completion
+checks cancellation, shutdown and managed quiescence again before returning a result.
+Failure releases admission without inventing an operation receipt or replaying work.
+
+The caller receives a signal tied to endpoint lifetime. This is an in-process trusted
+host primitive, not a persisted global capture epoch or an authenticated checkpoint
+attestation. It does not claim control of outside host writers. Archive manifests
+retain their existing false global-quiescence/restore flags, even when collected
+inside this scope. Persisted capture orchestration, binding the selected grant/root
+and storage allocation to the checkpoint, and clean-host activation remain open.
+
+Qualification: implementation/test revision `0056f676febb535c7d5b260c3ed79f7759c4eb5d`
+passed [scoped Linux run 43711480453](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43711480453):
+28 tests, typecheck and build. The native fixture captures an archive under the fence
+with an empty real managed pool and refuses a capture callback while a confined worker
+is running. Local affected suites passed 78 tests (three native-only skips), including
+pending admission, blocked requests, nested capture, callback failure, changed kernel
+population, cancellation and real archive creation. Local typecheck/build passed.
+No full matrix or deployment is claimed.

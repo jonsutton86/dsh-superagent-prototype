@@ -1,0 +1,13 @@
+{
+  "date": "2026-11-15",
+  "testedRevision": "0056f676febb535c7d5b260c3ed79f7759c4eb5d",
+  "localTests": { "passed": 78, "skipped": 3 },
+  "nativeRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43711480453",
+  "nativeTests": { "passed": 28, "skipped": 0 },
+  "typecheck": "passed locally and in Linux CI",
+  "build": "passed locally and in Linux CI",
+  "verified": ["RPC admission blocked throughout trusted capture", "pending calls prevent capture", "capture callback failure releases admission", "kernel population change refuses completion", "native idle capture and active worker refusal"],
+  "persistentCaptureOrchestration": false,
+  "globalSnapshotProven": false,
+  "deployed": false
+}

@@ -28,6 +28,12 @@ including rounded content, hard-link accounting and completion-record allowance.
 not reservations or quota authority. Capture still requires independent process quiescence before
 it can qualify as a consistent live backup; workspace-bearing installation remains held.
 
+Endpoint host capture now also has an in-process admission fence: configured kernel
+resources must be quiescent, pending RPC/cleanup must be absent, all RPC admission and
+periodic cleanup remain held during capture, and completion rechecks managed quiescence.
+Native confined-worker capture/refusal checks pass; durable capture orchestration and
+authenticated grant/root/storage bindings remain unfinished.
+
 The immediate recovery sequence remains: capture workspace content under verified process quiescence; bind that content
 to the original storage allocations and authenticated checkpoint; implement target filesystem/quota verification and
 ownership-fenced import; qualify clean-host restoration and original-operation recovery. Control-state capacity/headroom,
