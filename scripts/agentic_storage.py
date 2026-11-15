@@ -110,7 +110,9 @@ class StorageHost:
                 self.db.executescript('''CREATE TABLE IF NOT EXISTS endpoints (id TEXT PRIMARY KEY, filesystem TEXT NOT NULL, first INTEGER NOT NULL, last INTEGER NOT NULL, config TEXT NOT NULL);
                   CREATE TABLE IF NOT EXISTS namespaces (endpoint TEXT PRIMARY KEY, identities TEXT NOT NULL);
                   CREATE TABLE IF NOT EXISTS operations (endpoint TEXT NOT NULL, request TEXT NOT NULL, workspace TEXT NOT NULL, filesystem TEXT NOT NULL,
-                    project INTEGER NOT NULL, intent TEXT NOT NULL, roots TEXT NOT NULL, PRIMARY KEY(endpoint, request), UNIQUE(endpoint, workspace), UNIQUE(filesystem, project));''')
+                    project INTEGER NOT NULL, intent TEXT NOT NULL, roots TEXT NOT NULL, PRIMARY KEY(endpoint, request), UNIQUE(endpoint, workspace), UNIQUE(filesystem, project));
+                  CREATE TABLE IF NOT EXISTS repairs (endpoint TEXT NOT NULL, id TEXT NOT NULL, request TEXT NOT NULL, intent TEXT NOT NULL, phase TEXT NOT NULL,
+                    PRIMARY KEY(endpoint,id), UNIQUE(endpoint,request));''')
                 encoded = json.dumps(self.config, sort_keys=True)
                 saved = self.db.execute('SELECT config FROM endpoints WHERE id=?', (self.endpoint,)).fetchone()
                 if saved:
@@ -223,50 +225,106 @@ class StorageHost:
     def inspect(self, request):
         """Read-only evidence for operator reconciliation; never adopts roots or authorizes repair."""
         with self.exclusive():
-            self.check_namespace()
-            expected = self.saved(request)
-            require(len(expected) == 2 and all(item is None or isinstance(item, dict)
-                    and set(item) == {'device', 'inode'} and all(isinstance(value, str) and value.isdigit() for value in item.values())
-                    for item in expected))
-            mount = self.check_mount()
-            roots = []
-            for path, identity in zip(self.roots(request), expected):
-                protected(path.parent)
-                item = {'path': str(path), 'recordedIdentity': identity}
-                try:
-                    before = path.lstat()
-                except FileNotFoundError:
-                    roots.append({**item, 'state': 'missing'})
-                    continue
-                actual = {'device': str(before.st_dev), 'inode': str(before.st_ino)}
-                item.update({'actualIdentity': actual, 'uid': before.st_uid, 'gid': before.st_gid,
-                             'mode': stat.S_IMODE(before.st_mode), 'ctimeNs': str(before.st_ctime_ns),
-                             'mtimeNs': str(before.st_mtime_ns)})
-                if not stat.S_ISDIR(before.st_mode):
-                    roots.append({**item, 'state': 'not-directory'})
-                    continue
-                if identity is None:
-                    roots.append({**item, 'state': 'unrecorded'})
-                    continue  # An orphan tree is not adopted or traversed merely because its path matches.
-                if actual != identity:
-                    roots.append({**item, 'state': 'identity-mismatch'})
-                    continue
-                require(canonical(path) == path)
-                text = run('xfs_io', '-r', '-c', 'stat', path)
-                project = re.findall(r'^fsxattr.projid\s*=\s*(\d+)\s*$', text, re.M)
-                flags = re.findall(r'^fsxattr.xflags\s*=\s*(0x[0-9a-fA-F]+)', text, re.M)
-                require(len(project) == 1 and len(flags) == 1)
-                with os.scandir(path) as entries:
-                    empty = next(entries, None) is None
-                after = path.lstat()
-                require((before.st_dev, before.st_ino, before.st_uid, before.st_gid, before.st_mode, before.st_ctime_ns, before.st_mtime_ns)
-                        == (after.st_dev, after.st_ino, after.st_uid, after.st_gid, after.st_mode, after.st_ctime_ns, after.st_mtime_ns))
-                roots.append({**item, 'state': 'recorded', 'projectId': int(project[0]),
-                              'inherits': bool(int(flags[0], 16) & 0x200), 'realtime': bool(int(flags[0], 16) & 0x101), 'empty': empty})
-            evidence = {'endpointId': self.endpoint, 'request': dict(request), 'policy': json.loads(json.dumps(self.policy)),
-                        'mountId': mount['id'], 'roots': roots, 'quota': self.quota(request['projectId'])}
-            digest = hashlib.sha256(json.dumps(evidence, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
-            return {**evidence, 'snapshotHash': digest, 'authorizesRepair': False}
+            return self._inspect(request)
+
+    def _inspect(self, request):
+        self.check_namespace()
+        expected = self.saved(request)
+        require(len(expected) == 2 and all(item is None or isinstance(item, dict)
+                and set(item) == {'device', 'inode'} and all(isinstance(value, str) and value.isdigit() for value in item.values())
+                for item in expected))
+        mount = self.check_mount()
+        roots = []
+        for path, identity in zip(self.roots(request), expected):
+            protected(path.parent)
+            item = {'path': str(path), 'recordedIdentity': identity}
+            try:
+                before = path.lstat()
+            except FileNotFoundError:
+                roots.append({**item, 'state': 'missing'})
+                continue
+            actual = {'device': str(before.st_dev), 'inode': str(before.st_ino)}
+            item.update({'actualIdentity': actual, 'uid': before.st_uid, 'gid': before.st_gid,
+                         'mode': stat.S_IMODE(before.st_mode), 'ctimeNs': str(before.st_ctime_ns),
+                         'mtimeNs': str(before.st_mtime_ns)})
+            if not stat.S_ISDIR(before.st_mode):
+                roots.append({**item, 'state': 'not-directory'})
+                continue
+            if identity is None:
+                roots.append({**item, 'state': 'unrecorded'})
+                continue  # An orphan tree is not adopted or traversed merely because its path matches.
+            if actual != identity:
+                roots.append({**item, 'state': 'identity-mismatch'})
+                continue
+            require(canonical(path) == path)
+            text = run('xfs_io', '-r', '-c', 'stat', path)
+            project = re.findall(r'^fsxattr.projid\s*=\s*(\d+)\s*$', text, re.M)
+            flags = re.findall(r'^fsxattr.xflags\s*=\s*(0x[0-9a-fA-F]+)', text, re.M)
+            require(len(project) == 1 and len(flags) == 1)
+            with os.scandir(path) as entries:
+                empty = next(entries, None) is None
+            after = path.lstat()
+            require((before.st_dev, before.st_ino, before.st_uid, before.st_gid, before.st_mode, before.st_ctime_ns, before.st_mtime_ns)
+                    == (after.st_dev, after.st_ino, after.st_uid, after.st_gid, after.st_mode, after.st_ctime_ns, after.st_mtime_ns))
+            roots.append({**item, 'state': 'recorded', 'projectId': int(project[0]),
+                          'inherits': bool(int(flags[0], 16) & 0x200), 'realtime': bool(int(flags[0], 16) & 0x101), 'empty': empty})
+        evidence = {'endpointId': self.endpoint, 'request': dict(request), 'policy': json.loads(json.dumps(self.policy)),
+                    'mountId': mount['id'], 'roots': roots, 'quota': self.quota(request['projectId'])}
+        digest = hashlib.sha256(json.dumps(evidence, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+        return {**evidence, 'snapshotHash': digest, 'authorizesRepair': False}
+
+
+    def repair(self, request, repair_id, expected_snapshot):
+        """Explicit root-operator repair. A recorded repair is observed on replay, never re-executed."""
+        require(isinstance(repair_id, str) and re.fullmatch(r'[A-Za-z0-9_-]{1,100}', repair_id))
+        require(isinstance(expected_snapshot, str) and re.fullmatch(r'[a-f0-9]{64}', expected_snapshot))
+        self.validate_request(request)
+        intent = json.dumps({'request': request, 'snapshotHash': expected_snapshot}, sort_keys=True)
+        with self.exclusive():
+            prior = self.db.execute('SELECT intent, phase FROM repairs WHERE endpoint=? AND id=?', (self.endpoint, repair_id)).fetchone()
+            if prior:
+                require(prior[0] == intent and prior[1] in ['started', 'complete'])
+                result = self._observe(request)
+                if prior[1] == 'started':
+                    self.db.execute("UPDATE repairs SET phase='complete' WHERE endpoint=? AND id=?", (self.endpoint, repair_id))
+                    self.db.commit()
+                return result
+            require(not self.db.execute('SELECT 1 FROM repairs WHERE endpoint=? AND request=?', (self.endpoint, request['requestId'])).fetchone())
+            evidence = self._inspect(request)
+            require(evidence['snapshotHash'] == expected_snapshot)
+            roots = evidence['roots']
+            for root in roots:
+                require(root['state'] in ['missing', 'recorded'])
+                if root['state'] == 'missing':
+                    require(root['recordedIdentity'] is None)  # Lost recorded roots are not recreated.
+                else:
+                    require(root['uid'] == 0 and root['mode'] == 0o700 and root['empty'] and not root['realtime'])
+                    require(root['projectId'] in [0, request['projectId']])
+            quota = evidence['quota']
+            if quota:
+                require(quota['hardBytes'] in [0, self.policy['workspace']['bytes']]
+                        and quota['hardInodes'] in [0, self.policy['workspace']['inodes']])
+                require(quota['usedInodes'] <= sum(root.get('projectId') == request['projectId'] for root in roots))
+            # Every admissible tree is empty and root-private, or never created. Never adopt an orphan tree.
+            self.db.execute('INSERT INTO repairs VALUES (?,?,?,?,?)', (self.endpoint, repair_id, request['requestId'], intent, 'started'))
+            self.db.commit()
+            identities = self.saved(request)
+            for index, path in enumerate(self.roots(request)):
+                if roots[index]['state'] == 'missing':
+                    path.mkdir(mode=0o700); self.sync_directory(path.parent)
+                    info = path.stat()
+                    identities[index] = {'device': str(info.st_dev), 'inode': str(info.st_ino)}
+                    self.db.execute('UPDATE operations SET roots=? WHERE endpoint=? AND request=?',
+                                    (json.dumps(identities), self.endpoint, request['requestId']))
+                    self.db.commit()
+                run('xfs_quota', '-x', '-c', f'project -s -p {path} {request["projectId"]}', self.mount)
+            run('xfs_quota', '-x', '-c', f'limit -p bhard={self.policy["workspace"]["bytes"] // 1024}k ihard={self.policy["workspace"]["inodes"]} {request["projectId"]}', self.mount)
+            for path in self.roots(request):
+                os.chown(path, self.config['uid'], self.config['gid']); self.sync_directory(path)
+            result = self._observe(request)
+            self.db.execute("UPDATE repairs SET phase='complete' WHERE endpoint=? AND id=?", (self.endpoint, repair_id))
+            self.db.commit()
+            return result
 
     def observe(self, request):
         with self.exclusive():

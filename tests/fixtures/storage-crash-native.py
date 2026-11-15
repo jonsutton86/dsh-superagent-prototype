@@ -16,9 +16,11 @@ uid, gid = map(int, sys.argv[2:4])
 registry = mount.parent / 'crash-registry'; registry.mkdir(mode=0o700)
 filesystem = storage.run('findmnt', '-n', '-o', 'UUID', '--target', mount).strip()
 cases = ['intent-committed', 'first-root-created', 'first-root-recorded', 'first-project-applied',
-         'second-project-applied', 'hard-limit-applied', 'first-owner-applied', 'complete-before-reply']
+         'second-project-applied', 'hard-limit-applied', 'first-owner-applied', 'complete-before-reply',
+         'repair-before-ownership', 'repair-complete-before-reply']
 results = []
 for index, boundary in enumerate(cases):
+    killpoint = 'intent-committed' if boundary.startswith('repair-') else boundary
     first = 4000 + 20 * index
     config = {'endpointId': str(uuid.uuid4()), 'uid': uid, 'gid': gid, 'policy': {
         'kind': 'linux-xfs-project', 'filesystemUUID': filesystem, 'mountRoot': str(mount),
@@ -37,29 +39,29 @@ for index, boundary in enumerate(cases):
             def crash():
                 os.kill(os.getpid(), signal.SIGKILL)
             def mkdir_hook(path, *args, **kwargs):
-                if path == roots[0] and boundary == 'intent-committed': crash()
+                if path == roots[0] and killpoint == 'intent-committed': crash()
                 result = mkdir(path, *args, **kwargs)
-                if path == roots[0] and boundary == 'first-root-created': crash()
+                if path == roots[0] and killpoint == 'first-root-created': crash()
                 return result
             projects = [0]
             def run_hook(program, *args):
                 project = program == 'xfs_quota' and any(str(arg).startswith('project -s ') for arg in args)
                 limit = program == 'xfs_quota' and any(str(arg).startswith('limit -p ') for arg in args)
-                if project and boundary == 'first-root-recorded' and projects[0] == 0: crash()
+                if project and killpoint == 'first-root-recorded' and projects[0] == 0: crash()
                 result = run(program, *args)
                 if project:
                     projects[0] += 1
-                    if boundary == 'first-project-applied' and projects[0] == 1: crash()
-                    if boundary == 'second-project-applied' and projects[0] == 2: crash()
-                if limit and boundary == 'hard-limit-applied': crash()
+                    if killpoint == 'first-project-applied' and projects[0] == 1: crash()
+                    if killpoint == 'second-project-applied' and projects[0] == 2: crash()
+                if limit and killpoint == 'hard-limit-applied': crash()
                 return result
             def chown_hook(path, *args, **kwargs):
                 result = chown(path, *args, **kwargs)
-                if path == roots[0] and boundary == 'first-owner-applied': crash()
+                if path == roots[0] and killpoint == 'first-owner-applied': crash()
                 return result
             def observe_hook(value):
                 result = observe(value)
-                if boundary == 'complete-before-reply': crash()
+                if killpoint == 'complete-before-reply': crash()
                 return result
             Path.mkdir = mkdir_hook; storage.run = run_hook; os.chown = chown_hook; host._observe = observe_hook
             host.provision(request)
@@ -79,7 +81,7 @@ for index, boundary in enumerate(cases):
         assert len(evidence['snapshotHash']) == 64
         assert list(host.db.iterdump()) == saved
         states = [item['state'] for item in evidence['roots']]
-        if boundary == 'intent-committed': assert states == ['missing', 'missing']
+        if killpoint == 'intent-committed': assert states == ['missing', 'missing']
         elif boundary == 'first-root-created': assert states == ['unrecorded', 'missing']
         elif boundary in ['first-root-recorded', 'first-project-applied']: assert states == ['recorded', 'missing']
         else: assert states == ['recorded', 'recorded']
@@ -112,6 +114,78 @@ for index, boundary in enumerate(cases):
             storage.run = original_run
         assert list(host.db.iterdump()) == saved
         assert [(str(path), path.stat().st_ino, path.stat().st_uid) for path in roots if path.exists()] == identities
+        # Explicit repair is a separate intent bound to fresh evidence; it is not an original-request retry.
+        repairable = not boundary.startswith('repair-') and boundary not in ['first-root-created', 'first-owner-applied', 'complete-before-reply']
+        before_repair = list(host.db.iterdump())
+        try:
+            host.repair(request, 'repair', 'f' * 64)
+            raise AssertionError('Stale repair evidence accepted')
+        except RuntimeError:
+            pass
+        assert list(host.db.iterdump()) == before_repair
+        if boundary.startswith('repair-'):
+            host.close()
+            repair_pid = os.fork()
+            if repair_pid == 0:
+                try:
+                    repairing = storage.StorageHost(registry, config)
+                    effect, completed = storage.run, repairing._observe
+                    def interrupted_effect(program, *args):
+                        result = effect(program, *args)
+                        if boundary == 'repair-before-ownership' and program == 'xfs_quota' and any(str(arg).startswith('limit -p ') for arg in args):
+                            os.kill(os.getpid(), signal.SIGKILL)
+                        return result
+                    def interrupted_reply(value):
+                        result = completed(value)
+                        if boundary == 'repair-complete-before-reply': os.kill(os.getpid(), signal.SIGKILL)
+                        return result
+                    storage.run = interrupted_effect; repairing._observe = interrupted_reply
+                    repairing.repair(request, 'repair', evidence['snapshotHash'])
+                except BaseException:
+                    os._exit(2)
+                os._exit(3)
+            _, repair_status = os.waitpid(repair_pid, 0)
+            assert os.WIFSIGNALED(repair_status) and os.WTERMSIG(repair_status) == signal.SIGKILL
+            host = storage.StorageHost(registry, config)
+            assert host.db.execute('SELECT phase FROM repairs WHERE endpoint=?', (config['endpointId'],)).fetchone()[0] == 'started'
+            storage.run = read_only
+            try:
+                if boundary == 'repair-complete-before-reply':
+                    assert host.repair(request, 'repair', evidence['snapshotHash'])['projectId'] == first
+                    assert host.db.execute('SELECT phase FROM repairs WHERE endpoint=?', (config['endpointId'],)).fetchone()[0] == 'complete'
+                else:
+                    saved_repair = list(host.db.iterdump())
+                    try:
+                        host.repair(request, 'repair', evidence['snapshotHash'])
+                        raise AssertionError('Incomplete repair replayed')
+                    except RuntimeError:
+                        pass
+                    assert list(host.db.iterdump()) == saved_repair
+                try:
+                    host.repair(request, 'replacement-repair', host.inspect(request)['snapshotHash'])
+                    raise AssertionError('New ID bypassed original repair intent')
+                except RuntimeError:
+                    pass
+            finally:
+                storage.run = original_run
+        elif repairable:
+            fixed = host.repair(request, 'repair', evidence['snapshotHash'])
+            assert fixed['projectId'] == first and host.saved(request) == fixed['roots']
+            assert json.loads(host.db.execute('SELECT intent FROM operations WHERE endpoint=? AND request=?',
+                (config['endpointId'], 'original')).fetchone()[0]) == request
+            storage.run = read_only
+            try:
+                assert host.repair(request, 'repair', evidence['snapshotHash'])['roots'] == fixed['roots']
+            finally:
+                storage.run = original_run
+            assert host.db.execute('SELECT phase FROM repairs WHERE endpoint=?', (config['endpointId'],)).fetchone()[0] == 'complete'
+        else:
+            try:
+                host.repair(request, 'repair', evidence['snapshotHash'])
+                raise AssertionError('Unsafe repair admitted')
+            except RuntimeError:
+                pass
+            assert list(host.db.iterdump()) == before_repair
         # The interrupted or completed original occupies its allocation; only one more fits this pool.
         host.provision({**request, 'requestId': 'second', 'workspace': 'second', 'projectId': first + 1})
         try:
@@ -121,7 +195,7 @@ for index, boundary in enumerate(cases):
             pass
         assert host.db.execute('SELECT count(*) FROM operations WHERE endpoint=?', (config['endpointId'],)).fetchone()[0] == 2
         results.append({'boundary': boundary, 'originalIntentRetained': True, 'mutationReplay': False,
-                        'observation': 'verified' if boundary == 'complete-before-reply' else 'refused-incomplete', 'capacityRetained': True, 'inspectionStates': states, 'inspectionReadOnly': True})
+                        'observation': 'verified' if boundary == 'complete-before-reply' else 'refused-incomplete', 'capacityRetained': True, 'inspectionStates': states, 'inspectionReadOnly': True, 'explicitRepair': ('interrupted-replay-verified' if boundary.startswith('repair-') else 'verified' if repairable else 'refused')})
     finally:
         host.close()
 print(json.dumps({'nativeStorageCrashBoundaries': results}), flush=True)
