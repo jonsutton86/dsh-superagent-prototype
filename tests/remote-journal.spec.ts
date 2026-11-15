@@ -37,7 +37,7 @@ it('retains endpoint and grant identity through a journal reopen with private cr
   expect(reopened.id).toBe(id)
   expect(reopened.authenticate('Bearer ' + grant)).toEqual({ role: 'grant', id: 'saved-grant', epoch: 1 })
   expect(reopened.authenticate('Bearer ' + admin)).toEqual({ role: 'admin' })
-  for (const name of ['signing.key', 'admin.token']) expect(statSync(join(h.control, name)).mode & 0o777).toBe(0o600)
+  for (const name of ['signing.key', 'admin.token', 'endpoint.sqlite', 'endpoint.sqlite-wal']) expect(statSync(join(h.control, name)).mode & 0o777).toBe(0o600)
 })
 
 it.each(['signing.key', 'admin.token'])('refuses missing or empty %s on an existing endpoint without replacement', name => {

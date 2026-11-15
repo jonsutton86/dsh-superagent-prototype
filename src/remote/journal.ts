@@ -1,5 +1,5 @@
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
-import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, realpathSync } from 'node:fs'
+import { chmodSync, closeSync, constants, existsSync, fchmodSync, fstatSync, fsyncSync, mkdirSync, openSync, realpathSync } from 'node:fs'
 import { join, relative, isAbsolute } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { lockSync } from 'proper-lockfile'
@@ -46,7 +46,15 @@ export class RemoteJournal {
         return value
       }
       this.secret = readSecret('signing.key'); this.admin = readSecret('admin.token')
-      this.db = opened = new DatabaseSync(join(directory, 'endpoint.sqlite'))
+      const databasePath = join(control, 'endpoint.sqlite')
+      const descriptor = openSync(databasePath, constants.O_CREAT | constants.O_RDWR | constants.O_NOFOLLOW | constants.O_NONBLOCK, 0o600)
+      try {
+        const stat = fstatSync(descriptor)
+        if (!stat.isFile() || stat.nlink !== 1 || stat.uid !== process.getuid?.())
+          throw new Error('Endpoint database must be an owned regular file without additional hard links')
+        fchmodSync(descriptor, 0o600); fsyncSync(descriptor)
+      } finally { closeSync(descriptor) }
+      this.db = opened = new DatabaseSync(databasePath)
       this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;
         CREATE TABLE IF NOT EXISTS endpoint_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS remote_grant (id TEXT PRIMARY KEY, value TEXT NOT NULL);
