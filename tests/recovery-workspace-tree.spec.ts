@@ -1,3 +1,4 @@
+import { verifyWorkspaceRecovery } from '../src/recovery/workspace-verify.ts'
 import { createHash } from 'node:crypto'
 import { captureWorkspaceRecovery } from '../src/recovery/workspace-archive.ts'
 import { it, expect } from 'vitest'
@@ -42,6 +43,7 @@ it('archives exact full content in private members and refuses existing or neste
     const bytes = Buffer.alloc(200003, 123); await writeFile(join(source, 'large'), bytes)
     await link(join(source, 'large'), join(source, 'alias')); await symlink('large', join(source, 'link'))
     const result = await captureWorkspaceRecovery(source, join(root, 'archive'), budget)
+    expect(await verifyWorkspaceRecovery(result.path)).toMatchObject({ contentVerified: true, sourceAuthorityVerified: false, restoreVerified: false })
     expect(result.manifest).toMatchObject({ contentArchived: true, executionQuiescenceVerified: false, restoreVerified: false })
     for (const member of result.manifest.content) {
       const saved = await readFile(join(result.path, member.member))
@@ -64,5 +66,30 @@ it('retains failed capture bytes without a completed manifest', async () => {
     await expect(captureWorkspaceRecovery(source, target, budget)).rejects.toThrow('outside')
     expect(await readFile(join(target, 'content-0.bin'), 'utf8')).toBe('retained')
     await expect(readFile(join(target, 'manifest.json'))).rejects.toMatchObject({ code: 'ENOENT' })
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+
+it('rejects changed content, unbound members and rehashed invalid tree relationships', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'recovery-archive-invalid-'))
+  try {
+    const source = join(root, 'source'); await mkdir(source, { mode: 0o700 }); await writeFile(join(source, 'file'), 'original')
+    const saved = await captureWorkspaceRecovery(source, join(root, 'archive'), budget)
+    const member = saved.manifest.content[0]!, contentPath = join(saved.path, member.member)
+    await writeFile(contentPath, 'modified')
+    await expect(verifyWorkspaceRecovery(saved.path)).rejects.toThrow('digest')
+    await writeFile(contentPath, 'original')
+    await writeFile(join(saved.path, 'extra'), 'unbound', { mode: 0o600 })
+    await expect(verifyWorkspaceRecovery(saved.path)).rejects.toThrow('unbound')
+    await rm(join(saved.path, 'extra'))
+    const malformed = structuredClone(saved.manifest)
+    malformed.entries[1]!.path = '../escape'
+    malformed.sha256 = createHash('sha256').update(JSON.stringify({ version: 1, entries: malformed.entries, bytes: malformed.bytes })).digest('hex')
+    await writeFile(join(saved.path, 'manifest.json'), JSON.stringify(malformed))
+    await expect(verifyWorkspaceRecovery(saved.path)).rejects.toThrow()
+    malformed.entries[1]!.path = 'missing-parent/file'
+    malformed.sha256 = createHash('sha256').update(JSON.stringify({ version: 1, entries: malformed.entries, bytes: malformed.bytes })).digest('hex')
+    await writeFile(join(saved.path, 'manifest.json'), JSON.stringify(malformed))
+    await expect(verifyWorkspaceRecovery(saved.path)).rejects.toThrow('directory relationships')
   } finally { await rm(root, { recursive: true, force: true }) }
 })
