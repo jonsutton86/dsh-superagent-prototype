@@ -21,6 +21,7 @@ python3 "$(dirname "$0")/storage-listener-contract.py"
 python3 "$(dirname "$0")/storage-install-contract.py"
 python3 "$(dirname "$0")/storage-repair-receipt-contract.py"
 python3 "$(dirname "$0")/storage-backup-contract.py"
+python3 "$(dirname "$0")/storage-capture-contract.py"
 python3 "$(dirname "$0")/storage-backup-bindings-contract.py"
 python3 "$(dirname "$0")/storage-qualification.py" "$fixture/volume" "$1" "$2"
 

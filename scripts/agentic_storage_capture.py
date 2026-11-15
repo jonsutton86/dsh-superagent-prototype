@@ -37,8 +37,13 @@ def endpoint_capture(config, node, exporter, state, output):
                 if not chunk: break
                 data.extend(chunk); require(len(data) <= 65536)
         require(process.wait(timeout=max(0.01, deadline - time.monotonic())) == 0)
-        receipt = json.loads(data)
-        require(isinstance(receipt, dict) and receipt.get('version') == 1
+        def unique_object(items):
+            result = {}
+            for key, value in items:
+                require(key not in result); result[key] = value
+            return result
+        receipt = json.loads(data, object_pairs_hook=unique_object)
+        require(isinstance(receipt, dict) and type(receipt.get('version')) is int and receipt['version'] == 1
                 and receipt.get('endpointId') == config['endpointId'] and receipt.get('writerLockHeld') is True
                 and all(receipt.get(key) is False for key in ['workspaceFilesIncluded', 'executionQuiescenceVerified', 'hostRegistryIncluded', 'restoreVerified']))
         artifact = receipt.get('endpoint')
