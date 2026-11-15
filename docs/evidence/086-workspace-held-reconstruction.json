@@ -1,0 +1,21 @@
+{
+  "revision": "7eff1c50f99a14ccd9da959f68d6d1fbff25637d",
+  "classification": "VERIFIED",
+  "validation": {
+    "workspaceTests": 10,
+    "typecheck": "passed"
+  },
+  "evidence": [
+    "Git bytes and hard-link identities reconstructed from verified private copies",
+    "Raw symlink text retained; links created after all write paths",
+    "Regular files stay 0600 and directories 0700; original metadata retained separately",
+    "Durable preparing hold precedes reconstruction and transitions atomically to held after content comparison",
+    "Cancellation preserves original attempt and partial files; overwrite retry refused"
+  ],
+  "limits": [
+    "Only a new private candidate, no live workspace replacement",
+    "Original modes and ownership not applied; target quota/ownership policy remains unqualified",
+    "No fresh source quiescence or activation authority",
+    "Not wired to runtime installation or native recovery qualification yet"
+  ]
+}

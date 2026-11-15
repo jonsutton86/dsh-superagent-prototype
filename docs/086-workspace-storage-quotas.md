@@ -1417,3 +1417,26 @@ duplicate sources, unbound members, wrong roles, traversal names, changed source
 bindings, authenticated digest mismatch and cancellation.
 [Evidence](evidence/086-workspace-binding-refusals.json). These checks validate
 artifact membership, not fresh source identity, quiescence or restore authority.
+
+### Private held workspace reconstruction
+
+`stageWorkspaceRecovery` reconstructs a verified archive into a new private candidate
+containing `workspace/`, `source-manifest.json` and `hold.json`. A durable original
+attempt ID and `preparing` hold are written before workspace effects. Existing,
+non-normalized and source/archive-overlapping destinations are refused. Copies use
+exclusive creation; hard links reference previously reconstructed regular files.
+Symbolic links are created last, so they are never ancestors used for later writes.
+Raw link text, including external references, is retained but never followed.
+
+A fresh full inventory compares reconstructed bytes and link relationships before
+the hold transitions atomically to `held`. Files remain private `0600`, directories
+`0700`; original permission/UID/GID metadata is retained but not applied. Interrupted
+attempts retain their hold and partial output and cannot be blindly overwritten.
+The function reports `contentReconstructed: true`, `metadataApplied: false`,
+`executionOwnership: false`, and `restoreVerified: false`.
+
+Ten workspace tests and typecheck passed. Cancellation after the first copied file
+retains the preparing hold, source bytes and partial candidate and rejects overwrite
+retry. [Evidence](evidence/086-workspace-held-reconstruction.json). Target quota,
+ownership/permission policy, fresh source quiescence, authenticated checkpoint-to-
+candidate installation, native recovery qualification and activation remain open.
