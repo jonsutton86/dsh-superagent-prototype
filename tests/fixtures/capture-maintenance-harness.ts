@@ -37,7 +37,13 @@ export async function qualifyCaptureMaintenance(cli: string, config: Omit<Endpoi
         capture: { phase: 'complete', request, result: { managedQuiescenceObserved: true, globalSnapshotVerified: false } } })
     }, { timeout: 45000, interval: 250 })
     const response = await fetch(`http://127.0.0.1:${port}${RPC_PATH}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(5000) })
-    expect(response.status).toBe(404)
+    // Harness's unmatched POST reaches its static fallback (405), rather than a 404 router response.
+    // A registered endpoint RPC would authenticate this request and return its JSON 401 instead.
+    const absent = await fetch(`http://127.0.0.1:${port}/missing-capture-route-${randomUUID()}`, { method: 'POST',
+      headers: { 'content-type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(5000) })
+    expect(response.status).toBe(405)
+    expect(response.status).toBe(absent.status)
+    expect(await response.text()).toBe(await absent.text())
   } catch (error) {
     throw new Error(String(error) + '\n' + log.split('\n').filter(line => !/key|token|secret|credential|authorization/i.test(line)).slice(-30).join('\n'))
   } finally {
