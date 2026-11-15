@@ -1,0 +1,22 @@
+{
+  "revision": "7fcfba94d03a824192c6a68faaddb7973579a120",
+  "classification": "VERIFIED",
+  "validation": {
+    "storageAndWorkspaceTests": "43 passed, 1 native-only skipped",
+    "typecheck": "passed",
+    "build": "passed"
+  },
+  "evidence": [
+    "Original checkpoint reauthenticated and selected workspace binding verified",
+    "Original candidate attempt ID retained with no reconstruction or state mutation",
+    "Source manifest bytes compared to authenticated checkpoint member digest",
+    "Fresh inventory checks content and link relationships and private ownership/modes",
+    "Changed content/manifest, exposed permissions and root symlink replacement rejected; hold bytes unchanged"
+  ],
+  "limits": [
+    "Read-only observation, not an atomic execution fence or activation authority",
+    "No original permission/ownership application or target quota validation",
+    "New installed Harness maintenance-mode invocation and native rerun remain unqualified",
+    "Full final qualification remains open"
+  ]
+}

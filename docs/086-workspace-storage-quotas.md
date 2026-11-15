@@ -1468,3 +1468,26 @@ tests passed, typecheck/build passed, and the focused Linux storage workflow pas
 including the authenticated checkpoint-to-candidate test and existing native storage
 journeys. [Receipt](evidence/086-checkpoint-workspace-stage.json). The new maintenance
 mode is built; an installed Harness profile invocation remains unqualified.
+
+### Read-only candidate reauthentication after response loss
+
+The offline profile now also supports `mode: verify-workspace` with the same
+`checkpoint`, `keyFile`, `workspaceSource` and candidate `destination` fields.
+`verifyCheckpointWorkspaceCandidate` reauthenticates the checkpoint and selected
+workspace, then compares the existing hold's original attempt ID/location/source
+and origin against it. The saved source-manifest bytes must match the authenticated
+member digest. A fresh inventory checks content/link relationships and the expected
+private file/directory modes and ownership. A replaced or exposed workspace root,
+extra candidate members, changed metadata/content or a non-held attempt is refused.
+
+Verification does not reconstruct, mutate the hold, settle uncertainty or grant
+execution ownership. The returned attempt ID comes from the retained hold. Local
+hold metadata alone never substitutes for authenticating the original checkpoint.
+This observation is not a global concurrent-writer fence; activation still needs
+fresh ownership, target quota and source-quiescence qualification.
+
+The storage/workspace ring passed 43 tests (one native-only skip), typecheck and
+build passed at the revision in [evidence](evidence/086-held-workspace-reauthentication.json).
+Tests explicitly check changed content, altered source metadata, exposed file modes
+and workspace-root symlink replacement while confirming hold bytes remain unchanged.
+Installed-profile invocation, native requalification and live activation remain open.
