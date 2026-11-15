@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-15",
+  "testedRevision": "9dd88667849f5eed8d67d9a345c9249bc8694452",
+  "localTests": { "passed": 22, "skipped": 1 },
+  "nativeRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43714496865",
+  "nativeTests": { "passed": 30, "skipped": 0 },
+  "typecheck": "passed locally and in Linux CI",
+  "build": "passed in Linux CI",
+  "installedHarnessCaptureLoaderQualified": true,
+  "installedHarnessReconciliationLoaderQualified": true,
+  "verified": ["interrupted started intent recovered by a fresh Harness profile", "original request/binding/start time preserved", "archive manifest unchanged", "maintenance execution RPC absent"],
+  "nativeStorageBackedMaintenanceQualified": false,
+  "deployed": false
+}

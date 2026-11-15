@@ -1824,3 +1824,23 @@ This qualifies installed-profile **capture**. Reconciliation through a fresh ins
 profile, native storage-backed maintenance, operator UI and coordinated global capture
 remain separate unqualified work. Existing direct/native reconciliation evidence is
 unchanged; this test does not broaden its claim to the profile loader.
+
+### Installed-profile interrupted capture reconciliation
+
+The installed-Harness fixture now accepts a reviewed manifest digest to select
+reconciliation mode. The native journey injects a failure before the capture completion
+record is committed, verifies that the original request remains started, and stops its
+endpoint. It then creates a separate disposable Harness profile and invokes the
+production maintenance plugin with that exact request and reviewed digest. Assertions
+require the same binding, request ID and original start timestamp, a reconciled complete
+result and unchanged archive manifest bytes. The endpoint RPC URL must still match the
+known-absent route fallback. This exercises persistence and real loader activation,
+rather than completing the capture in the original test endpoint process.
+
+VERIFIED at `9dd88667849f5eed8d67d9a345c9249bc8694452`: [Linux run 43714496865](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43714496865)
+passed 30 scoped tests, typecheck and build, including fresh installed-Harness capture
+and reconciliation profiles. The local resource suite passed 22 tests (one native-only
+skip) and typecheck passed. The reconciliation profile completed the retained started
+attempt with its original identity and unchanged archive manifest. Native storage-backed
+maintenance, coordinated capture and restoration remain unqualified; no operator app
+or model configuration was changed.

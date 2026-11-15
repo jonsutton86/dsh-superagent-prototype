@@ -40,7 +40,8 @@ a reviewed archive digest against the original binding and fresh fenced source c
 without recopying. The endpoint Harness plugin now has explicit host-only capture/reconcile
 maintenance configuration, with no RPC listener or accepted-job replay and a private
 status file. Built-plugin native checks and fresh installed-Harness capture-profile
-qualification pass. Installed-profile reconciliation, native storage-backed maintenance,
+qualification pass. Fresh installed-profile reconciliation now also preserves an interrupted
+operation across process restart, without recopying. Native storage-backed maintenance,
 operator UI review, a coordinated capture epoch and clean-host activation remain unfinished.
 
 The immediate recovery sequence remains: capture workspace content under verified process quiescence; bind that content
