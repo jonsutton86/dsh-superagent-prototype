@@ -1,0 +1,28 @@
+{
+  "kind": "storage-service-request-deadline",
+  "revision": "3e2e5b2a99aee91a9b01aaa0136c35c1a147196c",
+  "recordedAt": "2026-11-15T08:17:22.416422+00:00",
+  "workflowRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43693592028",
+  "result": "success",
+  "hashes": {
+    "scripts/agentic_storage_service.py": "a2e97d9bb10c95b502c6b3fca8b340dacd04cb965210206f69344465aa41e8c8",
+    "tests/fixtures/storage-service-contract.py": "25ba0eee526b96b821a6ac6de00e9178c521275cd9022799cc4fc3b28ec64d1e",
+    "tests/fixtures/storage-service-native.py": "61c698b0fd1b8409a92cc18811eca4ed12b8bf8cdcdca5a8d20157be82fe3df3",
+    "tests/fixtures/storage-qualification.sh": "2c5a5c6bfe47fb090fea6b03bede53c2b5dbfb6212393a4c4d3aabc502bd14cf"
+  },
+  "validation": {
+    "deterministicTransportTests": 3,
+    "nativeVitestTests": 13,
+    "nativeSlowRequestDeadline": "passed; refusal within 4\u20138 seconds while sending bytes without EOF",
+    "followingConnection": "accepted and handled",
+    "existingHostAndMechanismFixtures": "passed",
+    "typecheck": "not repeated; Python-only changes",
+    "fullMatrix": "not run"
+  },
+  "integrationFindings": {
+    "src/remote/journal.ts": "constructor requires canonical workspace root before endpoint identity is available to caller",
+    "src/remote/endpoint.ts": "startup writes/probes under parent; enrollment mkdir bypasses host provisioning; verification rooted in control state",
+    "src/infra/environment.ts": "verifyLocalWorkspace writes a nonce into the supplied directory"
+  },
+  "remaining": "Preserve root ownership while resolving identity/bootstrap ordering and startup proof root; wire original enrollment and verification intents; retain dispatch guard until enforcement is integrated."
+}

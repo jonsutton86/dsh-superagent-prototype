@@ -632,6 +632,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/storage-probe.spec.ts` | Strict quota report parsing and opt-in native Harness probe with enforcement, limit and membership mismatch refusals |
 | `tests/fixtures/storage-host-native.py` | Native XFS host provisioning, response-loss replay without mutation, range/identity/capacity refusal and descriptor cleanup |
 | `tests/fixtures/storage-service-native.py`, `tests/storage-host-client.spec.ts` | Real root service with unprivileged TypeScript client and actual SQLite recovery; peer-UID and malformed-frame refusals, socket cleanup |
+| `tests/fixtures/storage-service-contract.py` | Deterministic total request deadline and recursive duplicate-field refusal before any host operation |
 | `tests/fixtures/storage-qualification.sh`, `storage-qualification.py` | Disposable hosted-CI XFS mechanism investigation: shared roots, independent project, hard limits, membership confinement, deferred release and accounting-only counterexample; not endpoint integration |
 | `tests/remote-harness.spec.ts` | Opt-in installed Harness qualification with a configured model, remote artifacts, restart, maintenance-plugin checkpoint/import/reservation and ownership-authority process handoff |
 | `tests/recovery.spec.ts` | Official JSONL round trips, exclusive ownership, corruption/cancellation refusal, fork imports, held restore, original reservation retries, competing restores and preserved remote receipts |

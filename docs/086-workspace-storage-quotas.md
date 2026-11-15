@@ -233,3 +233,27 @@ paths, dispatch fencing and namespace isolation of the service socket, stale-soc
 whole-volume/control-state headroom, service endurance/adversarial framing acceptance, migration and clean-host/reboot
 qualification. A live observation and historical provisioned row still do not authorize general endpoint execution.
 The storage startup guard remains; this service was started only in disposable CI and is not installed on the user's app.
+
+## Bounded request lifetime and integration prerequisites
+
+The service now uses one monotonic five-second deadline for the entire request body, rather than a fresh timeout for each
+read. Replies have a separate one-second send deadline. Duplicate JSON fields are refused recursively for requests and
+administrator configuration. A slow peer therefore cannot keep extending its service slot by sending individual bytes.
+Three deterministic transport tests pass without privileges; they verify the shrinking remaining timeout and that no host
+operation runs on slow or duplicate-field requests.
+
+Native [run 43693592028](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43693592028) passed at `3e2e5b2a99aee91a9b01aaa0136c35c1a147196c`:
+the authorized peer repeatedly sent bytes without ending its request, received the fixed refusal within the bounded window,
+and a subsequent connection succeeded. The native client/probe tests (13 total), privileged host fixture, mechanism fixture,
+and three deterministic transport tests also passed. No TypeScript changed in this slice; no repeated typecheck/build or
+whole-system qualification was run.
+
+VERIFIED source prerequisites for endpoint integration: `RemoteJournal` currently creates/canonicalizes the workspace
+parent during construction, while storage root plans include that journal's endpoint UUID. `RemoteEndpoint.start()` calls
+`verifyLocalWorkspace` on the parent, which writes a nonce file; `verifyIsolation` creates a temporary child below it.
+The new host-owned parent must not be made writable merely to preserve these probes. Integration must initialize/bind the
+original endpoint identity before host namespace preparation, and run startup proofs in an explicitly owned test root while
+preserving quota and cleanup accounting. Enrollment currently performs its own mkdir before grant persistence; it must use
+the original storage intent and verified host root instead. Verification currently uses `stateDir/verification`; it must
+move to the workspace's assigned verification root, including cleanup/restart paths. These are concrete code changes still
+required, not accomplished by the service tests or a reason to bypass the startup guard.
