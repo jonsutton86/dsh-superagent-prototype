@@ -1,0 +1,24 @@
+{
+  "revision": "3e74ed98a92b0702afce21345571c54f3933bfac",
+  "classification": "VERIFIED",
+  "validation": {
+    "captureContracts": "2 passed, including 8 rejection cases",
+    "backupContracts": "7 passed"
+  },
+  "scope": "Real local subprocess transport and artifact receipt validation; privilege arguments asserted while privilege dropping is mocked locally",
+  "refusals": [
+    "wrong endpoint identity",
+    "hash mismatch",
+    "size mismatch",
+    "public file permissions",
+    "restore claim",
+    "duplicate JSON fields",
+    "oversized stdout",
+    "nonzero exporter exit"
+  ],
+  "limits": [
+    "Native privilege dropping was verified at preceding f4c9ae5 revision",
+    "This revision has not rerun native CI",
+    "Full capture-to-checkpoint journey remains unfinished"
+  ]
+}

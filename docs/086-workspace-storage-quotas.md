@@ -1243,3 +1243,11 @@ refusal. It also passed 32 recovery tests, 12 quota probes, the existing native
 launcher/repair/installation journeys, and 12 crash boundaries. The paired fixture
 seeds endpoint storage records from retained host intents; a full live-endpoint
 capture-to-checkpoint journey is still required. [Evidence](evidence/086-paired-capture-native.json).
+
+Paired exporter validation additionally rejects duplicate JSON fields, altered
+endpoint IDs/hashes/sizes, public artifact permissions, false restore claims,
+oversized output and failed subprocesses. Two local subprocess tests (eight
+rejection cases) and seven backup tests passed at the revision in
+[this receipt](evidence/086-capture-receipt-refusals.json). The local tests assert
+privilege-drop arguments but mock that OS boundary; preceding native CI provides
+its separate evidence. These contracts now run in the Linux storage job as well.
