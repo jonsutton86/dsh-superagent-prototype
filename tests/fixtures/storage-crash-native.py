@@ -104,6 +104,7 @@ for index, boundary in enumerate(cases):
         if boundary == 'first-owner-applied': assert [item['uid'] for item in evidence['roots']] == [uid, 0]
         if boundary in ['hard-limit-applied', 'first-owner-applied', 'complete-before-reply']:
             assert evidence['quota']['hardBytes'] == config['policy']['workspace']['bytes']
+        assert evidence['repair'] is None
         assert host.inspect(request)['snapshotHash'] == evidence['snapshotHash']
         assert admin('inspect', request)['inspection']['snapshotHash'] == evidence['snapshotHash']
         assert list(host.db.iterdump()) == saved
@@ -165,6 +166,10 @@ for index, boundary in enumerate(cases):
             assert os.WIFSIGNALED(repair_status) and os.WTERMSIG(repair_status) == signal.SIGKILL
             host = storage.StorageHost(registry, config)
             assert host.db.execute('SELECT phase FROM repairs WHERE endpoint=?', (config['endpointId'],)).fetchone()[0] == 'started'
+            before_inspect = list(host.db.iterdump())
+            inspected_repair = admin('inspect', request)['inspection']['repair']
+            assert inspected_repair == {'repairId': 'repair', 'phase': 'started', 'originalSnapshotHash': evidence['snapshotHash']}
+            assert list(host.db.iterdump()) == before_inspect
             storage.run = read_only
             try:
                 if boundary == 'repair-complete-before-reply':

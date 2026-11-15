@@ -19,6 +19,7 @@ mount -o loop,prjquota,nodev,nosuid "$fixture/volume.img" "$fixture/volume"
 python3 "$(dirname "$0")/storage-service-contract.py"
 python3 "$(dirname "$0")/storage-listener-contract.py"
 python3 "$(dirname "$0")/storage-install-contract.py"
+python3 "$(dirname "$0")/storage-repair-receipt-contract.py"
 python3 "$(dirname "$0")/storage-qualification.py" "$fixture/volume" "$1" "$2"
 
 # Observe the same prepared filesystem through the real Harness subprocess runtime.

@@ -241,6 +241,21 @@ class StorageHost:
         with self.exclusive():
             return self._inspect(request)
 
+    def repair_receipt(self, request):
+        """Read retained approval identity only; a completed journal phase is not fresh host proof."""
+        self.saved(request)
+        row = self.db.execute('SELECT id,intent,phase FROM repairs WHERE endpoint=? AND request=?',
+                              (self.endpoint, request['requestId'])).fetchone()
+        if row is None:
+            return None
+        repair_id, encoded, phase = row
+        require(isinstance(repair_id, str) and re.fullmatch(r'[A-Za-z0-9_-]{1,100}', repair_id))
+        require(phase in ['started', 'complete'])
+        intent = json.loads(encoded)
+        require(isinstance(intent, dict) and set(intent) == {'request', 'snapshotHash'} and intent['request'] == request)
+        require(isinstance(intent['snapshotHash'], str) and re.fullmatch(r'[a-f0-9]{64}', intent['snapshotHash']))
+        return {'repairId': repair_id, 'phase': phase, 'originalSnapshotHash': intent['snapshotHash']}
+
     def _inspect(self, request):
         self.check_namespace()
         expected = self.saved(request)
@@ -283,7 +298,8 @@ class StorageHost:
             roots.append({**item, 'state': 'recorded', 'projectId': int(project[0]),
                           'inherits': bool(int(flags[0], 16) & 0x200), 'realtime': bool(int(flags[0], 16) & 0x101), 'empty': empty})
         evidence = {'endpointId': self.endpoint, 'request': dict(request), 'policy': json.loads(json.dumps(self.policy)),
-                    'mountId': mount['id'], 'roots': roots, 'quota': self.quota(request['projectId'])}
+                    'mountId': mount['id'], 'roots': roots, 'quota': self.quota(request['projectId']),
+                    'repair': self.repair_receipt(request)}
         digest = hashlib.sha256(json.dumps(evidence, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
         return {**evidence, 'snapshotHash': digest, 'authorizesRepair': False}
 
