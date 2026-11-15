@@ -274,6 +274,13 @@ it.runIf(!!process.env.DSH_RESOURCE_QUALIFICATION_ROOT)('qualifies actual cgroup
     await endpoint.stop(); endpoint = create(); await endpoint.start()
     expect(await endpoint.rpc(principal, request)).toMatchObject({ id: request.requestId, phase: 'settled', outcome: { exitCode: 0 }, quiescent: true })
     expect(await endpoint.rpc(principal, { op: 'job.get', id: oom.requestId })).toMatchObject({ id: oom.requestId, outcome: killed.outcome, resources: killed.resources, quiescent: true })
+    const profileRecoveryRequest = { ...captureRequest, requestId: randomUUID(), destination: join(directory, 'profile-interrupted-archive') }
+    const profileFault = vi.spyOn(WorkspaceCaptures.prototype, 'complete').mockImplementationOnce(() => { throw new Error('profile recovery interruption') })
+    try { await expect(endpoint.captureWorkspace(profileRecoveryRequest)).rejects.toThrow('profile recovery interruption') } finally { profileFault.mockRestore() }
+    const profileIntent = await endpoint.captureWorkspace(profileRecoveryRequest)
+    expect(profileIntent.phase).toBe('started')
+    const profileManifest = await readFile(join(profileRecoveryRequest.destination, 'manifest.json'))
+    const profileDigest = createHash('sha256').update(profileManifest).digest('hex')
     await endpoint.stop()
     const built = await import(pathToFileURL(resolve('lib/remote-endpoint.js')).href)
     const registered = vi.fn(), disposers: (() => Promise<void>)[] = [], receiptFile = join(directory, 'maintenance-result.json')
@@ -290,6 +297,12 @@ it.runIf(!!process.env.DSH_RESOURCE_QUALIFICATION_ROOT)('qualifies actual cgroup
     if (!process.env.DSH_ENDPOINT_QUALIFICATION_CLI) throw new Error('Installed Harness CLI is required for native capture maintenance qualification')
     await qualifyCaptureMaintenance(process.env.DSH_ENDPOINT_QUALIFICATION_CLI, { stateDir: join(directory, 'state'), workspaceRoot: join(directory, 'work'), resources: configured },
       { ...captureRequest, requestId: randomUUID(), destination: join(directory, 'native-installed-maintenance-archive') })
+    const profileRecovered = await qualifyCaptureMaintenance(process.env.DSH_ENDPOINT_QUALIFICATION_CLI, {
+      stateDir: join(directory, 'state'), workspaceRoot: join(directory, 'work'), resources: configured }, profileRecoveryRequest, profileDigest)
+    expect(profileRecovered).toMatchObject({ request: profileRecoveryRequest, binding: profileIntent.binding, startedAt: profileIntent.startedAt,
+      phase: 'complete', result: { reconciled: true, manifestHash: profileDigest } })
+    expect(await readFile(join(profileRecoveryRequest.destination, 'manifest.json'))).toEqual(profileManifest)
+
 
 
   } finally {
