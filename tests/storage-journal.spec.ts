@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -174,4 +175,17 @@ it('rejects corrupted persisted observation on reopen', () => {
   value.observation!.quota.hardInodes *= 2
   journal.db.prepare('UPDATE remote_storage SET value=?').run(JSON.stringify(value))
   expect(() => new StorageReservations(journal, policy)).toThrow('does not match original storage allocation')
+})
+
+it('pins an administrator-assigned endpoint identity on first creation and refuses replacement on reopen', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-storage-')); roots.push(root)
+  const state = join(root, 'state'), work = join(root, 'work'), original = randomUUID()
+  let journal = new RemoteJournal(state, work, original)
+  expect(journal.id).toBe(original); journal.close()
+  expect(() => new RemoteJournal(state, work, randomUUID())).toThrow('differs from the original journal')
+  journal = new RemoteJournal(state, work, original); journals.push(journal)
+  expect(journal.id).toBe(original)
+})
+it('rejects a malformed assigned identity before initializing directories', () => {
+  expect(() => new RemoteJournal('/unused-storage-state', '/unused-storage-root', 'not-an-id')).toThrow('canonical UUID')
 })

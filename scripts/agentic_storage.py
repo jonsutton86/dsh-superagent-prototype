@@ -107,6 +107,7 @@ class StorageHost:
             self.db.execute('PRAGMA journal_mode=WAL'); self.db.execute('PRAGMA synchronous=FULL')
             with self.exclusive():
                 self.db.executescript('''CREATE TABLE IF NOT EXISTS endpoints (id TEXT PRIMARY KEY, filesystem TEXT NOT NULL, first INTEGER NOT NULL, last INTEGER NOT NULL, config TEXT NOT NULL);
+                  CREATE TABLE IF NOT EXISTS namespaces (endpoint TEXT PRIMARY KEY, identities TEXT NOT NULL);
                   CREATE TABLE IF NOT EXISTS operations (endpoint TEXT NOT NULL, request TEXT NOT NULL, workspace TEXT NOT NULL, filesystem TEXT NOT NULL,
                     project INTEGER NOT NULL, intent TEXT NOT NULL, roots TEXT NOT NULL, PRIMARY KEY(endpoint, request), UNIQUE(endpoint, workspace), UNIQUE(filesystem, project));''')
                 encoded = json.dumps(self.config, sort_keys=True)
@@ -119,12 +120,49 @@ class StorageHost:
                     self.db.execute('INSERT INTO endpoints VALUES (?,?,?,?,?)', (self.endpoint, policy['filesystemUUID'], first, last, encoded))
                     self.db.commit()
                 self.check_mount()
+                self.prepare_namespace()
                 self.sync_directory(self.registry)
         except BaseException:
             if hasattr(self, 'db'):
                 self.db.close()
             os.close(self.lock)
             raise
+
+    def namespace_paths(self):
+        base = self.mount / ('dsh-' + self.endpoint)
+        return [base, base / 'workspaces', base / 'verification']
+
+    def check_namespace(self):
+        row = self.db.execute('SELECT identities FROM namespaces WHERE endpoint=?', (self.endpoint,)).fetchone()
+        require(row is not None)
+        identities = json.loads(row[0])
+        paths = self.namespace_paths()
+        require(len(identities) == len(paths) and all(identities))
+        for path, expected in zip(paths, identities):
+            protected(path)
+            info = path.stat()
+            require(stat.S_IMODE(info.st_mode) == 0o755)
+            require(expected == {'device': str(info.st_dev), 'inode': str(info.st_ino)})
+
+    def prepare_namespace(self):
+        if self.db.execute('SELECT 1 FROM namespaces WHERE endpoint=?', (self.endpoint,)).fetchone():
+            self.check_namespace()
+            return
+        # Persist before mkdir. Partial creation remains unknown; never adopt/recreate its paths automatically.
+        self.db.execute('INSERT INTO namespaces VALUES (?,?)', (self.endpoint, '[null,null,null]'))
+        self.db.commit()
+        identities = [None, None, None]
+        for index, path in enumerate(self.namespace_paths()):
+            path.mkdir(mode=0o755)
+            os.chmod(path, 0o755)  # Do not let a restrictive service umask make the prepared namespace inaccessible.
+            self.sync_directory(path)
+            self.sync_directory(path.parent)
+            protected(path)
+            info = path.stat()
+            identities[index] = {'device': str(info.st_dev), 'inode': str(info.st_ino)}
+            self.db.execute('UPDATE namespaces SET identities=? WHERE endpoint=?', (json.dumps(identities), self.endpoint))
+            self.db.commit()
+        self.check_namespace()
 
     @staticmethod
     def sync_directory(path):
@@ -186,6 +224,7 @@ class StorageHost:
             return self._observe(request)
 
     def _observe(self, request):
+        self.check_namespace()
         identities = self.saved(request)
         require(len(identities) == 2 and all(identities))
         mount = self.check_mount()
@@ -210,6 +249,7 @@ class StorageHost:
         intent = self.validate_request(request)
         with self.exclusive():
             self.check_mount()
+            self.check_namespace()
             existing = self.db.execute('SELECT 1 FROM operations WHERE endpoint=? AND request=?', (self.endpoint, request['requestId'])).fetchone()
             if existing:
                 return self._observe(request)  # Original incomplete effects are never automatically repeated.
@@ -223,10 +263,7 @@ class StorageHost:
             roots = self.roots(request)
             identities = [None, None]
             for index, path in enumerate(roots):
-                for parent in [path.parent.parent, path.parent]:
-                    if not parent.exists():
-                        parent.mkdir(mode=0o755); self.sync_directory(parent.parent)
-                    protected(parent)
+                protected(path.parent)
                 # Never adopt an existing tree, including one left in an uncertain creation window.
                 path.mkdir(mode=0o700); self.sync_directory(path.parent)
                 info = path.stat()

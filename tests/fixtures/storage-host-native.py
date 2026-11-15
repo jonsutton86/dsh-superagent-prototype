@@ -31,12 +31,17 @@ def refused(action):
 
 
 baseline_descriptors = len(list(Path('/proc/self/fd').iterdir()))
-host = module.StorageHost(registry, config)
+previous_mask = os.umask(0o077)
+try:
+    host = module.StorageHost(registry, config)
+finally:
+    os.umask(previous_mask)
 try:
     refused(lambda: host.provision({**request, 'workspace': '../escape'}))
     refused(lambda: host.provision({**request, 'endpointId': str(uuid.uuid4())}))
     refused(lambda: host.provision({**request, 'projectId': 99}))
     assert host.db.execute('SELECT count(*) FROM operations').fetchone()[0] == 0
+    assert all(path.stat().st_uid == 0 and path.stat().st_mode & 0o777 == 0o755 for path in host.namespace_paths())
     original = host.provision(request)
     assert original['quota']['hardBytes'] == 16 * 1024 ** 2
     assert len(original['roots']) == 2
@@ -78,8 +83,20 @@ try:
     path.rename(path.with_name('retained-original'))
     path.mkdir(mode=0o700)
     refused(lambda: host.observe(request))
+    # A committed namespace intent without completed identities must never restart mkdir.
+    uncertain_endpoint = str(uuid.uuid4())
+    uncertain_config = {**config, 'endpointId': uncertain_endpoint, 'policy': {**config['policy'], 'projectIds': {'first': 200, 'last': 209}}}
+    host.db.execute('INSERT INTO namespaces VALUES (?,?)', (uncertain_endpoint, '[null,null,null]'))
+    host.db.commit()
+    refused(lambda: module.StorageHost(registry, uncertain_config))
+    assert not (root / ('dsh-' + uncertain_endpoint)).exists()
+    # A host-owned replacement parent is not the original namespace even if its permissions look correct.
+    namespace = host.namespace_paths()[0]
+    namespace.rename(namespace.with_name(namespace.name + '-retained'))
+    namespace.mkdir(mode=0o755)
+    refused(lambda: host.observe(request))
     print(json.dumps({'nativeStorageHost': 'passed', 'replayMutation': False, 'overlapRefused': True,
-                      'uncertainIntentRetained': True, 'capacityRetained': True, 'rootReplacementRefused': True}), flush=True)
+                      'uncertainIntentRetained': True, 'capacityRetained': True, 'rootReplacementRefused': True, 'namespaceRecoveryFenced': True}), flush=True)
 finally:
     host.close()
     assert len(list(Path('/proc/self/fd').iterdir())) == baseline_descriptors, 'Host descriptors remained after all connections closed'

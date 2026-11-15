@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -13,19 +13,19 @@ it.runIf(!!process.env.DSH_STORAGE_SERVICE_CONFIG)('prepares and recovers origin
   const config = JSON.parse(process.env.DSH_STORAGE_SERVICE_CONFIG!) as { endpointId: string; uid: number; policy: unknown }
   expect(process.platform).toBe('linux'); expect(process.getuid?.()).toBe(config.uid); expect(config.uid).toBeGreaterThan(0)
   const policy = EndpointStorage.parse(config.policy), directory = await mkdtemp(join(tmpdir(), 'dsh-storage-client-'))
-  const state = join(directory, 'state'), root = join(directory, 'work')
-  let journal = new RemoteJournal(state, root)
+  const state = join(directory, 'state')
+  const assignedRoot = `${policy.mountRoot}/dsh-${config.endpointId}/workspaces`
+  let journal = new RemoteJournal(state, assignedRoot, config.endpointId)
   try {
-    // Restore the fixture's assigned endpoint identity before creating any allocations.
-    journal.db.prepare('UPDATE endpoint_meta SET value=? WHERE key=?').run(config.endpointId, 'id')
-    journal.close(); journal = new RemoteJournal(state, root)
+    expect(journal.id).toBe(config.endpointId)
+    await expect(writeFile(join(assignedRoot, 'unprivileged-parent-write'), 'no')).rejects.toMatchObject({ code: 'EACCES' })
     const client = new LocalStorageHost(process.env.DSH_STORAGE_SERVICE_SOCKET!), request = {
       requestId: 'socket-original', workspace: 'socket-one', requestHash: fingerprint('socket-original') }
     let reservations = new StorageReservations(journal, policy)
     const original = await new StorageProvisioning(reservations, client).prepare(request, AbortSignal.timeout(20000))
     expect(original.phase).toBe('provisioned')
     expect(original.observation!.directories.map(item => item.path)).toEqual(storageRoots(policy, original))
-    journal.close(); journal = new RemoteJournal(state, root)
+    journal.close(); journal = new RemoteJournal(state, assignedRoot, config.endpointId)
     reservations = new StorageReservations(journal, policy)
     const recovered = await new StorageProvisioning(reservations, client).prepare(request, AbortSignal.timeout(20000))
     expect(recovered.projectId).toBe(original.projectId)

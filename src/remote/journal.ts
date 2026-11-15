@@ -22,7 +22,9 @@ export class RemoteJournal {
   private readonly admin: string
   private readonly release: () => void
   private closed = false
-  constructor(readonly directory: string, readonly root: string) {
+  constructor(readonly directory: string, readonly root: string, expectedId?: string) {
+    if (expectedId !== undefined && !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(expectedId))
+      throw new Error('Expected endpoint identity must be a canonical UUID')
     mkdirSync(directory, { recursive: true, mode: 0o700 }); mkdirSync(root, { recursive: true, mode: 0o700 })
     const control = realpathSync(directory), workspace = realpathSync(root)
     if (inside(workspace, control) || inside(control, workspace)) throw new Error('Endpoint control state and workspaces must be separate directories')
@@ -53,7 +55,10 @@ export class RemoteJournal {
         CREATE TABLE IF NOT EXISTS remote_receipt (id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS remote_audit (id INTEGER PRIMARY KEY, value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS remote_output (job TEXT, stream TEXT, data BLOB NOT NULL, total INTEGER NOT NULL, PRIMARY KEY(job,stream));`)
-      this.db.prepare('INSERT OR IGNORE INTO endpoint_meta VALUES (?,?)').run('id', randomUUID())
+      const savedId = this.db.prepare('SELECT value FROM endpoint_meta WHERE key=?').get('id')?.value
+      if (expectedId !== undefined && savedId !== undefined && savedId !== expectedId)
+        throw new Error('Configured endpoint identity differs from the original journal')
+      this.db.prepare('INSERT OR IGNORE INTO endpoint_meta VALUES (?,?)').run('id', expectedId ?? randomUUID())
       this.id = String(this.db.prepare('SELECT value FROM endpoint_meta WHERE key=?').get('id')!.value)
       this.atomic(() => {
         for (const job of this.jobs()) if (job.phase === 'started' || (job.phase === 'settled' && !job.quiescent)) {
