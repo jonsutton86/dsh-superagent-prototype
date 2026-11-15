@@ -1342,3 +1342,10 @@ scoped Linux run 43702016501. The root CLI checks the trusted expected hash, pri
 standalone SQLite format and table structure without opening a live host. Five focused contracts and
 native verification passed. [Evidence](evidence/086-storage-backup-verification.json). Semantic binding
 to endpoint allocations, fenced restore and final qualification remain open; storage recovery stays refused.
+
+
+086 registry binding audit: native root CLI audit VERIFIED at `519725e` by scoped Linux run 43702462270;
+subsequent missing-root refusal at `174848f` passed eight focused local backup/binding tests. The audit
+checks original allocations, ranges, budgets and repair approvals, retaining incomplete states without
+claiming live filesystem or restore readiness. [Exact revision evidence](evidence/086-storage-backup-bindings.json).
+Endpoint-image cross-binding, fencing and coordinated restore remain open.

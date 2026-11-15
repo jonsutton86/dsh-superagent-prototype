@@ -947,3 +947,36 @@ and unchanged native snapshot bytes/counts. Five local SQLite backup/verificatio
 existing scoped native storage workflow, typecheck and builds passed. See
 [artifact verification evidence](evidence/086-storage-backup-verification.json). This verifies artifact
 integrity/format, not allocation semantics, filesystem restoration or clean-host recovery.
+
+### Offline retained-record binding audit
+
+`audit-backup --input SNAPSHOT --sha256 EXPECTED_HASH` first performs the offline artifact checks,
+then validates registry relationships without a live host. Endpoint configuration must agree with its
+stored UUID, filesystem and project range; ranges may not overlap on a filesystem. Policy budgets,
+IDs, root identity shapes and duplicate JSON keys are checked. Allocation rows must match the exact
+original request, belong to a registered endpoint with a completed namespace record, use a unique
+workspace/request/project, and fit the pinned pool budget. Repair approvals must refer to their
+original allocation and preserve the original snapshot, repair ID, phase and any handoff approval.
+Duplicate repair IDs or multiple repairs for one original request are refused.
+
+The audit preserves and counts missing recorded roots and unresolved repairs. It returns
+`recordBindingsVerified: true` only for internally consistent retained records, with
+`liveFilesystemVerified: false` and `restoreVerified: false`. Historical identities are not compared
+with a current filesystem; `complete` repair records are not converted into live health evidence.
+Neither this command nor `verify-backup` initializes an endpoint, imports a database, changes quotas,
+issues credentials, clears uncertainty, or permits the currently refused storage-backed recovery path.
+
+This establishes the host-snapshot side of the recovery contract. The snapshot still needs an
+authenticated recovery-image member and a cross-check against the original endpoint `remote_storage`
+rows, grant roots, inventory revision and independently fenced ownership before restore can proceed.
+
+
+VERIFIED native audit at `519725e7db10ebe4c27f7d10be0a4682c4798460`: scoped Linux
+[run 43702462270](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43702462270)
+passed the root CLI binding audit of the native crash snapshot, retaining one unresolved handoff.
+The existing scoped storage workflow, typecheck and builds passed at that revision. A subsequent
+pure validation tightening at `174848ffc8e6f049754df3af758bf4b3da3e1921` rejects complete/finishing
+repairs without both original root identities; three binding contracts and five backup contracts
+passed locally. Native qualification was not repeated for that tightening and is not attributed to
+it. See [binding evidence](evidence/086-storage-backup-bindings.json). Endpoint-image cross-binding,
+live filesystem/fencing proof, coordinated restore and full qualification remain open.

@@ -1,0 +1,25 @@
+{
+  "kind": "offline-storage-registry-record-bindings",
+  "revision": "174848ffc8e6f049754df3af758bf4b3da3e1921",
+  "nativeRevision": "519725e7db10ebe4c27f7d10be0a4682c4798460",
+  "recordedAt": "2026-11-15T10:10:20.792632+00:00",
+  "workflowRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43702462270",
+  "result": "success",
+  "classification": "Native audit VERIFIED at parent revision; later stricter missing-root guard verified by focused local tests; NOT DEPLOYED",
+  "hashes": {
+    "scripts/agentic_storage.py": "199c705d5e9f9537944cd4054685c0490e3cb43777c1e300dfae500f3a59b509",
+    "scripts/agentic_storage_admin.py": "a53793be3119bc12ae7f714f9a4716473746df9c4b0e31501fc15eb6c05d8bf2",
+    "tests/fixtures/storage-backup-bindings-contract.py": "dc432246347340c1d6b000f2402d8aff397fa9d2997b0f9355640714bc13cab2"
+  },
+  "validation": [
+    "Native root CLI audited all original endpoint/allocation/repair relationships in the crash-registry snapshot",
+    "Unresolved finishing repair remained unresolved; liveFilesystemVerified and restoreVerified remained false",
+    "Native scoped storage workflow, typecheck and builds passed at nativeRevision",
+    "Three binding-contract tests and five backup-contract tests passed locally at revision",
+    "Later missing-root guard refuses completed repairs without original root identities; native suite not repeated for this pure validation tightening"
+  ],
+  "limits": [
+    "No cross-check with endpoint remote_storage rows or recovery-image binding yet",
+    "No current filesystem/ownership fence proof, import, coordinated restore or final qualification"
+  ]
+}
