@@ -594,3 +594,38 @@ This closes on-demand quota status integration and its local DOM/native backend 
 close deployed browser acceptance, in-flight mutation recovery, whole-machine reboot, clean-host
 restore, backup/export/migration, upgrade/uninstall/reconciliation, volume headroom or final complete
 architecture qualification. No model defaults changed and no user-host service was deployed.
+
+### Process-loss provisioning boundaries
+
+The native crash fixture forks with no inherited database/lock connection, opens the real privileged
+host library, and uses test-only hooks to terminate that child with SIGKILL at eight boundaries:
+committed intent before mkdir; first root created before its identity is recorded; first identity
+recorded before project setup; first project setup complete; both project setups complete; hard limits
+applied; first root ownership changed; and full verification complete before returning a result.
+The parent requires an actual SIGKILL exit, reopens the original registry and uses the same request ID,
+hash, workspace and project. No production fault hooks or retry logic are introduced.
+
+The assertions require retained original intent, unchanged registry and root identities across replay,
+no repeated project/limit mutation, refusal of incomplete work, and read-only observation when the
+original work finished before its response was lost. A changed request hash must be refused. A second
+allocation may fill the two-allocation pool, but a third must be refused: interrupted work is not free
+capacity. Each boundary uses distinct assigned IDs in one shared crash-test registry.
+
+This experiment covers process termination at known completed syscall/command boundaries. It does not
+simulate machine power loss, a kill during an external xfs_quota command, storage-device faults or a
+filesystem remount. Safe refusal of incomplete provisioning is not repair or completed recovery;
+operator reconciliation of those retained effects remains required. Native result/revision follows.
+
+VERIFIED at `e7084be23cac2ed81f83e86959d1ea40a420232c`: native
+[run 43697912564](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43697912564)
+passed all eight real process-loss cases. Seven incomplete stages refused observation and duplicate
+provisioning without mutation. The completed-before-reply stage was observed successfully without
+repeating effects. Every case retained the original intent and capacity, and refused a changed hash.
+The full case results and source hashes are saved in
+[provisioning-crash evidence](evidence/086-storage-provisioning-crashes.json).
+
+The scoped workflow also passed its existing storage/managed Harness/systemd checks, typecheck and
+builds. Production code did not change in this increment. Partial-effect operator repair, interruption
+inside an external quota command, power loss, machine reboot, clean-host restoration, storage export/
+backup/migration, headroom and final whole-system qualification remain required. The running app and
+provider defaults were unchanged.

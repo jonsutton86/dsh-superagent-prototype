@@ -1,0 +1,78 @@
+{
+  "kind": "storage-provisioning-process-loss",
+  "revision": "e7084be23cac2ed81f83e86959d1ea40a420232c",
+  "recordedAt": "2026-11-15T09:12:28.533292+00:00",
+  "workflowRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43697912564",
+  "result": "success",
+  "classification": "eight native SIGKILL boundaries VERIFIED; incomplete-effect repair NOT IMPLEMENTED",
+  "hashes": {
+    "tests/fixtures/storage-crash-native.py": "acd12fbf1a7daafbcefbb09d625e4ed76bee70cbf3431daeac00cf1821a277b4",
+    "tests/fixtures/storage-qualification.sh": "912a044807943410247ee3c766babf67bc7c320e224980629e94af06d3cee66d",
+    "scripts/agentic_storage.py": "945fb24a0f1ebf53f8ea80bf8c7f6b1dbe703760351dfd36d1772be8827c66fb"
+  },
+  "cases": [
+    {
+      "boundary": "intent-committed",
+      "originalIntentRetained": true,
+      "mutationReplay": false,
+      "observation": "refused-incomplete",
+      "capacityRetained": true
+    },
+    {
+      "boundary": "first-root-created",
+      "originalIntentRetained": true,
+      "mutationReplay": false,
+      "observation": "refused-incomplete",
+      "capacityRetained": true
+    },
+    {
+      "boundary": "first-root-recorded",
+      "originalIntentRetained": true,
+      "mutationReplay": false,
+      "observation": "refused-incomplete",
+      "capacityRetained": true
+    },
+    {
+      "boundary": "first-project-applied",
+      "originalIntentRetained": true,
+      "mutationReplay": false,
+      "observation": "refused-incomplete",
+      "capacityRetained": true
+    },
+    {
+      "boundary": "second-project-applied",
+      "originalIntentRetained": true,
+      "mutationReplay": false,
+      "observation": "refused-incomplete",
+      "capacityRetained": true
+    },
+    {
+      "boundary": "hard-limit-applied",
+      "originalIntentRetained": true,
+      "mutationReplay": false,
+      "observation": "refused-incomplete",
+      "capacityRetained": true
+    },
+    {
+      "boundary": "first-owner-applied",
+      "originalIntentRetained": true,
+      "mutationReplay": false,
+      "observation": "refused-incomplete",
+      "capacityRetained": true
+    },
+    {
+      "boundary": "complete-before-reply",
+      "originalIntentRetained": true,
+      "mutationReplay": false,
+      "observation": "verified",
+      "capacityRetained": true
+    }
+  ],
+  "limits": [
+    "process loss at completed syscall/command boundaries, not power loss",
+    "external command interrupted mid-execution not simulated",
+    "safe refusal is not operator repair",
+    "no clean-host restore or reboot qualification"
+  ],
+  "fullMatrix": "not run"
+}

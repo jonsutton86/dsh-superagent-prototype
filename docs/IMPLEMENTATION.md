@@ -1278,3 +1278,8 @@ samples are integrated. Failed refreshes clear prior readings; incomplete provis
 Local 33 storage/coordinator and final 24 coordinator/UI tests passed. Native run `43697502068` passed
 the real coordinator status request after restart, 14 native tests, nine Python contracts, typecheck
 and seven builds. See [086 status evidence](evidence/086-storage-workspace-status.json) for remaining gates.
+
+Storage interruption qualification (`e7084be`): eight native SIGKILL boundaries passed, preserving
+original intents/capacity and refusing incomplete replay; completed-before-reply work was re-observed
+without mutation. This proves fail-closed process-loss handling, not partial-state repair or power-loss
+recovery. See [086 crash evidence](evidence/086-storage-provisioning-crashes.json); recovery work remains open.
