@@ -1103,6 +1103,10 @@ historical coverage. Abrupt host-loss acceptance and the final platform matrix r
 
 ### 2. Compute/state/environment contracts and remote execution — whole-profile mission integration implemented
 
+Next implementation: [085 Workspace aggregate resource allocation](085-workspace-resource-allocation.md) records the
+verified missing aggregate ceiling and the cross-layer implementation sequence. It is designed, not implemented; disk
+quotas and other compute/environment requirements remain open.
+
 Introduce an environment registry in the existing state store. Each environment has a stable ID, endpoint identity,
 capabilities, availability, grant revision and lease epoch. Bind a ticket's execution to that environment and grant revision.
 Keep the existing local path as the first provider. Add a remote Harness provider paired with its filesystem implementation;

@@ -1,0 +1,22 @@
+{
+  "kind": "workspace-aggregate-resource-source-contract",
+  "classification": "VERIFIED source gap; DESIGN proposed implementation; UNKNOWN native acceptance",
+  "recordedAt": "2026-11-15T07:15:56.522222+00:00",
+  "revision": "87f49c23c88fa0b9ce6f3e96a595fb25a22bed6c",
+  "hashes": {
+    "src/remote/resource-model.ts": "4325d76281e20f7f62ae64b03f978f1586b78570b89adc1718fbf5ff537dcfb5",
+    "src/remote/resources.ts": "8d07b5b9493846cec4db95ba8b1dcde625f4a3c880da60fcdbdfd7336a937760",
+    "src/remote/resource-worker.ts": "f20f6a1531416b7696e91c2d48fe9d68310b24278531daf18d6c56e24e3ff92c",
+    "src/remote/endpoint.ts": "cd7f4a047aa9cc0457c1fcaa0c69092a6d31d347636c771438d4f7778059691c",
+    "src/remote/protocol.ts": "7428ba2b168ef85640b078c069206b4ae9e5e41d740d535dd661d41680b68ed9"
+  },
+  "facts": [
+    "Only endpoint pool and command budgets currently exist.",
+    "Command groups are direct children of pool; helper assumes immediate parent is pool.",
+    "Async resource owner context contains effect identity, not workspace identity.",
+    "Authorized grants carry workspace identity and jobs retain grantId.",
+    "Resource policy is pinned in existing endpoint journal."
+  ],
+  "next": "Implement optional workspace aggregate policy and end-to-end original grant attribution without duplicate reservation persistence.",
+  "validation": "Source inspection and CodeGraph impact query only; no new runtime feature or kernel enforcement claimed."
+}
