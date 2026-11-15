@@ -1,0 +1,37 @@
+{
+  "revision": "ab4301943ed56964917986ed79986a2e636b0066",
+  "classification": "VERIFIED",
+  "workflow": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43707033784",
+  "conclusion": "success",
+  "logSHA256": "406aa501c31d6f41596ca2b75161980adb3f45577ea30e0abca6253721f1b036",
+  "observation": {
+    "nativeLiveStorageCheckpoint": "passed",
+    "originalEndpointRecords": true,
+    "heldStaging": true,
+    "restoreVerified": false
+  },
+  "priorFailure": {
+    "workflow": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43706707536",
+    "revision": "536b40f6b3e9dadb5ede46f12d4d41024b7f83f1",
+    "finding": "Actual endpoint SQLite state inherited mode 0644; offline snapshot requires 0600",
+    "reproduction": "Journal mode assertion failed locally: expected 384 (0600), received 420 (0644)",
+    "fix": "Create/check owned regular database with no symlink or extra hard links, set and sync private mode before SQLite open"
+  },
+  "localValidation": {
+    "journalAndRecovery": "39 passed, 1 native-only skipped",
+    "endpointAndCredentials": "43 passed, 3 platform cases skipped",
+    "typecheck": "passed"
+  },
+  "nativeValidation": [
+    "Real endpoint execution and restart records preserved after stop",
+    "Root paired command invokes unprivileged endpoint exporter",
+    "Artifact hash verification and complete host/endpoint crosscheck",
+    "Encrypted capture, verification, held staging",
+    "Existing scoped XFS, launcher, installation and crash checks passed"
+  ],
+  "limits": [
+    "Checkpoint coordinator/session fixture is minimal; endpoint and host records are produced by real execution",
+    "Workspace content backup and live restore are not implemented by this test",
+    "No full-system qualification or deployment"
+  ]
+}

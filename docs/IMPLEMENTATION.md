@@ -1402,3 +1402,9 @@ through an unprivileged endpoint export and artifact verification. Focused Linux
 qualification passed at f4c9ae5. Full endpoint/host record crosschecking still occurs
 in checkpoint capture; workspace data capture, process quiescence and storage
 restoration remain open. See increment 086 and its paired-capture evidence.
+
+Real endpoint execution records now pass paired capture, full host/endpoint record
+crosscheck, encrypted checkpoint verification and held staging on Linux (ab43019).
+This exposed and fixed endpoint SQLite file permissions inherited from the process
+umask. The tested scope excludes workspace contents and live restoration; increment
+086 records both the initial failure and successful rerun.

@@ -1251,3 +1251,26 @@ rejection cases) and seven backup tests passed at the revision in
 [this receipt](evidence/086-capture-receipt-refusals.json). The local tests assert
 privilege-drop arguments but mock that OS boundary; preceding native CI provides
 its separate evidence. These contracts now run in the Linux storage job as well.
+
+### Actual endpoint records through checkpoint staging
+
+The native service fixture now retains the real endpoint journal after execution,
+quota enforcement and restart checks, stops it, runs paired capture, and transfers
+private copies to the checkpoint operator. A dedicated test crosschecks the full
+host/endpoint records, creates and verifies an encrypted checkpoint, and confirms
+staging retains its execution hold. Its coordinator/session fixture is minimal;
+the endpoint storage and host records are produced by actual endpoint execution.
+
+The first run exposed a real integration defect: SQLite inherited `0644` for the
+endpoint database, incompatible with private snapshot requirements. A local mode
+assertion reproduced the issue. Journal opening now creates/checks an owned regular
+file without symlinks or extra hard links, sets `0600`, and syncs it before SQLite
+opens it. Local journal/recovery checks passed 39 tests; adjacent endpoint/credential
+checks passed 43, with native/platform-only cases skipped. Typecheck passed.
+
+Focused Linux qualification then passed at
+`ab4301943ed56964917986ed79986a2e636b0066`, including the live-record
+capture-to-checkpoint journey and existing native storage checks.
+[Evidence and failed/successful run links](evidence/086-live-storage-checkpoint.json).
+This closes that integration-test gap; workspace content capture, globally fenced
+recovery ownership and storage restoration remain open.
