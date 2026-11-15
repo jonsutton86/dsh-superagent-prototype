@@ -1004,3 +1004,25 @@ existing storage-journal suite passed, plus typecheck. CodeGraph selected the ne
 the journal suite supplied adjacent coverage. No native/full qualification was rerun for this pure
 backend helper. [Evidence](evidence/086-storage-cross-binding.json). Artifact readers, authenticated
 image integration, ownership fencing and restore remain open.
+
+
+### Bounded original-row readers
+
+The storage recovery component now includes `readEndpointStorageSnapshot` and
+`readHostStorageSnapshot`, using the existing `StateReader` byte/record limits, cancellation checks
+and capture digests. They accept already-authenticated frozen SQLite handles, never paths, and do
+not construct product services. Endpoint metadata, reservation SQL keys and grant SQL keys must agree
+with their saved JSON. Host endpoint configuration and operation SQL keys must likewise agree with
+original intent and policy. Required tables cannot silently disappear. Reads preserve source journals.
+
+The selected endpoint's normalized host view includes original allocation/root records; the capture
+digest also accounts for other host rows, namespace records and repair approvals. Full host artifact
+audit remains a prerequisite, not an inferred result of normalizing the selected endpoint. The readers
+feed the pure cross-check but are not yet wired into a recovery image or restore command. Snapshot
+provenance, frozen-epoch ownership and live filesystem proof still belong to the caller/integration.
+
+VERIFIED at `d46eabc97b258e6558d267f22d490c7e8735514d`: 41 focused/adjacent tests passed before a
+type-only narrowing correction; typecheck and all 18 recovery-storage tests then passed after that
+correction. Tests cover direct SQLite normalization, unchanged mutation counters, mismatched keys,
+missing tables, cancellation and repair-row digest changes. No native/full suite was rerun for these
+read-only readers. [Evidence](evidence/086-storage-row-readers.json). Full recovery integration remains open.

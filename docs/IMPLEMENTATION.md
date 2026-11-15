@@ -1357,3 +1357,9 @@ limits and grant roots must agree; missing/extra host allocations are refused ex
 retained pre-host provisioning gap. [Evidence](evidence/086-storage-cross-binding.json).
 This helper is not yet integrated into export/restore; authenticated readers, image binding and
 ownership/live-filesystem validation remain required. Storage-backed recovery stays refused.
+
+
+086 original-row readers: VERIFIED at `d46eabc` with final typecheck/18 storage-recovery tests and
+preceding 41-test adjacent run. Bounded read-only SQLite readers check original SQL keys against JSON,
+preserve the journals and digest retained namespace/repair records. [Evidence](evidence/086-storage-row-readers.json).
+Authenticated artifact opening, image membership, fencing and live restore integration remain unfinished.

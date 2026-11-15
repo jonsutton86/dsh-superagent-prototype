@@ -1,0 +1,26 @@
+{
+  "kind": "storage-recovery-original-row-readers",
+  "revision": "d46eabc97b258e6558d267f22d490c7e8735514d",
+  "recordedAt": "2026-11-15T10:16:04.552444+00:00",
+  "classification": "VERIFIED bounded SQLite readers and cross-check; NOT INTEGRATED into recovery export/restore; NOT DEPLOYED",
+  "hashes": {
+    "src/recovery/storage.ts": "c1a8b0ff2174a4dd9e22a677af94e776d5506222a97b1b5cc74fe07efe331aef",
+    "tests/recovery-storage.spec.ts": "9b8f3b82e8f3a18aac9d7317f8dc1f9665b103675af27e7c01e6545cb49ceaa7"
+  },
+  "validation": [
+    "41 focused/adjacent tests passed before a type-only narrowing correction",
+    "Typecheck and all 18 recovery-storage tests passed after the correction",
+    "SQLite endpoint/host rows normalize to the original captured records",
+    "Mismatched reservation, grant, operation and configuration SQL keys refused",
+    "Missing required tables and pre-cancelled signals refused",
+    "Source total_changes counters unchanged by reads",
+    "Changing a retained repair row changes the host capture digest",
+    "CodeGraph affected selection identified recovery-storage.spec.ts"
+  ],
+  "limits": [
+    "Caller must provide authenticated frozen databases and full audited host artifact",
+    "Readers do not authenticate file paths, snapshot hashes or image membership",
+    "Recovery image/export/import/fencing and live filesystem checks remain open",
+    "No new native/full qualification for this bounded read-only component"
+  ]
+}
