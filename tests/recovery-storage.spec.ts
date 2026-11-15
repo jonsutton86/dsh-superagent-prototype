@@ -1,3 +1,8 @@
+import { createHash } from 'node:crypto'
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { auditStorageRecoveryArtifacts } from '../src/recovery/storage-artifacts.ts'
 import { expect, it } from 'vitest'
 import { DatabaseSync } from 'node:sqlite'
 import { auditStorageRecoveryBindings, readEndpointStorageSnapshot, readHostStorageSnapshot } from '../src/recovery/storage.ts'
@@ -99,4 +104,33 @@ it('honors cancellation before reading either database', async () => {
     await expect(readEndpointStorageSnapshot(db.endpoint, AbortSignal.abort())).rejects.toThrow()
     await expect(readHostStorageSnapshot(db.host, db.value.host.endpointId, AbortSignal.abort())).rejects.toThrow()
   } finally { db.close() }
+})
+
+
+it('verifies expected artifact bytes before reading isolated SQLite copies', async () => {
+  const db = databases(), directory = await mkdtemp(join(tmpdir(), 'dsh-storage-artifact-test-'))
+  try {
+    const capture = async (source: DatabaseSync, name: string) => {
+      const path = join(directory, name)
+      source.prepare('VACUUM INTO ?').run(path); await chmod(path, 0o600)
+      const bytes = await readFile(path)
+      return { path, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') }
+    }
+    const endpoint = await capture(db.endpoint, 'endpoint.sqlite'), host = await capture(db.host, 'host.sqlite')
+    const input = { endpointId: db.value.endpoint.endpointId, endpoint, host }, signal = new AbortController().signal
+    const result = await auditStorageRecoveryArtifacts(input, signal)
+    expect(result).toMatchObject({ recordBindingsVerified: true, restoreVerified: false, liveFilesystemVerified: false,
+      hostRegistryAuditRequired: true, endpointArtifact: { sha256: endpoint.sha256 }, hostArtifact: { sha256: host.sha256 } })
+    expect(createHash('sha256').update(await readFile(endpoint.path)).digest('hex')).toBe(endpoint.sha256)
+    await expect(auditStorageRecoveryArtifacts({ ...input, host: { ...host, sha256: 'f'.repeat(64) } }, signal)).rejects.toThrow('digest')
+    await expect(auditStorageRecoveryArtifacts({ ...input, endpoint: { ...endpoint, bytes: endpoint.bytes - 1 } }, signal)).rejects.toThrow('size')
+    await expect(auditStorageRecoveryArtifacts(input, AbortSignal.abort())).rejects.toThrow()
+    const walHeader = await readFile(endpoint.path); walHeader[18] = 2; walHeader[19] = 2
+    await writeFile(endpoint.path, walHeader)
+    const walInput = { ...input, endpoint: { ...endpoint, sha256: createHash('sha256').update(walHeader).digest('hex') } }
+    await expect(auditStorageRecoveryArtifacts(walInput, signal)).rejects.toThrow('standalone SQLite')
+    walHeader[18] = 1; walHeader[19] = 1; await writeFile(endpoint.path, walHeader)
+    await chmod(host.path, 0o644)
+    await expect(auditStorageRecoveryArtifacts(input, signal)).rejects.toThrow('private owned')
+  } finally { db.close(); await rm(directory, { recursive: true, force: true }) }
 })
