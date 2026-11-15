@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-15",
+  "testedRevision": "7f0905e145088361f76e7de916485d62f80fe6d8",
+  "localTests": {
+    "vitestPassed": 34,
+    "nativeOnlySkipped": 1,
+    "pythonContractTestsPassed": 3
+  },
+  "nativeRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43716443906",
+  "nativeVitestPassed": 50,
+  "nativePythonFixtures": "passed",
+  "typecheck": "passed locally and in Linux CI",
+  "build": "passed locally and in Linux CI",
+  "verified": [
+    "explicit repeated capture UUID and reviewed manifest selections",
+    "strict selection/result matching across privilege boundary",
+    "unprivileged stopped-endpoint reinspection under host registry and endpoint writer locks",
+    "fresh installed Harness quota-backed archive survives handoff and checkpoint verification",
+    "legacy unselected paired export continues to pass"
+  ],
+  "executionQuiescenceVerified": false,
+  "globalSnapshotVerified": false,
+  "restoreVerified": false,
+  "deployed": false
+}

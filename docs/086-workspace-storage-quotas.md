@@ -1929,3 +1929,28 @@ source/database immutability, successful original-record reinspection, unknown/d
 selections, wrong digests, changed grant/storage bindings, altered retained results and
 changed source contents without a completion receipt. No new native test is claimed.
 See [handoff evidence](evidence/086-capture-handoff.json).
+
+### Paired host-export capture handoff
+
+The root operator's `capture-pair` command now accepts repeated
+`--capture <original-request-uuid>:<reviewed-manifest-sha256>` selections. They are
+bounded, unique and passed as structured JSON to the unprivileged stopped-endpoint
+exporter. The root parent requires an exact matching handoff result, including each
+inventory digest and explicit false quiescence/global-snapshot/restore claims. Missing,
+changed or overclaiming results fail the operation. Legacy unselected capture remains
+unchanged and cannot silently gain a handoff claim.
+
+The host registry lock remains held while the endpoint writer lock is acquired and
+selected archives are checked against fresh source contents. No endpoint startup or
+storage RPC occurs inside this path, avoiding the lock-order problem documented above.
+This still does not prevent unmanaged filesystem writers or establish a coordinated
+coordinator/session epoch. Reinspection evidence is returned in the pair's endpoint
+receipt; it is not yet an authenticated checkpoint-level global capture claim.
+
+VERIFIED at `7f0905e145088361f76e7de916485d62f80fe6d8`: [Linux run 43716443906](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43716443906)
+passed 50 scoped Vitest cases and the native Python fixtures, typecheck and build. The
+real paired-export command selected the freshly installed Harness quota-backed capture,
+returned the exact requested handoff digests and passed the subsequent archive-bearing
+checkpoint journey. Legacy unselected paired export also passed. Local checks passed
+34 Vitest cases (one native-only skip), three subprocess receipt/selection contract tests,
+typecheck and build. See [paired handoff evidence](evidence/086-paired-capture-handoff.json).

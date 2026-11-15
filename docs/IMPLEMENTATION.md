@@ -49,8 +49,10 @@ held staging at `47cb9ee9ed0675d56aa51b4b79a9ecf7dd2d0a3d`
 ([evidence](evidence/086-installed-storage-capture.json)). Operator UI review, a coordinated
 capture epoch and clean-host activation remain unfinished. The stopped-endpoint export API now optionally
 rechecks explicitly selected captures against fresh source contents under its writer lock
-([evidence](evidence/086-capture-handoff.json)); paired-host CLI wiring and native handoff
-qualification remain open.
+([evidence](evidence/086-capture-handoff.json)). Paired-host CLI wiring and native handoff
+qualification now pass at `7f0905e145088361f76e7de916485d62f80fe6d8`
+([evidence](evidence/086-paired-capture-handoff.json)); this remains a content reinspection,
+not a process fence or coordinated global snapshot.
 
 The immediate recovery sequence remains: capture workspace content under verified process quiescence; bind that content
 to the original storage allocations and authenticated checkpoint; implement target filesystem/quota verification and
