@@ -1,0 +1,39 @@
+{
+  "kind": "read-only-native-storage-probe",
+  "revision": "65f346e4fcde9d5c2de9bff32f6923e648252641",
+  "recordedAt": "2026-11-15T07:52:12.898050+00:00",
+  "classification": "IMPLEMENTED and native TESTED observer; NOT INTEGRATED provisioning/dispatch",
+  "workflowRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43691750911",
+  "hashes": {
+    "src/remote/storage-probe.ts": "9375a70ed3ae4ee78e4f88cad50ba277a8ffc52d34e1a1a194502e38dbd68772",
+    "tests/storage-probe.spec.ts": "c84881ff763385c66d1290f064dc48d582c749a479e462f247cc807fb5d02ef6",
+    "tests/fixtures/storage-qualification.sh": "29207c0844105ce2b567d7bbfd65d2836c16c5f86a82289755f2056dda17af24",
+    ".github/workflows/remote-execution.yml": "e1c415d6f92e0ddf18a61a661b6e15fa438df57f4d8f360127cf3c3eb63b2d06"
+  },
+  "validation": {
+    "nativeTests": 12,
+    "nativeSkipped": 0,
+    "nativeResult": "success",
+    "mechanismFixture": "passed",
+    "localTests": 11,
+    "localNativeSkipped": 1,
+    "typecheck": "passed after Context fiber cleanup repair",
+    "fullSuite": "not run",
+    "build": "not run"
+  },
+  "cancelledRun": {
+    "id": 43691714594,
+    "conclusion": "cancelled",
+    "reason": "Typecheck caught invalid test cleanup method; cancelled and confirmed terminal before corrected dispatch"
+  },
+  "limitations": [
+    "root-privileged fixture; production quota observation permission not established",
+    "point-in-time observations only",
+    "no descendant tree audit",
+    "no host-wide ID exclusivity proof",
+    "no provisioning side effects",
+    "no enrollment or dispatch integration",
+    "startup refusal for pinned storage policies remains",
+    "no deployment"
+  ]
+}

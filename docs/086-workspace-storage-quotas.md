@@ -108,3 +108,28 @@ focused case and the final three-suite run passed without unhandled errors. No r
 Next: implement a trusted filesystem/quota observation and provisioning boundary, bind the existing reservations to actual
 host effects, integrate enrollment and verification roots, and remove the WIP startup guard only when dispatch enforces
 those pinned records. Local project uniqueness does not establish host-wide exclusivity of the configured ID range.
+
+## Read-only Harness host probe
+
+`src/remote/storage-probe.ts` now observes the real host filesystem through bounded, time-limited Harness subprocesses.
+It requires the pinned XFS UUID and mount root, matching numeric mount identity for every supplied directory, canonical
+non-symlink paths, directory identity before/after observation, inherited project membership, no realtime allocation flags,
+and exact configured byte/inode hard limits with both accounting and enforcement enabled. It rejects empty, duplicate,
+truncated, unsafe-number, unit-suffixed or wrong-project quota output. Locale is fixed; external diagnostic text is not
+used as a readiness decision. The probe neither escalates privileges nor modifies the filesystem/quota policy.
+
+Native evidence at `65f346e4fcde9d5c2de9bff32f6923e648252641`: [run 43691750911](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43691750911)
+passed all 12 probe tests, none skipped, plus the existing native mechanism fixture. The real Harness subprocess adapter
+read the two prepared roots, and rejected disabled enforcement, a changed hard byte limit, and the independent project's
+root. The fixture runs with root privileges to read quota state; this does not establish the production endpoint user's
+permission to run quota inspection. A narrowly scoped trusted host boundary remains required.
+
+Local parser checks passed 11 tests with the native case skipped. Typecheck initially caught the test using `ctx.dispose`
+instead of Harness `ctx.fiber.dispose`; the first dispatch (`43691714594`) was cancelled, confirmed terminal, and is not
+acceptance evidence. Typecheck passed after correction. No full-suite, build, deployment or provider request ran.
+
+The returned observation is point-in-time evidence only: concurrent path/mount changes, existing descendant membership,
+host-wide project ownership, and changes after observation are not proven safe by it. Do not persist a ready state or
+remove the endpoint startup guard solely because this probe succeeds. Provisioning must establish protected roots and
+execution must revalidate/fence the bound storage identity. Enrollment, recovery reconciliation and dispatch integration
+remain unfinished; this preserves the original full storage scope.

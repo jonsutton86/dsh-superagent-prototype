@@ -1115,6 +1115,8 @@ The next storage boundary and acceptance sequence are recorded in [086 Workspace
 focused native XFS mechanism checks now pass at `bcfd859` (run `43691070339`). Endpoint storage enforcement and recovery integration remain unfinished; see `docs/evidence/086-native-storage.json`.
 The durable allocation/provisioning-intent backend now passes focused checks (`docs/evidence/086-storage-journal.json`);
 enrollment/kernel integration is still WIP and persisted storage policies cannot start unenforced endpoints.
+The read-only host probe passed 12 native checks through Harness at `65f346e` (`docs/evidence/086-storage-probe.json`);
+its point-in-time result does not yet authorize dispatch or establish protected roots.
 
 Introduce an environment registry in the existing state store. Each environment has a stable ID, endpoint identity,
 capabilities, availability, grant revision and lease epoch. Bind a ticket's execution to that environment and grant revision.
