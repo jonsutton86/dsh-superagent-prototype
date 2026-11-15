@@ -8,10 +8,11 @@ import { privateInput } from './crypto.ts'
 import { verifyWorkspaceRecovery } from './workspace-verify.ts'
 
 const member = z.string().regex(/^[a-z0-9-]+\.bin$/)
-export const WorkspaceArchiveBindings = z.array(z.object({ source: z.string().max(4096).startsWith('/'), manifestMember: member,
+export const WorkspaceArchiveBindings = z.array(z.object({ source: z.string().max(4096).startsWith('/').refine(value => !value.includes('\0')), manifestMember: member,
   content: z.array(z.object({ name: z.string().regex(/^content-(0|[1-9]\d*)\.bin$/), member }).strict()).max(19999) }).strict()).min(1).max(256).optional()
 interface File { member: string; kind: string; bytes: number; sha256: string }
 export function validateWorkspaceMembers(bindings: z.infer<typeof WorkspaceArchiveBindings>, files: readonly File[]): void {
+  WorkspaceArchiveBindings.parse(bindings)
   const used = new Set<string>(), sources = new Set<string>(), indexed = new Map(files.map(file => [file.member, file]))
   if (indexed.size !== files.length) throw new Error('Duplicate recovery workspace member catalog')
   for (const binding of bindings ?? []) {

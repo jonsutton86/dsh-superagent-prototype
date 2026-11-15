@@ -1,10 +1,11 @@
+import { validateWorkspaceMembers, verifyWorkspaceMembers } from '../src/recovery/workspace-members.ts'
 import { createRecoveryKey } from '../src/recovery/crypto.ts'
 import { encryptWorkspaceRecovery, verifyEncryptedWorkspaceRecovery } from '../src/recovery/workspace-encrypted.ts'
 import { verifyWorkspaceRecovery } from '../src/recovery/workspace-verify.ts'
 import { createHash } from 'node:crypto'
 import { captureWorkspaceRecovery } from '../src/recovery/workspace-archive.ts'
 import { it, expect } from 'vitest'
-import { mkdtemp, mkdir, writeFile, symlink, link, rm, chmod, readFile, stat, readdir, realpath } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, symlink, link, rm, chmod, readFile, stat, readdir, realpath, copyFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { inventoryWorkspaceRecovery } from '../src/recovery/workspace-tree.ts'
@@ -139,5 +140,30 @@ it('encrypts verified workspace bytes and refuses wrong keys or changed cipherte
     await expect(encryptWorkspaceRecovery(plain.path, encrypted.path, key)).rejects.toMatchObject({ code: 'EEXIST' })
     const embeddedKey = join(source, 'embedded-key'); createRecoveryKey(embeddedKey)
     await expect(encryptWorkspaceRecovery(plain.path, join(root, 'refused-key'), embeddedKey)).rejects.toThrow('original workspace')
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+
+it('verifies authenticated workspace member mapping and rejects role, source and digest substitutions', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'recovery-member-binding-')))
+  try {
+    const source = join(root, 'source'); await mkdir(source, { mode: 0o700 }); await writeFile(join(source, 'file'), 'original')
+    const archive = await captureWorkspaceRecovery(source, join(root, 'archive'), budget)
+    const members = join(root, 'members'); await mkdir(members, { mode: 0o700 })
+    const files = []
+    for (const [name, kind] of [['manifest.json', 'workspace-manifest'], ['content-0.bin', 'workspace-content']] as const) {
+      const member = `member-${files.length}.bin`, bytes = await readFile(join(archive.path, name))
+      await copyFile(join(archive.path, name), join(members, member))
+      files.push({ member, kind, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') })
+    }
+    const bindings = [{ source, manifestMember: 'member-0.bin', content: [{ name: 'content-0.bin', member: 'member-1.bin' }] }]
+    await expect(verifyWorkspaceMembers(members, bindings, files, new AbortController().signal)).resolves.toBeUndefined()
+    expect(() => validateWorkspaceMembers([bindings[0]!, bindings[0]!], files)).toThrow('Duplicate recovery workspace source')
+    expect(() => validateWorkspaceMembers(undefined, files)).toThrow('Unbound')
+    expect(() => validateWorkspaceMembers(bindings, [files[0]!, { ...files[1]!, kind: 'session' }])).toThrow('binding differs')
+    expect(() => validateWorkspaceMembers([{ ...bindings[0]!, content: [{ name: '../escape', member: 'member-1.bin' }] }], files)).toThrow()
+    await expect(verifyWorkspaceMembers(members, [{ ...bindings[0]!, source: '/another-workspace' }], files, new AbortController().signal)).rejects.toThrow('source differs')
+    await expect(verifyWorkspaceMembers(members, bindings, [files[0]!, { ...files[1]!, sha256: 'f'.repeat(64) }], new AbortController().signal)).rejects.toThrow('authenticated digest')
+    await expect(verifyWorkspaceMembers(members, bindings, files, AbortSignal.abort())).rejects.toThrow()
   } finally { await rm(root, { recursive: true, force: true }) }
 })
