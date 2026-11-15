@@ -1,0 +1,24 @@
+{
+  "revision": "de25f296e9e47205cbd31732010a3ee9f6f8b2f2",
+  "classification": "VERIFIED",
+  "validation": {
+    "recoveryRing": "90 passed, 1 Linux-only skipped across 4 suites",
+    "typecheck": "passed before final fixture correction and duplicate catalog guard",
+    "build": "passed at final source state"
+  },
+  "behavior": [
+    "Explicit workspaceArtifacts profile/config input",
+    "Unique original coordinator workspace binding required at capture and verification",
+    "Verified private archive copies encrypted with existing checkpoint key",
+    "Authenticated role/name mapping and content hashes rechecked",
+    "Held staging and receipt preparation retain mappings",
+    "Installation refuses workspace-bearing images pending restore integration"
+  ],
+  "limits": [
+    "Supplied archive is not evidence of a globally frozen source",
+    "Source path binding is not fresh inode/quiescence/ownership proof",
+    "No live workspace extraction or installation",
+    "Checkpoint aggregate member/manifest bounds still apply; oversized archives are refused, never truncated",
+    "Final full macOS/Linux qualification remains open"
+  ]
+}

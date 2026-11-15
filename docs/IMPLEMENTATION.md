@@ -1421,3 +1421,11 @@ crosscheck, encrypted checkpoint verification and held staging on Linux (ab43019
 This exposed and fixed endpoint SQLite file permissions inherited from the process
 umask. The tested scope excludes workspace contents and live restoration; increment
 086 records both the initial failure and successful rerun.
+
+Workspace content archives now have explicit authenticated membership in coordinator
+checkpoints, with original coordinator source-path checks and repeated archive
+verification. The offline profile exposes `workspaceArtifacts`; held staging and
+receipt preparation retain its mappings. Workspace-bearing installation remains
+blocked until fresh ownership/quiescence and restoration are implemented. The
+focused recovery ring passed 90 tests (one native-only skip), with a successful build
+at de25f29; increment 086 records exact qualification limits.

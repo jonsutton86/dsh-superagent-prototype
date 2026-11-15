@@ -1379,3 +1379,31 @@ changed ciphertext, existing output and original-workspace key refusal.
 archive; coordinator checkpoint membership, frozen-source ownership, live helper
 integration and restoration remain unfinished. Encryption authenticity does not
 establish source authority or permission to resume execution.
+
+### Workspace archives in coordinator checkpoints
+
+The offline maintenance profile now accepts `workspaceArtifacts`, a list of absolute
+paths to private plaintext workspace archives produced by `captureWorkspaceRecovery`.
+For each archive, capture verifies its content and requires a unique source path
+already recorded in the coordinator's task execution or execution-environment roots.
+It encrypts the verified private copies with the existing checkpoint key and records
+an explicit mapping from archive manifest/content names to checkpoint members.
+
+Checkpoint verification authenticates members, reconstructs a temporary private
+archive, reruns structural/content verification, and checks source membership against
+the archived coordinator. No member can be shared between workspace bindings or left
+unbound. Staging preserves the mapped files and its execution hold. Receipt preparation
+preserves mappings, and signed-image verification rechecks them and the content.
+Installation explicitly refuses images containing workspace archives until ownership
+fencing and restoration are implemented; nothing is extracted into a working tree.
+
+Existing aggregate checkpoint bounds still apply (20,000 members and bounded manifests),
+so a larger standalone archive can be refused by checkpoint capture. No files are
+silently omitted. Source-path binding is not proof of a fresh inode identity, common
+capture epoch, worker quiescence or current ownership; those gates remain open.
+
+The affected checkpoint/storage/archive/installation ring passed 90 tests, with one
+Linux-only test skipped locally, and the final build passed.
+[Evidence](evidence/086-workspace-checkpoint-members.json) records the exact source
+revision and typecheck scope. This is explicit supplied-archive integration, not
+live capture or a completed workspace restore.
