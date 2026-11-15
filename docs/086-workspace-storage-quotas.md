@@ -133,3 +133,29 @@ host-wide project ownership, and changes after observation are not proven safe b
 remove the endpoint startup guard solely because this probe succeeds. Provisioning must establish protected roots and
 execution must revalidate/fence the bound storage identity. Enrollment, recovery reconciliation and dispatch integration
 remain unfinished; this preserves the original full storage scope.
+
+## Provisioning orchestration and response-loss recovery
+
+At `13eb4e5ce068230c48f7e69a84476c9ab949b1b4`, `StorageProvisioning` serializes preparation through a trusted host adapter, records the provisioning intent
+before its first host effect, and always obtains a new observation before recording completion. A replay after response
+loss only inspects the original project/roots. It never automatically repeats the provisioning call or allocates another
+project. The original journal row now records a strictly validated `provisioned` observation; this records historical
+provisioning, not authorization to dispatch. The startup guard remains.
+
+Root plans derive from the pinned mount, endpoint UUID and workspace ID under separate workspaces/verification parents.
+Stored observations must match both roots, exact quota policy and original project; later observations cannot replace
+previously bound root device/inode or mount identity. Audit/receipt failure rolls back the observed state, leaving the
+original provisioning intent recoverable. Reopen rejects corrupted observation identity or limits. No release path was added.
+
+Validation: 28 checks passed across storage journal/probe before the final corruption assertion (one native skip); the
+final journal suite passed all 18 tests and typecheck passed. These use actual SQLite restart and an explicit simulated
+host adapter; they are not evidence of production privileged provisioning. The additional native sandbox inheritance
+attack passed at `745f3bc6a6e447b9df5aaf680ff15969f97a5c57` in [run 43691948723](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43691948723),
+alongside the existing mechanism checks and 12 native probe tests. Sandbox `chattr -P` was refused and the root's actual
+project-inherit flag remained set. This is mechanism evidence at that revision, not native testing of the later orchestration.
+
+Next required work: implement the narrowly scoped privileged host adapter with protected parent ownership, host-wide
+project-range exclusivity, identity-pinned empty-root creation and recoverable partial provisioning; connect endpoint
+enrollment and snapshot roots; validate/fence dispatch; add operator configuration and recovery paths. The new `StorageHost`
+interface has no production implementation yet. Neither this checkpoint nor a `provisioned` journal row means storage
+protection has been integrated or deployed.

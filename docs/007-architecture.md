@@ -388,6 +388,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/remote/resource-model.ts`, `resources.ts`, `resource-worker.ts` | Pinned cgroup v2 pool/process-tree limits, pre-exec enforcement, whole-tree cancellation, kernel usage receipts and population-aware reconciliation |
 | `src/remote/storage-model.ts`, `storage-journal.ts` | WIP strict XFS policy and journal-backed original quota allocations/provisioning intents; not yet kernel provisioning or enrollment integration |
 | `src/remote/storage-probe.ts` | Read-only Harness host observation of pinned XFS mount, root identities, project inheritance and exact enforced quota; not provisioning or dispatch authority |
+| `src/remote/storage-provisioning.ts` | Original-intent provisioning orchestration and fresh-observation recovery; trusted privileged host adapter and endpoint integration still unfinished |
 | `src/verification/model.ts`, `snapshot.ts`, `snapshot-worker.ts`, `runner.ts` | Bounded host-captured file/Git manifests, private copied inputs, revision-pinned checks, output digests and quiescence-bound cleanup through Harness |
 | `src/verification/git-tree.ts` | Canonical Git blob/tree reconstruction from captured bytes and modes, independent of index and local objects |
 | `src/verification/contracts.ts`, `definitions.ts` | Strict operator-authored check contracts, immutable versions, scope/worker authority, durable command receipts and metadata limits |

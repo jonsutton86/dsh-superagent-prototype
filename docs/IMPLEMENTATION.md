@@ -1117,6 +1117,8 @@ The durable allocation/provisioning-intent backend now passes focused checks (`d
 enrollment/kernel integration is still WIP and persisted storage policies cannot start unenforced endpoints.
 The read-only host probe passed 12 native checks through Harness at `65f346e` (`docs/evidence/086-storage-probe.json`);
 its point-in-time result does not yet authorize dispatch or establish protected roots.
+Provisioning orchestration now preserves original effects across response loss and validates persisted observations
+(`docs/evidence/086-storage-provisioning.json`); the production privileged adapter and endpoint wiring remain unfinished.
 
 Introduce an environment registry in the existing state store. Each environment has a stable ID, endpoint identity,
 capabilities, availability, grant revision and lease epoch. Bind a ticket's execution to that environment and grant revision.

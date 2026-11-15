@@ -1,0 +1,47 @@
+{
+  "kind": "original-storage-provisioning-recovery",
+  "revision": "13eb4e5ce068230c48f7e69a84476c9ab949b1b4",
+  "recordedAt": "2026-11-15T07:56:29.200447+00:00",
+  "classification": "IMPLEMENTED orchestration; TESTED SQLite plus simulated host; NOT INTEGRATED privileged adapter",
+  "hashes": {
+    "src/remote/storage-model.ts": "975af23e256ee085bec129c77d150d933b4e4d481de84469d70e59e694725d66",
+    "src/remote/storage-journal.ts": "879b57c8605734d3e294992be0fe896a7e723e49d5d5fd9e416e3ca5bd0576df",
+    "src/remote/storage-provisioning.ts": "336e1e07b6e0a29ee5efe473aa2235aaa932c19b911aaac28ba10fd2152599fb",
+    "tests/storage-journal.spec.ts": "1fd16609794c1793ccdea0f4cbbacd30cca2e674354d19dadac1567948b3a551"
+  },
+  "validation": {
+    "finalFocusedSuite": "tests/storage-journal.spec.ts",
+    "passed": 18,
+    "failed": 0,
+    "typecheck": "passed",
+    "priorCombinedJournalProbeRun": {
+      "passed": 28,
+      "nativeSkipped": 1
+    },
+    "nativeInheritance": {
+      "revision": "745f3bc6a6e447b9df5aaf680ff15969f97a5c57",
+      "url": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43691948723",
+      "result": "success",
+      "inheritanceChangeDenied": true,
+      "probeTests": 12
+    }
+  },
+  "coverage": [
+    "lost host response then SQLite reopen recovers by observation only",
+    "duplicate preparations produce one host write",
+    "changed roots or quota rejected",
+    "observation receipt failure retains intent",
+    "cancellation retains original capacity",
+    "corrupt persisted observation rejected on reopen"
+  ],
+  "remaining": [
+    "production privileged host adapter",
+    "protected roots and host-wide range ownership",
+    "partial native provisioning recovery",
+    "endpoint enrollment and verification-root wiring",
+    "execution-time storage fencing",
+    "operator UI and supported migration",
+    "full qualification",
+    "deployment"
+  ]
+}
