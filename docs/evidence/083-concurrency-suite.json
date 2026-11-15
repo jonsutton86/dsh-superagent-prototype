@@ -1,0 +1,28 @@
+{
+  "kind": "runtime-concurrency-focused-suite",
+  "recordedAt": "2026-11-15T06:59:15.853417+00:00",
+  "baseRevision": "fc1a867",
+  "workingTree": "Includes concurrent preparation repair; file digests identify focused fixture inputs. Not full qualification of a clean commit.",
+  "fileHashes": {
+    "tests/runtime-concurrency.spec.ts": "ffd3553e95ca4758197845c46c399f93e5762f89bc759e3d32edc4ae2d443077",
+    "tests/fixtures/host.ts": "9be2861fbe5a0220d9dadd43ff0b845706ccab255199b60219d8ca08fc258ee0"
+  },
+  "command": "env -u GIT_CONFIG_GLOBAL ./node_modules/.bin/vitest run tests/runtime-concurrency.spec.ts",
+  "result": {
+    "passed": 61,
+    "failed": 0,
+    "durationSeconds": 5.38
+  },
+  "typecheck": "pnpm typecheck passed",
+  "logs": [
+    "/tmp/dsh-083-concurrency-suite.log",
+    "/tmp/dsh-083-final-concurrency-typecheck.log"
+  ],
+  "changes": [
+    "Background-limit report asserts requested control separately from quiet receipt.",
+    "Failed fake kill leaves job running until explicit fixture termination.",
+    "Paused ready-task resume waits original worker idle and settled observation.",
+    "Warm unread-note restart remains automatic with continuous original authority; crashed missing-Agent restart requires explicit original-scope evidence."
+  ],
+  "limitations": "No full platform matrix, vendor inference or user-app deployment."
+}

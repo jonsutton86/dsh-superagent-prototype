@@ -525,11 +525,12 @@ describe('a worker whose work runs in the background', () => {
       await minutes(1)
     } finally { vi.useRealTimers() }
     await vi.waitFor(() => expect(latestAssignment(ticket())?.report).toMatchObject({ state: 'waiting', summary: 'The tests run in the background.\n\n'
-      + `Background jobs ran 30 minutes after the worker's turn ended and were killed: ${job} (pnpm test).` }))
+      + `Background jobs ran 30 minutes after the worker's turn ended; their stop was requested: ${job} (pnpm test).` }))
     expect(h.jobs.service.kill).toHaveBeenCalledWith(job, one.sessionId, expect.any(String))
-    // The kill was collected, so the worker reads of it at its next turn.
-    expect(h.agents.get(one.sessionId)!.inject).toHaveBeenCalledWith(expect.objectContaining({ content: [expect.objectContaining({
-      text: `Your background jobs ran 30 minutes after your turn ended and were killed: ${job} (pnpm test).` })] }))
+    // The report describes requested control; the separate original-scope receipt proves termination.
+    await h.runtime.executor.stops.idle()
+    expect(h.runtime.executor.stops.list(one.ticket.id).items).toContainEqual(expect.objectContaining({
+      scope: 'jobs', state: 'quiet', proof: 'registry' }))
     // Stopping its subagent would wake it with the end, in the Assignment it was just reported waiting in.
     expect(h.subagents.live(child)).toBe(true)
     expect(h.relays(h.runtime.masterId).at(-1)).toMatchObject({ kind: 'worker_report', state: 'waiting' })
@@ -667,6 +668,10 @@ describe('a worker whose work runs in the background', () => {
     h.runtime.engine.stopTicket(one.id)
     await vi.waitFor(() => expect(h.jobs.service.kill).toHaveBeenCalledWith(second, sessionId, expect.any(String)))
     expect(h.jobs.service.kill).toHaveBeenCalledWith(first, sessionId, expect.any(String))
+    // A failed kill is not termination. End the retained fake job explicitly so teardown observes real fixture quiet.
+    expect(h.jobs.service.list(sessionId).find(job => job.id === first)?.status).toBe('running')
+    h.jobs.end(first)
+    await h.runtime.executor.stops.idle()
   })
 })
 describe('what a worker read', () => {
@@ -729,15 +734,6 @@ describe('what a worker read', () => {
     h.ctx.on('agent/inbox/claimed', ({ message }) => { claimed.push(message.id) })
     // The replacement launch removes the retained copy before replaying the input once under the new assignment.
     h.runtime.executor.resume()
-    await h.runtime.idle()
-    expect(copies()).toHaveLength(1)
-    expect(h.agents.has(one.sessionId)).toBe(false)
-    const stop = h.runtime.executor.stops.list(one.ticket.id).items[0]!
-    expect(stop.state).toBe('unknown')
-    const result = await h.runtime.executor.stops.attest(stop.id, { schema: 1, requestId: 'crash-inbox-original-stop',
-      expectedRevision: stop.revision, executionBindingHash: stop.executionBindingHash, scopeHash: stop.scopeHash,
-      confirmed: true, note: 'Fixture operator inspected the original crashed scope and confirmed no work remains.' })
-    expect(result.receipt.phase).toBe('accepted')
     await vi.waitFor(() => expect(copies()).toHaveLength(2))
     h.step(one.sessionId); await h.runtime.idle(); await later()
     await vi.waitFor(() => expect(claimed).toContain(copies()[0]![0].id))
@@ -910,7 +906,13 @@ it('resumes an ended ticket a person wrote to during a pause once it lifts, unde
   await followUp('2', 'om_1')
   expect(h.runtime.store.tickets.get(first)).toMatchObject({ ended: expect.anything(), undelivered: [expect.any(String)] })
   await h.runtime.settings.pause(false, 'panel'); await pass()
-  expect(h.runtime.store.tickets.get(first)).toMatchObject({ assignments: [expect.anything(), expect.objectContaining({ state: 'running' })] })
+  // A ready report is not a turn-termination receipt; the original worker must finish before resuming.
+  expect(latestAssignment(h.runtime.store.tickets.get(first)!)?.state).toBe('pending')
+  idle(`worker-${first}`)
+  await h.runtime.executor.stops.idle()
+  const originalStop = h.runtime.executor.stops.list(first).items[0]!
+  expect((await h.runtime.executor.stops.recheck(originalStop.id)).state).toBe('quiet')
+  await vi.waitFor(() => expect(h.runtime.store.tickets.get(first)).toMatchObject({ assignments: [expect.anything(), expect.objectContaining({ state: 'running' })] }))
   expect(h.runtime.store.tickets.get(first)).not.toHaveProperty('ended')
   // A Mandate the Policy no longer holds when the pause lifts does not resume: its sender left the list meanwhile.
   await followUp('4', 'om_3')
