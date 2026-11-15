@@ -8,8 +8,19 @@ import signal
 import socket
 import stat
 import struct
+import time
 
 from agentic_storage import StorageHost, protected, require
+
+
+def strict_json(data):
+    def unique(pairs):
+        value = {}
+        for key, item in pairs:
+            require(key not in value)
+            value[key] = item
+        return value
+    return json.loads(data, object_pairs_hook=unique)
 
 
 def configuration(path):
@@ -21,7 +32,7 @@ def configuration(path):
         require(stat.S_ISREG(info.st_mode) and info.st_uid == 0 and info.st_nlink == 1 and not info.st_mode & 0o077 and info.st_size <= 16384)
         data = stream.read(16385)
         require(len(data) <= 16384)
-        return json.loads(data)
+        return strict_json(data)
 
 
 def respond(host, connection):
@@ -30,14 +41,18 @@ def respond(host, connection):
         _, uid, _ = struct.unpack('3i', connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize('3i')))
         require(uid == host.config['uid'])
         data = bytearray()
+        deadline = time.monotonic() + 5
         # One length-bounded JSON request; EOF prevents accepting a valid prefix followed by extra commands.
         while True:
+            remaining = deadline - time.monotonic()
+            require(remaining > 0)
+            connection.settimeout(remaining)
             part = connection.recv(4097 - len(data))
             if not part:
                 break
             data.extend(part)
             require(len(data) <= 4096)
-        value = json.loads(data)
+        value = strict_json(data)
         require(isinstance(value, dict) and set(value) == {'op', 'request'} and value['op'] in ['provision', 'observe'])
         request = value['request']
         require(isinstance(request, dict))
@@ -55,6 +70,7 @@ def respond(host, connection):
         # Never return host paths, arbitrary command output, configuration or submitted text in errors.
         reply = {'ok': False, 'error': 'storage_host_refused'}
     try:
+        connection.settimeout(1)
         connection.sendall(json.dumps(reply, separators=(',', ':')).encode())
     except OSError:
         pass  # Lost response does not undo or repeat an original host operation.

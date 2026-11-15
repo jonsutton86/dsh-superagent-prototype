@@ -50,11 +50,32 @@ while True:
  data+=part
 assert json.loads(data)=={'ok':False,'error':'storage_host_refused'},data
 '''
-    for payload in ['{"op":"observe","request":{},"policy":{}}', '{}{}', 'x' * 4097]:
+    for payload in ['{"op":"observe","request":{},"policy":{}}', '{}{}', '{"op":"observe","op":"provision","request":{}}', 'x' * 4097]:
         checked = subprocess.run([sys.executable, '-c', client, str(socket_path), payload], user=uid, group=gid,
                                  extra_groups=[], capture_output=True, text=True, timeout=15)
         assert checked.returncode == 0, checked.stderr
-    print(json.dumps({'nativeStorageService': 'passed', 'peerUidRequired': True, 'malformedRequestsRefused': True}), flush=True)
+    slow_client = """import json,socket,sys,time
+s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM);s.connect(sys.argv[1]);s.settimeout(.2)
+start=time.monotonic();data=b''
+while time.monotonic()-start<9:
+ s.sendall(b' ')
+ try:
+  part=s.recv(4096)
+  if not part: break
+  data+=part
+  if data: break
+ except socket.timeout: pass
+assert json.loads(data)=={'ok':False,'error':'storage_host_refused'},data
+assert 4 <= time.monotonic()-start < 8
+"""
+    slow = subprocess.run([sys.executable, '-c', slow_client, str(socket_path)], user=uid, group=gid,
+                          extra_groups=[], capture_output=True, text=True, timeout=12)
+    assert slow.returncode == 0, slow.stderr
+    # The service must still accept a new connection after terminating the slow request.
+    checked = subprocess.run([sys.executable, '-c', client, str(socket_path), '{}'], user=uid, group=gid,
+                             extra_groups=[], capture_output=True, text=True, timeout=15)
+    assert checked.returncode == 0, checked.stderr
+    print(json.dumps({'nativeStorageService': 'passed', 'peerUidRequired': True, 'malformedRequestsRefused': True, 'slowRequestDeadline': True}), flush=True)
 finally:
     process.terminate()
     try:
