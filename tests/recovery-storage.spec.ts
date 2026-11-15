@@ -1,3 +1,4 @@
+import { verifyCaptureHandoff } from '../src/recovery/capture-handoff.ts'
 import { fingerprint } from '../src/remote/journal.ts'
 import { captureWorkspaceRecovery } from '../src/recovery/workspace-archive.ts'
 import { exportEndpointStorageSnapshot } from '../src/recovery/endpoint-snapshot.ts'
@@ -426,4 +427,49 @@ it('validates retained workspace capture requests and original grant/storage bin
     save({ ...capture, phase: 'complete' })
     await expect(readEndpointStorageSnapshot(db.endpoint, signal)).rejects.toThrow('workspace_capture')
   } finally { db.endpoint.close(); db.host.close() }
+})
+
+it('rechecks selected capture contents under the stopped endpoint writer lock and refuses changed sources', async () => {
+  const directory = await realpath(await mkdtemp(join(tmpdir(), 'capture-handoff-'))), db = databases(directory)
+  try {
+    const grant = db.value.endpoint.grants[0]!, allocation = db.value.endpoint.reservations[0]!
+    await mkdir(grant.root, { recursive: true, mode: 0o700 }); await writeFile(join(grant.root, 'content'), 'original')
+    const archive = await captureWorkspaceRecovery(grant.root, join(directory, 'archive'), { maxEntries: 100, maxBytes: 1024 })
+    grant.rootIdentity = archive.manifest.sourceIdentity + ':12345'
+    db.endpoint.prepare('UPDATE remote_grant SET value=? WHERE id=?').run(JSON.stringify(grant), grant.id)
+    const request = { requestId: randomUUID(), grantId: grant.id, epoch: grant.epoch, destination: archive.path, maxEntries: 100, maxBytes: 1024 }
+    const manifestHash = createHash('sha256').update(await readFile(join(archive.path, 'manifest.json'))).digest('hex')
+    const capture = { version: 1, request, requestHash: fingerprint(request), phase: 'complete', startedAt: '2026-11-15T00:00:00.000Z', completedAt: '2026-11-15T00:00:01.000Z',
+      binding: { endpointId: db.value.endpoint.endpointId, grantId: grant.id, epoch: grant.epoch, revision: grant.revision,
+        root: grant.root, rootIdentity: grant.rootIdentity, workspace: grant.workspace,
+        storage: { requestId: allocation.requestId, projectId: allocation.projectId, policyHash: fingerprint(db.value.endpoint.policy) } },
+      result: { path: archive.path, inventoryHash: archive.manifest.sha256, manifestHash, managedQuiescenceObserved: true, globalSnapshotVerified: false, restoreVerified: false } }
+    db.endpoint.prepare('INSERT INTO endpoint_meta VALUES(?,?)').run('workspace-capture:' + request.requestId, JSON.stringify(capture))
+    const state = join(directory, 'state'); await mkdir(state, { mode: 0o700 })
+    const source = join(state, 'endpoint.sqlite'); db.endpoint.prepare('VACUUM INTO ?').run(source); await chmod(source, 0o600)
+    const original = await readFile(source), signal = new AbortController().signal, selection = [{ requestId: request.requestId, manifestHash }]
+    const release = lockSync(state)
+    try { await expect(exportEndpointStorageSnapshot(state, join(directory, 'locked'), signal, selection)).rejects.toThrow() } finally { release() }
+    const receipt = await exportEndpointStorageSnapshot(state, join(directory, 'snapshot'), signal, selection)
+    expect(receipt.handoff).toEqual({ captures: [{ ...selection[0], inventoryHash: archive.manifest.sha256 }], sourceContentsRechecked: true,
+      executionQuiescenceVerified: false, globalSnapshotVerified: false, restoreVerified: false })
+    await expect(exportEndpointStorageSnapshot(state, join(directory, 'unknown'), signal, [{ ...selection[0], requestId: randomUUID() }])).rejects.toThrow('original completed')
+    await expect(exportEndpointStorageSnapshot(state, join(directory, 'duplicate'), signal, [...selection, ...selection])).rejects.toThrow('unique')
+    await expect(exportEndpointStorageSnapshot(state, join(directory, 'wrong-digest'), signal, [{ ...selection[0], manifestHash: '0'.repeat(64) }])).rejects.toThrow('original completed')
+    const snapshot = (await readEndpointStorageSnapshot(db.endpoint, signal)).snapshot
+    for (const kind of ['grant', 'allocation', 'pending', 'inventory', 'path']) {
+      const changed = structuredClone(snapshot)
+      if (kind === 'grant') changed.grants[0]!.revision++
+      if (kind === 'allocation') changed.reservations[0]!.projectId++
+      if (kind === 'pending') changed.reservations[0]!.phase = 'provisioning'
+      if (kind === 'inventory') changed.captures![0]!.result!.inventoryHash = '0'.repeat(64)
+      if (kind === 'path') changed.captures![0]!.result!.path = join(directory, 'other')
+      await expect(verifyCaptureHandoff(changed, selection, signal)).rejects.toThrow()
+    }
+    await writeFile(join(grant.root, 'content'), 'changed')
+    const changed = join(directory, 'changed')
+    await expect(exportEndpointStorageSnapshot(state, changed, signal, selection)).rejects.toThrow('freshly observed source')
+    await expect(readFile(join(changed, 'snapshot.json'))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await readFile(source)).toEqual(original)
+  } finally { db.endpoint.close(); db.host.close(); await rm(directory, { recursive: true, force: true }) }
 })

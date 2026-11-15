@@ -1,4 +1,5 @@
 /** Offline storage evidence export. Never initialize an endpoint or settle retained operations. */
+import { verifyCaptureHandoff } from './capture-handoff.ts'
 import { createHash } from 'node:crypto'
 import { chmod, lstat, mkdir, open, realpath, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
@@ -10,7 +11,7 @@ import { privateInput } from './crypto.ts'
 import { readEndpointStorageSnapshot } from './storage.ts'
 
 const sync = async (path: string) => { const handle = await open(path, 'r'); try { await handle.sync() } finally { await handle.close() } }
-export async function exportEndpointStorageSnapshot(stateDir: string, destination: string, requestedSignal = new AbortController().signal) {
+export async function exportEndpointStorageSnapshot(stateDir: string, destination: string, requestedSignal = new AbortController().signal, captureSelections?: unknown) {
   if (!isAbsolute(stateDir) || !isAbsolute(destination)) throw new Error('Snapshot paths must be absolute')
   // Require an existing source: privateDirectory alone would create a missing directory.
   const sourceStat = await lstat(stateDir)
@@ -39,12 +40,13 @@ export async function exportEndpointStorageSnapshot(stateDir: string, destinatio
     const integrity = copy.prepare('PRAGMA integrity_check').all()
     if (integrity.length !== 1 || Object.values(integrity[0]!)[0] !== 'ok') throw new Error('Endpoint snapshot integrity check failed')
     const evidence = await readEndpointStorageSnapshot(copy, signal)
+    const handoff = captureSelections === undefined ? undefined : await verifyCaptureHandoff(evidence.snapshot, captureSelections, signal)
     copy.close(); copy = undefined
     let bytes = 0; const hash = createHash('sha256')
     for await (const chunk of privateInput(path, signal)) { bytes += chunk.length; hash.update(chunk) }
     const receipt = { version: 1, endpointId: evidence.snapshot.endpointId, endpoint: { path, bytes, sha256: hash.digest('hex') },
       records: evidence.records, recordDigest: evidence.digest, writerLockHeld: true, workspaceFilesIncluded: false,
-      executionQuiescenceVerified: false, hostRegistryIncluded: false, restoreVerified: false }
+      executionQuiescenceVerified: false, hostRegistryIncluded: false, restoreVerified: false, ...(handoff ? { handoff } : {}) }
     await sync(path); signal.throwIfAborted()
     await writeFile(join(target, 'snapshot.json'), JSON.stringify(receipt), { flag: 'wx', mode: 0o600 })
     await sync(join(target, 'snapshot.json')); await sync(target); await sync(parent)
