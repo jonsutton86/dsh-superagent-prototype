@@ -1,0 +1,34 @@
+{
+  "kind": "workspace-native-gate-and-disposal",
+  "recordedAt": "2026-11-15T07:29:49.473342+00:00",
+  "baseRevision": "57ebeaf",
+  "files": {
+    "src/remote/resources.ts": "e19ff10f2d0c57e04956880edd05272c0b57ec7e4252a8c57dfd57fb8fa6a8e9",
+    "tests/remote-resources.spec.ts": "9f0ddb1bb36907bf051da9f03c67cce00758c5396c9f9663c70355660baf16a5"
+  },
+  "implemented": "Dispose empty workspace parents after command-scope cleanup; preserve populated or uncertain groups.",
+  "preparedNotExecuted": "Existing dedicated Linux resource fixture now configures nested limits, checks simultaneous populated children in shared/separate workspace groups, exact workspace/pool CPU limits, and actual parent throttling.",
+  "validation": [
+    {
+      "command": "vitest run tests/remote-resources.spec.ts",
+      "passed": 18,
+      "skipped": 1,
+      "log": "/tmp/dsh-085-native-gate-local.log"
+    },
+    {
+      "command": "vitest run tests/remote-resources.spec.ts -t 'workspace parents on disposal'",
+      "passed": 1,
+      "log": "/tmp/dsh-085-disposal.log",
+      "note": "Final test proves empty parent exists before disposal, and populated sibling survives."
+    }
+  ],
+  "typecheck": {
+    "exitCode": 0,
+    "log": "/tmp/dsh-085-native-gate-typecheck.log"
+  },
+  "build": {
+    "exitCode": 0,
+    "log": "/tmp/dsh-085-native-gate-build.log"
+  },
+  "limitations": "Native Linux case skipped on this macOS run. Native assertions are unqualified; no kernel aggregation or deployment claim."
+}

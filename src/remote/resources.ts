@@ -238,7 +238,7 @@ export class CgroupResources {
   }
   close(): void {
     if (this.timer) clearInterval(this.timer)
-    this.cleanFinished(); this.closed = true
+    this.cleanFinished(); this.cleanWorkspaces(); this.closed = true
     // No forced cleanup of live/unknown groups and no invented quiescence on endpoint disposal.
   }
 }

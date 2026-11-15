@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { join, resolve } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { SubprocessHandle, SubprocessOutcome, SubprocessRuntime, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
@@ -8,7 +8,7 @@ import { FakeCgroup } from './fixtures/cgroup.ts'
 import { Context } from '@deepseek-ai/cordis'
 import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
 import { LocalSubprocessRuntime } from '@deepseek-ai/dsh-subprocess-local'
-import { mkdtemp, realpath, rm, rmdir, writeFile } from 'node:fs/promises'
+import { mkdtemp, realpath, rm, rmdir, writeFile, readFile, readdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { RemoteEndpoint } from '../src/remote/endpoint.ts'
 import { BubblewrapIsolation } from '../src/remote/isolation.ts'
@@ -178,7 +178,7 @@ it.runIf(!!process.env.DSH_RESOURCE_QUALIFICATION_ROOT)('qualifies actual cgroup
   if (process.platform !== 'linux') throw new Error('Native resource qualification requires Linux')
   const directory = await mkdtemp(join(tmpdir(), 'resource native ')), ctx = new Context()
   const filesystem = new LocalFileSystem(ctx, { cwd: directory, diffBasisMaxBytes: 1024 * 1024 }), local = new LocalSubprocessRuntime(ctx)
-  const configured = { ...policy, command: { ...policy.command, cpuPercent: 25 }, cgroupRoot: process.env.DSH_RESOURCE_QUALIFICATION_ROOT! }
+  const configured = { ...policy, command: { ...policy.command, cpuPercent: 25 }, workspace: { cpuPercent: 25, memoryBytes: 512 * 1024 ** 2, processes: 64 }, cgroupRoot: process.env.DSH_RESOURCE_QUALIFICATION_ROOT! }
   let endpoint: RemoteEndpoint
   const create = () => {
     const resources = new CgroupResources(configured), subprocess = resources.decorate(local, resolve('lib/remote-resource-worker.js'))
@@ -209,7 +209,32 @@ it.runIf(!!process.env.DSH_RESOURCE_QUALIFICATION_ROOT)('qualifies actual cgroup
     await endpoint.rpc(principal, cpu)
     const throttled = await settled(cpu.requestId)
     expect(throttled.outcome?.exitCode).toBe(0); expect(throttled.resources?.complete).toBe(true)
-    expect(throttled.resources?.throttledPeriods).toBeGreaterThan(0)
+    const workspacePath = (name: string) => join(pool, 'w-' + createHash('sha256').update('workspace:' + name).digest('hex').slice(0, 32))
+    const parent = workspacePath(enrolled.grant.workspace)
+    const parentThrottled = async () => Number((await readFile(join(parent, 'cpu.stat'), 'utf8')).match(/nr_throttled (\d+)/)?.[1] ?? NaN)
+    expect((throttled.resources?.throttledPeriods ?? 0) + await parentThrottled()).toBeGreaterThan(0)
+    // Two simultaneously populated command children must share the same enforced workspace CPU ceiling.
+    const other = await endpoint.rpc({ role: 'admin' }, { op: 'grant.create', requestId: 'native-other-grant', owner: 'test', workspace: 'other-resource',
+      operations: ['fs.read', 'process.spawn'], leaseMs: 300000 }) as GrantReceipt
+    const otherPrincipal = { role: 'grant' as const, id: other.grant.id, epoch: other.grant.epoch }
+    const work = [0, 1].map(index => ({ ...cpu, requestId: 'native-aggregate-' + index,
+      argv: [node, '-e', 'const end=Date.now()+5000; while(Date.now()<end) {}'] }))
+    const separate = { ...work[0]!, requestId: 'native-separate', cwd: other.grant.root, revision: other.grant.revision }
+    await Promise.all([...work.map(value => endpoint.rpc(principal, value)), endpoint.rpc(otherPrincipal, separate)])
+    const populatedChildren = async (path: string) => {
+      const children = (await readdir(path)).filter(name => name.startsWith('s-'))
+      return (await Promise.all(children.map(async name => /populated 1/.test(await readFile(join(path, name, 'cgroup.events'), 'utf8'))))).filter(Boolean).length
+    }
+    await vi.waitFor(async () => {
+      expect(await populatedChildren(parent)).toBe(2)
+      expect(await populatedChildren(workspacePath(other.grant.workspace))).toBe(1)
+    }, { timeout: 4000 })
+    expect((await readFile(join(parent, 'cpu.max'), 'utf8')).trim()).toBe('25000 100000')
+    expect((await readFile(join(pool, 'cpu.max'), 'utf8')).trim()).toBe('200000 100000')
+    for (const value of work) expect(await settled(value.requestId)).toMatchObject({ outcome: { exitCode: 0 }, quiescent: true })
+    await vi.waitFor(() => expect(endpoint.journal.job(separate.requestId)).toMatchObject({ outcome: { exitCode: 0 }, quiescent: true }), { timeout: 15000 })
+    expect(await parentThrottled()).toBeGreaterThan(0)
+
     const forks = { ...request, requestId: 'native-resource-pids', argv: [node, '-e',
       "const {spawn}=require('node:child_process'); const children=[]; for(let i=0;i<80;i++){const child=spawn('/bin/sleep',['3']); child.on('error',()=>{}); children.push(child)} setTimeout(()=>children.forEach(child=>child.kill()),300)"] }
     await endpoint.rpc(principal, forks)
@@ -371,4 +396,20 @@ it('attributes endpoint commands and filesystem helpers to the authenticated gra
     expect(run.mock.calls.filter(([owner]) => owner === 'job:' + check.requestId).map(([, , workspace]) => workspace)).toEqual(['trusted-workspace'])
 
   } finally { await endpoint.stop(); await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }) }
+})
+
+
+it('removes empty workspace parents on disposal without removing populated parents', async () => {
+  const h = fixture(new FakeCgroup(), { ...policy, workspace: { ...policy.pool } })
+  h.resources.run('job:live', () => h.runtime.spawn(h.spec), 'live')
+  const liveScope = vi.mocked(h.base.spawn).mock.calls.at(-1)![0].argv[3]!
+  h.io.population(liveScope, true)
+  const handle = h.resources.run('job:empty', () => h.runtime.spawn(h.spec), 'empty')
+  const emptyScope = vi.mocked(h.base.spawn).mock.calls.at(-1)![0].argv[3]!
+  await handle.waitForExit()
+  const emptyParent = emptyScope.slice(0, emptyScope.lastIndexOf('/'))
+  expect(h.io.directories.has(emptyParent)).toBe(true)
+  h.resources.close()
+  expect(h.io.directories.has(emptyParent)).toBe(false)
+  expect(h.io.directories.has(liveScope.slice(0, liveScope.lastIndexOf('/')))).toBe(true)
 })

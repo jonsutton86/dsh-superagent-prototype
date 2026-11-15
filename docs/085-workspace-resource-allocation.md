@@ -116,3 +116,13 @@ Actual snapshot capture, check and recapture helpers create separate command sco
 parent. The original verification receipt aggregates all scopes, and replay of that same request creates no further scope.
 All 17 resource tests pass with one native case skipped; typecheck passes. See `evidence/085-verification-attribution.json`.
 Native Linux aggregate enforcement, full-runtime restart/clean-host acceptance and final qualification remain open.
+
+
+## Native gate prepared; execution pending
+
+The existing dedicated Linux resource test now enables workspace limits and requires simultaneous populated command
+children in a shared workspace, a distinct second workspace, exact workspace/pool CPU ceilings and observed parent
+throttling. The existing OOM/process-limit/replay checks remain. These native additions have not run on Linux and are not
+acceptance evidence. Disposal now removes empty workspace parents after command cleanup, preserving populated/unknown
+parents; the regression proves the empty parent exists before disposal. Local resource checks passed 18 tests with one
+native skip, plus the tightened disposal assertion, typecheck and build. `evidence/085-native-gate.json` records scope.
