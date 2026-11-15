@@ -1281,3 +1281,26 @@ capture-to-checkpoint journey and existing native storage checks.
 [Evidence and failed/successful run links](evidence/086-live-storage-checkpoint.json).
 This closes that integration-test gap; workspace content capture, globally fenced
 recovery ownership and storage restoration remain open.
+
+### Workspace content inventory foundation
+
+The verification snapshot helper is intentionally unsuitable for full recovery: it
+always excludes `.git`, canonicalizes symbolic links and makes copies read-only.
+`src/recovery/workspace-tree.ts` therefore provides a separate full-tree inventory.
+It retains original modes, UID/GID metadata, raw symbolic link text (without following
+links), and internal hard-link relationships, including repository history. Regular
+file hashes use bounded 64 KiB reads; the manifest is bounded by entries, metadata
+size and content bytes. Bytes are charged per path, conservatively counting hard-link
+aliases. Hard links extending outside the captured tree are refused rather than
+silently discarding an unrecoverable relationship. Special files are refused.
+
+Each observed file/directory identity is rechecked before completion. These checks
+are not a global atomic snapshot: the caller must establish independent execution
+quiescence and source fencing before using this inventory for recovery. Original
+UID/GID values are evidence, not permission to restore arbitrary ownership.
+
+Two focused tests and typecheck passed at the revision in
+[this receipt](evidence/086-workspace-inventory.json). Content archiving, confined
+helper dispatch, authenticated checkpoint membership and target restoration remain
+unfinished. The API explicitly reports `contentArchived: false`,
+`executionQuiescenceVerified: false` and `restoreVerified: false`.

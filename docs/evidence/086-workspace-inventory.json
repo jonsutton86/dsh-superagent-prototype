@@ -1,0 +1,26 @@
+{
+  "revision": "9fcd0e4df0495e633a9338899fea036869796425",
+  "classification": "VERIFIED",
+  "sourceEvidence": [
+    "Verification captureSnapshot always excludes .git, canonicalizes symlink targets and makes copies read-only; it is not a full recovery archive",
+    "New recovery inventory includes all paths without exclusions and hashes regular files in 64 KiB reads"
+  ],
+  "validation": {
+    "focusedTests": 2,
+    "typecheck": "passed",
+    "codegraph": "synced"
+  },
+  "covered": [
+    "Git content changes alter inventory digest",
+    "Original modes and symbolic link text retained",
+    "Internal hard-link relations retained",
+    "External hard links refused",
+    "Byte and entry budgets and cancellation enforced"
+  ],
+  "limits": [
+    "No content archive or restoration",
+    "Caller must independently establish process quiescence and a frozen source",
+    "No live helper or checkpoint integration yet",
+    "File identity rechecks detect observed changes but are not a global atomic snapshot"
+  ]
+}
