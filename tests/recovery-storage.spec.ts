@@ -7,7 +7,7 @@ import Jsonl from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { Store } from '../src/app/store.ts'
 import { KV } from '../src/kv.ts'
-import { createCheckpoint, verifyCheckpoint, stageCheckpoint } from '../src/recovery/checkpoint.ts'
+import { createCheckpoint, verifyCheckpoint, stageCheckpoint, stageCheckpointWorkspace } from '../src/recovery/checkpoint.ts'
 import { ReceiptImage, sealReceiptImage, verifyReceiptImage, requireInstallableStorageImage } from '../src/recovery/image.ts'
 import { createRecoveryKey, recoveryKey, seal, unseal } from '../src/recovery/crypto.ts'
 import { createHash, randomUUID } from 'node:crypto'
@@ -246,6 +246,11 @@ it('captures verified storage pairs in an encrypted checkpoint and preserves the
     expect(checkpoint.manifest.storage).toHaveLength(1)
     expect(checkpoint.manifest.files.filter(file => file.kind.startsWith('storage-'))).toHaveLength(2)
     expect(await verifyCheckpoint(checkpoint.path, keyFile)).toEqual(checkpoint.manifest)
+    const candidate = await stageCheckpointWorkspace(checkpoint.path, keyFile, workspace, join(directory, 'workspace-held'))
+    expect(candidate.origin?.checkpointId).toBe(checkpoint.manifest.id)
+    expect(await readFile(join(candidate.workspace, 'retained.txt'), 'utf8')).toBe('workspace content')
+    expect(JSON.parse(await readFile(join(candidate.path, 'hold.json'), 'utf8'))).toMatchObject({ state: 'held', executionOwnership: false, origin: candidate.origin })
+    await expect(stageCheckpointWorkspace(checkpoint.path, keyFile, '/unregistered', join(directory, 'unknown-held'))).rejects.toThrow('no archive')
     const target = join(directory, 'held'); await stageCheckpoint(checkpoint.path, keyFile, target)
     const restored = new DatabaseSync(join(target, 'orchestrator.sqlite'), { readOnly: true })
     try { expect(restored.prepare('SELECT value FROM kv WHERE key=?').get(KV.recovery.hold)).toBeTruthy() } finally { restored.close() }

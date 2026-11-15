@@ -4,7 +4,7 @@ import s from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-session-persistence'
 import { basename, dirname, isAbsolute, join } from 'node:path'
 import { privateDirectory, privateFile } from '../environments/endpoint-files.ts'
-import { createCheckpoint, importCheckpointSessions, stageCheckpoint, verifyCheckpoint, type CheckpointOptions } from './checkpoint.ts'
+import { createCheckpoint, importCheckpointSessions, stageCheckpoint, stageCheckpointWorkspace, verifyCheckpoint, type CheckpointOptions } from './checkpoint.ts'
 import { reserveCheckpointOwnership, type ReserveCheckpointOwnership } from './ownership.ts'
 import { prepareCheckpointReceipts, type PrepareCheckpointReceipts } from './prepare.ts'
 import { auditCheckpointReceipts, type AuditCheckpointReceipts, type ReceiptAudit } from './audit.ts'
@@ -12,7 +12,7 @@ import { recoveryInferenceHost } from './inference.ts'
 import { recoverySourceHost } from './sources.ts'
 import { installCheckpoint, type InstallCheckpoint, type Installation } from './installation.ts'
 
-export { createCheckpoint, importCheckpointSessions, stageCheckpoint, verifyCheckpoint, type CheckpointManifest } from './checkpoint.ts'
+export { createCheckpoint, importCheckpointSessions, stageCheckpoint, stageCheckpointWorkspace, verifyCheckpoint, type CheckpointManifest } from './checkpoint.ts'
 export { exportEndpointStorageSnapshot } from './endpoint-snapshot.ts'
 export { createRecoveryKey } from './crypto.ts'
 export { reserveCheckpointOwnership, type ReserveCheckpointOwnership, type RecoveryIntent } from './ownership.ts'
@@ -30,8 +30,8 @@ export const name = 'dsh-superagent-recovery'
 export const inject = ['sessionPersistence']
 const authority = s.object({ url: s.string().required(), authorityId: s.string().required(), coordinatorId: s.string().required(), credentialFile: s.string().pattern(/^\//).required(),
   timeoutMs: s.number().min(100).max(60_000).default(5000) })
-export const Config: s<Partial<RecoveryConfig>, RecoveryConfig> = s.object({ mode: s.union(['checkpoint', 'verify', 'stage', 'import-sessions', 'reserve-ownership', 'audit-receipts', 'prepare-receipts', 'install']).required(), keyFile: s.string().required(),
-  stateDir: s.string(), outputDir: s.string(), checkpoint: s.string(), destination: s.string(), receiptFile: s.string(),
+export const Config: s<Partial<RecoveryConfig>, RecoveryConfig> = s.object({ mode: s.union(['checkpoint', 'verify', 'stage', 'stage-workspace', 'import-sessions', 'reserve-ownership', 'audit-receipts', 'prepare-receipts', 'install']).required(), keyFile: s.string().required(),
+  stateDir: s.string(), outputDir: s.string(), workspaceSource: s.string(), checkpoint: s.string(), destination: s.string(), receiptFile: s.string(),
   reservation: s.union([s.object({ requestId: s.string().required(), epoch: s.number().min(0).step(1).required(), generation: s.number().min(0).step(1).required(),
     authority: authority.required() })]),
   audit: s.union([s.object({ authority: authority.required(), endpoints: s.array(s.object({ url: s.string().required(), endpointId: s.string().required(),
@@ -51,8 +51,8 @@ export const Config: s<Partial<RecoveryConfig>, RecoveryConfig> = s.object({ mod
     host: s.object({ path: s.string().pattern(/^\//).required(), bytes: s.number().min(1).step(1).required(), sha256: s.string().pattern(/^[a-f0-9]{64}$/).required() }).required() })).default([]),
   workspaceArtifacts: s.array(s.string().pattern(/^\//)).default([]),
   worldDirectories: s.array(s.string()).default([]) })
-interface RecoveryConfig { mode: 'checkpoint' | 'verify' | 'stage' | 'import-sessions' | 'reserve-ownership' | 'audit-receipts' | 'prepare-receipts' | 'install'; keyFile: string; stateDir?: string; outputDir?: string;
-  checkpoint?: string; destination?: string; receiptFile?: string; worldDirectories?: string[]; storageArtifacts?: CheckpointOptions['storageArtifacts']; workspaceArtifacts?: string[];
+interface RecoveryConfig { mode: 'checkpoint' | 'verify' | 'stage' | 'stage-workspace' | 'import-sessions' | 'reserve-ownership' | 'audit-receipts' | 'prepare-receipts' | 'install'; keyFile: string; stateDir?: string; outputDir?: string;
+  workspaceSource?: string; checkpoint?: string; destination?: string; receiptFile?: string; worldDirectories?: string[]; storageArtifacts?: CheckpointOptions['storageArtifacts']; workspaceArtifacts?: string[];
   reservation?: Pick<ReserveCheckpointOwnership, 'requestId' | 'epoch' | 'generation' | 'authority'>;
   preparation?: Pick<PrepareCheckpointReceipts, 'requestId' | 'auditId'>;
   installation?: Pick<InstallCheckpoint, 'requestId' | 'preparationId' | 'target' | 'credentials' | 'launch'>;
@@ -64,7 +64,12 @@ export async function apply(ctx: Context, config: RecoveryConfig): Promise<void>
   const abort = new AbortController(); ctx.effect(() => () => abort.abort())
   if (config.receiptFile && !isAbsolute(config.receiptFile)) throw new Error('Recovery receipt path must be absolute')
   let checkpoint: string, path: string | undefined, reservation: Awaited<ReturnType<typeof reserveCheckpointOwnership>> | undefined, audit: ReceiptAudit | undefined, prepared: Awaited<ReturnType<typeof prepareCheckpointReceipts>> | undefined, installation: Installation | undefined
-  if (config.mode === 'install') {
+  if (config.mode === 'stage-workspace') {
+    const result = await stageCheckpointWorkspace(required(config.checkpoint, 'checkpoint'), config.keyFile, required(config.workspaceSource, 'workspaceSource'),
+      required(config.destination, 'destination'), abort.signal)
+    checkpoint = result.origin!.checkpointId; path = result.path
+    ctx.logger.info('Checkpoint %s workspace reconstructed in a private held candidate; no execution ownership granted', checkpoint)
+  } else if (config.mode === 'install') {
     if (!config.audit || !config.installation) throw new Error('Installation requires resource connections and the selected prepared image')
     installation = await installCheckpoint({ ...config.audit, ...config.installation, launch: config.installation.launch ?? {}, checkpoint: required(config.checkpoint, 'checkpoint'), keyFile: config.keyFile,
       destination: required(config.destination, 'destination'), signal: abort.signal })

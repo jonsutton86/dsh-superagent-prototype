@@ -1,3 +1,4 @@
+import { stageWorkspaceRecovery } from './workspace-stage.ts'
 import { verifyWorkspaceRecovery } from './workspace-verify.ts'
 import { verifyWorkspaceMembers } from './workspace-members.ts'
 /** Offline coordinator checkpoints: acquire every writer before capturing databases and logical Harness Session prefixes. */
@@ -380,4 +381,27 @@ export async function importCheckpointSessions(path: string, keyFile: string, de
   } finally {
     try { if (verified) await rm(verified.directory, { recursive: true, force: true }) } finally { release() }
   }
+}
+
+
+/** Reconstruct one authenticated original workspace into a new private held candidate; never activate it. */
+export async function stageCheckpointWorkspace(path: string, keyFile: string, source: string, destination: string,
+  signal = new AbortController().signal) {
+  if (!isAbsolute(destination) || resolve(destination) !== destination) throw new Error('Workspace staging destination must be absolute and normalized')
+  const checkpointRoot = await realpath(path), parent = await realpath(dirname(destination)), target = join(parent, basename(destination))
+  if (inside(checkpointRoot, target) || inside(target, checkpointRoot)) throw new Error('Workspace staging must be separate from its checkpoint')
+  const verified = await unpack(checkpointRoot, keyFile, signal)
+  try {
+    const binding = verified.manifest.workspaceArchives?.find(item => item.source === source)
+    if (!binding) throw new Error('Checkpoint has no archive for the selected original workspace')
+    const selected = new Set([binding.manifestMember, ...binding.content.map(item => item.member)])
+    const files = verified.manifest.files.filter(file => selected.has(file.member))
+    const origin = { checkpointId: verified.manifest.id, workspaceManifestSHA256: files.find(file => file.member === binding.manifestMember)!.sha256 }
+    let candidate: Awaited<ReturnType<typeof stageWorkspaceRecovery>> | undefined
+    await verifyWorkspaceMembers(verified.directory, [binding], files, signal, async archive => {
+      candidate = await stageWorkspaceRecovery(archive, target, signal, origin)
+    })
+    if (!candidate) throw new Error('Checkpoint workspace reconstruction did not produce a held candidate')
+    return candidate
+  } finally { await rm(verified.directory, { recursive: true, force: true }) }
 }

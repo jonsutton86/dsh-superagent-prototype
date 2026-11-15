@@ -29,7 +29,7 @@ export function validateWorkspaceMembers(bindings: z.infer<typeof WorkspaceArchi
   }
   if (files.some(file => file.kind.startsWith('workspace-') && !used.has(file.member))) throw new Error('Unbound recovery workspace member')
 }
-export async function verifyWorkspaceMembers(directory: string, bindings: z.infer<typeof WorkspaceArchiveBindings>, files: readonly File[], signal: AbortSignal) {
+export async function verifyWorkspaceMembers(directory: string, bindings: z.infer<typeof WorkspaceArchiveBindings>, files: readonly File[], signal: AbortSignal, capture?: (directory: string) => Promise<void>) {
   validateWorkspaceMembers(bindings, files)
   const indexed = new Map(files.map(file => [file.member, file]))
   for (const binding of bindings ?? []) {
@@ -49,6 +49,7 @@ export async function verifyWorkspaceMembers(directory: string, bindings: z.infe
       }
       const verified = await verifyWorkspaceRecovery(temporary, signal)
       if (verified.manifest.source !== binding.source) throw new Error('Recovery workspace source differs from authenticated binding')
+      signal.throwIfAborted(); await capture?.(temporary); signal.throwIfAborted()
     } finally { await rm(temporary, { recursive: true, force: true }) }
   }
 }
