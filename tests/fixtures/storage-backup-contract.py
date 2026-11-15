@@ -20,9 +20,12 @@ class Backup(unittest.TestCase):
         self.host.mount = self.base / 'volume'
         self.host.db = sqlite3.connect(self.host.registry / 'host.sqlite'); self.addCleanup(self.host.db.close)
         self.host.db.execute('PRAGMA journal_mode=WAL')
-        for table in ['endpoints', 'namespaces', 'operations', 'repairs']:
-            self.host.db.execute('CREATE TABLE ' + table + '(id,value)')
-            self.host.db.executemany('INSERT INTO ' + table + ' VALUES(?,?)', [('first', 'retained'), ('second', 'uncertain')])
+        schemas = {'endpoints': 'id,filesystem,first,last,config', 'namespaces': 'endpoint,identities',
+                   'operations': 'endpoint,request,workspace,filesystem,project,intent,roots', 'repairs': 'endpoint,id,request,intent,phase'}
+        for table, columns in schemas.items():
+            self.host.db.execute('CREATE TABLE ' + table + '(' + columns + ')')
+            for label in ['first', 'second']:
+                self.host.db.execute('INSERT INTO ' + table + '(' + columns.split(',')[0] + ') VALUES(?)', (label,))
         self.host.db.commit()
         self.host.exclusive = contextlib.nullcontext
         self.host.sync_directory = lambda path: None
@@ -30,7 +33,7 @@ class Backup(unittest.TestCase):
         def root_stat(fd):
             info = native_stat(fd)
             return SimpleNamespace(**{key: (0 if key == 'st_uid' else getattr(info, key)) for key in
-                ['st_dev', 'st_ino', 'st_nlink', 'st_mode', 'st_uid', 'st_size']})
+                ['st_dev', 'st_ino', 'st_nlink', 'st_mode', 'st_uid', 'st_size', 'st_mtime_ns', 'st_ctime_ns']})
         self.stack = contextlib.ExitStack(); self.addCleanup(self.stack.close)
         self.stack.enter_context(patch.object(storage, 'protected', side_effect=lambda path, private=False: path))
         self.stack.enter_context(patch.object(storage.os, 'fstat', side_effect=root_stat))
@@ -42,7 +45,7 @@ class Backup(unittest.TestCase):
         self.assertEqual(result['sha256'], hashlib.sha256(target.read_bytes()).hexdigest())
         self.assertEqual(result['records'], dict.fromkeys(['endpoints', 'namespaces', 'operations', 'repairs'], 2))
         self.assertFalse(result['restoreVerified']); self.assertFalse(result['workspaceFilesIncluded'])
-        with sqlite3.connect(target) as saved:
+        with contextlib.closing(sqlite3.connect(target)) as saved:
             self.assertEqual(list(saved.iterdump()), before[0])
         self.assertEqual((list(self.host.db.iterdump()), self.host.db.total_changes), before)
         self.assertEqual(target.stat().st_mode & 0o777, 0o600)
@@ -50,9 +53,26 @@ class Backup(unittest.TestCase):
         with self.assertRaises(FileExistsError): self.host.backup(target)
         self.assertEqual(result['sha256'], hashlib.sha256(target.read_bytes()).hexdigest())
 
+    def test_offline_verification_is_read_only_and_requires_original_hash(self):
+        target = self.base / 'snapshot.sqlite'; receipt = self.host.backup(target)
+        before = target.read_bytes(), target.stat().st_mtime_ns
+        verified = storage.StorageHost.verify_backup(target, receipt['sha256'])
+        self.assertTrue(verified['artifactVerified']); self.assertFalse(verified['restoreVerified'])
+        self.assertEqual(verified['records'], receipt['records'])
+        self.assertEqual((target.read_bytes(), target.stat().st_mtime_ns), before)
+        with self.assertRaises(RuntimeError): storage.StorageHost.verify_backup(target, 'f' * 64)
+        Path(str(target) + '-wal').touch()
+        with self.assertRaises(RuntimeError): storage.StorageHost.verify_backup(target, receipt['sha256'])
+
+    def test_offline_verification_rejects_unexpected_schema(self):
+        target = self.base / 'snapshot.sqlite'; self.host.backup(target)
+        with contextlib.closing(sqlite3.connect(target)) as database: database.execute('CREATE VIEW extra AS SELECT * FROM repairs')
+        with self.assertRaises(RuntimeError):
+            storage.StorageHost.verify_backup(target, hashlib.sha256(target.read_bytes()).hexdigest())
+
     def test_refuses_source_directory_and_pending_transaction(self):
         with self.assertRaises(RuntimeError): self.host.backup(self.host.registry / 'copy.sqlite')
-        self.host.db.execute("INSERT INTO repairs VALUES('pending','uncommitted')")
+        self.host.db.execute("INSERT INTO repairs(endpoint,id) VALUES('pending','uncommitted')")
         with self.assertRaises(RuntimeError): self.host.backup(self.base / 'pending.sqlite')
         self.assertFalse((self.base / 'pending.sqlite').exists())
 

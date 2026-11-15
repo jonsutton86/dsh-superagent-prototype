@@ -291,6 +291,16 @@ repeated = subprocess.run(backup_command, capture_output=True, text=True, timeou
 assert repeated.returncode == 1 and json.loads(repeated.stderr)['state'] == 'unverified'
 assert receipt['sha256'] == hashlib.sha256(backup_path.read_bytes()).hexdigest()
 assert not Path(str(backup_path) + '-wal').exists()
+verify_command = [sys.executable, '-B', 'scripts/agentic_storage_admin.py', 'verify-backup', '--input', str(backup_path), '--sha256', receipt['sha256']]
+verified = subprocess.run(verify_command, capture_output=True, text=True, timeout=30)
+assert verified.returncode == 0, verified.stderr
+assert json.loads(verified.stdout)['backup']['artifactVerified'] is True
+assert json.loads(verified.stdout)['backup']['restoreVerified'] is False
+assert json.loads(verified.stdout)['backup']['records'] == receipt['records']
+invalid = subprocess.run([*verify_command[:-1], 'f' * 64], capture_output=True, text=True, timeout=30)
+assert invalid.returncode == 1 and json.loads(invalid.stderr)['state'] == 'unverified'
+assert receipt['sha256'] == hashlib.sha256(backup_path.read_bytes()).hexdigest()
+
 print(json.dumps({'nativeStorageCrashBoundaries': results, 'missingRegistryUnchanged': True,
                   'registryBackup': {'allRecordsRetained': True, 'uncertainRepairRetained': True,
-                                     'overwriteRefused': True, 'standaloneSQLite': True}}), flush=True)
+                                     'overwriteRefused': True, 'standaloneSQLite': True, 'offlineArtifactVerification': True}}), flush=True)

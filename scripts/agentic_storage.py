@@ -237,6 +237,50 @@ class StorageHost:
         require(row and row[0] == intent)
         return json.loads(row[1])
 
+    @staticmethod
+    def verify_backup(source, expected_hash):
+        """Offline artifact verification only. Does not authorize import or filesystem recovery."""
+        require(isinstance(expected_hash, str) and re.fullmatch(r'[a-f0-9]{64}', expected_hash))
+        path = Path(source)
+        require(path.is_absolute())
+        protected(path.parent, private=True)
+        require(not any(Path(str(path) + suffix).exists() or Path(str(path) + suffix).is_symlink()
+                        for suffix in ['-wal', '-shm', '-journal']))
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            before = os.fstat(descriptor)
+            require(stat.S_ISREG(before.st_mode) and before.st_uid == 0 and before.st_nlink == 1
+                    and not before.st_mode & 0o077 and 0 < before.st_size <= 1024 ** 4)
+            require(os.pread(descriptor, 2, 18) == bytes([1, 1]))  # No WAL dependency may be hidden by immutable mode.
+            digest = hashlib.sha256(); deadline = time.monotonic() + 120
+            while chunk := os.read(descriptor, 1024 * 1024):
+                require(time.monotonic() < deadline); digest.update(chunk)
+            require(digest.hexdigest() == expected_hash)
+            database = sqlite3.connect(path.as_uri() + '?mode=ro&immutable=1', uri=True)
+            try:
+                database.execute('PRAGMA trusted_schema=OFF')
+                database.execute('PRAGMA query_only=ON')
+                database.set_progress_handler(lambda: int(time.monotonic() >= deadline), 1000)
+                require(database.execute('PRAGMA integrity_check').fetchall() == [('ok',)])
+                expected = {'endpoints': ['id', 'filesystem', 'first', 'last', 'config'],
+                            'namespaces': ['endpoint', 'identities'],
+                            'operations': ['endpoint', 'request', 'workspace', 'filesystem', 'project', 'intent', 'roots'],
+                            'repairs': ['endpoint', 'id', 'request', 'intent', 'phase']}
+                require({row[0] for row in database.execute("SELECT name FROM sqlite_master WHERE type='table'")} == set(expected))
+                require(not database.execute("SELECT 1 FROM sqlite_master WHERE type IN ('view','trigger')").fetchone())
+                for table, columns in expected.items():
+                    require([row[1] for row in database.execute('PRAGMA table_info(' + table + ')')] == columns)
+                counts = {table: database.execute('SELECT count(*) FROM ' + table).fetchone()[0] for table in expected}
+            finally:
+                database.close()
+            after, named = os.fstat(descriptor), path.lstat()
+            identity = lambda info: (info.st_dev, info.st_ino, info.st_size, info.st_mode, info.st_mtime_ns, info.st_ctime_ns)
+            require(identity(before) == identity(after) == identity(named))
+            return {'kind': 'storage-host-registry', 'sha256': expected_hash, 'bytes': before.st_size,
+                    'records': counts, 'artifactVerified': True, 'restoreVerified': False}
+        finally:
+            os.close(descriptor)
+
     def backup(self, output):
         """Consistent standalone registry snapshot, not a workspace or whole-system backup."""
         target = Path(output)
