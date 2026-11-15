@@ -85,6 +85,16 @@ export class StorageReservations {
       || new Set(observation.directories.map(item => item.device)).size !== 1)
       throw new RemoteError(409, 'storage_observation_mismatch', 'Host observation does not match original storage allocation')
   }
+  /** Read-only validation: polling must not settle an intent or mutate recovery inventory. */
+  validateCurrentObservation(value: StorageReservation, observed: StorageObservation): StorageObservation {
+    const observation = StorageObservation.parse(observed)
+    this.validateObservation(value, observation)
+    if (value.observation && (value.observation.mountId !== observation.mountId || value.observation.directories.some(before => {
+      const after = observation.directories.find(item => item.path === before.path)
+      return !after || before.device !== after.device || before.inode !== after.inode
+    }))) throw new RemoteError(409, 'storage_identity_changed', 'Previously observed storage roots changed identity')
+    return observation
+  }
   /** Observation settles provisioning only; later dispatch still requires fresh host validation. */
   recordObservation(input: StorageIntent, observed: StorageObservation): StorageReservation {
     const intent = StorageIntent.parse(input), observation = StorageObservation.parse(observed)
@@ -92,11 +102,7 @@ export class StorageReservations {
       const value = this.list().find(item => item.requestId === intent.requestId)
       if (!value || value.workspace !== intent.workspace || value.requestHash !== intent.requestHash || value.phase === 'reserved')
         throw new RemoteError(409, 'storage_intent_missing', 'Original provisioning intent is required')
-      this.validateObservation(value, observation)
-      if (value.observation && (value.observation.mountId !== observation.mountId || value.observation.directories.some(before => {
-        const after = observation.directories.find(item => item.path === before.path)
-        return !after || before.device !== after.device || before.inode !== after.inode
-      }))) throw new RemoteError(409, 'storage_identity_changed', 'Previously observed storage roots changed identity')
+      this.validateCurrentObservation(value, observation)
       value.phase = 'provisioned'; value.observation = observation
       this.journal.db.prepare('UPDATE remote_storage SET value=? WHERE workspace=?').run(JSON.stringify(value), value.workspace)
       this.journal.audit({ action: 'storage-observed', requestId: value.requestId, workspace: value.workspace, projectId: value.projectId })

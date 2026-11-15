@@ -21,6 +21,27 @@ export class EndpointStorageManager {
     this.reservations = new StorageReservations(journal, config.policy)
     this.provisioning = new StorageProvisioning(this.reservations, config.host)
   }
+  async status(workspace: string, signal: AbortSignal) {
+    signal.throwIfAborted()
+    const reservations = this.reservations.list(), policy = this.reservations.policy
+    const total = Math.min(Math.floor(policy.pool.bytes / policy.workspace.bytes),
+      Math.floor(policy.pool.inodes / policy.workspace.inodes), policy.projectIds.last - policy.projectIds.first + 1)
+    const summary = { configured: true as const, policy, reservationsObservedAt: new Date().toISOString(), reservedAllocations: reservations.length,
+      unreservedAllocations: total - reservations.length }
+    const original = reservations.find(item => item.workspace === workspace)
+    if (!original) return { ...summary, workspace, state: 'unallocated' as const }
+    if (original.phase === 'reserved') return { ...summary, workspace, phase: original.phase, state: 'not-provisioned' as const }
+    try {
+      const observed = await this.config.host.observe(policy, original, storageRoots(policy, original), signal)
+      signal.throwIfAborted()
+      const current = this.reservations.validateCurrentObservation(original, observed)
+      return { ...summary, workspace, phase: original.phase, state: 'observed' as const,
+        quota: current.quota, observedAt: current.observedAt }
+    } catch {
+      signal.throwIfAborted()
+      return { ...summary, workspace, phase: original.phase, state: 'unavailable' as const }
+    }
+  }
   async startup(signal: AbortSignal): Promise<string> {
     return this.prepare(STARTUP_STORAGE_WORKSPACE, 'storage-startup', fingerprint({ endpointId: this.journal.id,
       purpose: 'endpoint-startup', policy: this.reservations.policy }), signal)

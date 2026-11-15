@@ -531,6 +531,10 @@ export class RemoteEndpoint {
   private async dispatch(principal: Principal, request: RpcRequest): Promise<unknown> {
     switch (request.op) {
       case 'identity': return this.identity()
+      case 'storage.status': {
+        this.admin(principal)
+        return this.storage ? this.storage.status(request.workspace, AbortSignal.any([this.lifetime.signal, AbortSignal.timeout(30000)])) : { configured: false }
+      }
       case 'recovery.world': {
         if (this.storage) throw new RemoteError(409, 'storage_recovery_unavailable',
           'Storage-backed recovery export requires quota policy and host-registry integration')

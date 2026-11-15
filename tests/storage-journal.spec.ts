@@ -200,3 +200,36 @@ it('requires visible capacity for persistent startup qualification plus a worker
   ]) expect(() => new EndpointStorageManager(journal, { endpointId: journal.id, policy: constrained, host: {} as StorageHost },
     `${policy.mountRoot}/dsh-${journal.id}/workspaces`)).toThrow('startup qualification and at least one worker')
 })
+
+it('observes live quota without settling uncertain intents or changing journal inventory', async () => {
+  const { journal, storage } = fixture(), request = intent('one')
+  const host: StorageHost = { provision: vi.fn(async () => {}), observe: vi.fn(async (_, reservation) => observed(reservation)) }
+  const manager = new EndpointStorageManager(journal, { endpointId: journal.id, policy, host }, `${policy.mountRoot}/dsh-${journal.id}/workspaces`)
+  storage.reserve(request)
+  expect(await manager.status(request.workspace, AbortSignal.timeout(1000))).toMatchObject({ state: 'not-provisioned', reservedAllocations: 1 })
+  expect(host.observe).not.toHaveBeenCalled()
+  storage.beginProvisioning(request)
+  const before = journal.db.prepare('SELECT value FROM remote_storage').all()
+  const changes = journal.db.prepare('SELECT total_changes() AS count').get()
+  expect(await manager.status(request.workspace, AbortSignal.timeout(1000))).toMatchObject({ state: 'observed', phase: 'provisioning', quota: { enforcement: true } })
+  expect(journal.db.prepare('SELECT value FROM remote_storage').all()).toEqual(before)
+  expect(journal.db.prepare('SELECT total_changes() AS count').get()).toEqual(changes)
+  expect(host.provision).not.toHaveBeenCalled()
+  host.observe = vi.fn(async () => { throw new Error('private host diagnostic') })
+  const unavailable = await manager.status(request.workspace, AbortSignal.timeout(1000))
+  expect(unavailable).toMatchObject({ state: 'unavailable', reservedAllocations: 1 })
+  expect(JSON.stringify(unavailable)).not.toContain('private host diagnostic')
+  expect(unavailable).not.toHaveProperty('quota')
+  await expect(manager.status(request.workspace, AbortSignal.abort())).rejects.toThrow()
+})
+
+it('refuses replaced roots in status and keeps previous observation historical', async () => {
+  const { journal, storage } = fixture(), request = intent('one'), reserved = storage.reserve(request)
+  storage.beginProvisioning(request); storage.recordObservation(request, observed(reserved))
+  const changed = observed(reserved); changed.directories[0]!.inode = '999'
+  const host: StorageHost = { provision: vi.fn(), observe: vi.fn(async () => changed) }
+  const manager = new EndpointStorageManager(journal, { endpointId: journal.id, policy, host }, `${policy.mountRoot}/dsh-${journal.id}/workspaces`)
+  expect(await manager.status(request.workspace, AbortSignal.timeout(1000))).toMatchObject({ state: 'unavailable' })
+  expect(storage.list()[0]!.observation!.directories[0]!.inode).toBe('100')
+  expect(await manager.status('missing', AbortSignal.timeout(1000))).toMatchObject({ state: 'unallocated', reservedAllocations: 1 })
+})

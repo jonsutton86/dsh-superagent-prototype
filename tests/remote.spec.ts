@@ -1,3 +1,4 @@
+import { requiresOwnership } from '../src/ownership/protocol.ts'
 import { Context } from '@deepseek-ai/cordis'
 import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
 import { LocalSubprocessRuntime } from '@deepseek-ai/dsh-subprocess-local'
@@ -670,3 +671,10 @@ it.runIf(process.env.DSH_REMOTE_ISOLATION === '1')('qualifies native Linux files
     expect(resumed.status()).toMatchObject({ ready: false, phase: 'revoked', revocation: { acknowledged: true, quiescent: true } })
   } finally { vi.unstubAllEnvs() }
 }, 20_000)
+
+it('restricts storage status to administrators and reports absent configuration explicitly', async () => {
+  expect(requiresOwnership('storage.status')).toBe(false)
+  const h = await fixture()
+  expect(await h.admin.call({ op: 'storage.status', workspace: 'task' })).toEqual({ configured: false })
+  await expect(h.client.call({ op: 'storage.status', workspace: 'task' })).rejects.toThrow('administration')
+})

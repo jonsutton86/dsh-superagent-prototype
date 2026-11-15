@@ -41,6 +41,7 @@ export const WorldConfigurationRead = z.object({ op: z.literal('recovery.world')
 export const Rpc = z.discriminatedUnion('op', [
   InventoryRequest, ReceiptRequest, AdministrationRead, RevocationRead, WorldConfigurationRead,
   z.object({ op: z.literal('identity') }).strict(),
+  z.object({ op: z.literal('storage.status'), workspace: id }).strict(),
   z.object({ op: z.literal('grant.list'), offset: z.number().int().nonnegative().default(0) }).strict(),
   z.object({ op: z.literal('grant.get'), id }).strict(),
   z.object({ op: z.literal('job.catalog'), offset: z.number().int().nonnegative().default(0) }).strict(),
