@@ -269,4 +269,28 @@ for index, boundary in enumerate(cases):
 empty_registry = mount.parent / 'missing-operator-registry'; empty_registry.mkdir(mode=0o700)
 assert admin('inspect', request, expected_code=1, target_registry=empty_registry)['state'] == 'unverified'
 assert list(empty_registry.iterdir()) == [], 'Inspection initialized a missing registry'
-print(json.dumps({'nativeStorageCrashBoundaries': results, 'missingRegistryUnchanged': True}), flush=True)
+# Snapshot the shared registry, including all endpoints and unresolved finishing receipts.
+backup_dir = mount.parent / 'registry-backup'; backup_dir.mkdir(mode=0o700)
+backup_path = backup_dir / 'host.sqlite'
+backup_command = [sys.executable, '-B', 'scripts/agentic_storage_admin.py', '--config', str(config_path),
+                  '--registry', str(registry), 'backup', '--output', str(backup_path)]
+backup = subprocess.run(backup_command, capture_output=True, text=True, timeout=30)
+assert backup.returncode == 0, backup.stderr
+receipt = json.loads(backup.stdout)['backup']
+import hashlib
+import sqlite3
+assert receipt['sha256'] == hashlib.sha256(backup_path.read_bytes()).hexdigest()
+assert receipt['workspaceFilesIncluded'] is False and receipt['restoreVerified'] is False
+assert backup_path.stat().st_uid == 0 and backup_path.stat().st_mode & 0o777 == 0o600
+with sqlite3.connect((registry / 'host.sqlite').as_uri() + '?mode=ro', uri=True) as original_db, sqlite3.connect(backup_path) as backup_db:
+    assert list(original_db.iterdump()) == list(backup_db.iterdump())
+    assert backup_db.execute("SELECT count(*) FROM repairs WHERE phase='finishing'").fetchone()[0] == 1
+    assert receipt['records']['endpoints'] == len(cases)
+    assert receipt['records']['operations'] == 2 * len(cases)
+repeated = subprocess.run(backup_command, capture_output=True, text=True, timeout=30)
+assert repeated.returncode == 1 and json.loads(repeated.stderr)['state'] == 'unverified'
+assert receipt['sha256'] == hashlib.sha256(backup_path.read_bytes()).hexdigest()
+assert not Path(str(backup_path) + '-wal').exists()
+print(json.dumps({'nativeStorageCrashBoundaries': results, 'missingRegistryUnchanged': True,
+                  'registryBackup': {'allRecordsRetained': True, 'uncertainRepairRetained': True,
+                                     'overwriteRefused': True, 'standaloneSQLite': True}}), flush=True)

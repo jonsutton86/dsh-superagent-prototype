@@ -12,13 +12,15 @@ from agentic_storage_service import configuration
 def execute(args):
     require(os.getuid() == 0)
     config = configuration(args.config)
-    value = configuration(args.request if args.action == 'inspect' else args.approval)
+    value = None if args.action == 'backup' else configuration(args.request if args.action == 'inspect' else args.approval)
     if args.action == 'repair':
         require(isinstance(value, dict) and set(value) == {'request', 'repairId', 'snapshotHash'})
     if args.action == 'finish-repair':
         require(isinstance(value, dict) and set(value) == {'request', 'repairId', 'snapshotHash', 'finishSnapshotHash'})
     host = StorageHost(args.registry, config, existing_only=True)
     try:
+        if args.action == 'backup':
+            return {'ok': True, 'backup': host.backup(args.output)}
         if args.action == 'inspect':
             return {'ok': True, 'inspection': host.inspect(value)}
         result = (host.finish_repair(value['request'], value['repairId'], value['snapshotHash'], value['finishSnapshotHash'])
@@ -33,6 +35,7 @@ def main():
     parser.add_argument('--config', required=True)
     parser.add_argument('--registry', required=True)
     actions = parser.add_subparsers(dest='action', required=True)
+    actions.add_parser('backup').add_argument('--output', required=True)
     actions.add_parser('inspect').add_argument('--request', required=True)
     actions.add_parser('repair').add_argument('--approval', required=True)
     actions.add_parser('finish-repair').add_argument('--approval', required=True)
@@ -42,7 +45,7 @@ def main():
         return 0
     except Exception:
         print(json.dumps({'ok': False, 'state': 'unverified',
-                          'error': 'Storage inspection or repair refused. Preserve original request and repair IDs; inspect retained state before further action.'}), file=sys.stderr)
+                          'error': 'Storage operation refused; any backup output remains unverified. Preserve original request and repair IDs; inspect retained state before further action.'}), file=sys.stderr)
         return 1
 
 
