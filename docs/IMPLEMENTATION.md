@@ -1429,3 +1429,10 @@ receipt preparation retain its mappings. Workspace-bearing installation remains
 blocked until fresh ownership/quiescence and restoration are implemented. The
 focused recovery ring passed 90 tests (one native-only skip), with a successful build
 at de25f29; increment 086 records exact qualification limits.
+
+Authenticated checkpoints can now reconstruct a selected original workspace into a
+new private held candidate through `stage-workspace`. The original preparing hold
+records checkpoint ID and workspace-manifest digest. Local focused/adjacent checks
+and scoped Linux storage CI passed at 06ef18a. Original metadata application, quota
+and fresh ownership/quiescence checks, installed-profile qualification and activation
+remain open; see increment 086 for exact evidence.

@@ -1440,3 +1440,31 @@ retains the preparing hold, source bytes and partial candidate and rejects overw
 retry. [Evidence](evidence/086-workspace-held-reconstruction.json). Target quota,
 ownership/permission policy, fresh source quiescence, authenticated checkpoint-to-
 candidate installation, native recovery qualification and activation remain open.
+
+### Held reconstruction from an authenticated coordinator checkpoint
+
+The offline recovery profile now supports `mode: stage-workspace` with `checkpoint`,
+`keyFile`, `workspaceSource` and a new `destination`. `workspaceSource` is the exact
+original source path selected from the checkpoint's workspace bindings. The normal
+maintenance profile still supplies its Harness Session backend; this operation does
+not import Sessions, start a coordinator or acquire execution ownership.
+
+`stageCheckpointWorkspace` authenticates the complete checkpoint, verifies the
+selected workspace's membership and source binding, and passes private verified
+copies to reconstruction. The original preparing hold records the checkpoint ID and
+the authenticated workspace-manifest SHA-256 before workspace writes begin. This
+origin survives response loss and remains in the completed held candidate. Unknown
+sources and destinations overlapping the checkpoint are refused.
+
+The result remains a private candidate: original ownership/permissions are not
+applied, target quotas are not qualified, and execution ownership remains false.
+The hold is local recovery state, not a substitute for reauthenticating the original
+checkpoint before a later activation attempt. Full installation continues to refuse
+workspace-bearing images until those remaining gates are implemented.
+
+Qualification at `06ef18a8801b26e7085b8ae91a77a591ce6a2e33`: 42 local
+workspace/storage tests passed (one native-only skip), 51 adjacent recovery/installation
+tests passed, typecheck/build passed, and the focused Linux storage workflow passed
+including the authenticated checkpoint-to-candidate test and existing native storage
+journeys. [Receipt](evidence/086-checkpoint-workspace-stage.json). The new maintenance
+mode is built; an installed Harness profile invocation remains unqualified.

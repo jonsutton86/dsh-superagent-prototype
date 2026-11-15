@@ -1,0 +1,23 @@
+{
+  "revision": "06ef18a8801b26e7085b8ae91a77a591ce6a2e33",
+  "classification": "VERIFIED",
+  "workflow": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43709518334",
+  "conclusion": "success",
+  "logSHA256": "cf6e03168af4c89015cf028b31e7f2593e845159cc3fc8977f8c48e7b1a04c77",
+  "localValidation": {
+    "workspaceAndStorage": "42 passed, 1 native-only skipped",
+    "adjacentRecoveryAndInstallation": "51 passed",
+    "typecheck": "passed",
+    "build": "passed"
+  },
+  "linuxValidation": [
+    "Typecheck/build and recovery-storage suite passed, including authenticated checkpoint-to-workspace candidate test",
+    "Existing live endpoint paired capture, encrypted checkpoint staging, quota/launcher/repair and crash checks passed"
+  ],
+  "limits": [
+    "Direct API integration tested; new maintenance mode is built but not launched in a fresh installed Harness profile",
+    "Hold origin is retained metadata and must be reauthenticated before future activation",
+    "No target quota, ownership/permission application, source quiescence or live replacement",
+    "Not final full-system qualification or deployment"
+  ]
+}
