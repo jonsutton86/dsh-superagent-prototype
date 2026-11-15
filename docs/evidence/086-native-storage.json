@@ -1,0 +1,54 @@
+{
+  "kind": "native-xfs-storage-mechanism-investigation",
+  "classification": "VERIFIED focused mechanism; UNKNOWN endpoint integration and whole-system storage acceptance",
+  "revision": "bcfd859dee5d0b52c70be7f07bdbd7b79317f157",
+  "recordedAt": "2026-11-15T07:43:00.584460+00:00",
+  "workflowRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43691070339",
+  "result": "success",
+  "host": "GitHub hosted ubuntu-22.04",
+  "hashes": {
+    "tests/fixtures/storage-qualification.sh": "bb7960e0f72a54e1502a1166849f93fbc416c7768a82e8a560b916cc60fc7316",
+    "tests/fixtures/storage-qualification.py": "cf44873f88df5986e451f31689cc90883f69764455ad8b92faaf22c355849c62",
+    ".github/workflows/remote-execution.yml": "86565c43cb2475e4aeab5c29a008042c51ab9a1814c748394d62d8a7ec6dd409"
+  },
+  "checks": [
+    "shared project across workspace and copy",
+    "independent project remains writable",
+    "inherited project membership",
+    "byte hard limit ENOSPC",
+    "inode hard limit ENOSPC at 126 new files plus two existing directories",
+    "deleted-open file remains charged",
+    "bounded observation of release after close",
+    "cross-project hard link rejected",
+    "sandbox project-ID change rejected",
+    "accounting-only permits over-limit write",
+    "fixture cleanup returned success"
+  ],
+  "failedDiscoveryRuns": [
+    {
+      "id": 43690904775,
+      "revision": "6d86d27efedda21a0727514b9ae74c93f9eedd66",
+      "cause": "EDQUOT expectation contradicted by native ENOSPC"
+    },
+    {
+      "id": 43690969472,
+      "revision": "7e5a205f096382fd1f9c903f954e0076e5bf2f0a",
+      "cause": "Immediate release assumption contradicted; bounded observation added"
+    }
+  ],
+  "notValidated": [
+    "endpoint enrollment or dispatch integration",
+    "journal recovery and ID allocation",
+    "concurrent admission",
+    "migration",
+    "tmpfs memory accounting",
+    "control-state capacity",
+    "full macOS/Linux qualification",
+    "deployment"
+  ],
+  "localChecks": [
+    "bash -n fixture",
+    "Python AST parse",
+    "git diff --check"
+  ]
+}

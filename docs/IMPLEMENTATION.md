@@ -1112,7 +1112,7 @@ Focused native Linux qualification passed all 25 resource tests at `2c6bbfc`, wi
 `docs/evidence/085-native-qualification.json` records the exact run. Whole-system acceptance remains unfinished; disk quotas
 and other compute/environment requirements remain open. `docs/evidence/085-backend-progress.json` records this WIP scope.
 The next storage boundary and acceptance sequence are recorded in [086 Workspace storage quotas](086-workspace-storage-quotas.md);
-this is a design checkpoint, not implemented disk enforcement.
+focused native XFS mechanism checks now pass at `bcfd859` (run `43691070339`). Endpoint storage enforcement and recovery integration remain unfinished; see `docs/evidence/086-native-storage.json`.
 
 Introduce an environment registry in the existing state store. Each environment has a stable ID, endpoint identity,
 capabilities, availability, grant revision and lease epoch. Bind a ticket's execution to that environment and grant revision.

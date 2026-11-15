@@ -1,6 +1,6 @@
 # 086 — Workspace storage quotas (design checkpoint)
 
-Status: source investigation complete; implementation and native enforcement pending. This increment does not advertise
+Status: source and focused native mechanism investigation complete; endpoint implementation pending. This increment does not advertise
 storage protection in endpoint capabilities. Harness remains the executor and existing provider defaults are unchanged.
 
 ## Observed write boundaries
@@ -59,3 +59,28 @@ Design decisions (not implemented):
    macOS/Linux matrix for the final revision under the current testing policy.
 
 No new runtime feature, storage migration, host provisioning, or native storage test is claimed by this document.
+
+## Focused native mechanism result
+
+The hosted Ubuntu 22.04 storage-only workflow passed at `bcfd859dee5d0b52c70be7f07bdbd7b79317f157`:
+[run 43691070339](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43691070339).
+The fixture creates a disposable 512 MiB XFS image with project quotas, runs unprivileged processes in capability-dropped
+bubblewrap namespaces, and unmounts/removes the image on exit. It does not format existing devices or change application
+configuration. The full runtime job is intentionally skipped for manual `scope=storage`.
+
+VERIFIED in this fixture: two trees share a 16 MiB/128-inode project; a second project remains writable when the first
+is exhausted; newly created files inherit membership; cross-project hard links and sandbox project-ID changes fail;
+deleted-but-open allocation remains charged; release is observed after the final close; 126 empty files exhaust the
+128-inode budget that already contains two directory roots. With accounting still on and enforcement disabled, a
+20 MiB allocation succeeds despite the configured 16 MiB hard limit. Accounting alone cannot prove protection.
+
+Two failed discovery runs are retained as evidence, not hidden: `43690904775` expected EDQUOT but observed ENOSPC;
+`43690969472` assumed immediate quota release after close and failed. The passing revision uses the observed project-quota
+error and a bounded release observation. The upstream kernel's project-quota error path also returns ENOSPC:
+[xfs_trans_dquot.c](https://kernel.googlesource.com/pub/scm/linux/kernel/git/mic/linux/+/7db06e329af30dcb170a6782c1714217ad65033d/fs/xfs/xfs_trans_dquot.c).
+Do not classify every ENOSPC as quota exhaustion without matching filesystem/quota evidence.
+
+This supersedes the earlier unrun-native status for these specific mechanism checks only. Harness endpoint integration,
+provisioning recovery, concurrent admission, migration, filesystem identity checks, tmpfs accounting, retained control-state
+capacity, clean-host recovery and full qualification remain unimplemented or unverified. No TypeScript source changed;
+only fixture syntax and this native mechanism gate ran, not typecheck/build or the broader matrix.
