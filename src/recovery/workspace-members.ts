@@ -1,3 +1,4 @@
+import type { WorkspaceCaptureRecord } from '../remote/workspace-capture.ts'
 /** Authenticated checkpoint membership for workspace archives, without restore authorization. */
 import { createHash } from 'node:crypto'
 import { mkdtemp, open, rm } from 'node:fs/promises'
@@ -8,7 +9,8 @@ import { privateInput } from './crypto.ts'
 import { verifyWorkspaceRecovery } from './workspace-verify.ts'
 
 const member = z.string().regex(/^[a-z0-9-]+\.bin$/)
-export const WorkspaceArchiveBindings = z.array(z.object({ source: z.string().max(4096).startsWith('/').refine(value => !value.includes('\0')), manifestMember: member,
+export const WorkspaceCaptureSelections = z.array(z.object({ source: z.string().max(4096).startsWith('/'), endpointId: z.string().uuid(), requestId: z.string().uuid() }).strict()).max(256)
+export const WorkspaceArchiveBindings = z.array(z.object({ source: z.string().max(4096).startsWith('/').refine(value => !value.includes('\0')), manifestMember: member, capture: z.object({ endpointId: z.string().uuid(), requestId: z.string().uuid() }).strict().optional(),
   content: z.array(z.object({ name: z.string().regex(/^content-(0|[1-9]\d*)\.bin$/), member }).strict()).max(19999) }).strict()).min(1).max(256).optional()
 interface File { member: string; kind: string; bytes: number; sha256: string }
 export function validateWorkspaceMembers(bindings: z.infer<typeof WorkspaceArchiveBindings>, files: readonly File[]): void {
@@ -31,6 +33,7 @@ export function validateWorkspaceMembers(bindings: z.infer<typeof WorkspaceArchi
 }
 export async function verifyWorkspaceMembers(directory: string, bindings: z.infer<typeof WorkspaceArchiveBindings>, files: readonly File[], signal: AbortSignal, capture?: (directory: string) => Promise<void>) {
   validateWorkspaceMembers(bindings, files)
+  const inventories: { member: string; hash: string }[] = []
   const indexed = new Map(files.map(file => [file.member, file]))
   for (const binding of bindings ?? []) {
     const temporary = await mkdtemp(join(tmpdir(), 'dsh-workspace-members-'))
@@ -49,7 +52,23 @@ export async function verifyWorkspaceMembers(directory: string, bindings: z.infe
       }
       const verified = await verifyWorkspaceRecovery(temporary, signal)
       if (verified.manifest.source !== binding.source) throw new Error('Recovery workspace source differs from authenticated binding')
+      inventories.push({ member: binding.manifestMember, hash: verified.manifest.sha256 })
       signal.throwIfAborted(); await capture?.(temporary); signal.throwIfAborted()
     } finally { await rm(temporary, { recursive: true, force: true }) }
+  }
+  return inventories
+}
+
+
+/** Records must come from authenticated storage members audited against the original grant/allocation. */
+export function validateWorkspaceCaptureReferences(bindings: z.infer<typeof WorkspaceArchiveBindings>, files: readonly File[], records: readonly WorkspaceCaptureRecord[], inventories: readonly { member: string; hash: string }[]) {
+  for (const binding of bindings ?? []) {
+    if (!binding.capture) continue
+    const selected = records.filter(record => record.binding.endpointId === binding.capture!.endpointId && record.request.requestId === binding.capture!.requestId)
+    const record = selected[0], manifest = files.find(file => file.member === binding.manifestMember && file.kind === 'workspace-manifest')
+    if (selected.length !== 1 || !record || record.phase !== 'complete' || !record.result || record.binding.root !== binding.source
+      || !manifest || record.result.manifestHash !== manifest.sha256
+      || record.result.inventoryHash !== inventories.find(item => item.member === binding.manifestMember)?.hash)
+      throw new Error('Workspace archive differs from its original completed capture receipt')
   }
 }

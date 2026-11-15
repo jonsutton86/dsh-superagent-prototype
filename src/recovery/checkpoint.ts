@@ -1,7 +1,8 @@
+import type { WorkspaceCaptureRecord } from '../remote/workspace-capture.ts'
 import { verifyHeldWorkspaceCandidate } from './workspace-candidate.ts'
 import { stageWorkspaceRecovery } from './workspace-stage.ts'
 import { verifyWorkspaceRecovery } from './workspace-verify.ts'
-import { verifyWorkspaceMembers } from './workspace-members.ts'
+import { verifyWorkspaceMembers, WorkspaceCaptureSelections, validateWorkspaceCaptureReferences } from './workspace-members.ts'
 /** Offline coordinator checkpoints: acquire every writer before capturing databases and logical Harness Session prefixes. */
 import { createHash, randomUUID } from 'node:crypto'
 import { chmod, copyFile, lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises'
@@ -46,6 +47,7 @@ export interface CheckpointOptions {
   worldDirectories?: string[]; signal?: AbortSignal
   /** Explicit standalone snapshot evidence, not automatic live-host capture or restore authorization. */
   workspaceArtifacts?: string[]
+  workspaceCaptureSelections?: z.input<typeof WorkspaceCaptureSelections>
   storageArtifacts?: z.input<typeof StorageRecoveryArtifacts>[]
 }
 const table = (db: DatabaseSync, name: string) => !!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name)
@@ -151,6 +153,9 @@ export async function createCheckpoint(options: CheckpointOptions): Promise<{ pa
       signal.throwIfAborted(); const file = join(plain, `${binding}.sqlite`)
       await backup(world.db, file); await chmod(file, 0o600); await capture(file, 'world', { binding, source: world.source })
     }
+    const captureRecords: WorkspaceCaptureRecord[] = []
+    const selections = WorkspaceCaptureSelections.parse(options.workspaceCaptureSelections ?? [])
+    if (new Set(selections.map(item => item.source)).size !== selections.length) throw new Error('Duplicate workspace capture selection')
     const storage: NonNullable<CheckpointManifest['storage']> = []
     const storageInputs = z.array(StorageRecoveryArtifacts).max(256).parse(options.storageArtifacts ?? [])
     const registered = new Set(values<{ id: string }>(store, 'operator_endpoint').map(item => item.id))
@@ -158,11 +163,13 @@ export async function createCheckpoint(options: CheckpointOptions): Promise<{ pa
     for (const input of storageInputs) {
       if (!registered.has(input.endpointId) || storage.some(item => item.endpointId === input.endpointId))
         throw new Error('Storage capture requires a unique original registered endpoint')
-      await auditStorageRecoveryArtifacts(input, signal, async paths => {
+      const audited = await auditStorageRecoveryArtifacts(input, signal, async paths => {
         const endpoint = await capture(paths.endpoint, 'storage-endpoint'), host = await capture(paths.host, 'storage-host')
         storage.push({ endpointId: input.endpointId, endpointMember: endpoint.member, hostMember: host.member })
       })
+      captureRecords.push(...audited.captureRecords)
     }
+    const workspaceInventories: { member: string; hash: string }[] = []
     const workspaceArchives: NonNullable<CheckpointManifest['workspaceArchives']> = []
     for (const archive of z.array(z.string().startsWith('/')).max(256).parse(options.workspaceArtifacts ?? [])) {
       await verifyWorkspaceRecovery(archive, signal, async verified => {
@@ -174,9 +181,14 @@ export async function createCheckpoint(options: CheckpointOptions): Promise<{ pa
         for (const name of (await readdir(verified)).filter(name => name !== 'manifest.json').sort()) {
           const file = await capture(join(verified, name), 'workspace-content'); content.push({ name, member: file.member })
         }
-        workspaceArchives.push({ source: inventory.source, manifestMember: manifest.member, content })
+        workspaceInventories.push({ member: manifest.member, hash: inventory.sha256 })
+        const selected = selections.find(item => item.source === inventory.source)
+        workspaceArchives.push({ source: inventory.source, manifestMember: manifest.member, content,
+          ...(selected ? { capture: { endpointId: selected.endpointId, requestId: selected.requestId } } : {}) })
       })
     }
+    if (selections.some(item => !workspaceArchives.some(binding => binding.source === item.source))) throw new Error('Unmatched workspace capture selection')
+    validateWorkspaceCaptureReferences(workspaceArchives, files, captureRecords, workspaceInventories)
     for (const handle of handles) {
       const file = join(plain, `session-${sessions.length}.jsonl`), name = `member-${files.length}.bin`
       const session = await exportSession(handle, file, name, signal), encrypted = await capture(file, 'session')
@@ -241,7 +253,8 @@ async function unpack(path: string, keyFile: string, signal: AbortSignal): Promi
         } finally { db.close() }
       }
     }
-    await verifyWorkspaceMembers(directory, manifest.workspaceArchives, manifest.files, signal)
+    const workspaceInventories = await verifyWorkspaceMembers(directory, manifest.workspaceArchives, manifest.files, signal)
+    const captureRecords: WorkspaceCaptureRecord[] = []
     const storageMembers = new Set<string>(), storageEndpoints = new Set<string>(), endpointMembers = new Set<string>()
     for (const pair of manifest.storage ?? []) {
       const endpoint = manifest.files.find(file => file.member === pair.endpointMember), host = manifest.files.find(file => file.member === pair.hostMember)
@@ -249,10 +262,12 @@ async function unpack(path: string, keyFile: string, signal: AbortSignal): Promi
         || storageEndpoints.has(pair.endpointId) || endpointMembers.has(pair.endpointMember)) throw new Error('Invalid checkpoint storage member binding')
       storageEndpoints.add(pair.endpointId); endpointMembers.add(pair.endpointMember)
       storageMembers.add(pair.endpointMember); storageMembers.add(pair.hostMember)
-      await auditStorageRecoveryArtifacts({ endpointId: pair.endpointId,
+      const audited = await auditStorageRecoveryArtifacts({ endpointId: pair.endpointId,
         endpoint: { path: join(directory, endpoint.member), bytes: endpoint.bytes, sha256: endpoint.sha256 },
         host: { path: join(directory, host.member), bytes: host.bytes, sha256: host.sha256 } }, signal)
+      captureRecords.push(...audited.captureRecords)
     }
+    validateWorkspaceCaptureReferences(manifest.workspaceArchives, manifest.files, captureRecords, workspaceInventories)
     if (manifest.files.some(file => file.kind.startsWith('storage-') && !storageMembers.has(file.member)))
       throw new Error('Unbound checkpoint storage member')
     if (new Set(manifest.sessions.map(item => item.id)).size !== manifest.sessions.length

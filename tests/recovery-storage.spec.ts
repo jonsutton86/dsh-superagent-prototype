@@ -20,12 +20,12 @@ import { expect, it } from 'vitest'
 import { DatabaseSync } from 'node:sqlite'
 import { auditStorageRecoveryBindings, readEndpointStorageSnapshot, readHostStorageSnapshot } from '../src/recovery/storage.ts'
 
-function fixture() {
+function fixture(mountRoot = '/srv/quota') {
   const endpointId = '11111111-1111-4111-8111-111111111111'
-  const policy = { kind: 'linux-xfs-project', filesystemUUID: '22222222-2222-4222-8222-222222222222', mountRoot: '/srv/quota',
+  const policy = { kind: 'linux-xfs-project', filesystemUUID: '22222222-2222-4222-8222-222222222222', mountRoot,
     projectIds: { first: 100, last: 109 }, pool: { bytes: 8192, inodes: 20 }, workspace: { bytes: 4096, inodes: 10 } }
   const intent = { endpointId, requestId: 'original', requestHash: 'a'.repeat(64), workspace: 'work', projectId: 100 }
-  const roots = ['workspaces', 'verification'].map((name, i) => ({ path: `/srv/quota/dsh-${endpointId}/${name}/work`, device: '1', inode: String(i + 10),
+  const roots = ['workspaces', 'verification'].map((name, i) => ({ path: `${mountRoot}/dsh-${endpointId}/${name}/work`, device: '1', inode: String(i + 10),
     projectId: 100, inherits: true, realtime: false }))
   const reservation = { ...intent, phase: 'provisioned', createdAt: '2026-11-15T00:00:00.000Z', observation: {
     mountId: 1, filesystemUUID: policy.filesystemUUID, mountRoot: policy.mountRoot, projectId: 100, directories: roots,
@@ -68,8 +68,8 @@ it('retains the provisioning-before-host-intent gap without inventing an allocat
 })
 
 
-function databases() {
-  const value = fixture(), endpoint = new DatabaseSync(':memory:'), host = new DatabaseSync(':memory:')
+function databases(mountRoot = '/srv/quota') {
+  const value = fixture(mountRoot), endpoint = new DatabaseSync(':memory:'), host = new DatabaseSync(':memory:')
   endpoint.exec('CREATE TABLE endpoint_meta(key,value); CREATE TABLE remote_storage(workspace,request_id,project_id,value); CREATE TABLE remote_grant(id,value);')
   endpoint.prepare('INSERT INTO endpoint_meta VALUES(?,?)').run('id', value.endpoint.endpointId)
   endpoint.prepare('INSERT INTO endpoint_meta VALUES(?,?)').run('storage-policy', JSON.stringify(value.endpoint.policy))
@@ -213,10 +213,10 @@ it('retains an uninitialized namespace when no host operation has been admitted'
 
 
 it('captures verified storage pairs in an encrypted checkpoint and preserves their bindings in held staging', async () => {
-  const db = databases(), ctx = new Context(), directory = await realpath(await mkdtemp(join(tmpdir(), 'dsh-storage-checkpoint-test-')))
+  const ctx = new Context(), directory = await realpath(await mkdtemp(join(tmpdir(), 'dsh-storage-checkpoint-test-'))), db = databases(directory)
   try {
     const stateDir = join(directory, 'state'), outputDir = join(directory, 'backups'), keyFile = join(directory, 'key')
-    const workspace = join(directory, 'workspace'); await mkdir(workspace, { mode: 0o700 })
+    const workspace = db.value.endpoint.grants[0]!.root; await mkdir(workspace, { recursive: true, mode: 0o700 })
     await writeFile(join(workspace, 'retained.txt'), 'workspace content')
     const workspaceArchive = await captureWorkspaceRecovery(workspace, join(directory, 'workspace-archive'), { maxEntries: 100, maxBytes: 1024 })
     await mkdir(stateDir, { mode: 0o700 }); createRecoveryKey(keyFile)
@@ -238,10 +238,20 @@ it('captures verified storage pairs in an encrypted checkpoint and preserves the
       const bytes = await readFile(path)
       return { path, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') }
     }
+    const selectedGrant = db.value.endpoint.grants[0]!, allocation = db.value.endpoint.reservations[0]!
+    const captureRequest = { requestId: randomUUID(), grantId: selectedGrant.id, epoch: selectedGrant.epoch, destination: workspaceArchive.path, maxEntries: 100, maxBytes: 1024 }
+    const captureRecord = { version: 1, request: captureRequest, requestHash: fingerprint(captureRequest), phase: 'complete', startedAt: '2026-11-15T00:00:00.000Z', completedAt: '2026-11-15T00:00:01.000Z',
+      binding: { endpointId: db.value.endpoint.endpointId, grantId: selectedGrant.id, epoch: selectedGrant.epoch, revision: selectedGrant.revision, workspace: selectedGrant.workspace,
+        root: workspace, rootIdentity: selectedGrant.rootIdentity, storage: { requestId: allocation.requestId, projectId: allocation.projectId, policyHash: fingerprint(db.value.endpoint.policy) } },
+      result: { path: workspaceArchive.path, inventoryHash: workspaceArchive.manifest.sha256, manifestHash: createHash('sha256').update(await readFile(join(workspaceArchive.path, 'manifest.json'))).digest('hex'),
+        managedQuiescenceObserved: true, globalSnapshotVerified: false, restoreVerified: false } }
+    db.endpoint.prepare('INSERT INTO endpoint_meta VALUES(?,?)').run('workspace-capture:' + captureRequest.requestId, JSON.stringify(captureRecord))
     const pair = { endpointId: db.value.endpoint.endpointId, endpoint: await capture(db.endpoint, 'endpoint.sqlite'), host: await capture(db.host, 'host.sqlite') }
-    const options = { stateDir, outputDir, keyFile, persistence: ctx.sessionPersistence, storageArtifacts: [pair], workspaceArtifacts: [workspaceArchive.path] }
+    const options = { stateDir, outputDir, keyFile, persistence: ctx.sessionPersistence, storageArtifacts: [pair], workspaceArtifacts: [workspaceArchive.path], workspaceCaptureSelections: [{ source: workspace, endpointId: pair.endpointId, requestId: captureRequest.requestId }] }
     const checkpoint = await createCheckpoint(options)
     expect(checkpoint.manifest.workspaceArchives).toHaveLength(1)
+    expect(checkpoint.manifest.workspaceArchives![0]!.capture).toEqual({ endpointId: pair.endpointId, requestId: captureRequest.requestId })
+    await expect(createCheckpoint({ ...options, workspaceCaptureSelections: [{ source: workspace, endpointId: pair.endpointId, requestId: randomUUID() }] })).rejects.toThrow('original completed capture')
     expect(checkpoint.manifest.files.filter(file => file.kind.startsWith('workspace-'))).toHaveLength(2)
     expect(() => requireInstallableStorageImage({ ...checkpoint.manifest, storage: undefined, files: checkpoint.manifest.files.filter(file => !file.kind.startsWith('storage-')) } as unknown as ReceiptImage)).toThrow('Workspace recovery installation')
     expect(checkpoint.manifest.storage).toHaveLength(1)

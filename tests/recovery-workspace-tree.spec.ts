@@ -178,7 +178,7 @@ it('verifies authenticated workspace member mapping and rejects role, source and
       files.push({ member, kind, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') })
     }
     const bindings = [{ source, manifestMember: 'member-0.bin', content: [{ name: 'content-0.bin', member: 'member-1.bin' }] }]
-    await expect(verifyWorkspaceMembers(members, bindings, files, new AbortController().signal)).resolves.toBeUndefined()
+    await expect(verifyWorkspaceMembers(members, bindings, files, new AbortController().signal)).resolves.toEqual([{ member: 'member-0.bin', hash: archive.manifest.sha256 }])
     expect(() => validateWorkspaceMembers([bindings[0]!, bindings[0]!], files)).toThrow('Duplicate recovery workspace source')
     expect(() => validateWorkspaceMembers(undefined, files)).toThrow('Unbound')
     expect(() => validateWorkspaceMembers(bindings, [files[0]!, { ...files[1]!, kind: 'session' }])).toThrow('binding differs')

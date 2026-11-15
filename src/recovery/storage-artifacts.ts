@@ -53,7 +53,7 @@ export async function auditStorageRecoveryArtifacts(input: unknown, signal: Abor
     signal.throwIfAborted()
     await capture?.({ endpoint: endpointPath, host: hostPath })
     signal.throwIfAborted()
-    return { ...result, endpointDigest: endpointRecords.digest, hostDigest: hostRecords.digest,
+    return { ...result, captureRecords: endpointRecords.snapshot.captures ?? [], endpointDigest: endpointRecords.digest, hostDigest: hostRecords.digest,
       endpointArtifact: { bytes: value.endpoint.bytes, sha256: value.endpoint.sha256 },
       hostArtifact: { bytes: value.host.bytes, sha256: value.host.sha256 }, hostRegistryAudit: hostRecords.audit }
   } finally {

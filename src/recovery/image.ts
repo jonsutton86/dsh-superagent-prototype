@@ -1,4 +1,5 @@
-import { WorkspaceArchiveBindings, validateWorkspaceMembers, verifyWorkspaceMembers } from './workspace-members.ts'
+import type { WorkspaceCaptureRecord } from '../remote/workspace-capture.ts'
+import { WorkspaceArchiveBindings, validateWorkspaceMembers, verifyWorkspaceMembers, validateWorkspaceCaptureReferences } from './workspace-members.ts'
 /** Authenticated prepared state is a held recovery artifact, never an execution permit. */
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
 import { lstat, open, readdir, realpath } from 'node:fs/promises'
@@ -146,13 +147,16 @@ export async function verifyReceiptImage(path: string, keyFile: string, signal =
     const actual = await recoveryFileDigest(join(root, file.member), signal, file.bytes)
     if (actual.bytes !== file.bytes || actual.sha256 !== file.sha256) throw new Error('Prepared recovery image member digest differs')
   }
+  const captureRecords: WorkspaceCaptureRecord[] = []
   for (const binding of value.manifest.storage ?? []) {
     const endpoint = value.manifest.files.find(file => file.member === binding.endpointMember)!
     const host = value.manifest.files.find(file => file.member === binding.hostMember)!
-    await auditStorageRecoveryArtifacts({ endpointId: binding.endpointId,
+    const audited = await auditStorageRecoveryArtifacts({ endpointId: binding.endpointId,
       endpoint: { path: join(root, endpoint.member), bytes: endpoint.bytes, sha256: endpoint.sha256 },
       host: { path: join(root, host.member), bytes: host.bytes, sha256: host.sha256 } }, signal)
+    captureRecords.push(...audited.captureRecords)
   }
-  await verifyWorkspaceMembers(root, value.manifest.workspaceArchives, value.manifest.files, signal)
+  const workspaceInventories = await verifyWorkspaceMembers(root, value.manifest.workspaceArchives, value.manifest.files, signal)
+  validateWorkspaceCaptureReferences(value.manifest.workspaceArchives, value.manifest.files, captureRecords, workspaceInventories)
   signal.throwIfAborted(); return value.manifest
 }
