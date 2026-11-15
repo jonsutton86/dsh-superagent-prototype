@@ -74,7 +74,16 @@ export async function executeRoute(
 
   for (const candidate of candidates) {
     if (signal.aborted) return { ok: false, detail: 'aborted', attempts }
-    const reservation = options.reserve?.(candidate, request)
+    let reservation: ExecutionReservation | undefined
+    try {
+      reservation = options.reserve?.(candidate, request)
+    } catch (error) {
+      const attempt: ExecutionAttempt = { provider: candidate.provider.id, model: candidate.model, ok: false,
+        error: error instanceof Error ? error.message : String(error) }
+      attempts.push(attempt)
+      options.onAttempt?.(attempt)
+      continue
+    }
     try {
       const result = await transport.execute(candidate, request, signal)
       reservation?.settle('completed', result.reported)

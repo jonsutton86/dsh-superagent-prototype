@@ -25,9 +25,22 @@ Behavior:
 - reservations are settled exactly once for every attempted candidate, success or failure;
 - transport errors are returned in `attempts` rather than thrown.
 
+## Transport and accounting adapters
+
+- `src/security/provider-client.ts` implements the OpenAI-compatible chat-completions shape over an injectable `fetch`.
+  It appends `/chat/completions`, reads the named credential only at call time, bounds the request with a timeout,
+  refuses malformed input before any request, and maps `usage.prompt_tokens`/`completion_tokens`/`total_tokens`.
+  Endpoints remain operator-supplied and unverified; no provider was contacted in tests.
+- `src/app/provider-runner.ts` supplies `usageReservation` and `runRouted`, reserving through `Usage.begin` before each
+  attempt and settling completed/failed calls. A reservation refused by an exhausted budget falls through to the next
+  candidate. `tests/provider-runner.spec.ts` exercises this against the real `Usage` service with a fake transport.
+
+Neither adapter is wired to an automatic runtime trigger yet: invoking it remains an explicit operator action, so no
+provider call or spend can occur merely because the service is running.
+
 ## Integration boundary
 
-The runtime does not yet wire a transport. When a provider client exists, the caller must:
+When the runtime is wired, the caller must:
 
 1. resolve routing with recorded-spend filtering (`GET model-route` / `ProviderRegistry.route`);
 2. reserve spend through `Usage.begin` before each attempt;
