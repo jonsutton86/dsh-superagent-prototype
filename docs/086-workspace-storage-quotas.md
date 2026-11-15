@@ -662,3 +662,50 @@ This is internal repair evidence, not an exposed repair command. Repair intent j
 snapshot matching, quiescence/fencing, explicit actions for admissible partial states and operator
 reconciliation remain open, as do backup/migration, headroom, power-loss/reboot/clean-host testing and
 final architecture qualification. No user-host deployment or provider/model changes occurred.
+
+### Evidence-bound privileged repair intents
+
+The host library now implements internal `repair(originalRequest, repairId, expectedSnapshotHash)`.
+It keeps the original provisioning request/identity and records a separate repair intent in the same
+host SQLite registry, unique per endpoint/repair ID and original request. Repair checks a fresh
+inspection under the host lock, and commits `started` before any filesystem effect. A repeated repair
+must match its original snapshot/request and only observes the result. It can mark a previously started
+repair complete after successful observation, but never reruns its filesystem actions. A new repair ID
+cannot bypass a retained original repair intent.
+
+The currently admissible states are missing roots that never had recorded identities, or recorded roots
+that still match, are empty, root-owned mode 0700, have no realtime flags, and have project ID zero or the
+assigned project. Existing hard limits must be zero or the exact configured limits, and quota inode usage
+must not exceed the recorded assigned roots. Lost recorded roots, unrecorded/orphan trees, replacement
+identities, nonempty trees and roots already handed to the endpoint UID are refused. This prevents the
+repair from acting on ordinary worker-owned/live workspaces. It does not claim general quiescence of
+arbitrary user-owned trees; those require another reconciliation/fencing path.
+
+For admitted repairs, missing root identities are committed before project setup. Project membership,
+hard limits and final UID/GID are applied to those exact roots, followed by the normal full observation
+checks before the repair receipt becomes complete. Original allocations remain charged; no IDs are
+recycled and no trees are deleted. Inspection and repair share the same lock without nested unlocks.
+The repair method is not added to the endpoint peer socket or model tools.
+
+Native qualification extends the eight provisioning interruptions with explicit repair admission/refusal,
+stale-hash refusal, original-intent preservation and read-only duplicate repair checks. Two additional
+SIGKILL cases interrupt repair after hard limits and after full verification before its receipt. They
+must retain `started`, refuse partial replay/new-ID bypass, and finish a receipt only from verified
+completed effects. This is an internal repair backend; operator command/UI integration and broader
+reconciliation remain unfinished. Native result/revision follows.
+
+VERIFIED at `e7a1d8d44c63cedfe7339273b7c75ea06987ceff`: native
+[run 43698787968](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43698787968)
+passed five admissible root-private/missing-root repair cases, refusal of unrecorded/endpoint-owned
+states, stale snapshot rejection, original identity/capacity preservation and duplicate-repair observation.
+Both additional repair SIGKILL cases passed: incomplete repair stayed unresolved without replay, while
+completed effects were observed before marking the original repair complete. A replacement ID could
+not bypass either retained repair. The existing scoped Harness/storage/systemd checks, typecheck and
+builds also passed. Two local installation-planning tests passed before native qualification.
+
+Full case details/source hashes: [repair evidence](evidence/086-storage-repair.json). Internal backend
+repair is implemented for the proven states above; it is not an operator CLI/UI workflow. Orphan adoption,
+worker-owned partial states, general quiescence, interrupted-repair manual reconciliation, backup/restore/
+migration, headroom, reboot/clean-host recovery and final architecture qualification remain open. The new
+`repairs` table is part of the host registry and must be included by future backup/migration support.
+No running user-host service was changed.

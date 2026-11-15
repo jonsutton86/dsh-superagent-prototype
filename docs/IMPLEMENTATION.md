@@ -1289,3 +1289,9 @@ checks across eight real process-loss states, including missing/unrecorded roots
 ownership. Replaced roots and symlinks remain unadopted. Snapshot hashes bind evidence but authorize
 no repair. See [086 repair-inspection evidence](evidence/086-storage-repair-inspection.json); actual
 repair/fencing and broader recovery gates remain unfinished.
+
+Journaled storage repair (`e7a1d8d`): native validation passed five safe partial-state repairs and two
+repair-interruption scenarios. Repairs bind original intent and fresh inspection hash; repeated/uncertain
+repairs observe rather than repeat effects. Unsafe or unrecorded roots remain refused. See
+[086 repair evidence](evidence/086-storage-repair.json). Operator integration, general reconciliation
+and wider storage recovery remain incomplete.
