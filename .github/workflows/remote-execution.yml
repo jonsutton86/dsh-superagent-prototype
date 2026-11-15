@@ -105,9 +105,13 @@ jobs:
         run: |
           npm install --global pnpm@11.25.0
           pnpm install --frozen-lockfile
+          pnpm typecheck
+          pnpm build
       - name: Install filesystem investigation tools
         run: |
           sudo apt-get update
           sudo apt-get install --yes xfsprogs bubblewrap
+          sudo install -m 0755 "$(command -v node)" /usr/local/bin/node
+          echo /usr/local/bin >> "$GITHUB_PATH"
       - name: Exercise disposable XFS project quotas
         run: sudo env GITHUB_ACTIONS=true PATH="$PATH" bash tests/fixtures/storage-qualification.sh "$(id -u)" "$(id -g)"

@@ -17,6 +17,7 @@ import { ResourceInventory } from '../ownership/inventory.ts'
 import { worldBinding } from './world-journal.ts'
 import { runCapturedCheck, discardSnapshot } from '../verification/runner.ts'
 import { snapshotReservation } from '../verification/model.ts'
+import { EndpointStorageManager, STARTUP_STORAGE_WORKSPACE, type EndpointStorageConfig } from './endpoint-storage.ts'
 import type { CgroupResources } from './resources.ts'
 
 export interface EndpointHost {
@@ -26,6 +27,7 @@ export interface EndpointHost {
   snapshotHelper?: string
   resources?: CgroupResources
   resourceHelper?: string
+  storage?: EndpointStorageConfig
   ownership?: ResourceOwnershipConfig
   report?(error: unknown): void
   filesystemRpc?(grant: RemoteGrant, request: RpcRequest, signal: AbortSignal): Promise<unknown>
@@ -37,6 +39,8 @@ const rootIdentity = async (path: string) => { const value = await stat(path, { 
 /** Independently authenticated execution endpoint; accepts durable intents before crossing a process or file-effect boundary. */
 export class RemoteEndpoint {
   readonly journal: RemoteJournal
+  private readonly storage?: EndpointStorageManager
+  private startupProof?: RemoteGrant
   readonly credentials: EndpointCredentials
   readonly ownership?: OwnershipGate
   private readonly inventory: ResourceInventory
@@ -56,7 +60,7 @@ export class RemoteEndpoint {
   private initialized = false
   private root = ''
   constructor(private readonly host: EndpointHost) {
-    this.journal = new RemoteJournal(host.stateDir, host.root)
+    this.journal = new RemoteJournal(host.stateDir, host.root, host.storage?.endpointId)
     try {
       this.credentials = new EndpointCredentials(this.journal)
       const binding = host.ownership ? { authorityId: host.ownership.authorityId, coordinatorId: host.ownership.coordinatorId, resourceId: host.ownership.resourceId } : undefined
@@ -72,9 +76,14 @@ export class RemoteEndpoint {
         remember: value => { this.journal.db.prepare('INSERT INTO endpoint_meta VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('ownership-floor', JSON.stringify(value)) },
         fence: keep => this.fenceOwnership(keep), quiescent: keep => this.ownershipQuiescent(keep),
       })
-      // Storage provisioning is not integrated yet: never run a pinned storage endpoint without enforcement.
-      if (this.journal.db.prepare('SELECT value FROM endpoint_meta WHERE key=?').get('storage-policy'))
+      // A pinned policy cannot silently fall back to an unenforced endpoint.
+      if (!host.storage && this.journal.db.prepare('SELECT value FROM endpoint_meta WHERE key=?').get('storage-policy'))
         throw new Error('Persisted storage policy requires storage enforcement before this endpoint can start')
+      if (host.storage) {
+        if (host.isolation.name !== 'linux-bubblewrap' || !host.filesystemRpc)
+          throw new Error('Storage enforcement requires confined process and filesystem execution')
+        this.storage = new EndpointStorageManager(this.journal, host.storage, host.root)
+      }
       const resourcePolicy = this.journal.db.prepare('SELECT value FROM endpoint_meta WHERE key=?').get('resource-policy')?.value
       if (resourcePolicy && String(resourcePolicy) !== JSON.stringify(host.resources?.policy))
         throw new Error('Persisted endpoint resource limits cannot be removed or replaced')
@@ -120,8 +129,9 @@ export class RemoteEndpoint {
     if (['/usr', '/bin', '/sbin', '/lib', '/lib64', '/etc', '/dev', '/proc'].some(path => inside(path, control)))
       throw new Error('Endpoint control state must be outside system runtime mounts')
     this.host.resources?.start(this.journal.id)
-    await verifyLocalWorkspace(this.root, this.host.subprocess, this.lifetime.signal, this.host.filesystem)
-    if (this.host.isolation.name === 'linux-bubblewrap') await this.verifyIsolation(control)
+    const proofRoot = this.storage ? await this.storage.startup(this.lifetime.signal) : this.root
+    await verifyLocalWorkspace(proofRoot, this.host.subprocess, this.lifetime.signal, this.host.filesystem)
+    if (this.host.isolation.name === 'linux-bubblewrap') await this.verifyIsolation(control, proofRoot)
     if (this.host.resources) this.journal.db.prepare('INSERT OR IGNORE INTO endpoint_meta VALUES (?,?)').run('resource-policy', JSON.stringify(this.host.resources.policy))
     this.initialized = true
     this.sweep()
@@ -129,13 +139,14 @@ export class RemoteEndpoint {
     this.ownership?.start(error => this.host.report?.(error))
     for (const job of this.journal.jobs()) if (job.phase === 'accepted') this.enqueue(job.id)
   }
-  private async verifyIsolation(control: string): Promise<void> {
+  private async verifyIsolation(control: string, parent: string): Promise<void> {
     if (!this.host.filesystemRpc) throw new Error('Confined filesystem runner is required')
-    const root = await mkdtemp(join(this.root, '.qualification-')), nonce = randomUUID(), at = timestamp()
+    const root = await mkdtemp(join(parent, '.qualification-')), nonce = randomUUID(), at = timestamp()
     const signal = AbortSignal.any([this.lifetime.signal, AbortSignal.timeout(15_000)])
-    const grant: RemoteGrant = { id: nonce, owner: 'startup-proof', workspace: 'startup-proof', root, rootIdentity: await rootIdentity(root),
+    const grant: RemoteGrant = { id: nonce, owner: 'startup-proof', workspace: this.storage ? STARTUP_STORAGE_WORKSPACE : 'startup-proof', root, rootIdentity: await rootIdentity(root),
       operations: ['fs.read', 'fs.write', 'process.spawn'], enabled: true, epoch: 1, revision: 1, leaseUntil: Date.now() + 15_000, createdAt: at, updatedAt: at }
     let handle: SubprocessHandle | undefined
+    this.startupProof = grant
     try {
       await this.filesystem(grant, { op: 'fs.write', requestId: nonce, path: 'proof', content: nonce, expected: { kind: 'createIfAbsent' } }, signal)
       const argv = await this.host.isolation.wrap(['/bin/sh', '-c', '[ ! -e "$1" ] && cat proof', 'dsh-isolation-proof', control], root, root, false, signal)
@@ -146,6 +157,7 @@ export class RemoteEndpoint {
         throw new Error('Execution namespace proof failed: control state must be hidden and filesystem/process views must match')
       if (await this.filesystem(grant, { op: 'fs.read', path: 'proof' }, signal) !== nonce) throw new Error('Confined filesystem proof failed')
     } finally {
+      this.startupProof = undefined
       handle?.terminate()
       if (!handle || await handle.waitForExit(AbortSignal.timeout(2000)).catch(() => false)) await rm(root, { recursive: true, force: true })
     }
@@ -223,8 +235,11 @@ export class RemoteEndpoint {
       if (request.operations.includes('fs.write') && !request.operations.includes('fs.read')) throw new RemoteError(400, 'invalid_grant', 'Filesystem writes require read access for version guards')
       const credentials = this.credentialBindings(request.credentials ?? [], request.operations)
       if (this.journal.grants().some(grant => grant.workspace === request.workspace)) throw new RemoteError(409, 'workspace_enrolled', 'This workspace already has a grant; change its existing grant')
-      const directory = join(this.root, request.workspace)
-      await mkdir(directory, { recursive: true, mode: 0o700 })
+      if (this.storage && request.workspace === STARTUP_STORAGE_WORKSPACE)
+        throw new RemoteError(400, 'reserved_workspace', 'This workspace is reserved for endpoint startup qualification')
+      const directory = this.storage ? await this.storage.prepare(request.workspace, request.requestId, digest, this.lifetime.signal)
+        : join(this.root, request.workspace)
+      if (!this.storage) await mkdir(directory, { recursive: true, mode: 0o700 })
       const root = await realpath(directory)
       if (!inside(this.root, root) || root === this.root) throw new RemoteError(403, 'workspace_escape', 'Workspace resolves outside its assigned root')
       const at = timestamp(), grant: RemoteGrant = { id: randomUUID(), owner: request.owner, workspace: request.workspace, root,
@@ -308,6 +323,7 @@ export class RemoteEndpoint {
     return target
   }
   private async verifyRoot(grant: RemoteGrant): Promise<void> {
+    await this.storage?.verify(grant.workspace, grant.root, this.lifetime.signal, grant === this.startupProof)
     if (await realpath(grant.root) !== grant.root || await rootIdentity(grant.root) !== grant.rootIdentity)
       throw new FsError('Granted directory identity changed; enroll a new workspace', 'FS_SANDBOX_DENIED')
   }
@@ -377,6 +393,7 @@ export class RemoteEndpoint {
         attachments.push({ source: this.host.commandHelper, target: '/run/dsh-command.mjs' })
       }
       const argv = await this.host.isolation.wrap(command, grant.root, cwd, grant.operations.includes('network'), this.signal(grant), job.request.env, undefined, attachments)
+      await this.verifyRoot(grant)
       await this.verifyOwnership()
       this.grant(principal, 'process.spawn'); this.noUnknown()
       job = this.journal.job(id)
@@ -415,7 +432,7 @@ export class RemoteEndpoint {
       const target = await this.target(grant, job.request.cwd), source = this.host.filesystem.processPath(target)
       const result = await runCapturedCheck({ id, source, root: grant.root, argv: job.request.argv, env: job.request.env,
         stdin: job.request.stdin, spec: job.request.verification! }, {
-        subprocess: this.host.subprocess, isolation: this.host.isolation, helper: this.host.snapshotHelper!, storageRoot: join(this.host.stateDir, 'verification'),
+        subprocess: this.host.subprocess, isolation: this.host.isolation, helper: this.host.snapshotHelper!, storageRoot: this.verificationRoot(grant),
         signal: this.signal(grant), lifetime: this.lifetime.signal,
         authorize: async () => {
           await this.verifyRoot(grant); await this.verifyOwnership(); this.grant(principal, 'fs.read'); this.grant(principal, 'process.spawn'); this.noUnknown()
@@ -440,12 +457,19 @@ export class RemoteEndpoint {
       job.error = message(error).slice(0, 4000); this.journal.saveJob(job)
     }
   }
+  private verificationRoot(grant: RemoteGrant): string {
+    return this.storage ? this.storage.verificationRoot(grant.workspace) : join(this.host.stateDir, 'verification')
+  }
   /** A reconciled process can release its retained private copy, without turning an unknown check into success. */
   private cleanSnapshots(): void {
     if (this.closing) return
     for (const job of this.journal.jobs().filter(job => job.quiescent && job.verification && !job.verification.storageReleased).slice(0, 8)) {
       if (this.snapshotCleanup.has(job.id) || this.pending.has(job.id) || this.live.has(job.id)) continue
-      const pending = discardSnapshot(join(this.host.stateDir, 'verification', job.id)).then(() => {
+      const pending = Promise.resolve().then(async () => {
+        const grant = this.journal.grant(job.grantId)
+        if (this.storage) await this.verifyRoot(grant)
+        await discardSnapshot(join(this.verificationRoot(grant), job.id))
+      }).then(() => {
         if (this.closed) return
         const current = this.journal.job(job.id); current.verification!.storageReleased = true; this.journal.saveJob(current)
       }).catch(() => { /* A failed cleanup continues reserving disk until a later sweep succeeds. */ })
@@ -665,7 +689,11 @@ export class RemoteEndpoint {
     }
   }
   private filesystem(grant: RemoteGrant, request: RpcRequest, signal: AbortSignal): Promise<unknown> {
-    const run = () => this.host.filesystemRpc!(grant, request, signal)
+    const run = async () => {
+      await this.verifyRoot(grant)
+      signal.throwIfAborted()
+      return this.host.filesystemRpc!(grant, request, signal)
+    }
     return this.host.resources ? this.host.resources.run(request.op === 'fs.write' || request.op === 'fs.edit' ? 'operation:' + request.requestId : 'read', run, grant.workspace) : run()
   }
   stop(): Promise<void> { return this.stopping ??= this.close() }

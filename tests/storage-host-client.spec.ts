@@ -1,38 +1,71 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile, access } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
+import { Context } from '@deepseek-ai/cordis'
+import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
+import { LocalSubprocessRuntime } from '@deepseek-ai/dsh-subprocess-local'
 import { EndpointStorage } from '../src/remote/storage-model.ts'
-import { RemoteJournal, fingerprint } from '../src/remote/journal.ts'
 import { StorageReservations, storageRoots } from '../src/remote/storage-journal.ts'
-import { StorageProvisioning } from '../src/remote/storage-provisioning.ts'
 import { LocalStorageHost } from '../src/remote/storage-host-client.ts'
+import { RemoteEndpoint } from '../src/remote/endpoint.ts'
+import { BubblewrapIsolation } from '../src/remote/isolation.ts'
+import { confinedFilesystem } from '../src/remote/filesystem-runner.ts'
+import type { GrantReceipt, Principal, RemoteJob } from '../src/remote/protocol.ts'
 
-it.runIf(!!process.env.DSH_STORAGE_SERVICE_CONFIG)('prepares and recovers original storage through the authenticated host socket as an unprivileged endpoint', async () => {
+it.runIf(!!process.env.DSH_STORAGE_SERVICE_CONFIG)('starts, enrolls, executes and recovers a storage-backed endpoint as its unprivileged user', async () => {
   const config = JSON.parse(process.env.DSH_STORAGE_SERVICE_CONFIG!) as { endpointId: string; uid: number; policy: unknown }
   expect(process.platform).toBe('linux'); expect(process.getuid?.()).toBe(config.uid); expect(config.uid).toBeGreaterThan(0)
   const policy = EndpointStorage.parse(config.policy), directory = await mkdtemp(join(tmpdir(), 'dsh-storage-client-'))
-  const state = join(directory, 'state')
-  const assignedRoot = `${policy.mountRoot}/dsh-${config.endpointId}/workspaces`
-  let journal = new RemoteJournal(state, assignedRoot, config.endpointId)
+  const state = join(directory, 'state'), assignedRoot = `${policy.mountRoot}/dsh-${config.endpointId}/workspaces`
+  const ctx = new Context(), filesystem = new LocalFileSystem(ctx, { cwd: directory, diffBasisMaxBytes: 1024 * 1024 })
+  const subprocess = new LocalSubprocessRuntime(ctx), isolation = new BubblewrapIsolation(subprocess)
+  const client = new LocalStorageHost(process.env.DSH_STORAGE_SERVICE_SOCKET!)
+  const host = { stateDir: state, root: assignedRoot, filesystem, subprocess, isolation,
+    filesystemRpc: confinedFilesystem(subprocess, isolation, resolve('lib/remote-fs-worker.js')),
+    snapshotHelper: resolve('lib/verification-snapshot-worker.js'), storage: { endpointId: config.endpointId, policy, host: client } }
+  let endpoint = new RemoteEndpoint(host)
   try {
-    expect(journal.id).toBe(config.endpointId)
+    await endpoint.start()
+    expect(endpoint.journal.id).toBe(config.endpointId)
     await expect(writeFile(join(assignedRoot, 'unprivileged-parent-write'), 'no')).rejects.toMatchObject({ code: 'EACCES' })
-    const client = new LocalStorageHost(process.env.DSH_STORAGE_SERVICE_SOCKET!), request = {
-      requestId: 'socket-original', workspace: 'socket-one', requestHash: fingerprint('socket-original') }
-    let reservations = new StorageReservations(journal, policy)
-    const original = await new StorageProvisioning(reservations, client).prepare(request, AbortSignal.timeout(20000))
+    const enrollment = { op: 'grant.create', requestId: 'socket-original', owner: 'coordinator', workspace: 'socket-one',
+      operations: ['fs.read', 'fs.write', 'process.spawn'], leaseMs: 300000 }
+    const receipt = await endpoint.rpc({ role: 'admin' }, enrollment) as GrantReceipt
+    const principal: Principal = { role: 'grant', id: receipt.grant.id, epoch: receipt.grant.epoch }
+    await endpoint.rpc(principal, { op: 'fs.write', requestId: 'write', path: 'hello', content: 'quota-backed', expected: { kind: 'createIfAbsent' } })
+    expect(await endpoint.rpc(principal, { op: 'fs.read', path: 'hello' })).toBe('quota-backed')
+    const launch = async (id: string, argv: string[], verify = false) => {
+      await endpoint.rpc(principal, { op: 'job.spawn', requestId: id, revision: receipt.grant.revision, argv, cwd: receipt.grant.root, graceMs: 100, env: {},
+        ...(verify ? { verification: { kind: 'check', snapshot: { repository: 'none' } } } : {}) })
+      let job: RemoteJob | undefined
+      await vi.waitFor(async () => {
+        job = await endpoint.rpc(principal, { op: 'job.get', id }) as RemoteJob
+        expect(job.quiescent).toBe(true)
+      }, { timeout: 20000 })
+      return job!
+    }
+    expect((await launch('read', ['/bin/sh', '-c', 'test "$(cat hello)" = quota-backed'])).outcome?.exitCode).toBe(0)
+    const checked = await launch('verify', ['/bin/sh', '-c', 'test "$(cat hello)" = quota-backed'], true)
+    expect(checked, checked.error).toMatchObject({ outcome: { exitCode: 0 }, verification: { stage: 'finished', storageReleased: true } })
+    await expect(access(join(state, 'verification'))).rejects.toThrow()
+    expect((await launch('socket-hidden', ['/usr/bin/python3', '-c', 'import os,sys; assert not os.path.exists(sys.argv[1])',
+      process.env.DSH_STORAGE_SERVICE_SOCKET!])).outcome?.exitCode).toBe(0)
+    expect((await launch('fill', ['/usr/bin/python3', '-c', "import os; f=open('full','wb'); os.posix_fallocate(f.fileno(),0,20*1024*1024)"])).outcome?.exitCode).toBe(1)
+    const allocations = new StorageReservations(endpoint.journal, policy).list()
+    expect(allocations).toHaveLength(2) // The persistent startup proof allocation is charged to the same pool.
+    const original = allocations.find(item => item.workspace === 'socket-one')!
     expect(original.phase).toBe('provisioned')
-    expect(original.observation!.directories.map(item => item.path)).toEqual(storageRoots(policy, original))
-    journal.close(); journal = new RemoteJournal(state, assignedRoot, config.endpointId)
-    reservations = new StorageReservations(journal, policy)
-    const recovered = await new StorageProvisioning(reservations, client).prepare(request, AbortSignal.timeout(20000))
-    expect(recovered.projectId).toBe(original.projectId)
-    expect(recovered.observation!.directories).toEqual(original.observation!.directories)
-    const forged = { ...recovered, endpointId: randomUUID() }
+    await expect(endpoint.rpc({ role: 'admin' }, { ...enrollment, requestId: 'reserved', workspace: '__dsh_startup' })).rejects.toThrow('reserved')
+    await endpoint.stop(); endpoint = new RemoteEndpoint(host); await endpoint.start()
+    const replay = await endpoint.rpc({ role: 'admin' }, enrollment) as GrantReceipt
+    expect(replay.grant.id).toBe(receipt.grant.id)
+    expect(new StorageReservations(endpoint.journal, policy).list()).toHaveLength(2)
+    expect(await endpoint.rpc(principal, { op: 'fs.read', path: 'hello' })).toBe('quota-backed')
+    const forged = { ...original, endpointId: randomUUID() }
     await expect(client.observe(policy, forged, storageRoots(policy, forged), AbortSignal.timeout(20000))).rejects.toThrow('Storage host response')
-    await expect(client.observe(policy, recovered, ['/unassigned'], AbortSignal.timeout(20000))).rejects.toThrow('Storage host response')
-    await expect(client.observe(policy, recovered, storageRoots(policy, recovered), AbortSignal.abort())).rejects.toThrow()
-  } finally { journal.close(); await rm(directory, { recursive: true, force: true }) }
-}, 60000)
+    await expect(client.observe(policy, original, ['/unassigned'], AbortSignal.timeout(20000))).rejects.toThrow('Storage host response')
+    await expect(client.observe(policy, original, storageRoots(policy, original), AbortSignal.abort())).rejects.toThrow()
+  } finally { await endpoint.stop(); await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }) }
+}, 90000)
