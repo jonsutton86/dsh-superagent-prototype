@@ -1,0 +1,24 @@
+{
+  "date": "2026-11-15",
+  "testedRevision": "25726b35bbec597116501005ff08ecff16305d82",
+  "localTests": {
+    "passed": 9,
+    "nativeOnlySkipped": 1
+  },
+  "nativeRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43715749031",
+  "nativeVitestPassed": 49,
+  "nativePythonFixtures": "passed",
+  "typecheck": "passed locally and in Linux CI",
+  "build": "passed in Linux CI",
+  "installedStorageCaptureProfileQualified": true,
+  "verified": [
+    "fresh isolated installed Harness profile uses original endpoint state, resource policy and quota-host socket",
+    "new explicit capture retains original storage request and project binding",
+    "execution RPC absent in maintenance profile",
+    "profile-produced capture and workspace archive verified in paired export and encrypted checkpoint",
+    "control-state staging remains held"
+  ],
+  "globalSnapshotVerified": false,
+  "restoreVerified": false,
+  "deployed": false
+}

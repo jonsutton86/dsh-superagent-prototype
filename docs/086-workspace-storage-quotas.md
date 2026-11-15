@@ -1876,3 +1876,31 @@ new real cgroup-plus-quota endpoint capture and archive-bearing encrypted checkp
 both passed. The [evidence receipt](evidence/086-quota-workspace-capture.json) distinguishes
 this endpoint API boundary from the still-unqualified installed storage-capture profile.
 No operator app, credentials, provider defaults or deployment were changed.
+
+### Installed Harness quota-backed capture boundary
+
+The native storage journey now also stops the test endpoint and starts a fresh,
+isolated installed Harness maintenance profile against the same original endpoint
+state, delegated resource policy and storage-host socket. It creates a separate
+archive with a new explicit capture request, verifies the original storage allocation
+binding, and confirms no endpoint execution RPC is exposed. The subsequent paired
+export and encrypted checkpoint select this installed-profile capture, so the loader
+result is checked through the complete archive membership path. The earlier direct
+API capture remains retained as independent history. This does not establish a
+global capture epoch or destination installation authority.
+
+VERIFIED at `25726b35bbec597116501005ff08ecff16305d82`: [Linux run 43715749031](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43715749031)
+passed the complete scoped storage qualification (49 Vitest cases, native Python
+fixtures, typecheck and build), including fresh installed Harness quota-backed capture
+and checkpoint verification of that profile's archive. Local plugin checks passed
+nine tests with one native-only skip, plus typecheck. The
+[evidence receipt](evidence/086-installed-storage-capture.json) records the boundary.
+
+INFERRED from current lock ownership: coordinated capture must not hold the host
+registry lock while starting the normal endpoint maintenance profile. `StorageHost.capture_pair`
+holds `exclusive()` across its callback; endpoint startup and root verification query
+the storage service, which needs the same host registry lock. The existing pair exporter
+avoids this by reading stopped endpoint state without initializing its services. A future
+coordinated handoff must preserve this ordering and separately establish quiescence and
+workspace content consistency. This is a design constraint from code inspection, not a
+completed implementation or a native deadlock experiment.
