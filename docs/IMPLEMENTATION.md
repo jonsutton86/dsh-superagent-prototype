@@ -1267,3 +1267,8 @@ Storage workspace visibility (`2ac63a3`): endpoint cards now show registered dis
 startup/retained allocation accounting without claiming live usage/free space. English/Chinese copy,
 13 focused/adjacent UI tests, typecheck and seven builds passed. Live storage status and recovery controls
 remain open; see the latest section of [086](086-workspace-storage-quotas.md).
+
+Storage observation continuation (`1869721`): administrator-only read-only quota status now distinguishes
+fresh observation, unavailable evidence, reserved and absent allocations without mutating recovery state.
+23 storage tests and 62 adjacent tests passed (four native skips), plus typecheck/seven builds.
+Coordinator/workspace integration and native status qualification remain open; see latest [086](086-workspace-storage-quotas.md).

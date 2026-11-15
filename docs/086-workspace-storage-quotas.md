@@ -522,3 +522,33 @@ expensive derived state. These are rendered DOM tests, not a deployed browser or
 
 This implements policy visibility only. Live allocation/usage queries, freshness/error handling,
 operator reconciliation and storage recovery remain unfinished. The running user app was not restarted.
+
+### Read-only quota observation RPC
+
+At `1869721`, administrator RPC `storage.status` with a workspace identifier reports either
+`configured: false` or the configured policy, reservation snapshot time, reserved/unreserved allocation
+counts, and the selected workspace's state. Allocation counts include startup, retained and uncertain
+reservations; unreserved allocations are policy capacity, not physical free space. An absent allocation
+reports `unallocated`; a reserved intent reports `not-provisioned` without calling the host. For an intent
+whose provisioning began, the endpoint obtains and validates a fresh host observation and returns quota
+usage/limits plus observation time, or `unavailable` without stale quota data or host diagnostic text.
+The original durable phase is returned separately: fresh observation of a provisioning intent does not
+mean its receipt was committed or its grant is ready.
+
+Status validates quota policy, assigned roots and previous root/mount identity using the same checks as
+execution. It does not provision, settle an intent, persist observations or append audits. Tests verify
+that SQLite total_changes remains unchanged. Aborts propagate; requests have a 30-second host bound.
+Worker grant credentials cannot call this RPC. As a read-only recovery observation, it does not require
+active coordinator ownership, while administrator authentication still applies.
+
+VERIFIED locally: 23 storage journal/provisioning/status tests passed; final adjacent remote, endpoint,
+ownership and verification suites passed 62 tests with four native skips. Typecheck and seven builds
+passed. An earlier combined journal/remote run passed 58 with two native skips before the final
+ownership-read classification change; that change was covered by the final adjacent run. CodeGraph
+reported broad transitive matches through shared endpoint/protocol modules; direct call-path inspection
+selected the bounded adjacent suites above. No full qualification matrix was repeated.
+
+This is a locally tested backend increment. Coordinator response validation, workspace controls,
+native end-to-end status qualification and freshness/error presentation remain unfinished. Existing
+native evidence above does not claim coverage of this new RPC. Storage recovery/export/restore,
+headroom, reboot/clean-host qualification and final project acceptance remain open.
