@@ -11,10 +11,13 @@ import { mkdtemp, mkdir, writeFile, symlink, link, rm, chmod, readFile, stat, re
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { inventoryWorkspaceRecovery } from '../src/recovery/workspace-tree.ts'
-const stageFault = vi.hoisted(() => ({ abort: undefined as AbortController | undefined, replaceRoot: undefined as string | undefined }))
+const stageFault = vi.hoisted(() => ({ abort: undefined as AbortController | undefined, replaceRoot: undefined as string | undefined, capacityBlocked: false }))
 vi.mock('node:fs/promises', async importOriginal => {
   const real = await importOriginal<typeof import('node:fs/promises')>()
-  return { ...real, async lstat(...args: Parameters<typeof real.lstat>) {
+  return { ...real, async statfs(...args: Parameters<typeof real.statfs>) {
+    const result = await real.statfs(...args)
+    return stageFault.capacityBlocked ? { ...result, bavail: 0n } : result
+  }, async lstat(...args: Parameters<typeof real.lstat>) {
     const result = await real.lstat(...args)
     if (stageFault.replaceRoot === args[0]) {
       const root = stageFault.replaceRoot; stageFault.replaceRoot = undefined
@@ -260,4 +263,17 @@ it('refuses a root replaced after initial identity capture instead of binding re
     expect(await readFile(join(source, 'replacement.txt'), 'utf8')).toBe('replacement content')
     expect(await readFile(join(source + '-retired', 'original.txt'), 'utf8')).toBe('original content')
   } finally { stageFault.replaceRoot = undefined; await rm(directory, { recursive: true, force: true }) }
+})
+
+
+it('refuses staging before creating a candidate when available capacity is insufficient', async () => {
+  const directory = await realpath(await mkdtemp(join(tmpdir(), 'recovery-capacity-refusal-'))), source = join(directory, 'source')
+  try {
+    await mkdir(source, { mode: 0o700 }); await writeFile(join(source, 'file'), 'content')
+    const archive = await captureWorkspaceRecovery(source, join(directory, 'archive'), budget)
+    stageFault.capacityBlocked = true
+    await expect(stageWorkspaceRecovery(archive.path, join(directory, 'candidate'))).rejects.toThrow('available bytes')
+    await expect(stat(join(directory, 'candidate'))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await readFile(join(source, 'file'), 'utf8')).toBe('content')
+  } finally { stageFault.capacityBlocked = false; await rm(directory, { recursive: true, force: true }) }
 })

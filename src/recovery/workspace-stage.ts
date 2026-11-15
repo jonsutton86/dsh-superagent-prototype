@@ -1,4 +1,5 @@
 /** Reconstruct verified bytes/links into a new private held candidate. Never activate or overwrite a workspace. */
+import { checkWorkspaceStagingCapacity } from './workspace-capacity.ts'
 import { randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
 import { chmod, copyFile, link, mkdir, open, readFile, realpath, rename, symlink, writeFile } from 'node:fs/promises'
@@ -20,8 +21,10 @@ export async function stageWorkspaceRecovery(archive: string, destination: strin
   let receipt: { id: string; path: string; workspace: string; source: string; inventoryHash: string; state: 'held'; origin?: WorkspaceRecoveryOrigin;
     contentReconstructed: true; metadataApplied: false; executionOwnership: false; restoreVerified: false } | undefined
   await verifyWorkspaceRecovery(originalArchive, signal, async verified => {
-    const manifest: Awaited<ReturnType<typeof verifyWorkspaceRecovery>>['manifest'] = JSON.parse(await readFile(join(verified, 'manifest.json'), 'utf8'))
+    const manifestBytes = await readFile(join(verified, 'manifest.json'))
+    const manifest: Awaited<ReturnType<typeof verifyWorkspaceRecovery>>['manifest'] = JSON.parse(manifestBytes.toString('utf8'))
     if (inside(resolve(manifest.source), target) || inside(target, resolve(manifest.source))) throw new Error('Workspace staging must be separate from its original source')
+    await checkWorkspaceStagingCapacity(parent, manifest.entries, manifestBytes.length, signal)
     await mkdir(target, { mode: 0o700 })
     const workspace = join(target, 'workspace'), hold = { version: 1, id, source: manifest.source, inventoryHash: manifest.sha256,
       state: 'preparing', ...(origin ? { origin } : {}), executionOwnership: false, metadataApplied: false, restoreVerified: false }
