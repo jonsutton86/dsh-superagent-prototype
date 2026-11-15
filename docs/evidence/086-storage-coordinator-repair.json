@@ -1,0 +1,31 @@
+{
+  "kind": "coordinator-recovery-after-root-storage-repair",
+  "revision": "c6c314c03038cd0089e9dda9de0cac5295bc96c5",
+  "recordedAt": "2026-11-15T09:43:07.834593+00:00",
+  "workflowRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43700326077",
+  "result": "success",
+  "classification": "VERIFIED native coordinator and endpoint recovery; NOT DEPLOYED",
+  "hashes": {
+    "tests/storage-host-client.spec.ts": "c4e66ffb181240f178ef7c8c653f0f97cbc2ed620fa2c7f2590a6e7bf0ba8a6d",
+    "tests/fixtures/storage-repair-journey.py": "45200ccaddcc7c6d7c9b278858a7123bce157199d0f4e13483d6e8416f600b25",
+    "src/environments/endpoints.ts": "ff2ee63d5e09f8aed1c2d509f18823daa8bcd00866799968f5fe450dc2db41dd"
+  },
+  "validation": [
+    "Coordinator submits original grant through authenticated HTTP before host crash",
+    "Unknown administration receipt survives coordinator restart unchanged",
+    "Root CLI repairs recorded/missing roots using original host intent",
+    "Endpoint restart preserves pending allocation",
+    "Coordinator storage inspection observes repaired roots without changing unknown administration receipt",
+    "Explicit retry completes original administration request; subsequent retry returns same receipt",
+    "Host retains exactly two original allocations and one repair",
+    "Scoped Linux workflow passed 15 native Vitest executions plus Python/service/systemd/crash fixtures, typecheck and builds",
+    "CodeGraph affected selection identifies storage-host-client.spec.ts"
+  ],
+  "limits": [
+    "No rendered browser or managed-launcher failure/repair journey",
+    "No general orphan or endpoint-owned partial-state reconciliation",
+    "No backup/restore, power-loss or machine-reboot acceptance",
+    "Full final architecture qualification remains open"
+  ],
+  "fullMatrix": "not run"
+}

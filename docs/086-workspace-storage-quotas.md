@@ -804,3 +804,20 @@ Validation: endpoint UI/coordinator suites passed 16 tests; optional-provider co
 with the separately gated Harness integration test skipped. Typecheck and all build targets passed.
 No running app restart, live provider inference, or new native Linux qualification was performed for
 this UI-only change. Full architecture and broader recovery gates remain open.
+
+
+### Coordinator recovery after root repair — verified
+
+At `c6c314c03038cd0089e9dda9de0cac5295bc96c5`, the native repair journey now submits the original
+workspace request through the production coordinator and authenticated endpoint HTTP. The root service
+is killed during provisioning; the coordinator retains an unknown request across its own restart.
+After explicit root CLI repair and endpoint restart, coordinator storage inspection observes repaired
+roots while leaving both the administration receipt and pending reservation unsettled. Explicit retry
+then completes the original command, and a repeated retry returns the same receipt. Exactly two host
+allocations and the original repair remain.
+
+[Run 43700326077](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43700326077)
+passed the scoped Linux storage workflow (15 native Vitest executions, existing Python/service/systemd/
+crash fixtures, typecheck and builds). See [recorded evidence](evidence/086-storage-coordinator-repair.json).
+This adds coordinator receipt recovery evidence, not browser acceptance, a managed-launcher failure/repair
+journey, general orphan reconciliation, backup/restore, power loss or reboot qualification. No app deployment.

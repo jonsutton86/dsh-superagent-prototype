@@ -1307,3 +1307,10 @@ root CLI repair, endpoint restart and same-request grant recovery passed without
 The normal execution/verification checks passed afterward. See
 [086 endpoint repair journey](evidence/086-storage-endpoint-repair-journey.json); wider reconciliation,
 coordinator repair UX and full restoration/qualification remain incomplete.
+
+
+086 coordinator recovery extension: VERIFIED at `c6c314c03038cd0089e9dda9de0cac5295bc96c5` by scoped
+Linux run 43700326077. Unknown workspace creation survives coordinator restart; after root CLI repair
+and endpoint restart, read-only inspection leaves the request unknown and explicit original-ID retry
+completes it without another allocation. See [evidence](evidence/086-storage-coordinator-repair.json).
+Browser/managed-launcher failure journeys, wider reconciliation, storage restore and final qualification remain open.
