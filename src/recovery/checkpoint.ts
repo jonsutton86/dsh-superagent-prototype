@@ -241,9 +241,12 @@ async function unpack(path: string, keyFile: string, signal: AbortSignal): Promi
       if (!file || file.sha256 !== session.sha256 || file.bytes !== session.bytes) throw new Error('Session member differs from its checkpoint manifest')
       await inspectSession(join(directory, file.member), session as unknown as SessionArchive, signal)
     }
+    const sourceEndpoints = new Set<string>()
     for (const file of manifest.files.filter(file => file.kind === 'world')) {
       const db = await database(join(directory, file.member))
       try {
+        const record = db.prepare('SELECT value FROM execution_world WHERE id=1').get()
+        if (record) sourceEndpoints.add(JSON.parse(String(record.value)).endpointId)
         for (const id of receiptSessions(db)) if (!manifest.sessions.some(session => session.id === id))
           throw new Error('A remote execution receipt references missing Session history')
       } finally { db.close() }
@@ -253,6 +256,9 @@ async function unpack(path: string, keyFile: string, signal: AbortSignal): Promi
     try {
       if (identity(store) !== manifest.masterId || kv(store, RESTORE_HOLD)) throw new Error('Coordinator identity or recovery state differs from its checkpoint')
       references(store, new Set(manifest.sessions.map(session => session.id)), new Set(bindings))
+      for (const endpoint of values<{ id: string }>(store, 'operator_endpoint')) sourceEndpoints.add(endpoint.id)
+      for (const pair of manifest.storage ?? []) if (!sourceEndpoints.has(pair.endpointId))
+        throw new Error('Checkpoint storage endpoint is absent from the original coordinator and execution worlds')
     } finally { store.close() }
     return { directory, manifest }
   } catch (error) { await rm(directory, { recursive: true, force: true }); throw error }

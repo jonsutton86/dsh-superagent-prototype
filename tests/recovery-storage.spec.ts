@@ -6,7 +6,7 @@ import { Store } from '../src/app/store.ts'
 import { KV } from '../src/kv.ts'
 import { createCheckpoint, verifyCheckpoint, stageCheckpoint } from '../src/recovery/checkpoint.ts'
 import { ReceiptImage, sealReceiptImage, verifyReceiptImage, requireInstallableStorageImage } from '../src/recovery/image.ts'
-import { createRecoveryKey, recoveryKey } from '../src/recovery/crypto.ts'
+import { createRecoveryKey, recoveryKey, seal, unseal } from '../src/recovery/crypto.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { chmod, copyFile, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -240,5 +240,24 @@ it('captures verified storage pairs in an encrypted checkpoint and preserves the
     try { expect(restored.prepare('SELECT value FROM kv WHERE key=?').get(KV.recovery.hold)).toBeTruthy() } finally { restored.close() }
     await expect(createCheckpoint({ ...options, storageArtifacts: [{ ...pair, host: { ...pair.host, sha256: 'f'.repeat(64) } }] })).rejects.toThrow('digest')
     await expect(createCheckpoint({ ...options, storageArtifacts: [pair, pair] })).rejects.toThrow('unique original registered endpoint')
+    // Authentication alone is insufficient: a validly sealed archive must retain source ownership references.
+    const key = recoveryKey(keyFile), signal = new AbortController().signal
+    try {
+      const manifest = structuredClone(checkpoint.manifest), storeMember = manifest.files.find(file => file.kind === 'store')!
+      const plain = join(directory, 'altered-store.sqlite')
+      await unseal(join(checkpoint.path, storeMember.member), plain, key, manifest.id, storeMember, signal)
+      const altered = new DatabaseSync(plain)
+      try { altered.exec('DELETE FROM operator_endpoint; PRAGMA wal_checkpoint(TRUNCATE)') } finally { altered.close() }
+      await rm(join(checkpoint.path, storeMember.member))
+      Object.assign(storeMember, await seal(plain, join(checkpoint.path, storeMember.member), key, manifest.id, storeMember.member, signal))
+      const manifestPath = join(directory, 'altered-manifest.json')
+      await writeFile(manifestPath, JSON.stringify(manifest), { mode: 0o600 })
+      await rm(join(checkpoint.path, 'manifest.bin'))
+      const sealed = await seal(manifestPath, join(checkpoint.path, 'manifest.bin'), key, manifest.id, 'manifest.bin', signal)
+      await writeFile(join(checkpoint.path, 'checkpoint.json'), JSON.stringify({ version: 1, id: manifest.id, manifest: sealed }), { mode: 0o600 })
+      await expect(verifyCheckpoint(checkpoint.path, keyFile)).rejects.toThrow('absent from the original coordinator')
+      await expect(stageCheckpoint(checkpoint.path, keyFile, join(directory, 'rejected-stage'))).rejects.toThrow('absent from the original coordinator')
+    } finally { key.fill(0) }
+
   } finally { db.close(); await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }) }
 })
