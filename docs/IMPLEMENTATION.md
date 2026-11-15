@@ -1349,3 +1349,11 @@ subsequent missing-root refusal at `174848f` passed eight focused local backup/b
 checks original allocations, ranges, budgets and repair approvals, retaining incomplete states without
 claiming live filesystem or restore readiness. [Exact revision evidence](evidence/086-storage-backup-bindings.json).
 Endpoint-image cross-binding, fencing and coordinated restore remain open.
+
+
+086 endpoint/host record cross-check component: VERIFIED at `6c8e0fe` with 34 focused/adjacent tests
+and typecheck. Original allocation requests, policy, project IDs, observed root identities, quota
+limits and grant roots must agree; missing/extra host allocations are refused except the explicitly
+retained pre-host provisioning gap. [Evidence](evidence/086-storage-cross-binding.json).
+This helper is not yet integrated into export/restore; authenticated readers, image binding and
+ownership/live-filesystem validation remain required. Storage-backed recovery stays refused.

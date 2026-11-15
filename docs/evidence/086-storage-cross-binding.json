@@ -1,0 +1,24 @@
+{
+  "kind": "endpoint-host-storage-cross-binding",
+  "revision": "6c8e0fe82022be23f858bcd6e3e0869b02ab6618",
+  "recordedAt": "2026-11-15T10:13:23.753168+00:00",
+  "classification": "VERIFIED pure record cross-check; NOT INTEGRATED into recovery export/restore; NOT DEPLOYED",
+  "hashes": {
+    "src/recovery/storage.ts": "9d9550dbcd30819e758f3043be0d73654fc59c032815b7a26c6c2513fece1cf0",
+    "tests/recovery-storage.spec.ts": "251c54e75f1c26060301b02d80897fe795174c61a12145f8b77386544ae4c00e"
+  },
+  "validation": [
+    "34 tests passed across recovery-storage and storage-journal suites",
+    "Typecheck passed after correcting the assertion-function declaration",
+    "CodeGraph affected selection identified recovery-storage.spec.ts",
+    "Original request/project/policy/identity/quota/grant mismatches and missing/extra/duplicate records refused",
+    "Provisioning-before-host-intent gap retained as hostMissing, never converted to success",
+    "Inputs unchanged and liveFilesystemVerified/restoreVerified false"
+  ],
+  "limits": [
+    "Inputs are parsed normalized records; authenticated snapshot readers must still verify source SQL row bindings",
+    "Not connected to recovery image or export commands yet",
+    "Grant birthtime is retained but cannot be proven from host device/inode records alone",
+    "No new native or full qualification run for this pure backend helper"
+  ]
+}

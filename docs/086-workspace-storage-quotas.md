@@ -980,3 +980,27 @@ repairs without both original root identities; three binding contracts and five 
 passed locally. Native qualification was not repeated for that tightening and is not attributed to
 it. See [binding evidence](evidence/086-storage-backup-bindings.json). Endpoint-image cross-binding,
 live filesystem/fencing proof, coordinated restore and full qualification remain open.
+
+
+### Endpoint/host allocation cross-check component
+
+`src/recovery/storage.ts` now validates normalized endpoint and host records together. Policies and
+endpoint IDs must match; request IDs/hashes, workspace and project IDs remain original and unique.
+Reserved endpoint intents cannot already have a host allocation. Provisioning may have no host intent
+(the persisted-before-send interruption window), and that uncertainty is retained as `hostMissing`.
+Provisioned entries require matching host root identities, recorded quota limits, filesystem policy
+and both expected workspace/verification paths. Extra host allocations or a provisioned endpoint
+allocation absent from the host snapshot are refused. Grant roots must point to the matching
+provisioned allocation with the recorded device/inode; birthtime still needs live identity proof.
+
+The helper returns counts with `recordBindingsVerified: true`, `liveFilesystemVerified: false` and
+`restoreVerified: false`, without mutating inputs. Both catalogs are bounded to 20,000 entries. It is
+not yet called by recovery export/restore: authenticated artifact readers must validate original SQL
+row keys against JSON values and bind these normalized inputs to their snapshot hashes/inventory
+revisions. No storage recovery refusal is removed by adding this component.
+
+VERIFIED at `6c8e0fe82022be23f858bcd6e3e0869b02ab6618`: 34 tests across the new cross-binding suite and
+existing storage-journal suite passed, plus typecheck. CodeGraph selected the new suite as affected;
+the journal suite supplied adjacent coverage. No native/full qualification was rerun for this pure
+backend helper. [Evidence](evidence/086-storage-cross-binding.json). Artifact readers, authenticated
+image integration, ownership fencing and restore remain open.
