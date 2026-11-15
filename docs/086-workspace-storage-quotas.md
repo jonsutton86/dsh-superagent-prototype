@@ -1531,3 +1531,26 @@ it does not establish source quiescence or a global capture epoch.
 Focused results: 44 recovery tests passed, one native-only skip; installed Harness
 maintenance test passed against the rebuilt plugin; typecheck and build passed.
 No user profile/default provider changes, live activation or Linux requalification.
+
+### Staging filesystem capacity preflight
+
+At `1d6db05c9be9d5fdd690d02f0c2cf1de8a6b9b29`, held workspace reconstruction
+checks the target parent's observed available filesystem capacity before creating
+the candidate. Demand includes block-rounded unique file content (hard-link aliases
+share storage), one block per directory/link, the original manifest, the candidate
+container and two 32-KiB hold-record allowances. Finite inode pools are checked;
+filesystems reporting no finite inode pool explicitly return unknown inode capacity.
+Bigint arithmetic avoids truncating large filesystem counts. Parent device/inode
+identity is checked across observation, and cancellation is respected.
+
+This is a minimum preflight estimate, not a reservation or a guarantee of completion:
+concurrent users, quotas, filesystem metadata and temporary verification copies can
+still exhaust space. Verification copies are made before this staging check. Such
+failures retain the existing preparing hold and do not establish completion. Quota
+validation, control-state headroom and full capture/storage reservation remain open.
+No preflight result permits execution or substitutes for a fresh activation fence.
+
+VERIFIED: 47 focused recovery tests passed (one native-only skip), including capacity
+refusal before candidate creation and unchanged source contents; one installed
+Harness maintenance test passed with the rebuilt plugin. Typecheck and build passed.
+No live app deployment or additional native Linux qualification is claimed.

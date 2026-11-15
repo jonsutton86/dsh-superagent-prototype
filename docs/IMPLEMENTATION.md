@@ -21,6 +21,13 @@ record crosschecking, encrypted checkpoint verification and held staging. The [q
 records the initial permissions failure, its fix and the successful Linux run. This is not a workspace-files backup
 or an installed storage restore: storage-bearing installation remains deliberately refused.
 
+Workspace archive capture, encrypted checkpoint binding, held reconstruction and read-only
+candidate reauthentication are now implemented and tested through installed Harness maintenance
+profiles. Staging checks observed available filesystem bytes/inodes before creating its candidate,
+including rounded content, hard-link accounting and completion-record allowance. These checks are
+not reservations or quota authority. Capture still requires independent process quiescence before
+it can qualify as a consistent live backup; workspace-bearing installation remains held.
+
 The immediate recovery sequence remains: capture workspace content under verified process quiescence; bind that content
 to the original storage allocations and authenticated checkpoint; implement target filesystem/quota verification and
 ownership-fenced import; qualify clean-host restoration and original-operation recovery. Control-state capacity/headroom,

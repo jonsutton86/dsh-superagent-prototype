@@ -1,0 +1,12 @@
+{
+  "date": "2026-11-15",
+  "testedRevision": "1d6db05c9be9d5fdd690d02f0c2cf1de8a6b9b29",
+  "recoveryTests": { "passed": 47, "skipped": 1 },
+  "installedHarnessMaintenanceTests": { "passed": 1 },
+  "typecheck": "passed",
+  "build": "passed",
+  "verified": ["byte and finite inode refusals", "hard-link accounting", "unknown inode capacity explicit", "no candidate on preflight refusal", "source remains unchanged"],
+  "reservationImplemented": false,
+  "quotaVerified": false,
+  "deployed": false
+}
