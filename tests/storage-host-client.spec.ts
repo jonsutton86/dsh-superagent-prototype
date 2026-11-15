@@ -53,6 +53,7 @@ it.runIf(!!process.env.DSH_STORAGE_SERVICE_CONFIG)('starts, enrolls, executes an
     expect((await launch('socket-hidden', ['/usr/bin/python3', '-c', 'import os,sys; assert not os.path.exists(sys.argv[1])',
       process.env.DSH_STORAGE_SERVICE_SOCKET!])).outcome?.exitCode).toBe(0)
     expect((await launch('fill', ['/usr/bin/python3', '-c', "import os; f=open('full','wb'); os.posix_fallocate(f.fileno(),0,20*1024*1024)"])).outcome?.exitCode).toBe(1)
+    await expect(endpoint.rpc(principal, { op: 'recovery.world', revision: 'a'.repeat(32) })).rejects.toThrow('quota policy and host-registry')
     const allocations = new StorageReservations(endpoint.journal, policy).list()
     expect(allocations).toHaveLength(2) // The persistent startup proof allocation is charged to the same pool.
     const original = allocations.find(item => item.workspace === 'socket-one')!

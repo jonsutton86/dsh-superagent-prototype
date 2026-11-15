@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { RemoteJournal, fingerprint } from '../src/remote/journal.ts'
+import { EndpointStorageManager } from '../src/remote/endpoint-storage.ts'
 import { StorageProvisioning, type StorageHost } from '../src/remote/storage-provisioning.ts'
 import { EndpointStorage, type StorageObservation, type StorageReservation } from '../src/remote/storage-model.ts'
 import { RemoteEndpoint, type EndpointHost } from '../src/remote/endpoint.ts'
@@ -188,4 +189,14 @@ it('pins an administrator-assigned endpoint identity on first creation and refus
 })
 it('rejects a malformed assigned identity before initializing directories', () => {
   expect(() => new RemoteJournal('/unused-storage-state', '/unused-storage-root', 'not-an-id')).toThrow('canonical UUID')
+})
+
+it('requires visible capacity for persistent startup qualification plus a worker workspace', () => {
+  const { journal } = fixture()
+  for (const constrained of [
+    { ...policy, pool: { ...policy.pool, bytes: policy.workspace.bytes } },
+    { ...policy, pool: { ...policy.pool, inodes: policy.workspace.inodes } },
+    { ...policy, projectIds: { first: 100, last: 100 } },
+  ]) expect(() => new EndpointStorageManager(journal, { endpointId: journal.id, policy: constrained, host: {} as StorageHost },
+    `${policy.mountRoot}/dsh-${journal.id}/workspaces`)).toThrow('startup qualification and at least one worker')
 })

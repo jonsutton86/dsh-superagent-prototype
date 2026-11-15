@@ -109,7 +109,7 @@ export class RemoteEndpoint {
           observe: (item: RemoteOperation) => ({ id: item.id, grantId: item.grantId, epoch: item.epoch, fingerprint: item.fingerprint,
             phase: item.phase, ownership: item.ownership, owner: item.owner, quiescent: item.phase === 'settled' || !!item.reconciled,
             failed: !!item.error, reconciledAt: item.reconciled?.at }) },
-      ], ['remote_receipt'])
+      ], ['remote_receipt', ...(this.storage ? ['remote_storage'] : [])])
     }
     catch (error) { this.journal.close(); throw error }
   }
@@ -203,6 +203,7 @@ export class RemoteEndpoint {
   }
   private ownershipQuiescent(keepAccepted?: OwnershipStamp): boolean {
     return !this.closed && this.protectedCalls === 0
+      && !this.storage?.reservations.list().some(item => item.phase !== 'provisioned')
       && ![...this.pending.keys()].some(id => {
         const job = this.journal.job(id)
         return !(keepAccepted && job.phase === 'accepted' && !job.cancelRequested && job.ownership && sameOwner(keepAccepted, job.ownership))
@@ -530,6 +531,8 @@ export class RemoteEndpoint {
     switch (request.op) {
       case 'identity': return this.identity()
       case 'recovery.world': {
+        if (this.storage) throw new RemoteError(409, 'storage_recovery_unavailable',
+          'Storage-backed recovery export requires quota policy and host-registry integration')
         if (principal.role !== 'grant') throw new RemoteError(403, 'grant_required', 'Recovery configuration requires the original workspace grant credential')
         const endpoint = this.identity(), ownership = endpoint.ownership
         if (!ownership) throw new OwnershipError(409, 'ownership_required', 'Recovery configuration requires independent ownership')

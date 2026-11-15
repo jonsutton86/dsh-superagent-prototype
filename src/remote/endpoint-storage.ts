@@ -14,6 +14,10 @@ export class EndpointStorageManager {
   constructor(private readonly journal: RemoteJournal, private readonly config: EndpointStorageConfig, root: string) {
     if (journal.id !== config.endpointId || root !== `${config.policy.mountRoot}/dsh-${journal.id}/workspaces`)
       throw new Error('Endpoint storage identity and protected workspace parent must match the host configuration')
+    const policy = EndpointStorage.parse(config.policy)
+    if (policy.pool.bytes < 2 * policy.workspace.bytes || policy.pool.inodes < 2 * policy.workspace.inodes
+      || policy.projectIds.last - policy.projectIds.first < 1)
+      throw new Error('Endpoint storage must reserve capacity for startup qualification and at least one worker workspace')
     this.reservations = new StorageReservations(journal, config.policy)
     this.provisioning = new StorageProvisioning(this.reservations, config.host)
   }
