@@ -9,6 +9,7 @@ import { en } from '../src/client/locales.ts'
 import { translator } from './fixtures/panel.tsx'
 import { startRuntime } from './fixtures/host.ts'
 import { remoteFixture } from './fixtures/remote.ts'
+import type { EndpointStorage } from '../src/remote/storage-model.ts'
 import type { ResourceStatus } from '../src/remote/resource-model.ts'
 
 const cleanup: (() => Promise<unknown>)[] = []
@@ -28,9 +29,10 @@ async function enter(label: string, value: string, within: ParentNode = containe
   const prototype = input instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype
   await act(async () => { Object.getOwnPropertyDescriptor(prototype, 'value')!.set!.call(input, value); input.dispatchEvent(new Event('input', { bubbles: true })) })
 }
-async function fixture(resources?: ResourceStatus) {
+async function fixture(resources?: ResourceStatus, storage?: EndpointStorage) {
   const h = await remoteFixture(cleanup), host = await startRuntime(undefined, { executionMode: 'local', noAccounts: true })
-  if (resources) vi.spyOn(h.endpoint, 'identity').mockReturnValue({ ...h.endpoint.identity(), resources })
+  if (resources || storage) vi.spyOn(h.endpoint, 'identity').mockReturnValue({ ...h.endpoint.identity(),
+    ...(resources ? { resources } : {}), ...(storage ? { storage: { policy: storage } } : {}) })
   cleanup.push(() => host.stop())
   const nativeFetch = globalThis.fetch, requests: { method: string; path: string; body?: unknown }[] = []
   let lose = false
@@ -55,6 +57,18 @@ async function fixture(resources?: ResourceStatus) {
   return Object.assign(h, { host, requests, loseOperatorResponse: () => { lose = true } })
 }
 
+it('shows registered disk quota limits without presenting them as live free space', async () => {
+  await fixture(undefined, { kind: 'linux-xfs-project', filesystemUUID: '11111111-1111-4111-8111-111111111111',
+    mountRoot: '/private/quota-volume', projectIds: { first: 100, last: 109 },
+    pool: { bytes: 32 * 1024 ** 2, inodes: 256 }, workspace: { bytes: 16 * 1024 ** 2, inodes: 128 } })
+  expect(container!.textContent).toContain('Allocation pool: 32 MiB · 256 filesystem entries')
+  expect(container!.textContent).toContain('Per workspace including verification copies: 16 MiB · 128 filesystem entries')
+  expect(container!.textContent).toContain('not current usage or free space')
+  expect(container!.textContent).toContain('Startup verification consumes one allocation')
+  expect(container!.textContent).not.toContain('/private/quota-volume')
+  expect(container!.textContent).not.toContain('No managed disk quota reported')
+})
+
 it('shows configured resource limits and kernel-derived command receipts without claiming current usage from registration metadata', async () => {
   const policy = { cgroupRoot: '/private/delegated', pool: { cpuPercent: 200, memoryBytes: 1024 ** 3, processes: 128 },
     command: { cpuPercent: 100, memoryBytes: 256 * 1024 ** 2, processes: 32 },
@@ -75,6 +89,7 @@ it('shows configured resource limits and kernel-derived command receipts without
 
 it('registers an endpoint, preserves a lost submission ID and generates an inspectable profile without exposing credentials', async () => {
   const h = await fixture()
+  expect(container!.textContent).toContain('No managed disk quota reported by this endpoint.')
   expect(container!.querySelector('input[type=password]')).toBeNull()
   await enter('Workspace identifier', 'ui-research')
   h.loseOperatorResponse(); await click('Create workspace grant')

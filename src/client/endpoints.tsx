@@ -69,6 +69,17 @@ function EndpointCard({ record, changed }: { record: EndpointRegistration; chang
           { cpu: limit.cpuPercent / 100, memory: limit.memoryBytes / 1024 ** 2, processes: limit.processes })}</p>
       })}
     </div>}
+    <div>
+      <strong>{t('endpoint.storageLimits')}</strong>
+      {record.identity.storage ? <>
+        {(['pool', 'workspace'] as const).map(kind => {
+          const budget = record.identity.storage!.policy[kind]
+          return <p key={kind}>{t(kind === 'pool' ? 'endpoint.storagePool' : 'endpoint.storageWorkspace',
+            { storage: budget.bytes / 1024 ** 2, entries: budget.inodes })}</p>
+        })}
+        <p className="dt-hint">{t('endpoint.storageBoundary')}</p>
+      </> : <p>{t('endpoint.storageUnreported')}</p>}
+    </div>
     <RegistrationForm record={record} changed={changed} />
     <Button aria-expanded={open} onClick={() => setOpen(!open)}>{t(open ? 'endpoint.close' : 'endpoint.manage')}</Button>
     {open && <EndpointDetails record={record} />}
