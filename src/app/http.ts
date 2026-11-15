@@ -70,6 +70,7 @@ import type { AuditLog } from '../security/audit.ts'
 import { CREDENTIAL_NAME, type CredentialVault } from '../security/credentials.ts'
 import type { ProviderRegistry } from '../security/providers.ts'
 import { TaskKind } from '../security/model-routing.ts'
+import { budgetFrom } from '../usage/service.ts'
 import { MEMORY_KINDS, MemoryAccess, MemoryError, MemoryInputSchema, parseScopeKey, type Memory } from '../memory/service.ts'
 import { ImportInputSchema, importMemory } from '../memory/import.ts'
 
@@ -601,7 +602,17 @@ function routes(runtime: HttpHost): Routes {
         if (!Number.isFinite(ceiling) || ceiling < 0) throw new RouteError(400, 'Invalid monthly budget ceiling')
       }
       if (!runtime.providers) throw new RouteError(409, 'Provider routing is unavailable')
-      const result = runtime.providers.route(task.data, { monthlyBudgetUsd: ceiling })
+      const spentUsd: Record<string, number> = {}
+      if (runtime.usage) {
+        const from = budgetFrom('month', Date.now())
+        for (const provider of runtime.providers.view()) {
+          const totals = runtime.usage.providerSpend(provider.id, from)
+          spentUsd[provider.id] = totals.unknownCost > 0
+            ? Number.POSITIVE_INFINITY
+            : (totals.cost + totals.reservedCost) / 1_000_000
+        }
+      }
+      const result = runtime.providers.route(task.data, { monthlyBudgetUsd: ceiling, spentUsd })
       if (!result.ok) return { ...result, verified: false }
       return {
         ok: true,

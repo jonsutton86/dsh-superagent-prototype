@@ -51,7 +51,7 @@ export type RoutingResult = RouteSelection | RouteRefusal
 export function routeCandidates(
   providers: readonly ProviderConfig[],
   task: unknown,
-  options: { monthlyBudgetUsd?: number } = {}
+  options: { monthlyBudgetUsd?: number; spentUsd?: Readonly<Record<string, number>> } = {}
 ): RoutingCandidatesResult {
   const parsed = TaskKind.safeParse(task)
   if (!parsed.success) {
@@ -69,11 +69,13 @@ export function routeCandidates(
 
   const ceiling = options.monthlyBudgetUsd
   const hasCeiling = typeof ceiling === 'number' && Number.isFinite(ceiling) && ceiling >= 0
+  const spent = options.spentUsd ?? {}
   const candidates: RouteCandidate[] = []
 
   for (const provider of providers) {
     if (provider.models.length === 0 || provider.monthlyBudgetUsd === 0) continue
     if (hasCeiling && provider.monthlyBudgetUsd !== undefined && provider.monthlyBudgetUsd > ceiling) continue
+    if (provider.monthlyBudgetUsd !== undefined && (spent[provider.id] ?? 0) >= provider.monthlyBudgetUsd) continue
 
     candidates.push({
       provider,
@@ -98,7 +100,7 @@ export function routeCandidates(
 export function routeProvider(
   providers: readonly ProviderConfig[],
   task: unknown,
-  options: { monthlyBudgetUsd?: number } = {}
+  options: { monthlyBudgetUsd?: number; spentUsd?: Readonly<Record<string, number>> } = {}
 ): RoutingResult {
   const result = routeCandidates(providers, task, options)
   if (!result.ok) return result

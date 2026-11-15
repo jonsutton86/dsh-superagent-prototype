@@ -153,3 +153,26 @@ describe('routeCandidates', () => {
     })
   })
 })
+
+describe('budget-aware routing', () => {
+  it('skips a provider whose recorded spend reached its monthly budget', () => {
+    expect(routeProvider([first, second], 'coding', { spentUsd: { openai: 20 } })).toMatchObject({
+      provider: second,
+      model: 'second-model'
+    })
+  })
+
+  it('refuses when every candidate has exhausted its budget', () => {
+    expect(routeCandidates([first], 'coding', { spentUsd: { openai: 25 } })).toMatchObject({
+      ok: false,
+      reason: 'no_eligible_provider'
+    })
+  })
+
+  it('keeps a provider below its budget eligible', () => {
+    expect(routeProvider([first], 'coding', { spentUsd: { openai: 19.99 } })).toMatchObject({
+      provider: first,
+      model: 'first-model'
+    })
+  })
+})

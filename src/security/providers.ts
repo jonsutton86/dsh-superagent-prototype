@@ -72,7 +72,7 @@ export class ProviderRegistry {
   }
 
   /** Ordered local fallback candidates. It never calls a provider or asserts capability. */
-  route(task: unknown, options: { monthlyBudgetUsd?: number } = {}): RoutingCandidatesResult {
+  route(task: unknown, options: { monthlyBudgetUsd?: number; spentUsd?: Readonly<Record<string, number>> } = {}): RoutingCandidatesResult {
     return routeCandidates(this.providers, task, options)
   }
 

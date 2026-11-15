@@ -129,3 +129,16 @@ it('denies credential writes to a viewer while allowing provider reads', async (
   expect(h.runtime.credentials.get('viewer-key')).toBeUndefined()
   expect((await h.api('GET', 'credentials', undefined, headers)).status).toBe(403)
 })
+
+it('refuses a provider whose monthly budget is exhausted by recorded usage', async () => {
+  process.env.DSH_ORCHESTRATOR_PROVIDERS = JSON.stringify([
+    { id: 'openai-compatible', baseUrl: 'https://llm.example.test/v1', models: ['model-a'], monthlyBudgetUsd: 5 },
+  ])
+  const h = host = await startRuntime(undefined, { executionMode: 'local', noAccounts: true })
+  const call = h.runtime.usage.begin({ sessionId: 'usage-budget', root: '/', role: 'orchestrator' },
+    'openai-compatible', 'model-a', 'budget test')
+  h.runtime.usage.settle(call.id, 'completed', { inputTokens: 10, outputTokens: 5 })
+  const routed = await h.api('GET', 'model-route?task=coding')
+  expect(routed.status).toBe(200)
+  expect(routed.body).toMatchObject({ ok: false, reason: 'no_eligible_provider', verified: false })
+})

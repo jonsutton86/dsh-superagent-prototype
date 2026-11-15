@@ -33,6 +33,7 @@ export class Usage {
       CREATE TABLE IF NOT EXISTS usage_call (id TEXT PRIMARY KEY, value TEXT NOT NULL, at TEXT AS (value ->> '$.startedAt'),
         phase TEXT AS (value ->> '$.phase'), mission TEXT AS (value ->> '$.owner.missionId'), schedule TEXT AS (value ->> '$.owner.scheduleId'), persona TEXT AS (value ->> '$.owner.personaId'));
       CREATE INDEX IF NOT EXISTS usage_call_at ON usage_call(at);
+      CREATE INDEX IF NOT EXISTS usage_call_provider ON usage_call(json_extract(value,'$.provider'),at);
       CREATE INDEX IF NOT EXISTS usage_call_mission ON usage_call(mission,at);
       CREATE INDEX IF NOT EXISTS usage_call_schedule ON usage_call(schedule,at);
       CREATE INDEX IF NOT EXISTS usage_call_persona ON usage_call(persona,at);
@@ -89,6 +90,10 @@ export class Usage {
   totals(scope: UsageScope, from: string): UsageTotals {
     const filter = this.filter(scope, from)
     return this.aggregate(filter.sql, filter.args)
+  }
+  /** Recorded spend for one provider since `from`, including uncertain reservations. Costs are micro-USD. */
+  providerSpend(provider: string, from: string): UsageTotals {
+    return this.aggregate("value ->> '$.provider'=? AND at>=?", [provider, from])
   }
   /** Internal allocation accounting uses the host-bound speculative run, including uncertain reservations and descendants. */
   speculation(id: string, from = '0000-01-01T00:00:00.000Z', provider?: string): UsageTotals {

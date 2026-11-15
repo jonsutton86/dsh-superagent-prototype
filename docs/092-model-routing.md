@@ -18,6 +18,18 @@ The operator API exposes the ordered list without calling anything:
 `{ ok: true, task, candidates: [{ provider, model, monthlyBudgetUsd }], verified: false }` or the refusal with
 `verified: false`. Provider credentials are not included in this view.
 
+## Recorded-spend enforcement
+
+`Usage.providerSpend(provider, from)` aggregates the existing `usage_call` facts for one provider since a boundary,
+including reserved and unknown costs (micro-USD). The routing endpoint derives month-to-date spend and passes it to
+`routeCandidates` as `spentUsd`:
+
+- a provider whose recorded spend has reached its declared `monthlyBudgetUsd` is skipped;
+- if a provider has unknown-cost calls, its spend is treated as exhausted (fail closed);
+- providers without a declared budget are unaffected;
+- this is still selection-only: nothing reserves budget or dispatches a model call. Actual reservation must go through
+  `Usage.begin` before a future provider invocation.
+
 Selection is deliberately conservative and deterministic:
 
 - a provider with `models.length === 0` or `monthlyBudgetUsd === 0` is skipped (zero means no spend allowed);
