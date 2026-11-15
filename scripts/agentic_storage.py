@@ -91,33 +91,39 @@ class StorageHost:
         self.endpoint = config['endpointId']
         # An outer flock covers database decisions and host effects; SQLite commits intent before those effects.
         self.lock = os.open(self.registry / 'host.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
-        info = os.fstat(self.lock)
-        require(stat.S_ISREG(info.st_mode) and info.st_uid == 0 and not info.st_mode & 0o077 and info.st_nlink == 1)
-        database = self.registry / 'host.sqlite'
-        if database.exists() or database.is_symlink():
-            info = database.lstat()
-            require(stat.S_ISREG(info.st_mode) and info.st_uid == 0 and not info.st_mode & 0o077 and info.st_nlink == 1)
-        old_mask = os.umask(0o077)
         try:
-            self.db = sqlite3.connect(database)
-        finally:
-            os.umask(old_mask)
-        self.db.execute('PRAGMA journal_mode=WAL'); self.db.execute('PRAGMA synchronous=FULL')
-        with self.exclusive():
-            self.db.executescript('''CREATE TABLE IF NOT EXISTS endpoints (id TEXT PRIMARY KEY, filesystem TEXT NOT NULL, first INTEGER NOT NULL, last INTEGER NOT NULL, config TEXT NOT NULL);
-              CREATE TABLE IF NOT EXISTS operations (endpoint TEXT NOT NULL, request TEXT NOT NULL, workspace TEXT NOT NULL, filesystem TEXT NOT NULL,
-                project INTEGER NOT NULL, intent TEXT NOT NULL, roots TEXT NOT NULL, PRIMARY KEY(endpoint, request), UNIQUE(endpoint, workspace), UNIQUE(filesystem, project));''')
-            encoded = json.dumps(self.config, sort_keys=True)
-            saved = self.db.execute('SELECT config FROM endpoints WHERE id=?', (self.endpoint,)).fetchone()
-            if saved:
-                require(saved[0] == encoded)
-            else:
-                require(not self.db.execute('SELECT 1 FROM endpoints WHERE filesystem=? AND first<=? AND last>=?',
-                                            (policy['filesystemUUID'], last, first)).fetchone())
-                self.db.execute('INSERT INTO endpoints VALUES (?,?,?,?,?)', (self.endpoint, policy['filesystemUUID'], first, last, encoded))
-                self.db.commit()
-            self.check_mount()
-            self.sync_directory(self.registry)
+            info = os.fstat(self.lock)
+            require(stat.S_ISREG(info.st_mode) and info.st_uid == 0 and not info.st_mode & 0o077 and info.st_nlink == 1)
+            database = self.registry / 'host.sqlite'
+            if database.exists() or database.is_symlink():
+                info = database.lstat()
+                require(stat.S_ISREG(info.st_mode) and info.st_uid == 0 and not info.st_mode & 0o077 and info.st_nlink == 1)
+            old_mask = os.umask(0o077)
+            try:
+                self.db = sqlite3.connect(database)
+            finally:
+                os.umask(old_mask)
+            self.db.execute('PRAGMA journal_mode=WAL'); self.db.execute('PRAGMA synchronous=FULL')
+            with self.exclusive():
+                self.db.executescript('''CREATE TABLE IF NOT EXISTS endpoints (id TEXT PRIMARY KEY, filesystem TEXT NOT NULL, first INTEGER NOT NULL, last INTEGER NOT NULL, config TEXT NOT NULL);
+                  CREATE TABLE IF NOT EXISTS operations (endpoint TEXT NOT NULL, request TEXT NOT NULL, workspace TEXT NOT NULL, filesystem TEXT NOT NULL,
+                    project INTEGER NOT NULL, intent TEXT NOT NULL, roots TEXT NOT NULL, PRIMARY KEY(endpoint, request), UNIQUE(endpoint, workspace), UNIQUE(filesystem, project));''')
+                encoded = json.dumps(self.config, sort_keys=True)
+                saved = self.db.execute('SELECT config FROM endpoints WHERE id=?', (self.endpoint,)).fetchone()
+                if saved:
+                    require(saved[0] == encoded)
+                else:
+                    require(not self.db.execute('SELECT 1 FROM endpoints WHERE filesystem=? AND first<=? AND last>=?',
+                                                (policy['filesystemUUID'], last, first)).fetchone())
+                    self.db.execute('INSERT INTO endpoints VALUES (?,?,?,?,?)', (self.endpoint, policy['filesystemUUID'], first, last, encoded))
+                    self.db.commit()
+                self.check_mount()
+                self.sync_directory(self.registry)
+        except BaseException:
+            if hasattr(self, 'db'):
+                self.db.close()
+            os.close(self.lock)
+            raise
 
     @staticmethod
     def sync_directory(path):

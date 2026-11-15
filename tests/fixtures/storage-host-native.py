@@ -25,13 +25,17 @@ request = {'endpointId': endpoint, 'requestId': 'original', 'requestHash': 'a' *
 def refused(action):
     try:
         action()
-    except Exception:
+    except RuntimeError:
         return
     raise AssertionError('Expected host refusal')
 
 
 host = module.StorageHost(registry, config)
 try:
+    refused(lambda: host.provision({**request, 'workspace': '../escape'}))
+    refused(lambda: host.provision({**request, 'endpointId': str(uuid.uuid4())}))
+    refused(lambda: host.provision({**request, 'projectId': 99}))
+    assert host.db.execute('SELECT count(*) FROM operations').fetchone()[0] == 0
     original = host.provision(request)
     assert original['quota']['hardBytes'] == 16 * 1024 ** 2
     assert len(original['roots']) == 2
@@ -49,7 +53,9 @@ try:
     module.run = real_run
     refused(lambda: host.provision({**request, 'requestHash': 'b' * 64}))
     # Registry-wide range collision, even for a different endpoint identity.
+    descriptors = len(list(Path('/proc/self/fd').iterdir()))
     refused(lambda: module.StorageHost(registry, {**config, 'endpointId': str(uuid.uuid4())}))
+    assert len(list(Path('/proc/self/fd').iterdir())) == descriptors, 'Failed host registration leaked descriptors'
     # Crash after committed intent but before roots: inspection cannot invent success or replay the write.
     second = {**request, 'requestId': 'uncertain', 'workspace': 'two', 'projectId': 101}
     host.db.execute('INSERT INTO operations VALUES (?,?,?,?,?,?,?)', (endpoint, second['requestId'], second['workspace'], filesystem,
