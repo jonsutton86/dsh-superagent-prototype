@@ -1,0 +1,16 @@
+{
+  "date": "2026-11-15",
+  "testedRevision": "db063e0caf8affb872ae788e73210e5bcb6d9ed4",
+  "initialRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43713810152",
+  "initialFailure": "Capture and profile activation passed; expected 404 but observed Harness unmatched-POST fallback 405",
+  "nativeRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43714092280",
+  "nativeTests": { "passed": 30, "skipped": 0 },
+  "localAffectedTests": { "passed": 31, "skipped": 1 },
+  "typecheck": "passed locally and in Linux CI",
+  "build": "passed in Linux CI",
+  "installedHarnessCaptureLoaderQualified": true,
+  "installedHarnessReconciliationLoaderQualified": false,
+  "nativeStorageBackedMaintenanceQualified": false,
+  "providerTrafficRequested": false,
+  "deployed": false
+}

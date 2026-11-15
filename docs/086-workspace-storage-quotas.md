@@ -1799,3 +1799,28 @@ private maintenance result and confirms no RPC handler registration. This direct
 qualifies the built plugin entry with a supplied host context, not a fresh installed
 Harness profile-loader invocation. That loader boundary and native storage-backed
 maintenance remain unqualified.
+
+### Fresh installed Harness capture profile qualification
+
+The native resource fixture now also creates a disposable installed Harness 0.2.1-rc.3
+profile with an isolated HOME, activates the built endpoint maintenance plugin through
+the real loader, and captures the original endpoint's retained workspace. It checks
+the private original-ID result and compares an unauthenticated POST to the endpoint
+RPC URL with a known missing route. Both receive the identical Harness 405 fallback,
+confirming the maintenance profile did not expose the execution RPC. Normal endpoint
+RPC would instead return its JSON authentication response. No operator profile,
+credentials or model defaults are read or changed, and no inference is requested.
+
+The initial run at `4b1ba11bae102d71435e2ae725d09d4ec42d19fb` successfully
+activated the profile and captured the workspace, but failed an assumed 404 fallback
+assertion. Captured output showed 405; the test was corrected to compare against a
+known absent route as well as the observed status. Final revision
+`db063e0caf8affb872ae788e73210e5bcb6d9ed4` passed [Linux run 43714092280](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43714092280):
+30 tests, typecheck and build. The affected local suites passed 31 tests with one
+native-only skip before native execution; local typecheck passed after correction.
+The scoped resource workflow now installs the pinned Harness CLI for this boundary.
+
+This qualifies installed-profile **capture**. Reconciliation through a fresh installed
+profile, native storage-backed maintenance, operator UI and coordinated global capture
+remain separate unqualified work. Existing direct/native reconciliation evidence is
+unchanged; this test does not broaden its claim to the profile loader.
