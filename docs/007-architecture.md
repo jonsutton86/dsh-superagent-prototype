@@ -483,6 +483,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/security/access.ts` | Optional bearer-token administration boundary, role/capability matrix and explicit deny-by-default connector grants |
 | `src/security/credentials.ts` | Confined 0600 credential vault: atomic writes, names-only listing, traversal and symlink refusal |
 | `src/security/providers.ts` | Validated provider endpoints/models from the environment and a redacted view that never claims live verification |
+| `src/security/model-routing.ts` | Pure deterministic provider/model selection from configured providers with explicit budget ceilings and refusal reasons |
 | `src/memory/service.ts` | Typed persistent memory: scoped access, dedup/upsert, FTS5 search, bounded advisory context, configurable conversation retention, extractive digests, profiles, provenance events and hard deletion |
 | `src/memory/import.ts` | Consent-gated parsing/chunking of operator-provided Markdown/text and ChatGPT/Claude/Codex exports into provenance-tagged memory |
 | `src/executor/failure.ts` | Typed sanitized failure facts and exact live Agent/Session/assignment/turn/step fencing |
@@ -599,6 +600,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/admin-access.spec.ts` | No-token loopback default, bearer-token authentication, role capability denial with audit facts, connector deny-by-default grants, and malformed configuration that does not echo secrets |
 | `tests/credentials.spec.ts` | Atomic 0600 vault storage, names-only listing, traversal/symlink refusal, provider URL/model validation, redacted API views, audit without values, and viewer denial |
 | `tests/memory.spec.ts` | Memory persistence across restart, FTS/tag search, scope isolation, dedup/upsert, bounded advisory context, conversation capture/retention, extractive digests, profile upserts, consent-gated imports, prompt injection, ticket grants, worker tools, hard deletion, API flows and viewer denial |
+| `tests/model-routing.spec.ts` | Deterministic provider selection, budget/ceiling boundaries, refusals, default-model preference and task validation |
 | `tests/environments.spec.ts` | Runtime/API enrollment, persistent grants, paired-provider proof, races, revocation, replacement and legacy task binding |
 | `tests/environments-ui.spec.tsx` | Rendered enrollment/recovery and exact mutation retry after response loss and polling |
 | `tests/world-pool.spec.ts` | Independent paired worlds, per-action dispatch, revocation/recovery, credential fencing and revoked receipts |
