@@ -1077,3 +1077,28 @@ event, assert the allocation stays held beforehand, and preserve the production 
 Focused retests passed all three affected source cases plus 31 storage/recovery-resource/speculation
 runtime tests. The entire broad ring was not repeated after test-only corrections; no full final matrix
 or native qualification is claimed. [Evidence](evidence/086-storage-image-members.json).
+
+
+### Whole-host audit integrated into signed storage verification
+
+The TypeScript host reader now audits all four registry tables before selecting the endpoint view.
+It refuses unknown tables/columns, views/triggers, invalid host IDs/paths/configurations, overlapping
+filesystem project ranges, duplicate allocation identities, capacity overflow, allocations without
+completed namespace records, and orphan/duplicate/mismatched repair approvals. Complete/finishing
+repairs require their original root identities; handoff phase and approval fields must agree. This
+runs on the verified private copy reached through existing signed-image membership, including records
+belonging to other endpoints in the shared registry.
+
+`hostRegistryAuditRequired` is superseded by `hostRegistryAudit`, containing verified historical
+binding counts, incomplete root/namespace counts and unresolved repair counts. An uninitialized
+namespace with no admitted operation remains a retained partial state, not a successful namespace.
+Both live-filesystem and restore verification remain false. No standalone audit status is accepted
+as a substitute for reading the authenticated snapshot itself.
+
+VERIFIED at `7b2ba83dd0af1421eaba50e23c51745c6035fb04`: final 28 storage-recovery tests, typecheck and
+all seven builds passed. Earlier focused/adjacent coverage passed 49 tests before additional
+namespace/schema assertions. Tests exercise corruption outside the selected endpoint, overlapping
+ranges, capacity excess, missing namespaces and invalid/orphan/duplicate repairs, plus signed-image
+integration and retained uncertainty. [Evidence](evidence/086-storage-image-host-audit.json).
+Automatic capture/preparation, frozen-epoch fencing, live filesystem validation, target import/restore
+and final platform qualification remain open. Installation of storage-bearing images stays refused.

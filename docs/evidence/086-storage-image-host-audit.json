@@ -1,0 +1,26 @@
+{
+  "kind": "whole-host-registry-audit-in-signed-image-verification",
+  "revision": "7b2ba83dd0af1421eaba50e23c51745c6035fb04",
+  "recordedAt": "2026-11-15T10:31:52.295948+00:00",
+  "classification": "VERIFIED integrated host-record audit for signed storage members; restore remains held; NOT DEPLOYED",
+  "hashes": {
+    "src/recovery/storage.ts": "cd52b2526704eee2777e09c68ee1e5732dbda425dec4d7c7672fb782184a6ebd",
+    "src/recovery/storage-artifacts.ts": "2e9fed674d7948db59636ce40e36ac13e158ea848f6294e06de93857648e7d81",
+    "tests/recovery-storage.spec.ts": "2c1f2d6820a65eda4c3e52a21812cccaa14dc1144a4202ea3ee85ad0bbeb7dba"
+  },
+  "validation": [
+    "Final 28 storage-recovery tests, typecheck and seven builds passed",
+    "Earlier focused/adjacent run passed 49 tests before added namespace/schema assertions",
+    "Whole shared registry validated before selecting endpoint records",
+    "Unrelated invalid endpoint config, overlapping ranges, over-budget allocations, missing namespaces and invalid/duplicate/orphan repairs rejected",
+    "Unknown tables/columns and executable schema objects refused",
+    "Incomplete namespace with no admitted allocation retained explicitly",
+    "Authenticated image test now receives hostRegistryAudit instead of deferred hostRegistryAuditRequired"
+  ],
+  "limits": [
+    "Audit validates historical records, not current inode/quota state or quiescence",
+    "Automatic capture/preparation of storage members remains unfinished",
+    "Ownership fencing, target import/restore and final platform qualification remain open",
+    "No new native/full matrix for the read-only TypeScript audit"
+  ]
+}

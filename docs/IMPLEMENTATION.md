@@ -1377,3 +1377,10 @@ and activation loading remain refused for storage-bearing images. Typecheck/buil
 recovery ring was 321 passed/4 stale-fixture failures, followed by passing focused repairs (3 source cases
 and 31 storage/resources/speculation tests). [Exact evidence](evidence/086-storage-image-members.json).
 Automatic capture/preparation, full host audit, frozen-epoch fencing and storage restore remain open.
+
+
+086 whole-host audit integration: VERIFIED at `7b2ba83` with final 28 storage-recovery tests,
+typecheck and builds. Signed storage-image verification now audits every host registry row before
+selecting the endpoint pair, including other endpoints and incomplete repairs. Deferred host audit
+is replaced by explicit historical audit results. [Evidence](evidence/086-storage-image-host-audit.json).
+Capture/preparation, fencing, live filesystem checks and actual restore remain unfinished and held.
