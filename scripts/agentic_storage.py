@@ -12,6 +12,7 @@ import re
 import sqlite3
 import stat
 import subprocess
+import sys
 import uuid
 
 
@@ -68,7 +69,7 @@ def quota_row(text, project):
 
 class StorageHost:
     def __init__(self, registry, config):
-        require(os.getuid() == 0)
+        require(sys.platform == 'linux' and os.getuid() == 0)
         require(set(config) == {'endpointId', 'uid', 'gid', 'policy'})
         require(str(uuid.UUID(config['endpointId'])) == config['endpointId'])
         number(config['uid'], 1, 2 ** 31 - 1); number(config['gid'], 1, 2 ** 31 - 1)

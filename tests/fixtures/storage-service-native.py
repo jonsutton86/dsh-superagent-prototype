@@ -34,7 +34,7 @@ try:
         connection.settimeout(5); connection.connect(str(socket_path))
         assert json.loads(connection.recv(4096)) == {'ok': False, 'error': 'storage_host_refused'}
     env = {'PATH': os.environ['PATH'], 'DSH_STORAGE_SERVICE_CONFIG': json.dumps(config),
-           'DSH_STORAGE_SERVICE_SOCKET': str(socket_path), 'HOME': str(base), 'CI': 'true'}
+           'DSH_STORAGE_SERVICE_SOCKET': str(socket_path), 'CI': 'true'}
     result = subprocess.run(['node', 'node_modules/vitest/vitest.mjs', 'run', 'tests/storage-host-client.spec.ts', '--no-cache'],
                             user=uid, group=gid, extra_groups=[], env=env, capture_output=True, text=True, timeout=90)
     print(result.stdout, flush=True)
