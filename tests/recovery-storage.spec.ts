@@ -371,6 +371,11 @@ it.runIf(!!process.env.DSH_STORAGE_CAPTURE_PAIR)('captures a live endpoint pair 
     await mkdir(stateDir, { mode: 0o700 }); createRecoveryKey(keyFile)
     const store = new Store(join(stateDir, 'orchestrator.sqlite'))
     store.set(KV.runtime.masterId, 'live-storage-master')
+    const capture = JSON.parse(process.env.DSH_STORAGE_WORKSPACE_CAPTURE!)
+    expect(audit.captureRecords).toContainEqual(capture)
+    store.db.exec('CREATE TABLE IF NOT EXISTS execution_environment(id TEXT PRIMARY KEY,value TEXT NOT NULL)')
+    store.db.prepare('INSERT INTO execution_environment VALUES(?,?)').run(capture.binding.workspace,
+      JSON.stringify({ root: capture.binding.root, configuredRoot: capture.binding.root }))
     store.db.exec('CREATE TABLE IF NOT EXISTS operator_endpoint(id TEXT PRIMARY KEY,value TEXT NOT NULL)')
     store.db.prepare('INSERT INTO operator_endpoint VALUES(?,?)').run(pair.endpointId, JSON.stringify({ id: pair.endpointId, credentialFile: keyFile }))
     store.close()
@@ -379,8 +384,6 @@ it.runIf(!!process.env.DSH_STORAGE_CAPTURE_PAIR)('captures a live endpoint pair 
     await writer.append([{ type: 'user/message', seq: SessionSeq(0), time: 0, surfaceOp: 'append', data: {
       role: 'user', id: MessageId('live-storage-message'), source: { kind: 'dsh-superagent', form: 'relay' }, content: [{ type: 'text', text: 'Native capture checkpoint' }] } }])
     await writer.close()
-    const capture = JSON.parse(process.env.DSH_STORAGE_WORKSPACE_CAPTURE!)
-    expect(audit.captureRecords).toContainEqual(capture)
     const checkpoint = await createCheckpoint({ stateDir, outputDir: join(directory, 'backups'), keyFile,
       persistence: ctx.sessionPersistence, storageArtifacts: [pair], workspaceArtifacts: [capture.result.path],
       workspaceCaptureSelections: [{ source: capture.binding.root, endpointId: pair.endpointId, requestId: capture.request.requestId }] })
