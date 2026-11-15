@@ -1,3 +1,4 @@
+import { fingerprint } from '../src/remote/journal.ts'
 import { captureWorkspaceRecovery } from '../src/recovery/workspace-archive.ts'
 import { exportEndpointStorageSnapshot } from '../src/recovery/endpoint-snapshot.ts'
 import { lockSync } from 'proper-lockfile'
@@ -374,4 +375,37 @@ it.runIf(!!process.env.DSH_STORAGE_CAPTURE_PAIR)('captures a live endpoint pair 
     const restored = new DatabaseSync(join(target, 'orchestrator.sqlite'), { readOnly: true })
     try { expect(restored.prepare('SELECT value FROM kv WHERE key=?').get(KV.recovery.hold)).toBeTruthy() } finally { restored.close() }
   } finally { await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }) }
+})
+
+it('validates retained workspace capture requests and original grant/storage bindings in endpoint snapshots', async () => {
+  const db = databases(), signal = new AbortController().signal
+  try {
+    const grant = db.value.endpoint.grants[0]!, allocation = db.value.endpoint.reservations[0]!
+    const request = { requestId: randomUUID(), grantId: grant.id, epoch: grant.epoch, destination: '/private/capture', maxEntries: 100, maxBytes: 1024 }
+    const capture = { version: 1, request, requestHash: fingerprint(request), phase: 'started', startedAt: '2026-11-15T00:00:00.000Z',
+      binding: { endpointId: db.value.endpoint.endpointId, grantId: grant.id, epoch: grant.epoch, revision: grant.revision,
+        workspace: grant.workspace, root: grant.root, rootIdentity: grant.rootIdentity,
+        storage: { requestId: allocation.requestId, projectId: allocation.projectId, policyHash: fingerprint(db.value.endpoint.policy) } } }
+    const key = 'workspace-capture:' + request.requestId
+    const save = (value: unknown) => { db.endpoint.prepare('DELETE FROM endpoint_meta WHERE key=?').run(key); db.endpoint.prepare('INSERT INTO endpoint_meta VALUES(?,?)').run(key, JSON.stringify(value)) }
+    save(capture)
+    const endpoint = await readEndpointStorageSnapshot(db.endpoint, signal)
+    expect(endpoint.snapshot.captures).toEqual([capture])
+    expect(auditStorageRecoveryBindings(endpoint.snapshot, db.value.host)).toMatchObject({ recordBindingsVerified: true, restoreVerified: false, workspaceCaptures: { started: 1, complete: 0 } })
+    for (const binding of [{ ...capture.binding, rootIdentity: '1:999:12345' }, { ...capture.binding, epoch: 2 },
+      { ...capture.binding, storage: { ...capture.binding.storage, requestId: 'replacement' } },
+      { ...capture.binding, storage: { ...capture.binding.storage, projectId: 101 } },
+      { ...capture.binding, storage: { ...capture.binding.storage, policyHash: '0'.repeat(64) } }]) {
+      expect(() => auditStorageRecoveryBindings({ ...endpoint.snapshot, captures: [{ ...capture, binding }] }, db.value.host)).toThrow()
+    }
+    save({ ...capture, requestHash: '0'.repeat(64) })
+    await expect(readEndpointStorageSnapshot(db.endpoint, signal)).rejects.toThrow('workspace_capture_request')
+    save({ ...capture, binding: { ...capture.binding, endpointId: randomUUID() } })
+    await expect(readEndpointStorageSnapshot(db.endpoint, signal)).rejects.toThrow('workspace_capture_endpoint')
+    const completed = { ...capture, phase: 'complete', completedAt: '2026-11-15T00:00:01.000Z', result: { path: request.destination, inventoryHash: 'a'.repeat(64), manifestHash: 'b'.repeat(64), managedQuiescenceObserved: true, globalSnapshotVerified: false, restoreVerified: false } }
+    save(completed)
+    expect((await readEndpointStorageSnapshot(db.endpoint, signal)).snapshot.captures).toEqual([completed])
+    save({ ...capture, phase: 'complete' })
+    await expect(readEndpointStorageSnapshot(db.endpoint, signal)).rejects.toThrow('workspace_capture')
+  } finally { db.endpoint.close(); db.host.close() }
 })

@@ -11,10 +11,10 @@ export const WorkspaceCaptureBinding = z.object({ endpointId: z.string().uuid(),
   storage: z.object({ requestId: z.string(), projectId: z.number().int().positive(), policyHash: hash }).strict().optional() }).strict()
 const result = z.object({ path, inventoryHash: hash, manifestHash: hash, managedQuiescenceObserved: z.literal(true),
   globalSnapshotVerified: z.literal(false), restoreVerified: z.literal(false) }).strict()
-const record = z.object({ version: z.literal(1), request: WorkspaceCaptureRequest, requestHash: hash, binding: WorkspaceCaptureBinding,
+export const WorkspaceCaptureRecordSchema = z.object({ version: z.literal(1), request: WorkspaceCaptureRequest, requestHash: hash, binding: WorkspaceCaptureBinding,
   phase: z.enum(['started', 'complete']), startedAt: z.string().datetime(), completedAt: z.string().datetime().optional(), result: result.optional() }).strict()
   .refine(value => value.phase === 'complete' ? !!value.result && !!value.completedAt : !value.result && !value.completedAt)
-export type WorkspaceCaptureRecord = z.infer<typeof record>
+export type WorkspaceCaptureRecord = z.infer<typeof WorkspaceCaptureRecordSchema>
 const prefix = 'workspace-capture:'
 export class WorkspaceCaptures {
   constructor(private readonly journal: RemoteJournal) {}
@@ -22,7 +22,7 @@ export class WorkspaceCaptures {
     const request = WorkspaceCaptureRequest.parse(input)
     const row = this.journal.db.prepare('SELECT value FROM endpoint_meta WHERE key=?').get(prefix + request.requestId)
     if (!row) return
-    const saved = record.parse(JSON.parse(String(row.value)))
+    const saved = WorkspaceCaptureRecordSchema.parse(JSON.parse(String(row.value)))
     if (saved.request.requestId !== request.requestId || saved.binding.endpointId !== this.journal.id
       || saved.binding.grantId !== saved.request.grantId || saved.binding.epoch !== saved.request.epoch
       || saved.requestHash !== fingerprint(saved.request)) throw new Error('Workspace capture record identity differs')
@@ -35,7 +35,7 @@ export class WorkspaceCaptures {
       const prior = this.read(request); if (prior) return prior
       const count = Number(this.journal.db.prepare('SELECT count(*) AS n FROM endpoint_meta WHERE key LIKE ?').get(prefix + '%')!.n)
       if (count >= 256) throw new RemoteError(429, 'capture_capacity', 'Retained capture capacity requires operator review')
-      const value = record.parse({ version: 1, request, requestHash: fingerprint(request), binding, phase: 'started', startedAt: new Date().toISOString() })
+      const value = WorkspaceCaptureRecordSchema.parse({ version: 1, request, requestHash: fingerprint(request), binding, phase: 'started', startedAt: new Date().toISOString() })
       if (value.binding.endpointId !== this.journal.id || value.binding.grantId !== request.grantId || value.binding.epoch !== request.epoch)
         throw new Error('Workspace capture binding differs from request')
       this.journal.db.prepare('INSERT INTO endpoint_meta VALUES (?,?)').run(prefix + request.requestId, JSON.stringify(value))
@@ -46,7 +46,7 @@ export class WorkspaceCaptures {
     return this.journal.atomic(() => {
       const prior = this.read(input)
       if (!prior || prior.phase !== 'started') throw new Error('Workspace capture requires its original started intent')
-      const value = record.parse({ ...prior, phase: 'complete', completedAt: new Date().toISOString(), result: output })
+      const value = WorkspaceCaptureRecordSchema.parse({ ...prior, phase: 'complete', completedAt: new Date().toISOString(), result: output })
       this.journal.db.prepare('UPDATE endpoint_meta SET value=? WHERE key=?').run(JSON.stringify(value), prefix + prior.request.requestId)
       return value
     })

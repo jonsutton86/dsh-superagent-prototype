@@ -1,3 +1,5 @@
+import { WorkspaceCaptureRecordSchema, type WorkspaceCaptureRecord } from '../remote/workspace-capture.ts'
+import { fingerprint } from '../remote/journal.ts'
 /** Cross-check separately captured records. Never imports state or treats historical quotas as live proof. */
 import { z } from 'zod'
 import type { DatabaseSync } from 'node:sqlite'
@@ -12,6 +14,7 @@ const hostOperation = z.object({ intent: StorageIntent.extend({ endpointId: z.st
 const hostSnapshot = z.object({ endpointId: z.string().uuid(), policy: EndpointStorage,
   operations: z.array(hostOperation).max(20000) }).strict()
 const endpointSnapshot = z.object({ endpointId: z.string().uuid(), policy: EndpointStorage,
+  captures: z.array(WorkspaceCaptureRecordSchema).max(256).optional(),
   reservations: z.array(StorageReservation).max(20000), grants: z.array(GrantMetadata).max(20000) }).strict()
 function requireBinding(condition: unknown): asserts condition {
   if (!condition) throw new Error('Storage recovery records do not share their original allocation binding')
@@ -54,6 +57,16 @@ export function auditStorageRecoveryBindings(endpointInput: unknown, hostInput: 
       }
     }
   }
+  unique(endpoint.captures ?? [], [value => value.request.requestId])
+  for (const capture of endpoint.captures ?? []) {
+    const binding = capture.binding, request = capture.request
+    const grant = endpoint.grants.find(value => value.id === binding.grantId), allocation = allocations.get(binding.workspace)
+    requireBinding(binding.endpointId === endpoint.endpointId && binding.grantId === request.grantId && binding.epoch === request.epoch
+      && capture.requestHash === fingerprint(request) && grant && grant.epoch >= binding.epoch && grant.revision >= binding.revision
+      && grant.workspace === binding.workspace && grant.root === binding.root && grant.rootIdentity === binding.rootIdentity)
+    requireBinding(allocation?.phase === 'provisioned' && binding.storage && binding.storage.requestId === allocation.requestId
+      && binding.storage.projectId === allocation.projectId && binding.storage.policyHash === fingerprint(policy))
+  }
   // A newer host snapshot must not silently add allocations omitted from the endpoint snapshot.
   for (const operation of host.operations) requireBinding(allocations.has(operation.intent.workspace))
   for (const grant of endpoint.grants) {
@@ -64,6 +77,8 @@ export function auditStorageRecoveryBindings(endpointInput: unknown, hostInput: 
       && grant.rootIdentity.startsWith(`${directory.device}:${directory.inode}:`))
   }
   return { allocations: endpoint.reservations.length, reserved, provisioning, provisioned, hostMissing,
+    ...(endpoint.captures?.length ? { workspaceCaptures: { started: endpoint.captures.filter(item => item.phase === 'started').length,
+      complete: endpoint.captures.filter(item => item.phase === 'complete').length } } : {}),
     recordBindingsVerified: true as const, liveFilesystemVerified: false as const, restoreVerified: false as const }
 }
 
@@ -74,13 +89,23 @@ export async function readEndpointStorageSnapshot(db: DatabaseSync, signal: Abor
   const r = new StateReader(db, signal, 'endpoint_storage')
   for (const table of ['endpoint_meta', 'remote_storage', 'remote_grant'])
     if (!r.tables.has(table)) r.fail('reference', table)
+  const captures: WorkspaceCaptureRecord[] = []
   let endpointId: string | undefined, policy: z.infer<typeof EndpointStorage> | undefined
   for (const row of r.rows('endpoint_meta')) {
     if (row.key === 'id') { if (endpointId) r.fail('conflict', 'endpoint_id'); endpointId = r.parse(z.string().uuid(), row.value, 'endpoint_id') }
+    if (String(row.key).startsWith('workspace-capture:')) {
+      const capture = r.json(row.value, WorkspaceCaptureRecordSchema, 'workspace_capture')
+      r.same(row.key, 'workspace-capture:' + capture.request.requestId, 'workspace_capture_key')
+      r.same(capture.requestHash, fingerprint(capture.request), 'workspace_capture_request')
+      r.same([capture.binding.grantId, capture.binding.epoch], [capture.request.grantId, capture.request.epoch], 'workspace_capture_binding')
+      captures.push(capture)
+      if (captures.length > 256) r.fail('limit', 'workspace_captures')
+    }
     if (row.key === 'storage-policy') { if (policy) r.fail('conflict', 'storage_policy'); policy = r.json(row.value, EndpointStorage, 'storage_policy') }
     await r.step()
   }
   if (!endpointId || !policy) r.fail('reference', 'storage_configuration')
+  for (const capture of captures) r.same(capture.binding.endpointId, endpointId, 'workspace_capture_endpoint')
   const reservations: z.infer<typeof StorageReservation>[] = [], grants: z.infer<typeof GrantMetadata>[] = []
   for (const row of r.rows('remote_storage')) {
     const value = r.json(row.value, StorageReservation, 'reservation')
@@ -95,7 +120,7 @@ export async function readEndpointStorageSnapshot(db: DatabaseSync, signal: Abor
     if (grants.length > 20000) r.fail('limit', 'grants')
     await r.step()
   }
-  return { snapshot: endpointSnapshot.parse({ endpointId, policy, reservations, grants }), records: r.records, digest: r.digest() }
+  return { snapshot: endpointSnapshot.parse({ endpointId, policy, reservations, grants, ...(captures.length ? { captures } : {}) }), records: r.records, digest: r.digest() }
 }
 
 /** Audit the whole shared registry before selecting an endpoint view. All records contribute to its digest. */
