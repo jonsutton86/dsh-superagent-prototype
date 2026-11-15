@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { z } from 'zod'
 
 const limits = z.object({ maxEntries: z.number().int().min(1).max(100000), maxBytes: z.number().int().min(0).max(2 ** 40) }).strict()
-interface Entry { path: string; mode: number; uid: number; gid: number; kind: 'directory' | 'file' | 'symlink';
+export interface WorkspaceRecoveryEntry { path: string; mode: number; uid: number; gid: number; kind: 'directory' | 'file' | 'symlink';
   bytes?: number; sha256?: string; target?: string; hardlinkTo?: string }
 const identity = (info: Awaited<ReturnType<typeof lstat>>) =>
   [info.dev, info.ino, info.mode, info.nlink, info.uid, info.gid, info.size, info.mtimeMs, info.ctimeMs].join(':')
@@ -19,10 +19,10 @@ export async function inventoryWorkspaceRecovery(source: string, input: z.input<
   const budget = limits.parse(input); signal.throwIfAborted()
   const root = await realpath(source), initial = await lstat(root)
   if (!initial.isDirectory()) throw new Error('Recovery workspace must be a directory')
-  const entries: Entry[] = [], witnesses: { path: string; identity: string }[] = []
+  const entries: WorkspaceRecoveryEntry[] = [], witnesses: { path: string; identity: string }[] = []
   const inodes = new Map<string, { path: string; links: number; seen: number; hash: string; bytes: number }>()
   let bytes = 0, metadataBytes = 0
-  const add = (entry: Entry) => {
+  const add = (entry: WorkspaceRecoveryEntry) => {
     metadataBytes += Buffer.byteLength(JSON.stringify(entry))
     if (entries.length >= budget.maxEntries || metadataBytes > 32 * 1024 * 1024) throw new Error('Recovery workspace inventory exceeds its entry budget')
     entries.push(entry)
