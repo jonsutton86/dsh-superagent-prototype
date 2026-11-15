@@ -64,9 +64,17 @@ try:
     paired = subprocess.run([sys.executable, '-B', 'scripts/agentic_storage_admin.py', '--config', str(config_path), '--registry', str(registry),
         'capture-pair', '--output', str(host_output / 'host.sqlite'), '--node', str(Path(shutil.which('node')).resolve()),
         '--exporter', str(Path('scripts/endpoint-storage-snapshot.mjs').resolve()), '--endpoint-state', retained['state'],
-        '--endpoint-output', str(exchange / 'endpoint')], capture_output=True, text=True, timeout=140)
+        '--endpoint-output', str(exchange / 'endpoint'), '--capture',
+        retained['capture']['request']['requestId'] + ':' + retained['capture']['result']['manifestHash']], capture_output=True, text=True, timeout=140)
     assert paired.returncode == 0, paired.stderr
     pair = json.loads(paired.stdout)['pair']
+    assert pair['hostLockHeldThroughEndpointCapture'] is True
+    assert pair['endpoint']['handoff'] == {'captures': [{
+        'requestId': retained['capture']['request']['requestId'],
+        'manifestHash': retained['capture']['result']['manifestHash'],
+        'inventoryHash': retained['capture']['result']['inventoryHash']}],
+        'sourceContentsRechecked': True, 'executionQuiescenceVerified': False,
+        'globalSnapshotVerified': False, 'restoreVerified': False}
     host_copy = exchange / 'host.sqlite'; shutil.copyfile(host_output / 'host.sqlite', host_copy)
     os.chmod(host_copy, 0o600); os.chown(host_copy, uid, gid)
     descriptor = {'endpointId': config['endpointId'], 'endpoint': pair['endpoint']['endpoint'],

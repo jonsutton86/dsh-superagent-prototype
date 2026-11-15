@@ -13,13 +13,25 @@ import time
 from agentic_storage import require
 
 
-def endpoint_capture(config, node, exporter, state, output):
+def capture_selections(values):
+    require(isinstance(values, list) and 1 <= len(values) <= 256)
+    selected = []
+    for value in values:
+        require(isinstance(value, str) and re.fullmatch(r'[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}:[a-f0-9]{64}', value))
+        request, digest = value.split(':')
+        selected.append({'requestId': request, 'manifestHash': digest})
+    require(len({item['requestId'] for item in selected}) == len(selected))
+    return selected
+
+
+def endpoint_capture(config, node, exporter, state, output, selections=None):
+    selected = capture_selections(selections) if selections is not None else None
     paths = [Path(value) for value in [node, exporter, state, output]]
     require(all(path.is_absolute() and str(path) == os.path.realpath(path) for path in paths))
     node, exporter, state, output = paths
     require(node.is_file() and exporter.is_file() and state.is_dir() and not output.exists())
     # No inherited credentials, shell, supplementary groups, or root-owned execution.
-    process = subprocess.Popen([str(node), str(exporter), str(state), str(output)],
+    process = subprocess.Popen([str(node), str(exporter), str(state), str(output), *([json.dumps(selected)] if selected is not None else [])],
         stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
         env={'PATH': '/usr/local/bin:/usr/bin:/bin', 'LC_ALL': 'C'}, cwd='/',
         user=config['uid'], group=config['gid'], extra_groups=[], umask=0o077,
@@ -46,6 +58,19 @@ def endpoint_capture(config, node, exporter, state, output):
         require(isinstance(receipt, dict) and type(receipt.get('version')) is int and receipt['version'] == 1
                 and receipt.get('endpointId') == config['endpointId'] and receipt.get('writerLockHeld') is True
                 and all(receipt.get(key) is False for key in ['workspaceFilesIncluded', 'executionQuiescenceVerified', 'hostRegistryIncluded', 'restoreVerified']))
+        handoff = receipt.get('handoff')
+        if selected is None:
+            require(handoff is None)
+        else:
+            require(isinstance(handoff, dict) and set(handoff) == {'captures', 'sourceContentsRechecked', 'executionQuiescenceVerified', 'globalSnapshotVerified', 'restoreVerified'}
+                    and handoff['sourceContentsRechecked'] is True
+                    and all(handoff[key] is False for key in ['executionQuiescenceVerified', 'globalSnapshotVerified', 'restoreVerified']))
+            observed = handoff['captures']
+            require(isinstance(observed, list) and len(observed) == len(selected))
+            for actual, expected in zip(observed, selected):
+                require(isinstance(actual, dict) and set(actual) == {'requestId', 'manifestHash', 'inventoryHash'}
+                        and all(actual[key] == value for key, value in expected.items())
+                        and isinstance(actual['inventoryHash'], str) and re.fullmatch(r'[a-f0-9]{64}', actual['inventoryHash']))
         artifact = receipt.get('endpoint')
         require(isinstance(artifact, dict) and set(artifact) == {'path', 'bytes', 'sha256'})
         expected = output / 'endpoint.sqlite'
@@ -70,7 +95,8 @@ def endpoint_capture(config, node, exporter, state, output):
             os.close(descriptor)
         # Return only validated fields, never arbitrary subprocess text or saved database rows.
         return {'endpointId': config['endpointId'], 'endpoint': artifact, 'writerLockHeld': True,
-                'artifactVerified': True, 'executionQuiescenceVerified': False, 'restoreVerified': False}
+                'artifactVerified': True, 'executionQuiescenceVerified': False, 'restoreVerified': False,
+                **({'handoff': handoff} if selected is not None else {})}
     except BaseException:
         try: os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError: pass
