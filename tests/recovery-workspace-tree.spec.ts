@@ -93,3 +93,26 @@ it('rejects changed content, unbound members and rehashed invalid tree relations
     await expect(verifyWorkspaceRecovery(saved.path)).rejects.toThrow('directory relationships')
   } finally { await rm(root, { recursive: true, force: true }) }
 })
+
+it('hands off verified private copies despite later source replacement and always removes them', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'recovery-archive-handoff-'))
+  let copied = ''
+  try {
+    const source = join(root, 'source'); await mkdir(source, { mode: 0o700 }); await writeFile(join(source, 'file'), 'verified')
+    const saved = await captureWorkspaceRecovery(source, join(root, 'archive'), budget)
+    const member = saved.manifest.content[0]!
+    await verifyWorkspaceRecovery(saved.path, new AbortController().signal, async directory => {
+      copied = directory
+      await writeFile(join(saved.path, member.member), 'replaced')
+      expect(await readFile(join(directory, member.member), 'utf8')).toBe('verified')
+      expect((await stat(join(directory, member.member))).mode & 0o777).toBe(0o600)
+      expect((await verifyWorkspaceRecovery(directory)).contentVerified).toBe(true)
+    })
+    await expect(stat(copied)).rejects.toMatchObject({ code: 'ENOENT' })
+    await writeFile(join(saved.path, member.member), 'verified')
+    await expect(verifyWorkspaceRecovery(saved.path, new AbortController().signal, async directory => {
+      copied = directory; throw new Error('consumer failed')
+    })).rejects.toThrow('consumer failed')
+    await expect(stat(copied)).rejects.toMatchObject({ code: 'ENOENT' })
+  } finally { await rm(root, { recursive: true, force: true }) }
+})

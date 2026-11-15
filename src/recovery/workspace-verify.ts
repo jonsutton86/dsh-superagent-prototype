@@ -1,6 +1,7 @@
 /** Read-only structural/content verification. Hashes establish integrity, never source authority or safe execution. */
 import { createHash } from 'node:crypto'
-import { lstat, readdir, realpath } from 'node:fs/promises'
+import { lstat, mkdtemp, open, readdir, realpath, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join, posix } from 'node:path'
 import { z } from 'zod'
 import { privateInput } from './crypto.ts'
@@ -18,7 +19,9 @@ const manifestSchema = z.object({ version: z.literal(1), entries: z.array(entry)
   content: z.array(z.object({ path, member: z.string().regex(/^content-(0|[1-9]\d*)\.bin$/), bytes: count, sha256: digest }).strict()).max(100000),
   contentArchived: z.literal(true), executionQuiescenceVerified: z.literal(false), restoreVerified: z.literal(false) }).strict()
 
-export async function verifyWorkspaceRecovery(path: string, signal = new AbortController().signal) {
+/** A capture callback receives private copies of the exact verified bytes; they are removed when it returns. */
+export async function verifyWorkspaceRecovery(path: string, signal = new AbortController().signal,
+  capture?: (directory: string) => Promise<void>) {
   signal.throwIfAborted()
   const stat = await lstat(path)
   if (!stat.isDirectory() || stat.isSymbolicLink() || stat.uid !== process.getuid?.() || stat.mode & 0o077)
@@ -52,23 +55,34 @@ export async function verifyWorkspaceRecovery(path: string, signal = new AbortCo
     entries.set(item.path, item)
   }
   if (total !== manifest.bytes) throw new Error('Workspace archive byte total differs')
-  const members = new Set<string>(), covered = new Set<string>()
-  for (const member of manifest.content) {
-    const item = entries.get(member.path)
-    if (item?.kind !== 'file' || covered.has(member.path) || members.has(member.member) || item.bytes !== member.bytes || item.sha256 !== member.sha256)
-      throw new Error('Workspace archive content membership differs')
-    members.add(member.member); covered.add(member.path)
-    const hash = createHash('sha256'); let bytes = 0
-    for await (const chunk of privateInput(join(root, member.member), signal)) {
-      bytes += chunk.length
-      if (bytes > member.bytes) throw new Error('Workspace archive content exceeds its recorded size')
-      hash.update(chunk)
+  const staging = capture ? await mkdtemp(join(tmpdir(), 'dsh-workspace-verified-')) : undefined
+  try {
+    const members = new Set<string>(), covered = new Set<string>()
+    for (const member of manifest.content) {
+      const item = entries.get(member.path)
+      if (item?.kind !== 'file' || covered.has(member.path) || members.has(member.member) || item.bytes !== member.bytes || item.sha256 !== member.sha256)
+        throw new Error('Workspace archive content membership differs')
+      members.add(member.member); covered.add(member.path)
+      const hash = createHash('sha256'); let bytes = 0
+      const copy = staging ? await open(join(staging, member.member), 'wx', 0o600) : undefined
+      try {
+        for await (const chunk of privateInput(join(root, member.member), signal)) {
+          bytes += chunk.length
+          if (bytes > member.bytes) throw new Error('Workspace archive content exceeds its recorded size')
+          hash.update(chunk)
+          await copy?.writeFile(chunk)
+        }
+      } finally { await copy?.close() }
+      if (bytes !== member.bytes || hash.digest('hex') !== member.sha256) throw new Error('Workspace archive content digest differs')
     }
-    if (bytes !== member.bytes || hash.digest('hex') !== member.sha256) throw new Error('Workspace archive content digest differs')
-  }
-  if ([...entries.values()].some(item => item.kind === 'file' && !covered.has(item.path))) throw new Error('Workspace archive content is missing')
-  const files = await readdir(root)
-  if (files.length !== members.size + 1 || files.some(file => file !== 'manifest.json' && !members.has(file))) throw new Error('Workspace archive has unbound members')
-  signal.throwIfAborted()
-  return { manifest, contentVerified: true as const, sourceAuthorityVerified: false as const, executionQuiescenceVerified: false as const, restoreVerified: false as const }
+    if ([...entries.values()].some(item => item.kind === 'file' && !covered.has(item.path))) throw new Error('Workspace archive content is missing')
+    const files = await readdir(root)
+    if (files.length !== members.size + 1 || files.some(file => file !== 'manifest.json' && !members.has(file))) throw new Error('Workspace archive has unbound members')
+    signal.throwIfAborted()
+    if (capture && staging) {
+      await writeFile(join(staging, 'manifest.json'), Buffer.concat(chunks), { flag: 'wx', mode: 0o600 })
+      await capture(staging); signal.throwIfAborted()
+    }
+    return { manifest, contentVerified: true as const, sourceAuthorityVerified: false as const, executionQuiescenceVerified: false as const, restoreVerified: false as const }
+  } finally { if (staging) await rm(staging, { recursive: true, force: true }) }
 }
