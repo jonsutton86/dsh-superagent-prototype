@@ -51,7 +51,7 @@ jobs:
           pnpm build
           qualification_tests=(pnpm test --maxWorkers=4)
           if [[ "$QUALIFICATION_SCOPE" == resources ]]; then
-            qualification_tests=(pnpm exec vitest run tests/remote-resources.spec.ts tests/resource-worker.spec.ts)
+            qualification_tests=(pnpm exec vitest run tests/remote-resources.spec.ts tests/resource-worker.spec.ts tests/workspace-capture.spec.ts)
           fi
           sudo systemd-run --wait --pipe --collect --service-type=exec \
             --unit="agentic-qualification-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \

@@ -208,6 +208,10 @@ it.runIf(!!process.env.DSH_RESOURCE_QUALIFICATION_ROOT)('qualifies actual cgroup
     await endpoint.rpc(principal, request)
     expect(await settled(request.requestId)).toMatchObject({ phase: 'settled', outcome: { exitCode: 0 } })
     expect(await endpoint.rpc(principal, { op: 'fs.read', path: join(enrolled.grant.root, 'proof.txt') })).toBe('resource-proof')
+    const captureRequest = { requestId: randomUUID(), grantId: enrolled.grant.id, epoch: enrolled.grant.epoch, destination: join(directory, 'native-retained-archive'), maxEntries: 100, maxBytes: 4096 }
+    const captureReceipt = await endpoint.captureWorkspace(captureRequest)
+    expect(captureReceipt).toMatchObject({ phase: 'complete', result: { managedQuiescenceObserved: true, globalSnapshotVerified: false } })
+    expect(await endpoint.captureWorkspace(captureRequest)).toEqual(captureReceipt)
     const node = await local.resolveExecutable('node')
     const cpu = { ...request, requestId: 'native-resource-cpu', argv: [node, '-e', 'const end=Date.now()+5000; while(Date.now()<end) {}'] }
     expect(resources!.quiescent()).toBe(true)
@@ -503,5 +507,22 @@ it('holds all endpoint admission during host capture and releases the fence afte
     const archived = await endpoint.withRecoveryCapture(signal => captureWorkspaceRecovery(root, join(directory, 'archive'), { maxEntries: 100, maxBytes: 1024 }, signal))
     expect(archived.manifest.entries).toContainEqual(expect.objectContaining({ path: 'retained.txt', kind: 'file' }))
     expect(archived.manifest).toMatchObject({ contentArchived: true, executionQuiescenceVerified: false, restoreVerified: false })
+    const grant = await endpoint.rpc({ role: 'admin' }, { op: 'grant.create', requestId: 'capture-grant', owner: 'test', workspace: 'capture',
+      operations: ['fs.read'], leaseMs: 60000 }) as GrantReceipt
+    await writeFile(join(grant.grant.root, 'data'), 'original capture bytes')
+    const request = { requestId: randomUUID(), grantId: grant.grant.id, epoch: grant.grant.epoch, destination: join(directory, 'retained-archive'), maxEntries: 100, maxBytes: 1024 }
+    const saved = await endpoint.captureWorkspace(request)
+    expect(saved).toMatchObject({ phase: 'complete', binding: { grantId: grant.grant.id, epoch: grant.grant.epoch, rootIdentity: grant.grant.rootIdentity },
+      result: { managedQuiescenceObserved: true, globalSnapshotVerified: false, restoreVerified: false } })
+    await writeFile(join(grant.grant.root, 'data'), 'new bytes must not be recaptured')
+    expect(await endpoint.captureWorkspace(request)).toEqual(saved)
+    await expect(endpoint.captureWorkspace({ ...request, maxBytes: 2048 })).rejects.toThrow('another payload')
+    const interrupted = { ...request, requestId: randomUUID(), destination: join(directory, 'interrupted-archive'), maxBytes: 1 }
+    await expect(endpoint.captureWorkspace(interrupted)).rejects.toThrow('byte budget')
+    const held = await endpoint.captureWorkspace(interrupted)
+    expect(held).toMatchObject({ phase: 'started', request: interrupted })
+    expect(held.result).toBeUndefined()
+    expect(await endpoint.captureWorkspace(interrupted)).toEqual(held)
+
   } finally { await endpoint.stop(); await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true }) }
 })

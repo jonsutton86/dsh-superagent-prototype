@@ -1,6 +1,8 @@
-import { randomUUID } from 'node:crypto'
+import { WorkspaceCaptures, WorkspaceCaptureRequest } from './workspace-capture.ts'
+import { captureWorkspaceRecovery } from '../recovery/workspace-archive.ts'
+import { createHash, randomUUID } from 'node:crypto'
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { mkdir, mkdtemp, realpath, rm, stat } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { FsError, FsVersion, type FileSystem, type FsTarget } from '@deepseek-ai/dsh-fs'
 import type { SubprocessHandle, SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
@@ -522,6 +524,32 @@ export class RemoteEndpoint {
       this.journal.saveOperation(operation)
     }
     return operation
+  }
+  /** Host-only retained capture. Existing IDs are observation-only, including interrupted attempts. */
+  async captureWorkspace(input: unknown, requestedSignal = new AbortController().signal) {
+    const request = WorkspaceCaptureRequest.parse(input), captures = new WorkspaceCaptures(this.journal)
+    const prior = captures.read(request)
+    if (prior) return prior
+    return this.withRecoveryCapture(async signal => {
+      const grant = this.journal.grant(request.grantId)
+      if (grant.epoch !== request.epoch) throw new RemoteError(409, 'grant_changed', 'Capture requires the original grant generation')
+      await this.verifyRoot(grant)
+      const allocation = this.storage?.reservations.list().find(item => item.workspace === grant.workspace)
+      const binding = { endpointId: this.journal.id, grantId: grant.id, epoch: grant.epoch, revision: grant.revision,
+        workspace: grant.workspace, root: grant.root, rootIdentity: grant.rootIdentity,
+        ...(allocation ? { storage: { requestId: allocation.requestId, projectId: allocation.projectId, policyHash: fingerprint(this.storage!.reservations.policy) } } : {}) }
+      // Commit before any destination writes; failures deliberately retain the started identity.
+      captures.begin(request, binding)
+      const archive = await captureWorkspaceRecovery(grant.root, request.destination, { maxEntries: request.maxEntries, maxBytes: request.maxBytes }, signal)
+      await this.verifyRoot(grant)
+      signal.throwIfAborted()
+      if (!this.ownershipQuiescent()) throw new RemoteError(409, 'recovery_busy', 'Managed process quiescence changed during capture')
+      const manifestHash = createHash('sha256').update(await readFile(join(archive.path, 'manifest.json'))).digest('hex')
+      signal.throwIfAborted()
+      if (!this.ownershipQuiescent()) throw new RemoteError(409, 'recovery_busy', 'Managed process quiescence changed before capture receipt')
+      return captures.complete(request, { path: archive.path, inventoryHash: archive.manifest.sha256, manifestHash,
+        managedQuiescenceObserved: true, globalSnapshotVerified: false, restoreVerified: false })
+    }, requestedSignal)
   }
   /** Trusted host-only capture scope. Not an RPC, durable checkpoint epoch or ownership grant.
    * All endpoint admission is stopped, including reads that launch confined helper processes. */
