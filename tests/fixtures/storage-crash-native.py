@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import subprocess
 import sys
 import uuid
 
@@ -28,6 +29,20 @@ for index, boundary in enumerate(cases):
         'workspace': {'bytes': 16 * 1024 ** 2, 'inodes': 128}}}
     request = {'endpointId': config['endpointId'], 'requestId': 'original', 'requestHash': 'a' * 64,
                'workspace': 'original-work', 'projectId': first}
+    config_path = mount.parent / (boundary + '-config.json')
+    with os.fdopen(os.open(config_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'w') as stream:
+        json.dump(config, stream)
+    serial = [0]
+    def admin(action, value, expected_code=0, target_registry=registry):
+        serial[0] += 1
+        input_path = mount.parent / (boundary + '-input-' + str(serial[0]) + '.json')
+        with os.fdopen(os.open(input_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'w') as stream:
+            json.dump(value, stream)
+        command = [sys.executable, '-B', 'scripts/agentic_storage_admin.py', '--config', str(config_path),
+                   '--registry', str(target_registry), action, '--request' if action == 'inspect' else '--approval', str(input_path)]
+        result = subprocess.run(command, capture_output=True, text=True, timeout=20)
+        assert result.returncode == expected_code, (boundary, result.stderr)
+        return json.loads(result.stdout if result.returncode == 0 else result.stderr)
     host = storage.StorageHost(registry, config)
     roots = host.roots(request)
     host.close()  # Fork with no inherited database/lock connection.
@@ -90,6 +105,8 @@ for index, boundary in enumerate(cases):
         if boundary in ['hard-limit-applied', 'first-owner-applied', 'complete-before-reply']:
             assert evidence['quota']['hardBytes'] == config['policy']['workspace']['bytes']
         assert host.inspect(request)['snapshotHash'] == evidence['snapshotHash']
+        assert admin('inspect', request)['inspection']['snapshotHash'] == evidence['snapshotHash']
+        assert list(host.db.iterdump()) == saved
 
         identities = [(str(path), path.stat().st_ino, path.stat().st_uid) for path in roots if path.exists()]
         original_run = storage.run
@@ -169,7 +186,7 @@ for index, boundary in enumerate(cases):
             finally:
                 storage.run = original_run
         elif repairable:
-            fixed = host.repair(request, 'repair', evidence['snapshotHash'])
+            fixed = admin('repair', {'request': request, 'repairId': 'repair', 'snapshotHash': evidence['snapshotHash']})['observation']
             assert fixed['projectId'] == first and host.saved(request) == fixed['roots']
             assert json.loads(host.db.execute('SELECT intent FROM operations WHERE endpoint=? AND request=?',
                 (config['endpointId'], 'original')).fetchone()[0]) == request
@@ -195,7 +212,10 @@ for index, boundary in enumerate(cases):
             pass
         assert host.db.execute('SELECT count(*) FROM operations WHERE endpoint=?', (config['endpointId'],)).fetchone()[0] == 2
         results.append({'boundary': boundary, 'originalIntentRetained': True, 'mutationReplay': False,
-                        'observation': 'verified' if boundary == 'complete-before-reply' else 'refused-incomplete', 'capacityRetained': True, 'inspectionStates': states, 'inspectionReadOnly': True, 'explicitRepair': ('interrupted-replay-verified' if boundary.startswith('repair-') else 'verified' if repairable else 'refused')})
+                        'observation': 'verified' if boundary == 'complete-before-reply' else 'refused-incomplete', 'capacityRetained': True, 'inspectionStates': states, 'inspectionReadOnly': True, 'operatorInspection': True, 'explicitRepair': ('interrupted-replay-verified' if boundary.startswith('repair-') else 'verified' if repairable else 'refused')})
     finally:
         host.close()
-print(json.dumps({'nativeStorageCrashBoundaries': results}), flush=True)
+empty_registry = mount.parent / 'missing-operator-registry'; empty_registry.mkdir(mode=0o700)
+assert admin('inspect', request, expected_code=1, target_registry=empty_registry)['state'] == 'unverified'
+assert list(empty_registry.iterdir()) == [], 'Inspection initialized a missing registry'
+print(json.dumps({'nativeStorageCrashBoundaries': results, 'missingRegistryUnchanged': True}), flush=True)

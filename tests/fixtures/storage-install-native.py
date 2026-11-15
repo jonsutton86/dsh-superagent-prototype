@@ -80,6 +80,15 @@ try:
     systemctl('link', str(root / unit)); linked = True
     systemctl('daemon-reload'); systemctl('start', unit); wait_ready()
     first = call('provision')
+    request_file = base / 'installed-operator-request.json'
+    with os.fdopen(os.open(request_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'w') as stream:
+        json.dump(request, stream)
+    inspected = subprocess.run([sys.executable, '-B', str(root / 'agentic_storage_admin.py'), '--config', str(root / 'host.json'),
+        '--registry', str(registry), 'inspect', '--request', str(request_file)], capture_output=True, text=True, timeout=20)
+    assert inspected.returncode == 0, inspected.stderr
+    assert json.loads(inspected.stdout)['inspection']['request'] == request
+    assert install(str(root), str(registry), config) == manifest  # Operator imports must not create bundle files.
+
     saved = snapshot()
     assert first['observation']['quota']['hardBytes'] == config['policy']['workspace']['bytes']
     systemctl('kill', '--signal=KILL', '--kill-who=main', unit)
