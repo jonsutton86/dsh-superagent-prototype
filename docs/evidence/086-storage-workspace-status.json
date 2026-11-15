@@ -1,0 +1,37 @@
+{
+  "kind": "validated-workspace-storage-status",
+  "revision": "00b197d6454c65c45d793812cea1564d4a1e8bf3",
+  "recordedAt": "2026-11-15T09:08:28.570622+00:00",
+  "workflowRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43697502068",
+  "result": "success",
+  "classification": "coordinator and workspace INTEGRATED; local DOM and native backend TESTED; NOT DEPLOYED",
+  "hashes": {
+    "src/remote/storage-model.ts": "4bacfc8c75989aa4d3cc6cca838c623560c078344b3aeef1bf08e78f58fce243",
+    "src/environments/endpoints.ts": "ff2ee63d5e09f8aed1c2d509f18823daa8bcd00866799968f5fe450dc2db41dd",
+    "src/app/http.ts": "865d7f9a2a36c4e94f8d5b81d9397d74917b2a12b2e40604da81963c8998a325",
+    "src/client/endpoints.tsx": "974bf9c1b3a44f7dca5c97c6b22c1466a674957fddce373f2872047073b6f626",
+    "tests/endpoints.spec.ts": "bf666663b8ac4c34997003e276926917363876143db1272546362182f0758915",
+    "tests/endpoints-ui.spec.tsx": "b2a0f4a7cd208856c34edd0bc063d906a24395809af1343c1518ac7a103cb767",
+    "tests/endpoint-launcher.spec.ts": "ca9bf4531e2fd6007cebd9bad1d5769d759de897524193e491db5bc36444c7d1"
+  },
+  "validation": {
+    "localStorageCoordinatorTests": 33,
+    "localFinalCoordinatorUITests": 24,
+    "nativeVitestTests": 14,
+    "pythonContracts": 9,
+    "typecheck": "passed locally and natively",
+    "builds": 7,
+    "nativeStatus": "coordinator API after endpoint/coordinator restart returned observed usage, exact hard limits, timestamps, and original allocation counts",
+    "UI": "on-demand sample; stale reading cleared on failed refresh; incomplete receipt warning",
+    "fullMatrix": "not run"
+  },
+  "remaining": [
+    "whole-machine reboot and clean-host recovery",
+    "in-flight quota mutation recovery",
+    "storage backup/export/restore/migration",
+    "upgrade/uninstall and partial-install reconciliation",
+    "whole-volume/control-state headroom",
+    "final full-system qualification",
+    "deployed browser acceptance"
+  ]
+}

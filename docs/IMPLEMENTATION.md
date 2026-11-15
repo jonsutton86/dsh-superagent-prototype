@@ -1272,3 +1272,9 @@ Storage observation continuation (`1869721`): administrator-only read-only quota
 fresh observation, unavailable evidence, reserved and absent allocations without mutating recovery state.
 23 storage tests and 62 adjacent tests passed (four native skips), plus typecheck/seven builds.
 Coordinator/workspace integration and native status qualification remain open; see latest [086](086-workspace-storage-quotas.md).
+
+Storage workspace status (`00b197d`): strict coordinator reply validation and on-demand workspace quota
+samples are integrated. Failed refreshes clear prior readings; incomplete provisioning remains explicit.
+Local 33 storage/coordinator and final 24 coordinator/UI tests passed. Native run `43697502068` passed
+the real coordinator status request after restart, 14 native tests, nine Python contracts, typecheck
+and seven builds. See [086 status evidence](evidence/086-storage-workspace-status.json) for remaining gates.

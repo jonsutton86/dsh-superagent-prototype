@@ -552,3 +552,45 @@ This is a locally tested backend increment. Coordinator response validation, wor
 native end-to-end status qualification and freshness/error presentation remain unfinished. Existing
 native evidence above does not claim coverage of this new RPC. Storage recovery/export/restore,
 headroom, reboot/clean-host qualification and final project acceptance remain open.
+
+### Coordinator and workspace observation path
+
+The coordinator now validates a strict storage-status union, policy-derived allocation counts,
+workspace hard limits, and observation state/phase combinations. It matches replies to the requested
+workspace and the registered policy and rejects a registration revision change during the request.
+An unavailable result cannot carry old quota fields. Missing storage must agree with registration.
+`GET endpoints/:id/storage?workspace=...` uses the existing administrator credential and adds a local
+receipt timestamp; invalid/missing workspace inputs are refused. The status call is read-only and
+is not placed in the durable operator mutation queue.
+
+Each workspace card has an on-demand “Check storage status” button. Refresh clears the old reading
+before issuing a request. Failures display a generic verification failure without host diagnostics.
+Successful views distinguish quota usage from policy reservation capacity, label observation times as
+samples rather than continuous monitoring, and display an incomplete-provisioning notice even when a
+fresh host observation succeeds. English and Chinese labels are included. No automatic polling or
+background host effects were introduced.
+
+Local validation: 33 storage/coordinator tests passed; final coordinator and adjacent client/environment/
+endpoint UI suites passed 24 tests, typecheck and seven builds passed. Initial typechecking caught missing
+route declarations; the first UI integration attempt caught an API parameter-shape mismatch. Both were
+fixed and the final runs above passed. React review checked that the new state is event-driven, the action
+is disabled while pending, stale readings are cleared, failures have alert semantics, and pending feedback
+has status semantics. These DOM tests do not claim deployed browser visual validation.
+
+The native managed-launcher fixture now requests storage status through the real coordinator after
+endpoint/coordinator restart, checking positive usage, exact hard limits, timestamps and the original two
+allocations. Its result must be matched to the recorded native revision below.
+
+VERIFIED at `00b197d6454c65c45d793812cea1564d4a1e8bf3`: native
+[run 43697502068](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43697502068)
+passed 14 native Vitest tests, nine Python contracts, the existing service/systemd/host fixtures,
+typecheck and seven builds. The real coordinator status request after restart returned observed quota
+usage with positive used bytes, exact workspace hard limits, observation/receipt timestamps and two
+reserved/zero unreserved allocations. The existing root-fixture check confirmed the original two host
+operations remained. Source hashes and scoped evidence are in
+[workspace-status evidence](evidence/086-storage-workspace-status.json).
+
+This closes on-demand quota status integration and its local DOM/native backend checks. It does not
+close deployed browser acceptance, in-flight mutation recovery, whole-machine reboot, clean-host
+restore, backup/export/migration, upgrade/uninstall/reconciliation, volume headroom or final complete
+architecture qualification. No model defaults changed and no user-host service was deployed.
