@@ -168,6 +168,19 @@ export class CgroupResources {
       return !this.populated(this.pool)
     } catch { return false } // Missing or changed kernel evidence never proves stopped execution.
   }
+  /** Read-only observation of an already existing pool. Does not start, repair, adopt or own it.
+   * Callers must separately hold endpoint admission and inspect retained operations. */
+  observeExistingQuiescence(endpointId: string): boolean {
+    try {
+      if (this.pool || this.closed || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(endpointId)) return false
+      const root = this.policy.cgroupRoot, pool = join(root, 'dsh-' + endpointId)
+      this.directory(root)
+      if (this.io.read(join(root, 'cgroup.procs')) || !controllers.every(name =>
+        this.io.read(join(root, 'cgroup.subtree_control')).split(/\s+/).includes(name))) return false
+      this.check(pool, budgetFiles(this.policy.pool, false))
+      return !this.populated(pool)
+    } catch { return false }
+  }
   hasLive(owner: string): boolean { const prefix = 's-' + tag(owner) + '-'; return this.groups().some(path => path.split('/').at(-1)!.startsWith(prefix) && this.populated(path)) }
   status(): ResourceStatus {
     const result: ResourceStatus = { kind: 'linux-cgroup-v2', policy: this.policy, ready: false, memoryBytes: null, processes: null, activeScopes: null }
