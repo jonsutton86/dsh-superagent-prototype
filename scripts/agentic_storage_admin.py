@@ -15,11 +15,14 @@ def execute(args):
     value = configuration(args.request if args.action == 'inspect' else args.approval)
     if args.action == 'repair':
         require(isinstance(value, dict) and set(value) == {'request', 'repairId', 'snapshotHash'})
+    if args.action == 'finish-repair':
+        require(isinstance(value, dict) and set(value) == {'request', 'repairId', 'snapshotHash', 'finishSnapshotHash'})
     host = StorageHost(args.registry, config, existing_only=True)
     try:
         if args.action == 'inspect':
             return {'ok': True, 'inspection': host.inspect(value)}
-        result = host.repair(value['request'], value['repairId'], value['snapshotHash'])
+        result = (host.finish_repair(value['request'], value['repairId'], value['snapshotHash'], value['finishSnapshotHash'])
+                  if args.action == 'finish-repair' else host.repair(value['request'], value['repairId'], value['snapshotHash']))
         return {'ok': True, 'repairId': value['repairId'], 'requestId': value['request']['requestId'], 'observation': result}
     finally:
         host.close()
@@ -32,6 +35,7 @@ def main():
     actions = parser.add_subparsers(dest='action', required=True)
     actions.add_parser('inspect').add_argument('--request', required=True)
     actions.add_parser('repair').add_argument('--approval', required=True)
+    actions.add_parser('finish-repair').add_argument('--approval', required=True)
     args = parser.parse_args()
     try:
         print(json.dumps(execute(args), sort_keys=True))

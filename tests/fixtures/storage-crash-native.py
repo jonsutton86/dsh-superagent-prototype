@@ -18,7 +18,7 @@ registry = mount.parent / 'crash-registry'; registry.mkdir(mode=0o700)
 filesystem = storage.run('findmnt', '-n', '-o', 'UUID', '--target', mount).strip()
 cases = ['intent-committed', 'first-root-created', 'first-root-recorded', 'first-project-applied',
          'second-project-applied', 'hard-limit-applied', 'first-owner-applied', 'complete-before-reply',
-         'repair-before-ownership', 'repair-complete-before-reply']
+         'repair-before-ownership', 'repair-complete-before-reply', 'repair-finish-first-owner', 'repair-finish-complete']
 results = []
 for index, boundary in enumerate(cases):
     killpoint = 'intent-committed' if boundary.startswith('repair-') else boundary
@@ -150,7 +150,7 @@ for index, boundary in enumerate(cases):
                     effect, completed = storage.run, repairing._observe
                     def interrupted_effect(program, *args):
                         result = effect(program, *args)
-                        if boundary == 'repair-before-ownership' and program == 'xfs_quota' and any(str(arg).startswith('limit -p ') for arg in args):
+                        if boundary != 'repair-complete-before-reply' and program == 'xfs_quota' and any(str(arg).startswith('limit -p ') for arg in args):
                             os.kill(os.getpid(), signal.SIGKILL)
                         return result
                     def interrupted_reply(value):
@@ -190,6 +190,52 @@ for index, boundary in enumerate(cases):
                     pass
             finally:
                 storage.run = original_run
+            if boundary != 'repair-complete-before-reply':
+                fresh = admin('inspect', request)['inspection']['snapshotHash']
+                approval = {'request': request, 'repairId': 'repair', 'snapshotHash': evidence['snapshotHash'], 'finishSnapshotHash': fresh}
+                before_finish = list(host.db.iterdump())
+                assert admin('finish-repair', {**approval, 'repairId': 'replacement'}, expected_code=1)['state'] == 'unverified'
+                assert admin('finish-repair', {**approval, 'snapshotHash': 'f' * 64}, expected_code=1)['state'] == 'unverified'
+                assert admin('finish-repair', {**approval, 'finishSnapshotHash': 'f' * 64}, expected_code=1)['state'] == 'unverified'
+                assert list(host.db.iterdump()) == before_finish
+                if boundary.startswith('repair-finish-'):
+                    host.close()
+                    finishing_pid = os.fork()
+                    if finishing_pid == 0:
+                        try:
+                            finishing = storage.StorageHost(registry, config)
+                            handoff, observation = os.chown, finishing._observe
+                            def killed_handoff(path, *args):
+                                handoff(path, *args)
+                                if boundary == 'repair-finish-first-owner': os.kill(os.getpid(), signal.SIGKILL)
+                            def killed_observation(value):
+                                result = observation(value)
+                                if boundary == 'repair-finish-complete': os.kill(os.getpid(), signal.SIGKILL)
+                                return result
+                            os.chown = killed_handoff; finishing._observe = killed_observation
+                            finishing.finish_repair(request, 'repair', evidence['snapshotHash'], fresh)
+                        except BaseException:
+                            os._exit(2)
+                        os._exit(3)
+                    _, finish_status = os.waitpid(finishing_pid, 0)
+                    assert os.WIFSIGNALED(finish_status) and os.WTERMSIG(finish_status) == signal.SIGKILL
+                    host = storage.StorageHost(registry, config)
+                    assert host.repair_receipt(request)['phase'] == 'finishing'
+                if boundary == 'repair-finish-first-owner':
+                    retained_finish = list(host.db.iterdump())
+                    assert admin('finish-repair', approval, expected_code=1)['state'] == 'unverified'
+                    assert list(host.db.iterdump()) == retained_finish
+                    assert [path.stat().st_uid for path in roots] == [uid, 0]
+                else:
+                    assert admin('finish-repair', approval)['observation']['projectId'] == first
+                    assert host.repair_receipt(request)['phase'] == 'complete'
+                    # Repeated handoff approval and original repair replay only observe; inode/ctime unchanged.
+                    metadata = [(path.stat().st_ino, path.stat().st_ctime_ns) for path in roots]
+                    assert admin('finish-repair', approval)['observation']['projectId'] == first
+                    assert host.repair(request, 'repair', evidence['snapshotHash'])['projectId'] == first
+                    assert [(path.stat().st_ino, path.stat().st_ctime_ns) for path in roots] == metadata
+                assert host.repair_receipt(request)['finishSnapshotHash'] == fresh
+                assert admin('finish-repair', {**approval, 'finishSnapshotHash': host.inspect(request)['snapshotHash']}, expected_code=1)['state'] == 'unverified'
         elif repairable:
             fixed = admin('repair', {'request': request, 'repairId': 'repair', 'snapshotHash': evidence['snapshotHash']})['observation']
             assert fixed['projectId'] == first and host.saved(request) == fixed['roots']

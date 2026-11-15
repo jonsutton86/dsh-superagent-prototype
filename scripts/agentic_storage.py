@@ -250,11 +250,16 @@ class StorageHost:
             return None
         repair_id, encoded, phase = row
         require(isinstance(repair_id, str) and re.fullmatch(r'[A-Za-z0-9_-]{1,100}', repair_id))
-        require(phase in ['started', 'complete'])
+        require(phase in ['started', 'finishing', 'complete'])
         intent = json.loads(encoded)
-        require(isinstance(intent, dict) and set(intent) == {'request', 'snapshotHash'} and intent['request'] == request)
+        require(isinstance(intent, dict) and set(intent) in [{'request', 'snapshotHash'}, {'request', 'snapshotHash', 'finishSnapshotHash'}] and intent['request'] == request)
         require(isinstance(intent['snapshotHash'], str) and re.fullmatch(r'[a-f0-9]{64}', intent['snapshotHash']))
-        return {'repairId': repair_id, 'phase': phase, 'originalSnapshotHash': intent['snapshotHash']}
+        finish = intent.get('finishSnapshotHash')
+        require('finishSnapshotHash' not in intent or isinstance(finish, str) and re.fullmatch(r'[a-f0-9]{64}', finish))
+        require(phase != 'finishing' or finish is not None)
+        require(phase != 'started' or finish is None)
+        return {'repairId': repair_id, 'phase': phase, 'originalSnapshotHash': intent['snapshotHash'],
+                **({'finishSnapshotHash': finish} if finish is not None else {})}
 
     def _inspect(self, request):
         self.check_namespace()
@@ -313,9 +318,10 @@ class StorageHost:
         with self.exclusive():
             prior = self.db.execute('SELECT intent, phase FROM repairs WHERE endpoint=? AND id=?', (self.endpoint, repair_id)).fetchone()
             if prior:
-                require(prior[0] == intent and prior[1] in ['started', 'complete'])
+                receipt = self.repair_receipt(request)
+                require(receipt and receipt['repairId'] == repair_id and receipt['originalSnapshotHash'] == expected_snapshot)
                 result = self._observe(request)
-                if prior[1] == 'started':
+                if prior[1] != 'complete':
                     self.db.execute("UPDATE repairs SET phase='complete' WHERE endpoint=? AND id=?", (self.endpoint, repair_id))
                     self.db.commit()
                 return result
@@ -352,6 +358,40 @@ class StorageHost:
             for path in self.roots(request):
                 os.chown(path, self.config['uid'], self.config['gid']); self.sync_directory(path)
             result = self._observe(request)
+            self.db.execute("UPDATE repairs SET phase='complete' WHERE endpoint=? AND id=?", (self.endpoint, repair_id))
+            self.db.commit()
+            return result
+
+    def finish_repair(self, request, repair_id, original_snapshot, fresh_snapshot):
+        """Separate operator approval for ownership handoff only; never repeat provisioning effects."""
+        require(isinstance(fresh_snapshot, str) and re.fullmatch(r'[a-f0-9]{64}', fresh_snapshot))
+        with self.exclusive():
+            receipt = self.repair_receipt(request)
+            require(receipt and receipt['repairId'] == repair_id and receipt['originalSnapshotHash'] == original_snapshot)
+            if 'finishSnapshotHash' in receipt:
+                require(receipt['finishSnapshotHash'] == fresh_snapshot)
+                result = self._observe(request)  # Lost reply or interrupted handoff: observation only.
+            else:
+                require(receipt['phase'] == 'started')
+                evidence = self._inspect(request)
+                require(evidence['snapshotHash'] == fresh_snapshot)
+                for root in evidence['roots']:
+                    require(root['state'] == 'recorded' and root['uid'] == 0 and root['mode'] == 0o700
+                            and root['empty'] and not root['realtime'] and root['inherits']
+                            and root['projectId'] == request['projectId'])
+                quota = evidence['quota']
+                require(quota and quota['hardBytes'] == self.policy['workspace']['bytes']
+                        and quota['hardInodes'] == self.policy['workspace']['inodes']
+                        and quota['usedInodes'] == len(evidence['roots']))
+                # Keep original approval immutable within the record; journal the distinct handoff
+                # approval before ownership changes. Root-private empty trees exclude worker writers.
+                intent = {'request': request, 'snapshotHash': original_snapshot, 'finishSnapshotHash': fresh_snapshot}
+                self.db.execute("UPDATE repairs SET intent=?, phase='finishing' WHERE endpoint=? AND id=?",
+                                (json.dumps(intent, sort_keys=True), self.endpoint, repair_id))
+                self.db.commit()
+                for path in self.roots(request):
+                    os.chown(path, self.config['uid'], self.config['gid']); self.sync_directory(path)
+                result = self._observe(request)
             self.db.execute("UPDATE repairs SET phase='complete' WHERE endpoint=? AND id=?", (self.endpoint, repair_id))
             self.db.commit()
             return result

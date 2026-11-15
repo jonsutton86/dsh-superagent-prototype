@@ -35,11 +35,19 @@ class RepairReceipt(unittest.TestCase):
         cases = [({'request': {**self.request, 'workspace': 'other'}, 'snapshotHash': 'b' * 64}, 'started', 'repair'),
                  ({**self.intent, 'snapshotHash': 'invalid'}, 'started', 'repair'),
                  ({**self.intent, 'extra': True}, 'started', 'repair'),
+                 ({**self.intent, 'finishSnapshotHash': None}, 'finishing', 'repair'),
+                 (self.intent, 'finishing', 'repair'),
+                 ({**self.intent, 'finishSnapshotHash': 'c' * 64}, 'started', 'repair'),
                  (self.intent, 'unknown', 'repair'), (self.intent, 'started', '../repair')]
         for intent, phase, repair_id in cases:
             with self.subTest(intent=intent, phase=phase, repair_id=repair_id):
                 self.host.db.execute('DELETE FROM repairs'); self.insert(intent, phase, repair_id)
                 with self.assertRaises(RuntimeError): self.host.repair_receipt(self.request)
+
+    def test_finish_approval_retains_original_identity(self):
+        self.insert({**self.intent, 'finishSnapshotHash': 'c' * 64}, phase='finishing')
+        self.assertEqual(self.host.repair_receipt(self.request), {'repairId': 'repair', 'phase': 'finishing',
+                         'originalSnapshotHash': 'b' * 64, 'finishSnapshotHash': 'c' * 64})
 
     def test_changed_original_request_is_refused(self):
         self.insert()
