@@ -37,7 +37,7 @@ class Bindings(unittest.TestCase):
     def test_mismatched_rows_duplicates_and_approvals_are_refused(self):
         for statement in ["UPDATE operations SET workspace='other'", "UPDATE operations SET filesystem='other'",
                           "INSERT INTO operations SELECT * FROM operations", "DELETE FROM namespaces",
-                          "UPDATE repairs SET phase='unknown'", "INSERT INTO repairs SELECT * FROM repairs"]:
+                          "UPDATE repairs SET phase='unknown'", "UPDATE repairs SET phase='complete'", "INSERT INTO repairs SELECT * FROM repairs"]:
             with self.subTest(statement=statement):
                 self.db.execute('SAVEPOINT invalid'); self.db.execute(statement)
                 with self.assertRaises(RuntimeError): StorageHost.audit_backup_records(self.db)

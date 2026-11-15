@@ -254,7 +254,7 @@ class StorageHost:
                         and all(isinstance(item, str) and re.fullmatch(r'[0-9]+', item) for item in value.values()) for value in values))
             return values
         endpoints, ranges, namespaces, operations, workspaces, projects, repairs = {}, {}, {}, {}, set(), set(), set()
-        allocation_counts = {}
+        allocation_counts, root_records = {}, {}
         for endpoint, filesystem, first, last, encoded in database.execute('SELECT id,filesystem,first,last,config FROM endpoints'):
             config = decode(encoded)
             require(endpoint not in endpoints and set(config) == {'endpointId', 'uid', 'gid', 'policy'} and config['endpointId'] == endpoint)
@@ -291,7 +291,8 @@ class StorageHost:
             temporary = StorageHost.__new__(StorageHost); temporary.endpoint = endpoint; temporary.policy = policy
             temporary.validate_request(value)
             require(filesystem == policy['filesystemUUID'])
-            incomplete += int(any(root is None for root in identities(roots, 2)))
+            root_records[endpoint, request] = identities(roots, 2)
+            incomplete += int(any(root is None for root in root_records[endpoint, request]))
             allocation_counts[endpoint] = allocation_counts.get(endpoint, 0) + 1
             operations[endpoint, request] = value; workspaces.add((endpoint, workspace)); projects.add((filesystem, project))
         for endpoint, policy in endpoints.items():
@@ -306,6 +307,7 @@ class StorageHost:
             temporary = StorageHost.__new__(StorageHost); temporary.endpoint = endpoint; temporary.policy = endpoints[endpoint]; temporary.db = database
             receipt = temporary.repair_receipt(operations[endpoint, request])
             require(receipt and receipt['repairId'] == repair and receipt['phase'] == phase)
+            require(phase == 'started' or all(root_records[endpoint, request]))
             unresolved += int(phase != 'complete'); repairs.add((endpoint, repair)); repaired_requests.add((endpoint, request))
         return {'recordBindingsVerified': True, 'incompleteRootRecords': incomplete, 'unresolvedRepairs': unresolved,
                 'liveFilesystemVerified': False, 'restoreVerified': False}
