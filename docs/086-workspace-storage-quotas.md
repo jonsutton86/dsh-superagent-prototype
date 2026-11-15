@@ -1407,3 +1407,11 @@ Linux-only test skipped locally, and the final build passed.
 [Evidence](evidence/086-workspace-checkpoint-members.json) records the exact source
 revision and typecheck scope. This is explicit supplied-archive integration, not
 live capture or a completed workspace restore.
+
+Workspace member validation now parses its schema at the shared helper boundary,
+including NUL-free source paths, instead of relying only on upstream callers.
+Eight focused workspace tests and typecheck passed. New substitution cases cover
+duplicate sources, unbound members, wrong roles, traversal names, changed source
+bindings, authenticated digest mismatch and cancellation.
+[Evidence](evidence/086-workspace-binding-refusals.json). These checks validate
+artifact membership, not fresh source identity, quiescence or restore authority.

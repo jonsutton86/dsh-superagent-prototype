@@ -1,0 +1,21 @@
+{
+  "revision": "608a0cb552e5394c9781977bbe499ac07073ecd6",
+  "classification": "VERIFIED",
+  "validation": {
+    "workspaceTests": 8,
+    "typecheck": "passed"
+  },
+  "coverage": [
+    "Successful mapped artifact verification",
+    "Duplicate source and unbound member rejection",
+    "Wrong member role rejection",
+    "Traversal name refusal at helper entry",
+    "Source-root substitution rejection",
+    "Authenticated digest mismatch rejection",
+    "Cancellation refusal"
+  ],
+  "limits": [
+    "No fresh filesystem identity, execution quiescence or restore authority",
+    "No native qualification rerun for this scoped schema/test change"
+  ]
+}
