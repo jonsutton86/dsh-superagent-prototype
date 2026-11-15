@@ -875,3 +875,36 @@ crash cases. SIGKILL after the first ownership change remained held without repl
 complete handoff recovered by observation. Repeated approvals preserved inode/ctime. Four SQLite
 receipt contracts, existing scoped storage integration, typecheck and builds passed. See
 [handoff evidence](evidence/086-storage-repair-finish.json). No deployment or full qualification.
+
+### Privileged registry snapshot component
+
+The root operator CLI now accepts `backup --output /root/agentic-backups/host-UNIQUE.sqlite`, using
+the installed command/config/registry prefix above. The output parent must already be root-private
+under protected ancestors and outside both the active registry and this endpoint's quota mount.
+The destination must not exist. The command never overwrites, deletes or silently replaces an output;
+a failed or lost-response output remains unverified and must be preserved for inspection.
+
+Under the shared host lock, SQLite backup captures the committed registry, including all endpoint
+configurations/ranges, namespace identities, original operation records and repair/handoff approvals.
+It refuses a pending source transaction, uses a bounded backup deadline, verifies SQLite integrity,
+converts the output to standalone DELETE-journal format, and synchronizes the file and parent before
+returning its SHA-256, size and table counts. Output permissions are 0600; no row contents are printed.
+The source database and filesystem quota state are not changed. This is a root-only local operation,
+not an endpoint RPC or model tool. A consistent registry snapshot does not require stopping workers.
+
+The receipt explicitly reports `workspaceFilesIncluded: false` and `restoreVerified: false`. This
+component does not capture endpoint/coordinator journals, workspace contents, live quota accounting,
+or a globally quiescent system epoch. Restoring the host registry alone could roll back allocation
+ownership and must not be used as a recovery procedure. Coordinated inventory/export, fencing,
+manifest validation and an explicit restore/import workflow remain required. No backup is created on
+the user's host by this development change. Native evidence is recorded separately below.
+
+
+VERIFIED at `dbd6386980bb2a0475922cd0c644809ed435ff24`: scoped Linux
+[run 43701534066](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43701534066)
+passed the root CLI backup of the native crash registry: all 12 endpoints, 24 operations and repair
+records (including unresolved `finishing`) matched the source SQL dump. Hash, root-private permissions,
+standalone SQLite and overwrite refusal passed. Three local SQLite/WAL contracts and the existing
+scoped native integration/crash/systemd/Harness checks, typecheck and builds passed. See
+[registry backup evidence](evidence/086-storage-registry-backup.json). Coordinated export/restore,
+fencing and clean-host recovery remain open; this snapshot alone is not a restore procedure.

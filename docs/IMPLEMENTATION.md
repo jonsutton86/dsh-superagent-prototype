@@ -1328,3 +1328,10 @@ root-private roots with already-correct quota/project state. The handoff approva
 ownership changes; retries only observe. Native mid-handoff refusal and completed-handoff response-loss
 recovery passed. [Evidence](evidence/086-storage-repair-finish.json). Earlier project-setup interruptions,
 orphan/endpoint-owned reconciliation, upgrade/restore and final qualification remain open.
+
+
+086 registry backup component: VERIFIED at `dbd6386980bb2a0475922cd0c644809ed435ff24`, scoped Linux
+run 43701534066. Root CLI produces a synchronized standalone SQLite snapshot of all endpoints,
+allocations and repair approvals, with hash/count receipt and no overwrite. Native snapshot matched
+all rows including unresolved handoff. [Evidence](evidence/086-storage-registry-backup.json).
+Workspace/endpoint/coordinator capture, coordinated fencing, import/restore and final qualification remain open.

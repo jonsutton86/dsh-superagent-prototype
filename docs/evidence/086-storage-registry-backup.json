@@ -1,0 +1,28 @@
+{
+  "kind": "storage-registry-backup-component",
+  "revision": "dbd6386980bb2a0475922cd0c644809ed435ff24",
+  "recordedAt": "2026-11-15T09:58:37.138383+00:00",
+  "workflowRun": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/43701534066",
+  "result": "success",
+  "classification": "VERIFIED registry snapshot; whole-system restore NOT VERIFIED; NOT DEPLOYED",
+  "hashes": {
+    "scripts/agentic_storage.py": "bc56f46ed5e00ab006502f0871b4a2a781899e6a49a62bd25ddfa0bd4e12d0e6",
+    "scripts/agentic_storage_admin.py": "c9bc0e0112d9bc12969b6440ea2345d31d973c263c96d6879cdddb679f89c79b",
+    "tests/fixtures/storage-backup-contract.py": "1fadb8af5ec773a1c9026df00e35ead7abce4ef98c226255723234185507f99c",
+    "tests/fixtures/storage-crash-native.py": "e239b067f2706cc91a6192913eeb2e637ff3f3650c0fafae907f6afaf2b2e512"
+  },
+  "validation": [
+    "Three local SQLite/WAL contracts passed, including source unchanged and failed-output retention",
+    "Root CLI snapshot of native crash registry retained all 12 endpoints and 24 operations",
+    "Source and backup SQL dumps match including unresolved finishing repair",
+    "SHA256 and private root ownership/mode verified",
+    "Existing output refused and contents preserved",
+    "Snapshot standalone with no WAL dependency",
+    "Scoped native storage checks, typecheck and builds passed"
+  ],
+  "limits": [
+    "Does not include workspace files or endpoint/coordinator journals",
+    "Does not prove global quiescence or clean-host restore",
+    "Coordinated recovery manifest, import, fencing, migration and final qualification remain open"
+  ]
+}
