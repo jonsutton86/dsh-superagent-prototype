@@ -10,7 +10,12 @@ interface Entry { path: string; mode: number; uid: number; gid: number; kind: 'd
   bytes?: number; sha256?: string; target?: string; hardlinkTo?: string }
 const identity = (info: Awaited<ReturnType<typeof lstat>>) =>
   [info.dev, info.ino, info.mode, info.nlink, info.uid, info.gid, info.size, info.mtimeMs, info.ctimeMs].join(':')
-export async function inventoryWorkspaceRecovery(source: string, input: z.input<typeof limits>, signal = new AbortController().signal) {
+export interface WorkspaceContentSink {
+  begin(path: string): Promise<void>
+  write(chunk: Buffer): Promise<void>
+  end(path: string, bytes: number, sha256: string): Promise<void>
+}
+export async function inventoryWorkspaceRecovery(source: string, input: z.input<typeof limits>, signal = new AbortController().signal, sink?: WorkspaceContentSink) {
   const budget = limits.parse(input); signal.throwIfAborted()
   const root = await realpath(source), initial = await lstat(root)
   if (!initial.isDirectory()) throw new Error('Recovery workspace must be a directory')
@@ -43,6 +48,7 @@ export async function inventoryWorkspaceRecovery(source: string, input: z.input<
         const opened = await handle.stat()
         if (!opened.isFile() || identity(opened) !== identity(before) || await realpath(path) !== path)
           throw new Error('Recovery workspace file identity changed')
+        await sink?.begin(relative)
         const hash = createHash('sha256'), buffer = Buffer.alloc(65536); let size = 0
         while (true) {
           signal.throwIfAborted()
@@ -51,12 +57,14 @@ export async function inventoryWorkspaceRecovery(source: string, input: z.input<
           size += result.bytesRead
           if (size > before.size || size > budget.maxBytes - bytes) throw new Error('Recovery workspace file grew during inventory')
           hash.update(buffer.subarray(0, result.bytesRead))
+          await sink?.write(buffer.subarray(0, result.bytesRead))
         }
         if (size !== before.size || identity(await handle.stat()) !== identity(before)) throw new Error('Recovery workspace file changed during inventory')
         const digest = hash.digest('hex'), key = `${opened.dev}:${opened.ino}`, prior = inodes.get(key)
         if (prior && (prior.links !== opened.nlink || prior.hash !== digest || prior.bytes !== size)) throw new Error('Recovery workspace hard-link identity changed')
         if (prior) prior.seen++
         else inodes.set(key, { path: relative, links: opened.nlink, seen: 1, hash: digest, bytes: size })
+        await sink?.end(relative, size, digest)
         bytes += size
         add({ ...entry, kind: 'file', bytes: size, sha256: digest, ...(prior ? { hardlinkTo: prior.path } : {}) })
       } finally { await handle.close() }

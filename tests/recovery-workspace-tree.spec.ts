@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto'
+import { captureWorkspaceRecovery } from '../src/recovery/workspace-archive.ts'
 import { it, expect } from 'vitest'
-import { mkdtemp, mkdir, writeFile, symlink, link, rm, chmod } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, symlink, link, rm, chmod, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { inventoryWorkspaceRecovery } from '../src/recovery/workspace-tree.ts'
@@ -29,5 +31,38 @@ it('refuses omitted external hard-link relationships, budgets and cancellation',
     await expect(inventoryWorkspaceRecovery(root, { ...budget, maxBytes: 1 })).rejects.toThrow('byte budget')
     await expect(inventoryWorkspaceRecovery(root, { ...budget, maxEntries: 1 })).rejects.toThrow('entry budget')
     await expect(inventoryWorkspaceRecovery(root, budget, AbortSignal.abort())).rejects.toThrow()
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+it('archives exact full content in private members and refuses existing or nested destinations', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'recovery-archive-'))
+  try {
+    const source = join(root, 'source'); await mkdir(source, { mode: 0o700 })
+    await mkdir(join(source, '.git')); await writeFile(join(source, '.git', 'HEAD'), 'ref: refs/heads/main\n')
+    const bytes = Buffer.alloc(200003, 123); await writeFile(join(source, 'large'), bytes)
+    await link(join(source, 'large'), join(source, 'alias')); await symlink('large', join(source, 'link'))
+    const result = await captureWorkspaceRecovery(source, join(root, 'archive'), budget)
+    expect(result.manifest).toMatchObject({ contentArchived: true, executionQuiescenceVerified: false, restoreVerified: false })
+    for (const member of result.manifest.content) {
+      const saved = await readFile(join(result.path, member.member))
+      expect(saved).toEqual(await readFile(join(source, member.path)))
+      expect(createHash('sha256').update(saved).digest('hex')).toBe(member.sha256)
+      expect((await stat(join(result.path, member.member))).mode & 0o777).toBe(0o600)
+    }
+    expect(result.manifest.entries.find(entry => entry.path === 'large')?.hardlinkTo).toBe('alias')
+    expect(JSON.parse(await readFile(join(result.path, 'manifest.json'), 'utf8'))).toEqual(result.manifest)
+    await expect(captureWorkspaceRecovery(source, result.path, budget)).rejects.toMatchObject({ code: 'EEXIST' })
+    await expect(captureWorkspaceRecovery(source, join(source, 'archive'), budget)).rejects.toThrow('separate')
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+it('retains failed capture bytes without a completed manifest', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'recovery-archive-failed-'))
+  try {
+    const source = join(root, 'source'); await mkdir(source, { mode: 0o700 })
+    await writeFile(join(root, 'external'), 'retained'); await link(join(root, 'external'), join(source, 'linked'))
+    const target = join(root, 'archive')
+    await expect(captureWorkspaceRecovery(source, target, budget)).rejects.toThrow('outside')
+    expect(await readFile(join(target, 'content-0.bin'), 'utf8')).toBe('retained')
+    await expect(readFile(join(target, 'manifest.json'))).rejects.toMatchObject({ code: 'ENOENT' })
   } finally { await rm(root, { recursive: true, force: true }) }
 })
