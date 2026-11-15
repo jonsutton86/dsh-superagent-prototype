@@ -1,0 +1,20 @@
+{
+  "revision": "5c43ca97cd06e65ed81e812051f42abeb98dc1ee",
+  "classification": "VERIFIED",
+  "scope": "Checkpoint storage source-authority references",
+  "evidence": [
+    "CodeGraph sync and verifyCheckpoint symbol query",
+    "Valid encrypted checkpoint succeeds; re-sealed archive with removed source endpoint registration fails verification and staging"
+  ],
+  "validation": {
+    "focused": "29 passed",
+    "adjacent": "63 passed across recovery.spec.ts and recovery-storage.spec.ts",
+    "typecheck": "passed"
+  },
+  "limitations": [
+    "No globally frozen capture epoch",
+    "No live filesystem or quota verification",
+    "Storage restore installation remains refused",
+    "No deployment or default model changes"
+  ]
+}

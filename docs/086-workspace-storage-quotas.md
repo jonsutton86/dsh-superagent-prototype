@@ -1124,3 +1124,13 @@ Validation: the checkpoint/storage/installation suites passed 80 tests before th
 maintenance-profile forwarding change. Optional-provider checks passed 12 tests;
 the installed-Harness test was skipped in that invocation. Typecheck passed after
 profile wiring. No external inference or default-model changes were performed.
+
+### Archived storage authority verification
+
+Revision `5c43ca97cd06e65ed81e812051f42abeb98dc1ee` also checks storage endpoint membership against the
+authenticated coordinator registrations and execution-world records during every
+verification/staging operation. A validly re-sealed archive whose source registration
+has been removed is rejected; encryption alone does not prove this relationship.
+The affected checkpoint/storage suites passed 63 tests and typecheck passed.
+See [evidence](evidence/086-storage-source-authority.json). Live capture and restore
+qualification remain open.
