@@ -11,10 +11,18 @@ import { mkdtemp, mkdir, writeFile, symlink, link, rm, chmod, readFile, stat, re
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { inventoryWorkspaceRecovery } from '../src/recovery/workspace-tree.ts'
-const stageFault = vi.hoisted(() => ({ abort: undefined as AbortController | undefined }))
+const stageFault = vi.hoisted(() => ({ abort: undefined as AbortController | undefined, replaceRoot: undefined as string | undefined }))
 vi.mock('node:fs/promises', async importOriginal => {
   const real = await importOriginal<typeof import('node:fs/promises')>()
-  return { ...real, async copyFile(...args: Parameters<typeof real.copyFile>) {
+  return { ...real, async lstat(...args: Parameters<typeof real.lstat>) {
+    const result = await real.lstat(...args)
+    if (stageFault.replaceRoot === args[0]) {
+      const root = stageFault.replaceRoot; stageFault.replaceRoot = undefined
+      await real.rename(root, root + '-retired'); await real.mkdir(root, { mode: 0o700 })
+      await real.writeFile(join(root, 'replacement.txt'), 'replacement content')
+    }
+    return result
+  }, async copyFile(...args: Parameters<typeof real.copyFile>) {
     await real.copyFile(...args)
     const abort = stageFault.abort; stageFault.abort = undefined; abort?.abort()
   } }
@@ -239,4 +247,17 @@ it('refuses changed candidate metadata, exposed modes and replaced workspace roo
     await expect(inspect()).rejects.toThrow('root was replaced')
     expect(await readFile(join(staged.path, 'hold.json'))).toEqual(hold)
   } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+
+it('refuses a root replaced after initial identity capture instead of binding replacement bytes to the old inode', async () => {
+  const directory = await realpath(await mkdtemp(join(tmpdir(), 'recovery-root-race-'))), source = join(directory, 'source')
+  try {
+    await mkdir(source, { mode: 0o700 }); await writeFile(join(source, 'original.txt'), 'original content')
+    stageFault.replaceRoot = source
+    await expect(captureWorkspaceRecovery(source, join(directory, 'archive'), budget)).rejects.toThrow('root changed before inventory')
+    await expect(readFile(join(directory, 'archive/manifest.json'))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await readFile(join(source, 'replacement.txt'), 'utf8')).toBe('replacement content')
+    expect(await readFile(join(source + '-retired', 'original.txt'), 'utf8')).toBe('original content')
+  } finally { stageFault.replaceRoot = undefined; await rm(directory, { recursive: true, force: true }) }
 })

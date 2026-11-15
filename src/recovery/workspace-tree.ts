@@ -31,6 +31,7 @@ export async function inventoryWorkspaceRecovery(source: string, input: z.input<
     signal.throwIfAborted()
     const path = relative ? join(root, relative) : root, before = await lstat(path)
     if (relative.length > 4096 || relative.includes('\0')) throw new Error('Recovery workspace path is not representable')
+    if (!relative && identity(before) !== identity(initial)) throw new Error('Recovery workspace root changed before inventory')
     const entry = { path: relative || '.', mode: before.mode & 0o7777, uid: before.uid, gid: before.gid }
     witnesses.push({ path, identity: identity(before) })
     if (before.isSymbolicLink()) {
