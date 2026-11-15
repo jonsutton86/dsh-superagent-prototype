@@ -1,0 +1,47 @@
+{
+  "status": "incomplete",
+  "baseRevision": "e70e4d7433e094c842d1ad2a6f357faee331d28f",
+  "sourceSha256": {
+    "docs/080-worker-recovery.md": "a80597e9daaccc7c9ab375bdfa8ff8fe4ab2a6d945523628fdee80943f0fa679",
+    "src/app/router-authority.ts": "3ba026741f4f6d304565077fd2466768da21edbc5dad96de7a538e140362c75e",
+    "src/app/sessions.ts": "8c01e149ce563f39901fe7bbd7744e81b97d12c2642981baef06a21a1ea80995",
+    "src/executor/dsh.ts": "b9264524df84e68e640492d0123a52b7a49566181682a1c46ead065b9cd47bbc",
+    "src/executor/failure.ts": "cb1e0b0d05474fe265c1044b21b6b06495718f587faf0eee2d552e0c59b6e267",
+    "src/executor/stops.ts": "ca20888677c9b5b51d962445b798880bac31f395e311660b25d9e2e1b83b4bbb",
+    "src/personas/runtime.ts": "ad0ff124fdc78bbc193cddde13e8ec420d5ca545fd19c70eafa251ef31c008ec",
+    "src/supervision/evaluation-cases.ts": "5c7194ea877e952f30e09e3087bdb70f1ee0760c4a1fa79eeab6b90e797c3a78",
+    "src/supervision/execution-evidence-view.tsx": "4356a749e216870a681ee61737e2330dfbad024fe7c242c4e41d2345dda9fc31",
+    "src/supervision/execution-evidence.ts": "6e57f63de74960754d52f621538c7e746a7eb8557a7031f6e3e4311b987d2f94",
+    "tests/execution-evidence.spec.ts": "ebd497cd9d17939cd4a99e61cefc8d23ddbb489fd9e29d460847dfef2af77d7a",
+    "tests/executor-failure.spec.ts": "7afdceaa1aa0d36c23a1a60504105a42e1b2b566e46041c5b65064badb9fd216",
+    "tests/executor-stop.spec.ts": "2d3cb95d2ce488f4e755352577a5676ae9f59d5f9d95882cfc323900dcf26a5e",
+    "tests/fixtures/host.ts": "5aa55d951b1f4460677cc9477782a2e2f46471c85dab966bea8e67d484bf52e4",
+    "tests/model-surface.spec.ts": "5d7dba485a9c0ee8228e21b7f392a6222c57a6890118fc1b4536be67e61bbda3",
+    "tests/personas-runtime.spec.ts": "2a27f2c4024192c79a5c6e00adc53e590180f93dc6b282b870f6cbe950ed40a7",
+    "tests/router-authority.spec.ts": "36f5bbb8da1ebf74bbd59799584365af1c780b2ccb424f094ce0c94ad38eb5e7",
+    "tests/runtime-concurrency.spec.ts": "261b63afffdb4ffcd50d4fa7d2ad83446ee6ca463689426ae28358ff3edb2de8",
+    "tests/runtime.spec.ts": "cf74ecb4412296b93a58511362cbab7f77b4e6d1ccb866df169efb480141f9a8",
+    "tests/watchdog-ui.spec.tsx": "913a604b6a3a63e8c9928dca1ecc0648d48e2077cad37b132615106d34f41fce",
+    "src/app/tool-authority.ts": "5868d6bbc948f7d4b423c36e69ff81774b179e0666a7eace256fd7f5113132cc",
+    "docs/coordinator-worker-continuity.md": "911fec8d3adbae4af0fa15deff606a66b66a0835ff1d4b28f730089983e35bfa"
+  },
+  "baseline": {
+    "passed": 199,
+    "failed": 15,
+    "scope": "9 focused suites; runtime and concurrency failures remain"
+  },
+  "repair": {
+    "command": "env -u GIT_CONFIG_GLOBAL ./node_modules/.bin/vitest run tests/runtime.spec.ts -t 'execution environment through|prompt version it works|team text with template braces'",
+    "exitCode": 0,
+    "passed": 3,
+    "deselected": 91,
+    "logSha256": "635d7dc64ce83b4e5ef7b40fd57308f7ffefabd53ca866cabda90301fab8fa97"
+  },
+  "typecheck": {
+    "command": "./node_modules/.bin/tsc --noEmit",
+    "exitCode": 0
+  },
+  "next": "Diagnose the remaining runtime and concurrency failures with focused tests; do not infer a green full suite from this receipt.",
+  "deployment": "unchanged",
+  "testingPolicy": "Focused affected suites during iteration; final platform qualification once."
+}

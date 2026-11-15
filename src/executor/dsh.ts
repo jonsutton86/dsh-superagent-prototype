@@ -26,7 +26,7 @@ import type { SpeculationRun } from '../speculation/model.ts'
 import { cancelled, collectJob, runningJobs, until, untilQuiet } from './background.ts'
 import { collectExecutionEvidence, type ExecutionEvidenceInput } from './evidence.ts'
 import { EXECUTION_EVIDENCE_LIMIT, emptyRemoteExecutionEvidence, unavailableExecutionEvidence, type ExecutionEvidence } from '../supervision/execution-evidence.ts'
-import { safeLaunchFailure, safeWorkerFailure, WorkerFailureFence } from './failure.ts'
+import { safeLaunchFailure, safeWorkerFailure, WorkerFailureFence, type SafeWorkerFailure } from './failure.ts'
 import { automaticRestartBudget, isAutomaticRestartInput } from '../core/recovery.ts'
 import { ExecutorStops } from './stops.ts'
 import { admissionTrace } from '../infra/admission-trace.ts'
@@ -40,6 +40,15 @@ export const ticketOfSession = (sessionId: string): string | undefined => sessio
 const PREPARE_TIMEOUT_MS = 10 * 60_000
 /** Completed failure retries for a pending launch; interrupted dispatches are held separately, never automatically replayed. */
 const LAUNCH_RETRIES = 3
+/**
+ * Bounded worker-turn retries for rate-limit (429) failures. The Harness request-retry policy does not cover the provider's
+ * rate-limit code, so a terminal `agent/error` for `RATE_LIMIT` gets these retries instead of an immediate failed hold.
+ */
+const RATE_LIMIT_RETRIES = 3
+/** Initial exponential backoff for a rate-limit turn retry, and the ceiling for any provider Retry-After or backoff. */
+const RATE_LIMIT_BACKOFF_MS = 15_000, RATE_LIMIT_BACKOFF_MAX_MS = 300_000
+/** How long a rate-limit retry waits for a worker slot, or for processing to resume, between looks. */
+const RATE_LIMIT_SLOT_WAIT_MS = 5000
 /** How long a worker's background work may run on after its turn ended before it is stopped and the worker reported waiting. */
 const BACKGROUND_LIMIT_MS = 30 * 60_000
 /** How long a host stop waits for the workers' background work to stop. */
@@ -234,6 +243,12 @@ export class DshExecutor implements Executor {
   private readonly left = new Map<string, { jobs: Set<string>; collect: AbortController }>()
   /** When a person's message typed into a worker's Session last started a turn, by ticket. */
   private readonly personal = new Map<string, string>()
+  /** Consecutive rate-limit failures awaiting retry, by assignment; a turn that ends normally clears its count. */
+  private readonly rateLimitRetries = new Map<string, number>()
+  /** Assignments whose worker-turn rate-limit retry is pending or being delivered. */
+  private readonly resuming = new Set<string>()
+  /** Rate-limit retry backoff timers, cleared on disposal. */
+  private readonly timers = new Set<ReturnType<typeof setTimeout>>()
   /** Registers the `launch` and `delivery` effect handlers; both are held (concurrency limit 0) while processing is paused. */
   constructor(private readonly host: ExecutorHost) {
     this.stops = new ExecutorStops({ store: host.store, context: host.context, effects: host.effects, signal: host.lifetime,
@@ -590,9 +605,10 @@ export class DshExecutor implements Executor {
       agents: { get: id => this.host.context.agents.get(id as SessionId), list: () => this.host.context.agents.list() },
       jobs: () => this.host.context.get('jobs') as ReturnType<ExecutionEvidenceInput['jobs']>,
       handedOff: this.left.get(ticket.id)?.jobs ?? new Set<string>(),
-      executor: { availability: 'available', provenance: 'process-and-durable-queue', retrying: false,
-        turnRetryAttempts: 0, launchRetryAttempts: cap(assignmentId ? this.host.effects.retryState('launch', assignmentId)?.attempts ?? 0 : 0),
-        recovery: { providerRetryOwner: 'harness', terminalTurnRetries: 0, launchRetryLimit: LAUNCH_RETRIES,
+      executor: { availability: 'available', provenance: 'process-and-durable-queue', retrying: assignmentId !== null && this.resuming.has(assignmentId),
+        turnRetryAttempts: cap(assignmentId ? this.rateLimitRetries.get(assignmentId) ?? 0 : 0),
+        launchRetryAttempts: cap(assignmentId ? this.host.effects.retryState('launch', assignmentId)?.attempts ?? 0 : 0),
+        recovery: { providerRetryOwner: 'harness', terminalTurnRetries: RATE_LIMIT_RETRIES, launchRetryLimit: LAUNCH_RETRIES,
           hostRestart: { ...automaticRestartBudget(current), limit: 3 } },
         settling: this.settling.has(ticket.id), preparing: this.preparingRepositories.has(ticket.id), stopping: this.stopping.has(ticket.id),
         knownHandedOffJobs: this.left.get(ticket.id)?.jobs.size ?? 0 },
@@ -789,8 +805,11 @@ export class DshExecutor implements Executor {
       const ticket = this.ticketOf(agent), assignment = ticket && runningAssignment(ticket)
       if (!ticket || !assignment || !liveTicket(ticket) || this.stops.problem(ticket.id) || !this.stops.turnAllowed(agent, assignment.id, turn)
         || !this.failures.consumeTerminal(agent, agent.session, assignment.id, turn, step)) return
-      // Harness owns request retries. A terminal error records a human-visible hold; it never creates another model turn.
-      try { this.failed(ticket.id, safeWorkerFailure(error).summary) }
+      const failure = safeWorkerFailure(error)
+      // Harness owns ordinary request retries, but its provider policy does not cover rate-limit (429) responses. Retryable
+      // rate-limit failures get bounded worker-turn retries honoring the provider's Retry-After or exponential backoff.
+      if (failure.code === 'RATE_LIMIT' && failure.retryable && this.retryRateLimit(ticket.id, assignment.id, failure)) return
+      try { this.failed(ticket.id, failure.summary) }
       catch { this.host.health.set({ state: 'error', detail: 'Worker failure could not be recorded', at: now() }) }
     }))
   }
@@ -798,6 +817,8 @@ export class DshExecutor implements Executor {
   dispose(): void {
     for (const dispose of this.disposers.splice(0)) dispose()
     this.failures.clear()
+    for (const timer of this.timers) clearTimeout(timer)
+    this.timers.clear(); this.resuming.clear(); this.rateLimitRetries.clear()
   }
   /**
    * Reconciles running and pending assignments across open tickets after a host restart: notifies Engine of interrupted
@@ -854,9 +875,52 @@ export class DshExecutor implements Executor {
       }))
     }
   }
+  /** Schedules `then` after `ms` milliseconds, tracked for disposal. */
+  private after(ms: number, then: () => void): void {
+    const timer = setTimeout(() => { this.timers.delete(timer); then() }, ms)
+    timer.unref?.()
+    this.timers.add(timer)
+  }
+  /** Backoff for a rate-limit retry: the provider's Retry-After hint when present, otherwise exponential backoff, capped. */
+  private rateLimitDelay(failure: SafeWorkerFailure, attempt: number): number {
+    const base = typeof failure.retryAfterMs === 'number' ? failure.retryAfterMs : RATE_LIMIT_BACKOFF_MS * 2 ** (attempt - 1)
+    return Math.max(0, Math.min(RATE_LIMIT_BACKOFF_MAX_MS, base))
+  }
+  /** Schedules a bounded worker-turn retry for a rate-limit failure; returns false when retries are exhausted. */
+  private retryRateLimit(ticketId: string, assignmentId: string, failure: SafeWorkerFailure): boolean {
+    const tries = this.rateLimitRetries.get(assignmentId) ?? 0
+    if (tries >= RATE_LIMIT_RETRIES) { this.rateLimitRetries.delete(assignmentId); this.resuming.delete(assignmentId); return false }
+    this.rateLimitRetries.set(assignmentId, tries + 1)
+    this.resuming.add(assignmentId)
+    const attempt = tries + 1
+    this.after(this.rateLimitDelay(failure, attempt), () => this.resumeRateLimitedTurn(ticketId, assignmentId, attempt))
+    return true
+  }
+  /** After the backoff, wakes the worker to continue its assignment, unless its ticket/assignment moved on meanwhile. */
+  private resumeRateLimitedTurn(ticketId: string, assignmentId: string, attempt: number): void {
+    if (this.host.closing()) { this.resuming.delete(assignmentId); return }
+    const ticket = this.host.store.tickets.get(ticketId)
+    if (!ticket || !liveTicket(ticket) || runningAssignment(ticket)?.id !== assignmentId) { this.resuming.delete(assignmentId); return }
+    if (this.host.paused()) { this.after(RATE_LIMIT_SLOT_WAIT_MS, () => this.resumeRateLimitedTurn(ticketId, assignmentId, attempt)); return }
+    const sessionId = workerSessionId(ticketId)
+    const waking = !this.running(ticket)
+    try { if (waking) this.slots.reserve(ticketId, 'wake') }
+    catch (error) {
+      if (!(error instanceof Later)) throw error
+      this.after(RATE_LIMIT_SLOT_WAIT_MS, () => this.resumeRateLimitedTurn(ticketId, assignmentId, attempt)); return
+    }
+    const text = 'Your last turn failed with a rate limit. Continue the assignment where it stopped.'
+    const sent = this.host.sessions.prompt(sessionId, `retry:${assignmentId}:${attempt}`, text, 'queue')
+    void this.background(sent.finally(() => { if (waking) this.slots.free(ticketId); this.resuming.delete(assignmentId) })
+      .catch((error: unknown) => { this.failed(ticketId, String(error)) }))
+  }
   private async workerIdle(ticket: Ticket, idle: Assignment, agent: Agent): Promise<void> {
     await agent.whenIdle()
     if (this.host.context.agents.get(agent.id) !== agent || agent.status !== 'idle') return
+    // A rate-limit retry is pending; the worker resumes on its own after the backoff, which is not an end of its turn.
+    if (this.resuming.has(idle.id)) return
+    // A turn that ended normally clears any consecutive rate-limit failures.
+    this.rateLimitRetries.delete(idle.id)
     // The ticket while the Assignment that went idle runs it.
     const live = () => {
       const stored = this.host.store.tickets.get(ticket.id)

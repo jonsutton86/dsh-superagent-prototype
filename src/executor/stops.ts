@@ -17,7 +17,7 @@ export { stopHolds } from './stop-store.ts'
 
 /** Cordis wraps a tracked service in a new proxy on every read. Identity is the unwrapped service. */
 const serviceIdentity = (value: unknown): unknown => {
-  if (!value || typeof value !== 'object') return value
+  if (!value || (typeof value !== 'object' && typeof value !== 'function')) return value
   const inner = (value as Record<symbol, unknown>)[Symbol.for('cordis.original')]
   return inner === undefined ? value : inner
 }
@@ -68,6 +68,25 @@ export class ExecutorStops {
       ? { jobs: agent.ctx.get('jobs'), children: agent.ctx.get('subagents') }
       : { jobs: this.host.context.get('jobs'), children: this.host.context.get('subagents') }
   }
+  /** Proxy reads may differ, but the admitted worker, Session and underlying registries must not change. */
+  private bindingCurrent(binding: Binding): boolean {
+    const { agent } = binding, services = this.services(agent)
+    return binding.session === agent.session && this.host.context.agents.get(agent.id) === agent
+      && serviceIdentity(binding.jobs) === serviceIdentity(services.jobs)
+      && serviceIdentity(binding.children) === serviceIdentity(services.children)
+  }
+  /** Observe the original registries when bound, never a replacement's empty view. */
+  private registries(record: StopRecord): { jobs: unknown; children: unknown } {
+    const binding = this.bindings.get(record.id)
+    if (binding) return binding
+    const agent = this.host.context.agents.get(record.sessionId as SessionId)
+    return agent ? this.services(agent) : { jobs: this.host.context.get('jobs'), children: this.host.context.get('subagents') }
+  }
+  /** killJobs only reads `get('jobs')`; pin it to the same original service used for observation. */
+  private killOriginalJobs(record: StopRecord, reason: string, except?: ReadonlySet<string>): Promise<void> {
+    const jobs = this.bindings.get(record.id)?.jobs
+    return killJobs({ get: () => jobs } as unknown as Context, record.sessionId, reason, except)
+  }
   /** Called at the original worker delivery boundary, never merely when a Session is loaded. */
   admitted(agent: Agent, assignmentId: string): void {
     const ticketId = agent.id.startsWith('worker-') ? agent.id.slice(7) : undefined
@@ -96,13 +115,7 @@ export class ExecutorStops {
   owns(agent: Agent | undefined, assignmentId: string): boolean {
     if (!agent) return false
     const admitted = admissions.get(agent)
-    // Compare the worker's own job and subagent services. The host context resolves a different pair, so a host lookup
-    // never matches the services recorded when the worker was admitted.
-    const services = this.services(agent)
-    return !!admitted && admitted.assignmentId === assignmentId && admitted.session === agent.session
-      && serviceIdentity(admitted.jobs) === serviceIdentity(services.jobs)
-      && serviceIdentity(admitted.children) === serviceIdentity(services.children)
-      && this.host.context.agents.get(agent.id) === agent
+    return !!admitted && admitted.assignmentId === assignmentId && this.bindingCurrent(admitted)
   }
   executionAllowed(agent: Agent, assignmentId: string): boolean {
     const bound = turns.get(agent)
@@ -140,6 +153,8 @@ export class ExecutorStops {
       if (assignment && (assignment.state === 'running' || this.host.store.db.prepare("SELECT 1 FROM effect WHERE kind='launch' AND key=? AND launch_started=1").get(assignment.id)))
         this.request(ticket, assignment, { keepInbox: true })
     }
+    // An ended assignment and an unloaded Session do not prove its original OS jobs or descendants stopped.
+    // A never-dispatched retry cannot release an earlier unknown stop; retain original-bound evidence requirements.
     // An interrupted operator validation never becomes accepted by absence. Preserve its original request and explicit refusal.
     for (const row of this.host.store.db.prepare("SELECT id,value FROM executor_stop_control WHERE json_extract(value,'$.phase')='pending'").iterate()) {
       const receipt = StopAttestationReceiptSchema.parse(JSON.parse(String(row.value)))
@@ -216,24 +231,23 @@ export class ExecutorStops {
       coverageConsumed: false, proof: null, settledAt: null, attestationId: null }
     record.world = world; record.executionBindingHash = stopExecutionDigest(execution, world); record.scopeHash = stopScopeDigest(record)
     const launch = this.host.store.db.prepare("SELECT launch_started,attempts FROM effect WHERE kind='launch' AND key=?").get(assignment.id)
+    // A stop for an assignment that never crossed worker dispatch has no original work to protect, whether it is the
+    // ticket's first assignment or a later retry; prior assignments' held stops still block the shared Session through `problem`.
     const undispatched = owned && scope === 'all' && !assignment.startedAt && !assignment.deliveredAt && !assignment.report && !agent
-      && ticket.assignments.length === 1 && launch?.launch_started === 0 && launch.attempts === 0
+      && launch?.launch_started === 0 && launch.attempts === 0
     if (undispatched) Object.assign(record, { state: 'quiet', proof: 'undispatched', settledAt: NOW(), reason: 'Original assignment never crossed worker dispatch' })
     this.host.store.atomic(() => {
       saveStop(this.host.store.db, record)
       if (stopHeld(record)) this.host.effects.ensure('stop', record.id, { stopId: record.id })
       const admission = agent && admissions.get(agent)
-      if (owned && admission?.assignmentId === assignment.id && admission.session === agent!.session
-        && admission.jobs === this.host.context.get('jobs') && admission.children === this.host.context.get('subagents')) this.bindings.set(record.id, admission)
+      if (owned && admission?.assignmentId === assignment.id && this.bindingCurrent(admission)) this.bindings.set(record.id, admission)
       this.host.store.afterCommit(() => { if (stopHeld(record)) void this.run(record.id).catch(() => {}) })
     })
     return record.id
   }
   private continuous(record: StopRecord): boolean {
     const binding = this.bindings.get(record.id)
-    return record.instance === this.instance && !!binding && binding.jobs === this.host.context.get('jobs')
-      && binding.children === this.host.context.get('subagents') && binding.agent === this.host.context.agents.get(record.sessionId as SessionId)
-      && binding.session === binding.agent.session
+    return record.instance === this.instance && !!binding && binding.agent.id === record.sessionId && this.bindingCurrent(binding)
   }
   private ownerCurrent(record: StopRecord): boolean {
     const ticket = this.host.store.tickets.get(record.ticketId), latest = ticket?.assignments.at(-1)
@@ -244,7 +258,7 @@ export class ExecutorStops {
     return !!agent && !!unsettledDrains.get(agent)?.size
   }
   private async drain(record: StopRecord): Promise<void> {
-    const agent = this.bindings.get(record.id)?.agent, children = this.host.context.get('subagents') as Children | undefined
+    const binding = this.bindings.get(record.id), agent = binding?.agent, children = binding?.children as Children | undefined
     if (!agent || !children) return
     const targets = record.sessions.filter(id => id !== record.sessionId && this.host.context.agents.get(id as SessionId))
     if (!targets.length) return
@@ -262,7 +276,8 @@ export class ExecutorStops {
     }
   }
   private async inspect(record: StopRecord, operatorEvidence = false): Promise<{ sessions: string[]; jobs: string[]; busy: boolean }> {
-    const ctx = this.host.context, service = ctx.get('jobs') as Jobs | undefined, children = ctx.get('subagents') as Children | undefined
+    const ctx = this.host.context, registries = this.registries(record)
+    const service = registries.jobs as Jobs | undefined, children = registries.children as Children | undefined
     const sessions = new Set(record.sessions), queue = [...record.sessions], deadline = AbortSignal.timeout(4000)
     const visited = new Set<string>()
     while (queue.length) {
@@ -337,16 +352,17 @@ export class ExecutorStops {
           const agent = this.bindings.get(id)?.agent
           if (record.scope === 'all' || record.scope === 'legacy') {
             if (!record.ownTurn) agent?.cancel({ kind: 'user' }, { keepInbox: record.keepInbox })
-            await until(killJobs(this.host.context, record.sessionId, 'Original assignment stopping'), undefined, 11000)
+            if (!this.continuous(record) || !this.ownerCurrent(record)) throw new Error('Original owner changed')
+            await until(this.killOriginalJobs(record, 'Original assignment stopping'), undefined, 11000)
             if (!this.continuous(record) || !this.ownerCurrent(record)) throw new Error('Original owner changed')
             await this.drain(record)
             if (!record.ownTurn && agent?.status !== 'idle') await until(agent!.whenIdle(), undefined, 10000)
           } else if (record.scope === 'descendants') {
             await this.drain(record)
           } else {
-            const service = this.host.context.get('jobs') as Jobs | undefined
+            const service = this.registries(record).jobs as Jobs | undefined
             const except = new Set((service?.list(record.sessionId) ?? []).filter(job => !record.jobIds.includes(job.id)).map(job => job.id))
-            await killJobs(this.host.context, record.sessionId, 'Background duration limit reached', except)
+            await this.killOriginalJobs(record, 'Background duration limit reached', except)
           }
         } catch { this.update(record, { state: 'unknown', reason: 'Original cancellation outcome is unconfirmed' }) }
       }

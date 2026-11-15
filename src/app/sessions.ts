@@ -30,6 +30,7 @@ import type { WorldPool } from '../environments/pool.ts'
 import type { OwnershipAccess } from '../ownership/protocol.ts'
 import { ownershipReady } from '../ownership/runtime.ts'
 import { RouterAuthority, ROUTER_CHILD } from './router-authority.ts'
+import { toolAuthority } from './tool-authority.ts'
 import type { Attachments } from '../attachments/service.ts'
 
 /** Host dependencies used by `Sessions`. */
@@ -460,7 +461,7 @@ export class Sessions {
     let parent = agent.session.header.parentSession
     const denyRouterChild = () => {
       this.host.store.set(KV.sessions.routerOwner(agent.id), this.host.masterId)
-      this.bindings.set(agent, { subagent: true, disposers: [agent.ctx.tools.guard(() => ROUTER_CHILD)] })
+      this.bindings.set(agent, { subagent: true, disposers: [toolAuthority(agent, () => ROUTER_CHILD)] })
     }
     if (this.host.store.get(KV.sessions.routerOwner(agent.id))) { denyRouterChild(); return }
     const remote = this.remoteFor(agent.id, agent)

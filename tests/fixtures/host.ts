@@ -184,10 +184,13 @@ export async function startRuntime(seed?: (store: Store) => void, options: { exe
   const createAgent = async ({ sessionId, workspaceId, agentPreset }: { sessionId: string; workspaceId?: string; agentPreset?: string }) => {
       if (agents.has(sessionId)) return
       const agentCtx = new Context()
+      // Real Agent scopes inherit registries; independent test contexts must model that explicitly.
+      agentCtx.reflect.provide('jobs', jobs.service)
+      agentCtx.reflect.provide('subagents', subagents.service)
       const sessionTools = new Map<string, RegisteredTool>()
       tools.set(sessionId, sessionTools)
       const register = (tool: RegisteredTool) => { sessionTools.set(tool.name, tool); return () => sessionTools.delete(tool.name) }
-      agentCtx.reflect.provide('tools', { register, get: () => undefined, restrict: vi.fn(() => () => {}), guard: vi.fn(() => () => {}) })
+      agentCtx.reflect.provide('tools', { register, get: () => undefined, presentAs: () => () => {}, restrict: vi.fn(() => () => {}), guard: vi.fn(() => () => {}) })
       agentCtx.reflect.provide('skills', { register: () => () => {} })
       agentCtx.reflect.provide('systemPrompt', { section: () => () => {} })
       const inbox = { nextTurn: [] as UserMessage[], nextStep: [] as UserMessage[],

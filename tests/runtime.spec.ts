@@ -177,13 +177,18 @@ beforeEach(async () => {
           const own = scope === agents.get(sessionId)
           return (scope === preset || own) && inherited.includes(name) || own && name === 'subagent' ? { name } : undefined
         },
+        presentAs: () => () => {},
         restrict: vi.fn((rule: { allow: string[] }) => {
           if (rule.allow.some(name => !inherited.includes(name))) throw new Error('Restriction names a non-inherited tool')
           restricts.set(sessionId, [...restricts.get(sessionId) ?? [], rule]); return () => {}
         }),
         guard: vi.fn((check: Guard) => { guards.set(sessionId, check); return () => {} }) })
       agentCtx.reflect.provide('skills', { register: () => () => {} })
-      agentCtx.reflect.provide('systemPrompt', { section: (spec: Section) => { sections.set(sessionId, spec); return () => {} } })
+      // These assertions inspect the composed policy, not whichever auxiliary guard registered last.
+      agentCtx.reflect.provide('systemPrompt', { section: (spec: Section) => {
+        if (spec.name === 'dsh-superagent-policy') sections.set(sessionId, spec)
+        return () => {}
+      } })
       const inbox = { nextTurn: [] as UserMessage[], nextStep: [] as UserMessage[],
         // A pending message taken out, as DSH's inbox does by its id.
         remove: (id: string) => [inbox.nextTurn, inbox.nextStep].some(list => {
@@ -191,11 +196,18 @@ beforeEach(async () => {
           if (at >= 0) list.splice(at, 1)
           return at >= 0
         }) }
+      agentCtx.reflect.provide('jobs', jobs.service)
       const modelEvents: { type: string; data: unknown }[] = []
+      let turn = 0
       const deliver = (mode: 'queue' | 'steer') => vi.fn((message: UserMessage) => {
         inbox[mode === 'queue' ? 'nextTurn' : 'nextStep'].push(message)
         deliveries({ sessionId, mode, id: message.id, text: message.content.map(block => block.type === 'text' ? block.text : '').join('') })
-        agents.get(sessionId)!.status = 'running'
+        const agent = agents.get(sessionId)!
+        if (agent.status === 'idle') {
+          agent.status = 'running'
+          // Model the native turn boundary rather than granting admission in a test guard.
+          ctx.emit('session/event', (agent as unknown as { session: never }).session, { type: 'turn/start', data: { turn: ++turn } } as never)
+        }
       })
       agents.set(sessionId, { id: sessionId, ctx: agentCtx, inbox, followup: deliver('queue'), steer: deliver('steer'), status: 'idle', inject: vi.fn(), session: { id: sessionId, header: { agentPreset }, snapshotEvents: () => modelEvents, requestHeader: () => undefined, append: vi.fn((type: string, data: unknown) => { modelEvents.push({ type, data }) }) }, cancel: vi.fn(), whenIdle: async () => { agents.get(sessionId)!.status = 'idle' } } as never)
       bindScopeParent(agents.get(sessionId)!, preset)

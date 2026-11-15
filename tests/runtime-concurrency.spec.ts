@@ -204,6 +204,35 @@ it('leaves terminal provider recovery to Harness and records a sanitized failure
   expect(h.relays(h.runtime.masterId).filter(item => item.kind === 'worker_report' && item.state === 'failed')).toHaveLength(1)
 })
 
+it('retries a rate-limit failure with backoff instead of failing, then fails once its allowance is spent', async () => {
+  const one = await h.acceptedTicket(feishu('1', '@bot 修一')), agent = h.agents.get(one.sessionId)!
+  const ticket = () => h.runtime.store.tickets.get(one.ticket.id)!
+  const rateLimit = () => Object.assign(new Error('private 429 body'), { code: 'RATE_LIMIT', failure: { code: 'RATE_LIMIT', status: 429 } })
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    h.ctx.emit('agent/error', { agent, turn: 1, step: 1, error: rateLimit() } as never)
+    // No failed hold: the rate-limit retry is pending with its attempt counted.
+    expect(latestAssignment(ticket())?.report).toBeUndefined()
+    expect(h.runtime.executor.executionEvidence(ticket()).executor).toMatchObject({ retrying: true, turnRetryAttempts: 1 })
+    await vi.advanceTimersByTimeAsync(20_000)
+  } finally { vi.useRealTimers() }
+  await vi.waitFor(() => {
+    const wake = h.deliveries.mock.calls.map(([call]) => call).find(call => call.sessionId === one.sessionId && call.text.includes('rate limit'))
+    expect(wake).toMatchObject({ mode: 'queue', text: expect.stringContaining('rate limit') })
+  })
+  expect(latestAssignment(ticket())?.report).toBeUndefined()
+  // Three retries are allowed; the fourth rate-limit failure records the terminal hold.
+  for (let turn = 2; turn <= 4; turn++) {
+    h.ctx.emit('session/event', (agent as any).session, { type: 'turn/start', data: { turn } } as never)
+    await h.ctx.waterfall('agent/request', { agent, turn, step: 1, signal: new AbortController().signal } as never, async () => ({} as never))
+    h.ctx.emit('agent/error', { agent, turn, step: 1, error: rateLimit() } as never)
+    if (turn < 4) expect(latestAssignment(ticket())?.report).toBeUndefined()
+  }
+  await h.runtime.idle()
+  expect(latestAssignment(ticket())?.report).toMatchObject({ state: 'failed' })
+  expect(h.runtime.executor.executionEvidence(ticket()).executor).toMatchObject({ retrying: false, turnRetryAttempts: 0 })
+})
+
 it('ignores terminal errors from a retired Agent or a request whose signal was cancelled', async () => {
   const one = await h.acceptedTicket(feishu('1', '@bot 修一')), agent = h.agents.get(one.sessionId)!
   const replacement = { ...agent }
@@ -324,6 +353,22 @@ describe('a worker whose work runs in the background', () => {
     expect(latestAssignment(h.runtime.store.tickets.get(one.ticket.id)!)?.report).toMatchObject({ state: report.state })
     return one
   }
+  it('delivers authorized continuation inputs after a blocked worker hands off without replacing its assignment', async () => {
+    const one = await h.acceptedTicket(feishu('1', '@bot 修一'))
+    const assignmentId = latestAssignment(h.runtime.store.tickets.get(one.ticket.id)!)!.id
+    await h.runTool(one.sessionId, 'orchestrator_report', { state: 'blocked', summary: 'Needs authorization to continue' })
+    idle(one.sessionId); await h.runtime.idle()
+    await vi.waitFor(() => expect(h.runtime.executor.stops.problem(one.ticket.id)).toBeUndefined())
+    const continuation = feishu('2', 'Authorized: continue the scoped repair', { mentions: [], root_id: 'om_1' })
+    await h.runtime.receive(continuation); await h.runtime.idle()
+    await vi.waitFor(() => expect(h.runtime.store.tickets.get(one.ticket.id)!.undelivered).toEqual([]))
+    const current = h.runtime.store.tickets.get(one.ticket.id)!
+    expect(current.assignments).toHaveLength(1)
+    expect(latestAssignment(current)!.id).toBe(assignmentId)
+    expect(current.inputs).toContainEqual(expect.objectContaining({ kind: 'trigger', triggerId: continuation.id, deliveredTo: assignmentId }))
+    expect(h.relays(one.sessionId)).toContainEqual(expect.objectContaining({ trigger_id: continuation.id }))
+  })
+
   it('frees the slot of a worker that reports blocked, stopping its subagents and leaving its jobs, whose end wakes no one', async () => {
     await handsOff({ state: 'blocked', summary: 'Which color?' })
   })

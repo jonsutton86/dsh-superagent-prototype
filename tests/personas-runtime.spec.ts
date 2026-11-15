@@ -37,6 +37,8 @@ it('uses Harness scoped prompts, skill registries and monotonic guards without a
     ctx.on('tools/pre-execute', async () => ({ kind: 'allow' }))
     agent.ctx.tools.register(defineTool({ name: 'bash', description: 'Local shell', parameters: {},
       output: { schema: { type: 'string' }, render: (_, text) => [{ type: 'text', text }] }, execute }))
+    expect((await ctx.systemPrompt.assemble({ scope: agent })).tools.map(tool => tool.name).sort()).toEqual(['read', 'workspace_publish'])
+    expect((await ctx.systemPrompt.assemble({ scope: other })).tools.map(tool => tool.name)).toContain('bash')
     const call = (name: string, owner = agent) => ctx.tools.execute({ callId: `test-${name}` as never, name, arguments: {}, agent: owner, signal: new AbortController().signal })
     expect(JSON.stringify(await call('bash'))).toContain('commands')
     expect(JSON.stringify(await call('subagent'))).toContain('delegation')

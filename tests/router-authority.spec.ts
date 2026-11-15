@@ -11,9 +11,9 @@ import { jobRegistry } from './fixtures/host.ts'
 
 const contexts: Context[] = []
 afterEach(async () => { for (const ctx of contexts.splice(0)) await ctx.fiber.dispose() })
-async function fixture() {
+async function fixture(mode: 'native' | 'ptc' = 'native') {
   const root = new Context(); contexts.push(root)
-  await root.plugin(SystemPrompt); await root.plugin(Tools)
+  await root.plugin(SystemPrompt); await root.plugin(Tools, { mode })
   const agents = new Map<string, Agent>(), values = new Map<string, unknown>(), jobs = jobRegistry()
   root.reflect.provide('agents', agents); root.reflect.provide('jobs', jobs.service)
   let ctx!: Context
@@ -44,6 +44,34 @@ it('blocks inherited and late agent-local execution through real Harness guards 
   expect(h.execute).toHaveBeenCalledTimes(3)
 })
 
+it('advertises only coordinator-authorized tools after late local registration, without masking workers', async () => {
+  const h = await fixture()
+  await h.authority.prepare()
+  for (const name of ['bash', 'read', 'subagent', 'spawn_teammate', 'plugin_manager']) h.register(name, h.agent.ctx)
+  // A provider may contribute a schema outside the registry; it still cannot advertise router execution authority.
+  h.agent.ctx.systemPrompt.tools(() => ({ schemas: [{ name: 'arbitrary_plugin', description: 'not authorized', parameters: {} }] }))
+  const assembled = await h.ctx.systemPrompt.assemble({ scope: h.agent })
+  expect(assembled.tools.map(tool => tool.name).sort()).toEqual(['orchestrator_read', 'skill'])
+  const worker = await h.ctx.systemPrompt.assemble({ scope: h.worker })
+  expect(worker.tools.map(tool => tool.name)).toContain('bash')
+  expect(worker.tools.map(tool => tool.name)).not.toContain('orchestrator_read')
+  for (const name of ['spawn_teammate', 'plugin_manager', 'arbitrary_plugin'])
+    expect(JSON.stringify(await h.call(name))).toContain('routing authority only')
+  expect(h.execute).not.toHaveBeenCalled()
+})
+
+it('does not embed denied tool schemas in PTC presentation or change unrelated workers', async () => {
+  const h = await fixture('ptc')
+  await h.authority.prepare()
+  h.register('spawn_teammate', h.agent.ctx)
+  const router = await h.ctx.systemPrompt.assemble({ scope: h.agent })
+  expect(router.tools.map(tool => tool.name).sort()).toEqual(['orchestrator_read', 'skill'])
+  // This fixture deliberately has no PTC runtime: the unrelated worker still requires one,
+  // proving that the coordinator's native override did not change its presentation mode.
+  await expect(h.ctx.systemPrompt.assemble({ scope: h.worker })).rejects.toThrow('requires a PTC runtime')
+  expect(JSON.stringify(await h.call('spawn_teammate'))).toContain('routing authority only')
+})
+
 it('uses the Harness creation barrier without waiting for its own serial initialization listener', async () => {
   const h = await fixture(), idle = vi.spyOn(h.agent, 'whenIdle').mockImplementation(async () => { throw new Error('Creation cannot wait for itself') })
   await h.authority.prepare(true)
@@ -61,6 +89,7 @@ it('retires tracked legacy coordinator jobs and descendants without touching wor
   expect(h.jobs.service.list(h.worker.id)).toMatchObject([{ id: workerJob, status: 'running' }])
   h.register('bash', child.ctx)
   expect(JSON.stringify(await h.call('bash', child))).toContain('Coordinator descendants cannot execute')
+  expect((await h.ctx.systemPrompt.assemble({ scope: child })).tools).toEqual([])
 })
 
 it('holds routing when a kill acknowledgement leaves an original job running', async () => {

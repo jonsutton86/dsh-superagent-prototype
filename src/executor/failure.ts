@@ -1,5 +1,5 @@
 /** Typed failure facts and live request ownership; neither grants permission to retry a worker turn. */
-export interface SafeWorkerFailure { code: string; retryable: boolean; summary: string }
+export interface SafeWorkerFailure { code: string; retryable: boolean; summary: string; retryAfterMs?: number }
 
 const UNKNOWN: Readonly<SafeWorkerFailure> = Object.freeze({ code: 'UNKNOWN', retryable: false,
   summary: 'Worker failed in Harness. Review its provider and execution configuration.' })
@@ -30,7 +30,7 @@ export function safeWorkerFailure(error: unknown): SafeWorkerFailure {
     if (status !== undefined && !httpStatus(status)
       || delay !== undefined && (typeof delay !== 'number' || !Number.isFinite(delay) || delay <= 0)) return { ...UNKNOWN }
     const retryable = (TRANSIENT.has(code) && (status === undefined || transientStatus(status as number))) || code === 'HTTP_408' && status === 408
-    return { code, retryable, summary: code === 'ABORTED' ? 'Harness cancelled the worker request.'
+    return { code, retryable, ...(retryable && typeof delay === 'number' ? { retryAfterMs: delay } : {}), summary: code === 'ABORTED' ? 'Harness cancelled the worker request.'
       : code === 'AUTH' || code === 'INVALID_CREDENTIAL' || code === 'MISSING_CREDENTIAL' ? 'The worker provider rejected its credential configuration.'
         : code === 'QUOTA' || code === 'ACCOUNT_QUOTA' ? 'The worker provider reported an account quota limit.'
           : retryable ? 'The worker provider request failed; Harness ended this turn.' : 'The worker provider request failed. Review its model and execution configuration.' }

@@ -3,6 +3,7 @@ import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-skill'
 import type { PersonaSnapshot } from './model.ts'
+import { toolAuthority } from '../app/tool-authority.ts'
 
 const CAPABILITY_TOOLS = {
   read: ['read', 'read_image', 'glob', 'grep', 'workspace_attachments', 'workspace_attachment_read'], write: ['write', 'edit', 'workspace_attachment_copy'], commands: ['bash', 'pwsh', 'job_output', 'job_list', 'job_kill', 'workspace_attachment_copy'],
@@ -19,7 +20,7 @@ export function personaDenial(persona: PersonaSnapshot, tool: string): string | 
 export async function bindPersona(agent: Agent, persona: PersonaSnapshot): Promise<() => void> {
   const disposers: (() => void)[] = [], { definition } = persona
   try {
-    disposers.push(agent.ctx.tools.guard(execution => personaDenial(persona, execution.name)))
+    disposers.push(toolAuthority(agent, name => personaDenial(persona, name)))
     disposers.push(agent.ctx.systemPrompt.section({ name: 'dsh-superagent-persona', order: 9998, interpolate: false,
       text: `[Persona ${definition.name}, version ${persona.version}, digest ${persona.digest}]\n${definition.instructions}\n`
         + `Allowed optional tool capabilities: ${definition.capabilities.join(', ') || 'none'}. The mission mandate, environment grant and host tool policy still apply.` }))

@@ -4,6 +4,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { Store } from './store.ts'
 import { KV } from '../kv.ts'
 import { killJobs, runningJobs, until } from '../executor/background.ts'
+import { toolAuthority } from './tool-authority.ts'
 
 export const ROUTER_ONLY = 'The coordinator has routing authority only. Use orchestrator_read, orchestrator_eval_read and workspace recall for context; dispatch authorized work to a ticket worker.'
 export const ROUTER_CHILD = 'Coordinator descendants cannot execute work. Start an authorized ticket; worker-local teams remain available.'
@@ -19,8 +20,9 @@ export class RouterAuthority {
     // run_code is Harness's sandboxed tool-composition transport; each nested tool still passes this guard.
     const allowed = new Set(['skill', 'run_code', ...names])
     const restrictions = agent.ctx.tools.restrict({ allow: ['skill'] })
+    const surface = toolAuthority(agent, name => allowed.has(name) ? undefined : ROUTER_ONLY)
     const guard = agent.ctx.tools.guard(execution => !allowed.has(execution.name) ? ROUTER_ONLY : this.ready ? undefined : this.problem)
-    this.dispose = () => { guard(); restrictions() }
+    this.dispose = () => { guard(); surface(); restrictions() }
   }
   assertReady(): void { if (!this.ready) throw new Error(this.problem) }
   /** Retire known legacy router jobs/children before routing resumes; a timeout never proves quiescence. */
@@ -44,7 +46,7 @@ export class RouterAuthority {
           seen.add(child.id); owners.push(child.id)
           this.store.set(KV.sessions.routerOwner(child.id), this.agent.id)
           const agent = this.ctx.agents.get(child.id as SessionId)
-          if (agent) { agent.ctx.effect(() => agent.ctx.tools.guard(() => ROUTER_CHILD)); agent.cancel({ kind: 'user' }, { keepInbox: true }) }
+          if (agent) { agent.ctx.effect(() => toolAuthority(agent, () => ROUTER_CHILD)); agent.cancel({ kind: 'user' }, { keepInbox: true }) }
         }
       }
       signal.throwIfAborted()

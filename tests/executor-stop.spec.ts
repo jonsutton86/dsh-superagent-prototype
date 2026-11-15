@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { afterEach, expect, it, vi } from 'vitest'
 import { Store } from '../src/app/store.ts'
@@ -12,9 +12,12 @@ import { ExecutorStops } from '../src/executor/stops.ts'
 import { readStop, stopDigest, stopExecutionDigest, stopScopeDigest, validateStopAuthority } from '../src/executor/stop-store.ts'
 import { KV } from '../src/kv.ts'
 
-const cleanup: (() => void)[] = []
-afterEach(() => { for (const close of cleanup.splice(0).reverse()) close() })
-function fixture(admitted = true) {
+const cleanup: (() => void | Promise<void>)[] = []
+afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close() })
+class StopRegistry extends Service {
+  constructor(ctx: Context, name: string, api: object) { super(ctx, name); Object.assign(this, api) }
+}
+function fixture(admitted = true, scoped = false) {
   const root = mkdtempSync(join(tmpdir(), 'agentic-stop-')), path = join(root, 'state.sqlite')
   const store = new Store(path), effects = new Effects(store, new HealthBoard())
   cleanup.push(() => { store.close(); rmSync(root, { recursive: true, force: true }) })
@@ -28,7 +31,18 @@ function fixture(admitted = true) {
   const jobs = { list: vi.fn((owner: string) => rows.filter(row => row.owner === owner)), kill: vi.fn(),
     wait: vi.fn(async (id: string) => ({ status: rows.find(row => row.id === id)?.status ?? 'missing' })) }
   const children = { listChildren: vi.fn(async (_owner: string): Promise<{ id: string }[]> => []), drainChildren: vi.fn(async () => {}) }
-  const context = { agents, get: (name: string) => name === 'jobs' ? jobs : name === 'subagents' ? children : undefined } as unknown as Context
+  const hostJobs = { list: vi.fn(() => []), kill: vi.fn(), wait: vi.fn(async () => ({ status: 'missing' })) }
+  const hostChildren = { listChildren: vi.fn(async () => []), drainChildren: vi.fn(async () => {}) }
+  const workerContext = scoped ? new Context() : undefined
+  let context: Context
+  if (workerContext) {
+    context = new Context()
+    cleanup.push(() => context.fiber.dispose(), () => workerContext.fiber.dispose())
+    context.reflect.provide('agents', agents)
+    new StopRegistry(context, 'jobs', hostJobs); new StopRegistry(context, 'subagents', hostChildren)
+    new StopRegistry(workerContext, 'jobs', jobs); new StopRegistry(workerContext, 'subagents', children)
+    Object.assign(agent, { ctx: workerContext })
+  } else context = { agents, get: (name: string) => name === 'jobs' ? jobs : name === 'subagents' ? children : undefined } as unknown as Context
   let lost = false, closing = false
   const host = { store, context, effects, signal: new AbortController().signal, remote: () => undefined,
     authorize: () => { if (closing || lost) throw new Error('unavailable') }, authorizeObservation: () => { if (lost) throw new Error('unavailable') }, closing: () => closing }
@@ -40,9 +54,91 @@ function fixture(admitted = true) {
     return { schema: 1 as const, requestId, expectedRevision: record.revision, executionBindingHash: record.executionBindingHash,
       scopeHash: record.scopeHash, confirmed: true as const, note: 'Inspected the original host and Session; its known work is stopped.' }
   }
-  return { store, effects, ticket, agent, agents, jobs, rows, children, stops, host, request, attest, path,
+  return { store, effects, ticket, agent, agents, jobs, rows, children, stops, host, request, attest, path, workerContext, hostJobs, hostChildren,
     lose: () => { lost = true }, close: () => { closing = true } }
 }
+
+it('uses real Cordis worker registry identity across admission, cancellation and observation', async () => {
+  const f = fixture(true, true), ctx = f.workerContext!, original = Symbol.for('cordis.original')
+  for (const name of ['jobs', 'subagents']) {
+    expect(ctx.get(name)).not.toBe(ctx.get(name))
+    expect(Reflect.get(ctx.get(name), original)).toBe(Reflect.get(ctx.get(name), original))
+    expect(Reflect.get(ctx.get(name), original)).not.toBe(Reflect.get(f.host.context.get(name), original))
+  }
+  f.stops.turnStarted(f.agent, 1)
+  expect(f.stops.owns(f.agent, 'original')).toBe(true)
+  expect(f.stops.executionAllowed(f.agent, 'original')).toBe(true)
+  f.rows.push({ id: 'worker-job', owner: f.agent.id, status: 'running' })
+  const id = f.request(); await f.stops.idle()
+  expect(f.stops.detail(id)).toMatchObject({ state: 'unknown', proof: null, targets: { jobIds: ['worker-job'] } })
+  expect(readStop(f.store.db, id)?.dispatched).toBe(true)
+  expect(f.agent.cancel).toHaveBeenCalledOnce(); expect(f.jobs.kill).toHaveBeenCalledWith('worker-job', f.agent.id, 'Original assignment stopping')
+  expect(f.hostJobs.list).not.toHaveBeenCalled(); expect(f.hostJobs.kill).not.toHaveBeenCalled()
+  expect(f.hostChildren.listChildren).not.toHaveBeenCalled()
+  expect(await f.stops.recheck(id)).toMatchObject({ state: 'unknown', proof: null })
+  f.rows[0]!.status = 'completed'
+  expect(await f.stops.recheck(id)).toMatchObject({ state: 'quiet', proof: 'registry' })
+  expect(f.jobs.kill).toHaveBeenCalledOnce()
+})
+
+it('drains descendants from the captured worker subagent registry, not the host registry', async () => {
+  const f = fixture(true, true), child = { id: 'worker-child', status: 'idle' } as Agent
+  f.agents.set(child.id, child)
+  f.children.listChildren.mockImplementation(async owner => owner === f.agent.id ? [{ id: child.id }] : [])
+  f.children.drainChildren.mockImplementation(async () => { f.agents.delete(child.id) })
+  const id = f.stops.request(f.ticket, f.ticket.assignments[0]!, { scope: 'descendants' }); await f.stops.idle()
+  expect(f.children.drainChildren).toHaveBeenCalledWith(f.agent, [child.id])
+  expect(f.stops.detail(id)).toMatchObject({ state: 'quiet', proof: 'registry', targets: { sessions: ['worker-child', f.agent.id] } })
+  expect(f.hostChildren.listChildren).not.toHaveBeenCalled(); expect(f.hostChildren.drainChildren).not.toHaveBeenCalled()
+})
+
+it('targets only the selected worker jobs through real Cordis services', async () => {
+  const f = fixture(true, true)
+  f.rows.push({ id: 'selected', owner: f.agent.id, status: 'running' }, { id: 'handed-off', owner: f.agent.id, status: 'running' })
+  const id = f.stops.request(f.ticket, f.ticket.assignments[0]!, { scope: 'jobs', jobIds: ['selected'] }); await f.stops.idle()
+  expect(f.stops.detail(id)).toMatchObject({ state: 'unknown', targets: { jobIds: ['selected'] } })
+  expect(f.jobs.kill).toHaveBeenCalledExactlyOnceWith('selected', f.agent.id, 'Background duration limit reached')
+  f.rows[0]!.status = 'completed'
+  expect(await f.stops.recheck(id)).toMatchObject({ state: 'quiet', proof: 'registry' })
+  expect(f.hostJobs.list).not.toHaveBeenCalled(); expect(f.hostJobs.kill).not.toHaveBeenCalled()
+  expect(f.agent.cancel).not.toHaveBeenCalled()
+})
+
+it.each(['jobs', 'subagents'])('fails closed when the actual worker %s registry is replaced before a stop', async name => {
+  const f = fixture(true, true)
+  f.stops.turnStarted(f.agent, 1)
+  f.workerContext!.set(name, Reflect.get(f.host.context.get(name), Symbol.for('cordis.original')))
+  expect(f.stops.owns(f.agent, 'original')).toBe(false)
+  expect(f.stops.executionAllowed(f.agent, 'original')).toBe(false)
+  const id = f.request(); await f.stops.idle()
+  expect(f.stops.detail(id)).toMatchObject({ state: 'unknown', proof: null })
+  expect(readStop(f.store.db, id)?.dispatched).toBe(false)
+  expect(f.agent.cancel).not.toHaveBeenCalled(); expect(f.jobs.kill).not.toHaveBeenCalled()
+})
+
+it.each(['jobs', 'subagents'])('cannot certify an empty replacement %s registry after original cancellation', async name => {
+  const f = fixture(true, true)
+  f.rows.push({ id: 'original-job', owner: f.agent.id, status: 'running' })
+  const id = f.request(); await f.stops.idle()
+  expect(f.jobs.kill).toHaveBeenCalledOnce()
+  f.workerContext!.set(name, Reflect.get(f.host.context.get(name), Symbol.for('cordis.original')))
+  expect(await f.stops.recheck(id)).toMatchObject({ state: 'unknown', proof: null })
+  // Even operator evidence cannot use an empty replacement to hide still-running original work.
+  expect((await f.stops.attest(id, f.attest(id))).receipt.phase).toBe('refused')
+  f.rows[0]!.status = 'completed'
+  expect(await f.stops.recheck(id)).toMatchObject({ state: 'unknown', proof: null })
+  expect(f.jobs.kill).toHaveBeenCalledOnce(); expect(f.agent.cancel).toHaveBeenCalledOnce()
+  expect(f.hostJobs.list).not.toHaveBeenCalled(); expect(f.hostJobs.kill).not.toHaveBeenCalled()
+})
+
+it('keeps unknown original Cordis registries held and checks worker work before operator evidence', async () => {
+  const f = fixture(false, true), id = f.request(); await f.stops.idle()
+  expect(f.stops.detail(id)).toMatchObject({ state: 'unknown', proof: null })
+  expect(f.agent.cancel).not.toHaveBeenCalled(); expect(f.jobs.kill).not.toHaveBeenCalled()
+  f.rows.push({ id: 'still-active', owner: f.agent.id, status: 'running' })
+  expect((await f.stops.attest(id, f.attest(id))).receipt.phase).toBe('refused')
+  expect(f.stops.detail(id)).toMatchObject({ state: 'unknown', proof: null })
+})
 
 it('keeps the original stop after kill wait returns running; observation never repeats cancellation', async () => {
   const f = fixture(); f.rows.push({ id: 'job-1', owner: f.agent.id, status: 'running' })
@@ -190,4 +286,42 @@ it('operator evidence may settle missing local job evidence but cannot bypass an
   const id = f.request(); await f.stops.idle(); f.rows.length = 0
   expect(await f.stops.recheck(id)).toMatchObject({ state: 'unknown' })
   expect((await f.stops.attest(id, f.attest(id))).receipt.phase).toBe('accepted')
+})
+
+it('settles a never-dispatched retry assignment alongside an ended prior assignment', async () => {
+  const f = fixture(false), ticket = f.store.tickets.get('task')!
+  const original = ticket.assignments[0]!
+  const retry = { ...original, id: 'retry', state: 'pending', createdAt: '2026-01-02T00:00:00.000Z' } as typeof original
+  delete retry.startedAt
+  original.state = 'ended'; original.endedAt = '2026-01-01T01:00:00.000Z'
+  ticket.assignments = [original, retry]
+  f.store.tickets.save(ticket)
+  f.agents.clear()
+  f.effects.ensure('launch', 'retry', { ticketId: 'task', assignmentId: 'retry' })
+  const id = f.stops.request(ticket, retry)
+  await f.stops.idle()
+  expect(f.stops.detail(id)).toMatchObject({ assignmentId: 'retry', state: 'quiet', proof: 'undispatched' })
+  expect(f.jobs.kill).not.toHaveBeenCalled()
+  validateStopAuthority(f.store.db, new Map([['task', ticket]]), () => {})
+})
+
+it('retains an unknown original stop after cold start even when the retry never dispatched', async () => {
+  const f = fixture(false), ticket = f.store.tickets.get('task')!
+  // Simulate a cold restore: prior assignment ended and its stop is held unknown, while the retry is still pending.
+  const original = ticket.assignments[0]!
+  const retry = { ...original, id: 'retry', state: 'pending', createdAt: '2026-01-02T00:00:00.000Z' } as typeof original
+  delete retry.startedAt
+  original.state = 'ended'; original.endedAt = '2026-01-01T01:00:00.000Z'
+  ticket.assignments = [original, retry]
+  f.store.tickets.save(ticket)
+  f.agents.clear()
+  f.effects.ensure('launch', 'retry', { ticketId: 'task', assignmentId: 'retry' })
+  const held = f.stops.request(ticket, original)
+  await f.stops.idle()
+  expect(f.stops.detail(held).state).toBe('unknown')
+  // A fresh instance and an empty current registry cannot certify the original process's work.
+  const restored = new ExecutorStops({ ...f.host, effects: new Effects(f.store, new HealthBoard()) })
+  restored.recover(); await restored.idle()
+  expect(restored.detail(held)).toMatchObject({ state: 'unknown', proof: null })
+  expect(restored.problem('task')).toContain('Original work is not confirmed stopped')
 })
