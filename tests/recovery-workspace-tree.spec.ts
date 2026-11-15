@@ -150,7 +150,7 @@ it('verifies authenticated workspace member mapping and rejects role, source and
     const source = join(root, 'source'); await mkdir(source, { mode: 0o700 }); await writeFile(join(source, 'file'), 'original')
     const archive = await captureWorkspaceRecovery(source, join(root, 'archive'), budget)
     const members = join(root, 'members'); await mkdir(members, { mode: 0o700 })
-    const files = []
+    const files: { member: string; kind: string; bytes: number; sha256: string }[] = []
     for (const [name, kind] of [['manifest.json', 'workspace-manifest'], ['content-0.bin', 'workspace-content']] as const) {
       const member = `member-${files.length}.bin`, bytes = await readFile(join(archive.path, name))
       await copyFile(join(archive.path, name), join(members, member))
