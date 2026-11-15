@@ -1,9 +1,10 @@
 {
-  "revision": "608a0cb552e5394c9781977bbe499ac07073ecd6",
+  "revision": "72a893edb4a41725a233d656deb82fee7ac763e7",
   "classification": "VERIFIED",
   "validation": {
-    "workspaceTests": 8,
-    "typecheck": "passed"
+    "workspaceTests": "8 passed before final test-only type annotation",
+    "typecheck": "Passed after adding explicit test catalog type",
+    "priorTypecheck": "Failed at 608a0cb due to implicit any in new test catalog; earlier passed entry was recorded before consuming that result and is superseded"
   },
   "coverage": [
     "Successful mapped artifact verification",

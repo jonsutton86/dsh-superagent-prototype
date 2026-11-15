@@ -1410,7 +1410,9 @@ live capture or a completed workspace restore.
 
 Workspace member validation now parses its schema at the shared helper boundary,
 including NUL-free source paths, instead of relying only on upstream callers.
-Eight focused workspace tests and typecheck passed. New substitution cases cover
+Eight focused workspace tests passed. Typecheck initially failed on an implicit-any
+test catalog; an explicit test-only annotation fixed it and typecheck then passed.
+The evidence receipt corrects the earlier premature typecheck entry. Substitution cases cover
 duplicate sources, unbound members, wrong roles, traversal names, changed source
 bindings, authenticated digest mismatch and cancellation.
 [Evidence](evidence/086-workspace-binding-refusals.json). These checks validate
