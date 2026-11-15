@@ -301,6 +301,14 @@ invalid = subprocess.run([*verify_command[:-1], 'f' * 64], capture_output=True, 
 assert invalid.returncode == 1 and json.loads(invalid.stderr)['state'] == 'unverified'
 assert receipt['sha256'] == hashlib.sha256(backup_path.read_bytes()).hexdigest()
 
+audit_command = [part if part != 'verify-backup' else 'audit-backup' for part in verify_command]
+audited = subprocess.run(audit_command, capture_output=True, text=True, timeout=30)
+assert audited.returncode == 0, audited.stderr
+bindings = json.loads(audited.stdout)['backup']['bindings']
+assert bindings['recordBindingsVerified'] is True and bindings['unresolvedRepairs'] == 1
+assert bindings['restoreVerified'] is False and bindings['liveFilesystemVerified'] is False
+assert receipt['sha256'] == hashlib.sha256(backup_path.read_bytes()).hexdigest()
+
 print(json.dumps({'nativeStorageCrashBoundaries': results, 'missingRegistryUnchanged': True,
                   'registryBackup': {'allRecordsRetained': True, 'uncertainRepairRetained': True,
-                                     'overwriteRefused': True, 'standaloneSQLite': True, 'offlineArtifactVerification': True}}), flush=True)
+                                     'overwriteRefused': True, 'standaloneSQLite': True, 'offlineArtifactVerification': True, 'recordBindingsVerified': True}}), flush=True)

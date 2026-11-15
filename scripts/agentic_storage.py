@@ -238,7 +238,80 @@ class StorageHost:
         return json.loads(row[1])
 
     @staticmethod
-    def verify_backup(source, expected_hash):
+    def audit_backup_records(database):
+        """Validate retained cross-record bindings; no assertion about current filesystem state."""
+        def decode(text):
+            def unique(pairs):
+                result = {}
+                for key, value in pairs:
+                    require(key not in result); result[key] = value
+                return result
+            return json.loads(text, object_pairs_hook=unique)
+        def identities(text, count):
+            values = decode(text)
+            require(isinstance(values, list) and len(values) == count)
+            require(all(value is None or isinstance(value, dict) and set(value) == {'device', 'inode'}
+                        and all(isinstance(item, str) and re.fullmatch(r'[0-9]+', item) for item in value.values()) for value in values))
+            return values
+        endpoints, ranges, namespaces, operations, workspaces, projects, repairs = {}, {}, {}, {}, set(), set(), set()
+        allocation_counts = {}
+        for endpoint, filesystem, first, last, encoded in database.execute('SELECT id,filesystem,first,last,config FROM endpoints'):
+            config = decode(encoded)
+            require(endpoint not in endpoints and set(config) == {'endpointId', 'uid', 'gid', 'policy'} and config['endpointId'] == endpoint)
+            require(str(uuid.UUID(endpoint)) == endpoint and str(uuid.UUID(filesystem)) == filesystem)
+            number(config['uid'], 1, 2 ** 31 - 1); number(config['gid'], 1, 2 ** 31 - 1)
+            policy = config['policy']
+            require(set(policy) == {'kind', 'filesystemUUID', 'mountRoot', 'projectIds', 'pool', 'workspace'})
+            require(policy['kind'] == 'linux-xfs-project' and policy['filesystemUUID'] == filesystem)
+            require(policy['projectIds'] == {'first': first, 'last': last})
+            number(first, 1, 2 ** 32 - 1); number(last, first, 2 ** 32 - 1)
+            number(policy['projectIds']['first'], 1, 2 ** 32 - 1); number(policy['projectIds']['last'], first, 2 ** 32 - 1)
+            path = policy['mountRoot']
+            require(isinstance(path, str) and re.fullmatch(r'/[A-Za-z0-9_/-]+', path) and len(path) <= 4096
+                    and not path.endswith('/') and all(part not in ['', '.', '..'] for part in path.split('/')[1:]))
+            for key in ['pool', 'workspace']:
+                require(set(policy[key]) == {'bytes', 'inodes'})
+                require(number(policy[key]['bytes'], 4096, 1024 ** 4) % 4096 == 0)
+                number(policy[key]['inodes'], 1, 2 ** 32 - 1)
+            require(all(policy['workspace'][key] <= policy['pool'][key] for key in ['bytes', 'inodes']))
+            ranges.setdefault(filesystem, []).append((first, last))
+            endpoints[endpoint] = policy
+        for intervals in ranges.values():
+            intervals.sort()
+            require(all(previous[1] < following[0] for previous, following in zip(intervals, intervals[1:])))
+        for endpoint, encoded in database.execute('SELECT endpoint,identities FROM namespaces'):
+            require(endpoint in endpoints and endpoint not in namespaces)
+            namespaces[endpoint] = identities(encoded, 3)
+        incomplete = 0
+        for endpoint, request, workspace, filesystem, project, encoded, roots in database.execute('SELECT endpoint,request,workspace,filesystem,project,intent,roots FROM operations'):
+            require(endpoint in namespaces and all(namespaces[endpoint]) and (endpoint, request) not in operations and (endpoint, workspace) not in workspaces
+                    and (filesystem, project) not in projects)
+            value = decode(encoded); policy = endpoints[endpoint]
+            require(value == {'endpointId': endpoint, 'requestId': request, 'requestHash': value.get('requestHash'), 'workspace': workspace, 'projectId': project})
+            temporary = StorageHost.__new__(StorageHost); temporary.endpoint = endpoint; temporary.policy = policy
+            temporary.validate_request(value)
+            require(filesystem == policy['filesystemUUID'])
+            incomplete += int(any(root is None for root in identities(roots, 2)))
+            allocation_counts[endpoint] = allocation_counts.get(endpoint, 0) + 1
+            operations[endpoint, request] = value; workspaces.add((endpoint, workspace)); projects.add((filesystem, project))
+        for endpoint, policy in endpoints.items():
+            count = allocation_counts.get(endpoint, 0)
+            require(all(count * policy['workspace'][key] <= policy['pool'][key] for key in ['bytes', 'inodes']))
+        unresolved = 0
+        repaired_requests = set()
+        for endpoint, repair, request, encoded, phase in database.execute('SELECT endpoint,id,request,intent,phase FROM repairs'):
+            require((endpoint, request) in operations and (endpoint, repair) not in repairs and (endpoint, request) not in repaired_requests)
+            # Reject duplicate JSON keys before using the common retained-receipt validator.
+            decode(encoded)
+            temporary = StorageHost.__new__(StorageHost); temporary.endpoint = endpoint; temporary.policy = endpoints[endpoint]; temporary.db = database
+            receipt = temporary.repair_receipt(operations[endpoint, request])
+            require(receipt and receipt['repairId'] == repair and receipt['phase'] == phase)
+            unresolved += int(phase != 'complete'); repairs.add((endpoint, repair)); repaired_requests.add((endpoint, request))
+        return {'recordBindingsVerified': True, 'incompleteRootRecords': incomplete, 'unresolvedRepairs': unresolved,
+                'liveFilesystemVerified': False, 'restoreVerified': False}
+
+    @staticmethod
+    def verify_backup(source, expected_hash, *, audit=False):
         """Offline artifact verification only. Does not authorize import or filesystem recovery."""
         require(isinstance(expected_hash, str) and re.fullmatch(r'[a-f0-9]{64}', expected_hash))
         path = Path(source)
@@ -271,13 +344,14 @@ class StorageHost:
                 for table, columns in expected.items():
                     require([row[1] for row in database.execute('PRAGMA table_info(' + table + ')')] == columns)
                 counts = {table: database.execute('SELECT count(*) FROM ' + table).fetchone()[0] for table in expected}
+                bindings = StorageHost.audit_backup_records(database) if audit else None
             finally:
                 database.close()
             after, named = os.fstat(descriptor), path.lstat()
             identity = lambda info: (info.st_dev, info.st_ino, info.st_size, info.st_mode, info.st_mtime_ns, info.st_ctime_ns)
             require(identity(before) == identity(after) == identity(named))
             return {'kind': 'storage-host-registry', 'sha256': expected_hash, 'bytes': before.st_size,
-                    'records': counts, 'artifactVerified': True, 'restoreVerified': False}
+                    'records': counts, 'artifactVerified': True, 'restoreVerified': False, **({'bindings': bindings} if bindings else {})}
         finally:
             os.close(descriptor)
 

@@ -11,8 +11,8 @@ from agentic_storage_service import configuration
 
 def execute(args):
     require(os.getuid() == 0)
-    if args.action == 'verify-backup':
-        return {'ok': True, 'backup': StorageHost.verify_backup(args.input, args.sha256)}
+    if args.action in ['verify-backup', 'audit-backup']:
+        return {'ok': True, 'backup': StorageHost.verify_backup(args.input, args.sha256, audit=args.action == 'audit-backup')}
     require(args.config is not None and args.registry is not None)
     config = configuration(args.config)
     value = None if args.action == 'backup' else configuration(args.request if args.action == 'inspect' else args.approval)
@@ -38,9 +38,10 @@ def main():
     parser.add_argument('--config')
     parser.add_argument('--registry')
     actions = parser.add_subparsers(dest='action', required=True)
-    verify = actions.add_parser('verify-backup')
-    verify.add_argument('--input', required=True)
-    verify.add_argument('--sha256', required=True)
+    for action in ['verify-backup', 'audit-backup']:
+        verify = actions.add_parser(action)
+        verify.add_argument('--input', required=True)
+        verify.add_argument('--sha256', required=True)
     actions.add_parser('backup').add_argument('--output', required=True)
     actions.add_parser('inspect').add_argument('--request', required=True)
     actions.add_parser('repair').add_argument('--approval', required=True)
