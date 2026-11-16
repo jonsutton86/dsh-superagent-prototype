@@ -17,14 +17,17 @@ The page lives in `src/client/jarvis.tsx`; `src/client/route.ts` carries the `ja
 | Agents | `GET state` | Executor load (`running`, `queued`, `maxWorkers`), the main Session id and whether processing is paused |
 | Goals | `GET missions` | Mission title, status, completed/total actions, review flag and update time from the first page |
 | Connections | `GET providers`, `GET credentials` | Provider id, base URL, models and credential presence; credential names and metadata only, never values |
-| Analytics | `GET usage` with `scope=workspace` | Recorded workspace totals, reservations, unknown usage, pending calls, limit count and tracking start |
-| Voice | `GET voice` | Configured input/output modes and the configured limits; no live speech check |
+| Analytics | `GET usage` with `scope=workspace` and an optional `from` | Recorded totals for the selected period (today, this month or all time), reservations, unknown usage, pending calls, limit count and tracking start |
+| Voice | `GET voice` | Configured input/output modes, configured limits and the host-reported active speech-request count |
 
-Each section is wrapped in a `data-jarvis="<name>"` area so its own availability can be read on its own.
+Each section is wrapped in a `data-jarvis="<name>"` area so its own availability can be read on its own. Every section
+also offers a navigation button to its detailed page (Library, Execution, Missions, Settings, Usage, Inbox); Analytics
+adds a period selector and Voice adds the live active-request count.
 
 ## Read-only guarantees
 
-- Only `GET` requests are issued; the page has no form, button or action that changes state.
+- Only `GET` requests are issued; the only controls are navigation buttons and the analytics period selector. Nothing on
+  the page changes host state.
 - An empty list is named as empty; an area whose endpoint answers with a refusal or is unreachable renders
   `jarvis.unavailable` with the endpoint's own message.
 - Counts and totals are the values the host returned. The page does not add, infer or cache numbers of its own beyond
@@ -48,7 +51,8 @@ Each section is wrapped in a `data-jarvis="<name>"` area so its own availability
 
 ## Limits
 
-The page is a summary, not a replacement for the detailed pages. Memory and goals show only their first page,
-Analytics shows only workspace scope, and there is no chart, history or drill-down. Selecting the ordinary tabs remains
-the way to act on what the dashboard reports. See [007 Architecture](007-architecture.md) for the module and test
+The page is a summary, not a replacement for the detailed pages. Memory and goals show only their first page and link
+out for paging; Analytics is workspace scope with a period boundary but no chart or per-model history; Voice shows the
+host's active count and links to Inbox for actual dictation/playback. Selecting the ordinary tabs remains the way to act
+on what the dashboard reports. See [007 Architecture](007-architecture.md) for the module and test
 tables and [005 The panel](005-panel.md) for the panel's conventions.
