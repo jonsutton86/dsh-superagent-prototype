@@ -301,6 +301,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/workspace/library.ts` | Transactional content-addressed storage, search, scope authorization, provenance, archival and evidence revisions |
 | `src/app/tools/library.ts` | Host-bound worker publication and worker/router recall tools |
 | `src/client/library.tsx` | Library search, authoring, immutable revisions, inert previews, downloads and source history |
+| `src/client/creative.tsx` | Creative workspace: Markdown artifact publishing through the existing library and a recent-artifact list |
 | `src/client/verification.tsx` | Operator check definition/authority forms, artifact requests, original evidence/output, freshness captures and quiescence review |
 | `src/workspace/model.ts` | Mission, action and activity contracts, validated commands and workspace errors |
 | `src/workspace/pull-model.ts`, `pulls.ts`, `completion.ts` | Immutable mission PR targets, revision-ordered provider observations and durable whole-mission completion attempts with original evidence-review IDs |
@@ -626,6 +627,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/stage.spec.ts` | The Ticket stages, row by row |
 | `tests/supervision.spec.ts` | Real HTTP transport, token authentication, stale commands, transactional receipts and existing worker delivery integration |
 | `tests/library.spec.ts` | Library restart/replay, atomic rollback, scoping, provenance, integrity, freshness, review invalidation and Runtime/API integration |
+| `tests/creative-ui.spec.tsx`, `tests/creative.spec.ts` | Creative tab rendering and Markdown artifact publish/list/read through the library |
 | `tests/recall.spec.ts`, `tests/recall-ui.spec.tsx` | Source-chain traversal/freshness, complete review closure, UTF-8 output ceilings, cumulative and interrupted allowances, private scopes and rendered policy/history controls |
 | `tests/library-ui.spec.tsx` | Rendered library creation/revision/archive and worker artifact preview through actual management routes |
 | `tests/workspace.spec.ts` | Mission persistence, deduplication, dependencies, review freshness, rollback and Runtime/Harness wiring |

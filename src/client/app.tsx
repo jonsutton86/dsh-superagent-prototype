@@ -15,6 +15,7 @@ import { SpeculationPage } from './speculation.tsx'
 import { ReflectionsPage } from './reflections.tsx'
 import { UsagePage } from './usage.tsx'
 import { LibraryPage } from './library.tsx'
+import { CreativePage } from './creative.tsx'
 import { InboxPage } from './inbox.tsx'
 import { GettingStartedPage } from './getting-started.tsx'
 import { EnvironmentsPage } from './environments.tsx'
@@ -163,6 +164,7 @@ function Pages({ route, openTab, deploymentForm }: { route: Route; openTab: (tab
       case 'guide': return <GettingStartedPage />
       case 'inbox': return <InboxPage key={route.id ?? 'list'} id={route.id} filter={route.query?.filter} compose={route.query?.compose} />
       case 'library': return <LibraryPage key={`${route.id ?? 'list'}:${route.query?.scope ?? ''}`} id={route.id} scope={route.query?.scope} />
+      case 'creative': return <CreativePage />
       case 'missions': return <MissionsPage key={route.id ?? 'list'} id={route.id} />
       case 'schedules': return <SchedulesPage key={`${route.id ?? 'list'}:${route.query?.mission ?? ''}`} id={route.id} missionId={route.query?.mission} />
       case 'speculation': return <SpeculationPage key={route.id ?? 'list'} id={route.id} />

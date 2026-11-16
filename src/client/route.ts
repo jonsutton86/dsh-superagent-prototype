@@ -5,11 +5,11 @@ import type { SetupPlace } from '../setup.ts'
 import { DECISION_FILTERS, type DecisionFilter } from './api.ts'
 import type { T } from './text.ts'
 
-export const TABS = ['guide', 'inbox', 'missions', 'schedules', 'reflections', 'speculation', 'library', 'personas', 'usage', 'environments', 'overview', 'jarvis', 'source', 'trigger', 'eval', 'execution', 'settings'] as const
+export const TABS = ['guide', 'inbox', 'missions', 'schedules', 'reflections', 'speculation', 'library', 'creative', 'personas', 'usage', 'environments', 'overview', 'jarvis', 'source', 'trigger', 'eval', 'execution', 'settings'] as const
 export type Tab = typeof TABS[number]
 export const SETTINGS_GROUPS = ['source', 'eval', 'execution', 'prompts', 'deployment'] as const
 export type SettingsGroup = typeof SETTINGS_GROUPS[number]
-export type Route = { page: 'overview' | 'jarvis' | 'source' | 'environments' | 'personas' | 'guide'; id?: undefined; query?: undefined }
+export type Route = { page: 'overview' | 'jarvis' | 'source' | 'environments' | 'personas' | 'guide' | 'creative'; id?: undefined; query?: undefined }
   | { page: 'inbox'; id?: string; query?: { filter?: InboxFilter; compose?: boolean } }
   | { page: 'missions'; id?: string; query?: undefined }
   | { page: 'reflections' | 'speculation'; id?: string; query?: undefined }
@@ -50,7 +50,7 @@ export function parseRoute(value: unknown): Route | undefined {
       return scope && scope !== 'workspace' && subject && /^[a-zA-Z0-9_-]{1,100}$/.test(subject) ? { page, query: { scope, subject } } : { page }
     }
     case 'schedules': return record ? { page, id: record } : { page, query: compact({ mission: text('mission') }) }
-    case 'overview': case 'jarvis': case 'source': case 'environments': case 'personas': case 'guide': return { page }
+    case 'overview': case 'jarvis': case 'source': case 'environments': case 'personas': case 'guide': case 'creative': return { page }
     case 'trigger': return record ? { page, id: record, query: compact({ trigger: text('trigger') }) }
       : { page, query: compact({ filter: pick(THREAD_FILTERS, query?.filter) }) }
     case 'eval': return { page, query: compact({ filter: pick(DECISION_FILTERS, query?.filter),
