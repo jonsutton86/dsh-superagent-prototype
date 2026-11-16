@@ -191,6 +191,7 @@ export interface Api {
   'GET mission-pull-targets/:id': { response: MissionPullState }
   'GET state': { response: StateView }
   'GET overview': { response: OverviewView }
+  'GET briefing': { response: { at: string; overview: OverviewView; upcoming: { id: string; title: string; nextAt: string | null; enabled: boolean; open: number }[] } }
   'GET search': { query: { q: string }; response: SearchView }
   'GET sources': { response: SourceStatusView[] }
   'GET settings': { response: SettingsView }

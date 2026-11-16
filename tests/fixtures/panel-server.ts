@@ -445,6 +445,7 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
   'POST emergency': { body: true, answer: () => refuse(409, 'Emergency fixture not configured') },
   'GET state': { answer: stateView },
   'GET overview': { answer: overviewView },
+  'GET briefing': { answer: () => refuse(409, 'Briefing fixture not configured') },
   'GET search': { query: ['q'], answer: async ({ query }) => {
     const q = query.q ?? ''
     await server.searching?.(q)
