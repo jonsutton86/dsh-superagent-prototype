@@ -27,9 +27,9 @@ Phases 0–7 and the Phase 6 briefing increment:
    Inbox/Missions flows.
 5. Voice: follow the device checklist in `docs/097`; do not claim voice qualification without a recorded device run.
 
-Latest recorded run on this machine: TypeScript pass, build pass, full Vitest suite green (see the branch commit log
-and phase reports for the exact counts). A **clean-machine install was not executed** in this environment; it remains
-part of the operator release checklist.
+Latest clean-copy qualification (fresh `git archive` checkout, `pnpm install --frozen-lockfile`): install, TypeScript,
+full Vitest suite (182 files; 2,419 tests passed, 32 skipped, 0 failed) and production build all pass. The branch is still
+not pushed or merged; GitHub authentication is the remaining external step.
 
 ## Platform matrix
 
