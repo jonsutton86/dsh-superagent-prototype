@@ -39,7 +39,7 @@ export class Voice {
   }
   capabilities(): VoiceCapabilities {
     const mode = (adapter?: SpeechAdapter) => !adapter ? null : adapter.config.kind === 'http' ? adapter.config.mode : 'local'
-    return { input: mode(this.input), output: mode(this.output), recordingMs: L.recordingMs, inputBytes: L.inputBytes, textChars: L.textChars }
+    return { input: mode(this.input), output: mode(this.output), recordingMs: L.recordingMs, inputBytes: L.inputBytes, textChars: L.textChars, active: this.active.size }
   }
   private row(id: string): Row | undefined { return this.host.store.db.prepare('SELECT fingerprint, receipt, audio FROM voice_operation WHERE id=?').get(id) as unknown as Row | undefined }
   private save(receipt: VoiceReceipt, audio?: Buffer): void {

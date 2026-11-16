@@ -570,7 +570,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/client/api.ts` | Calls and polls of the management API, typed by `src/app/api.ts`, and the Decision filters of the Eval status |
 | `src/client/route.ts` | The tabs, the settings groups, the typed routes that `parseRoute` reads, and the route memory with the settings group opened last |
 | `src/client/overview.tsx` | The overview |
-| `src/client/jarvis.tsx` | The read-only JARVIS dashboard: the Overview, Memory, Agents, Goals, Connections, Analytics and Voice sections over existing management views, each with its own empty or unavailable state and no verification claim |
+| `src/client/jarvis.tsx` | The read-only JARVIS dashboard: Overview, Memory, Agents, Goals, Connections, Analytics and Voice sections over existing management views, with navigation to full pages, an analytics period selector, live speech activity, and no verification claim |
 | `src/client/source.tsx`, `trigger.tsx`, `eval.tsx`, `execution.tsx` | One file per stage: its status, and its settings where it has some |
 | `src/client/thread.tsx`, `ticket.tsx` | The record pages: a Thread with its timeline, and a Ticket with its authorization, Inputs and Assignments |
 | `src/client/settings.tsx` | The Settings tab: the group navigation and the group on screen |

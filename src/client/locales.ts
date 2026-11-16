@@ -1011,6 +1011,12 @@ const TEXT = {
   'jarvis.voiceOutput': ['语音输出', 'Speech output'],
   'jarvis.voiceOff': ['未配置', 'Not configured'],
   'jarvis.voiceLimits': ['录音上限 {seconds} 秒 · 输入上限 {bytes} 字节 · 朗读上限 {chars} 字符', 'Recording limit {seconds}s · input limit {bytes} bytes · speech limit {chars} characters'],
+  'jarvis.openAll': ['打开完整页面', 'Open full page'],
+  'jarvis.periodLabel': ['统计周期', 'Period'],
+  'jarvis.periodDay': ['今天（UTC）', 'Today (UTC)'],
+  'jarvis.periodMonth': ['本月（UTC）', 'This month (UTC)'],
+  'jarvis.periodAll': ['全部时间', 'All time'],
+  'jarvis.voiceActive': ['进行中的语音请求', 'Active speech requests'],
   'jarvis.voiceNote': ['这些是配置项，不表示已完成实时检查。', 'These are configuration values; no live check has been performed.'],
   // Overview
   sourceError: ['{source} 来源异常', '{source} Source failing'],

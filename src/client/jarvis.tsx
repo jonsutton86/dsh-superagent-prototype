@@ -2,9 +2,9 @@
  * Read-only JARVIS dashboard: one page over existing management views with seven sections.
  * It reads only, never writes, never invents counts, and never claims that anything was verified.
  */
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { usePoll } from './api.ts'
-import { Tag } from './controls.tsx'
+import { Button, Tag } from './controls.tsx'
 import { usePanel, usePanelData } from './provider.tsx'
 import { errorText } from './text.ts'
 import { Hint, KeyValues, Section, When } from './widgets.tsx'
@@ -53,7 +53,7 @@ function OverviewSection() {
 }
 
 function MemorySection() {
-  const { t, call } = usePanel()
+  const { t, call, navigate } = usePanel()
   const { data, error } = usePoll(() => call('GET memory/search', { query: { limit: 5 } }), [call])
   return <Section title={t('jarvis.section.memory')} count={data?.items.length}>
     <Area name="memory">
@@ -61,6 +61,7 @@ function MemorySection() {
       {error && <Unavailable failure={error} />}
       {!data && !error && <Loading />}
       {data && !data.items.length && <Hint>{t('jarvis.memoryEmpty')}</Hint>}
+      <Button variant="outline" size="sm" onClick={() => navigate({ page: 'library' })}>{t('jarvis.openAll')}</Button>
       {!!data?.items.length && <ul className="dt-list">{data.items.map(item => <li key={item.id} className="dt-row">
         <div className="dt-row-main">
           <div className="dt-row-title">{item.subject || item.id}</div>
@@ -75,7 +76,7 @@ function MemorySection() {
 }
 
 function AgentsSection() {
-  const { t } = usePanel()
+  const { t, navigate } = usePanel()
   const { state, error } = usePanelData()
   const rows: [string, ReactNode][] = state ? [
     [t('executingLabel'), `${state.load.running} / ${state.load.maxWorkers}`],
@@ -88,6 +89,7 @@ function AgentsSection() {
       <Hint>{t('jarvis.agentsHint')}</Hint>
       {error && <Unavailable failure={error} />}
       {!state && !error && <Loading />}
+      <Button variant="outline" size="sm" onClick={() => navigate({ page: 'execution' })}>{t('jarvis.openAll')}</Button>
       {state && <><KeyValues rows={rows} />
         {state.paused && <p><Tag tone="warning">{t('jarvis.paused')}</Tag></p>}</>}
     </Area>
@@ -95,7 +97,7 @@ function AgentsSection() {
 }
 
 function GoalsSection() {
-  const { t, call } = usePanel()
+  const { t, call, navigate } = usePanel()
   const { data, error } = usePoll(() => call('GET missions'), [call])
   return <Section title={t('jarvis.section.goals')} count={data?.items.length}>
     <Area name="goals">
@@ -114,13 +116,14 @@ function GoalsSection() {
           </div>
         </div>
       </li>)}</ul>}
+      <Button variant="outline" size="sm" onClick={() => navigate({ page: 'missions' })}>{t('jarvis.openAll')}</Button>
       {data?.nextOffset != null && <Hint>{t('jarvis.firstPage')}</Hint>}
     </Area>
   </Section>
 }
 
 function ConnectionsSection() {
-  const { t, call } = usePanel()
+  const { t, call, navigate } = usePanel()
   const providers = usePoll(() => call('GET providers'), [call])
   const credentials = usePoll(() => call('GET credentials'), [call])
   return <Section title={t('jarvis.section.connections')}>
@@ -128,6 +131,7 @@ function ConnectionsSection() {
       <Hint>{t('jarvis.connectionsHint')}</Hint>
       {/* The providers view always reports `verified: false`; the page repeats that instead of implying a check. */}
       <p role="status"><Tag tone="neutral">{t('jarvis.notVerified')}</Tag></p>
+      <Button variant="outline" size="sm" onClick={() => navigate({ page: 'settings', query: { group: 'source' } })}>{t('jarvis.openAll')}</Button>
       <h3>{t('jarvis.providers')}</h3>
       {providers.error && <Unavailable failure={providers.error} />}
       {!providers.data && !providers.error && <Loading />}
@@ -158,11 +162,17 @@ function ConnectionsSection() {
 }
 
 function AnalyticsSection() {
-  const { t, call } = usePanel()
-  const { data, error } = usePoll(() => call('GET usage', { query: { scope: 'workspace' } }), [call])
+  const { t, call, navigate } = usePanel(), [period, setPeriod] = useState<'day' | 'month' | 'all'>('month')
+  const now = new Date(), from = period === 'day' ? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
+    : period === 'month' ? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString() : undefined
+  const { data, error } = usePoll(() => call('GET usage', { query: { scope: 'workspace', ...(from ? { from } : {}) } }), [call, from])
   return <Section title={t('jarvis.section.analytics')}>
     <Area name="analytics">
       <Hint>{t('jarvis.analyticsHint')}</Hint>
+      <label>{t('jarvis.periodLabel')} <select aria-label={t('jarvis.periodLabel')} value={period} onChange={event => setPeriod(event.target.value as 'day' | 'month' | 'all')}>
+        <option value="day">{t('jarvis.periodDay')}</option><option value="month">{t('jarvis.periodMonth')}</option><option value="all">{t('jarvis.periodAll')}</option>
+      </select></label>
+      <Button variant="outline" size="sm" onClick={() => navigate({ page: 'usage' })}>{t('jarvis.openAll')}</Button>
       {error && <Unavailable failure={error} />}
       {!data && !error && <Loading />}
       {data && <><KeyValues rows={[
@@ -181,7 +191,7 @@ function AnalyticsSection() {
 }
 
 function VoiceSection() {
-  const { t, call } = usePanel()
+  const { t, call, navigate } = usePanel()
   const { data, error } = usePoll(() => call('GET voice'), [call])
   const mode = (value: 'local' | 'cloud' | null) => value ? t(`voice.${value}`) : t('jarvis.voiceOff')
   return <Section title={t('jarvis.section.voice')}>
@@ -192,7 +202,9 @@ function VoiceSection() {
       {data && <><KeyValues rows={[
         [t('jarvis.voiceInput'), mode(data.input)],
         [t('jarvis.voiceOutput'), mode(data.output)],
+        [t('jarvis.voiceActive'), String(data.active ?? 0)],
       ]} />
+        <Button variant="outline" size="sm" onClick={() => navigate({ page: 'inbox' })}>{t('jarvis.openAll')}</Button>
         <Hint>{t('jarvis.voiceLimits', { seconds: Math.round(data.recordingMs / 1000), bytes: data.inputBytes, chars: data.textChars })}</Hint>
         <p className="dt-hint">{t('jarvis.voiceNote')}</p></>}
     </Area>

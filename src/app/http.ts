@@ -364,7 +364,7 @@ function routes(runtime: HttpHost): Routes {
     'POST uploads/:id/chunks': async ({ params, body }) => { if (!runtime.attachments) throw new UploadError(503, 'Attachments unavailable'); return runtime.attachments.chunk(params.id, await body(512 * 1024)) },
     'POST uploads/:id/finish': ({ params }) => { if (!runtime.attachments) throw new UploadError(503, 'Attachments unavailable'); return runtime.attachments.finish(params.id) },
     'POST uploads/:id/cancel': ({ params }) => { if (!runtime.attachments) throw new UploadError(503, 'Attachments unavailable'); return runtime.attachments.cancel(params.id) },
-    'GET voice': () => runtime.voice?.capabilities() ?? { input: null, output: null, recordingMs: 30000, inputBytes: 2097152, textChars: 2000 },
+    'GET voice': () => runtime.voice?.capabilities() ?? { input: null, output: null, recordingMs: 30000, inputBytes: 2097152, textChars: 2000, active: 0 },
     'POST voice/transcribe': async ({ body }) => { if (!runtime.voice) throw new VoiceError(503, 'Speech is unavailable'); return runtime.voice.transcribe(await body(3 * 1024 * 1024)) },
     'POST voice/speak': async ({ body }) => { if (!runtime.voice) throw new VoiceError(503, 'Speech is unavailable'); return runtime.voice.speak(await body()) },
     'GET voice/:id': ({ params }) => { if (!runtime.voice) throw new VoiceError(503, 'Speech is unavailable'); return runtime.voice.get(params.id) },

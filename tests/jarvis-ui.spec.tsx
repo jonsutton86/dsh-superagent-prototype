@@ -37,10 +37,16 @@ it('renders the seven read-only sections on the JARVIS tab from the existing vie
   expect(all('[data-jarvis="analytics"]').at(0)!.textContent).toContain(UNAVAILABLE)
   expect(text()).toContain('Usage fixture not configured')
   // Voice reports configuration only; absent input and output are named.
-  expect(all('[data-jarvis="voice"] .dt-kv dd').map(value => value.textContent)).toEqual([zh['jarvis.voiceOff'], zh['jarvis.voiceOff']])
+  expect(all('[data-jarvis="voice"] .dt-kv dd').map(value => value.textContent)).toEqual([zh['jarvis.voiceOff'], zh['jarvis.voiceOff'], '0'])
   // Nothing on this page claims verification.
   expect(text()).toContain(zh['jarvis.notVerified'])
   expect(text()).toContain(zh['jarvis.voiceNote'])
+  // Every read-only section offers a navigation escape hatch; analytics exposes a period selector.
+  expect(all('button').filter(button => button.textContent === zh['jarvis.openAll'])).toHaveLength(6)
+  const period = all('select')[0]!
+  expect(period.getAttribute('aria-label')).toBe(zh['jarvis.periodLabel'])
+  expect(all('option').map(option => option.textContent)).toEqual([
+    zh['jarvis.periodDay'], zh['jarvis.periodMonth'], zh['jarvis.periodAll']])
   expect(zh['jarvis.intro']).toContain('不验证')
   // Read-only: the page issued GET requests only.
   expect(server.requests.length).toBeGreaterThan(0)

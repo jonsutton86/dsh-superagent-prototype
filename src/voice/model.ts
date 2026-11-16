@@ -18,7 +18,7 @@ export const Transcribe = z.object({ requestId: z.string().uuid(), mime: z.enum(
 export const Speak = z.object({ requestId: z.string().uuid(), text: z.string().trim().min(1).max(VOICE_LIMITS.textChars) }).strict()
 export type TranscribeInput = z.infer<typeof Transcribe>
 export type SpeakInput = z.infer<typeof Speak>
-export interface VoiceCapabilities { input: 'local' | 'cloud' | null; output: 'local' | 'cloud' | null; recordingMs: number; inputBytes: number; textChars: number }
+export interface VoiceCapabilities { input: 'local' | 'cloud' | null; output: 'local' | 'cloud' | null; recordingMs: number; inputBytes: number; textChars: number; active: number }
 export interface VoiceReceipt { id: string; kind: 'transcribe' | 'speak'; mode: 'local' | 'cloud'; phase: 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
   createdAt: number; expiresAt: number; text?: string; audioBytes?: number; error?: string; expired?: boolean;
   /** Short-lived capability token for streaming this synthesis result through a media element. */
