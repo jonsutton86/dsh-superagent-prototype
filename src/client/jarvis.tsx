@@ -8,6 +8,7 @@ import { Button, Tag } from './controls.tsx'
 import { usePanel, usePanelData } from './provider.tsx'
 import { errorText } from './text.ts'
 import { Hint, KeyValues, Section, When } from './widgets.tsx'
+import { voiceBrowserSupport } from './voice-qualification.ts'
 
 const usd = (value: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 6 })
   .format(value / 1e6)
@@ -191,7 +192,7 @@ function AnalyticsSection() {
 }
 
 function VoiceSection() {
-  const { t, call, navigate } = usePanel()
+  const { t, call, navigate } = usePanel(), support = voiceBrowserSupport()
   const { data, error } = usePoll(() => call('GET voice'), [call])
   const mode = (value: 'local' | 'cloud' | null) => value ? t(`voice.${value}`) : t('jarvis.voiceOff')
   return <Section title={t('jarvis.section.voice')}>
@@ -206,6 +207,14 @@ function VoiceSection() {
       ]} />
         <Button variant="outline" size="sm" onClick={() => navigate({ page: 'inbox' })}>{t('jarvis.openAll')}</Button>
         <Hint>{t('jarvis.voiceLimits', { seconds: Math.round(data.recordingMs / 1000), bytes: data.inputBytes, chars: data.textChars })}</Hint>
+        <KeyValues rows={[
+          [t('jarvis.voiceBrowserRecorder'), support.mediaRecorder ? t('jarvis.voiceSupported') : t('jarvis.voiceUnsupported')],
+          [t('jarvis.voiceBrowserMime'), support.preferredMime ?? t('jarvis.none')],
+          [t('jarvis.voiceBrowserMic'), support.microphoneApi ? t('jarvis.voiceSupported') : t('jarvis.voiceUnsupported')],
+          [t('jarvis.voiceBrowserAudio'), support.audioElement ? t('jarvis.voiceSupported') : t('jarvis.voiceUnsupported')],
+          [t('jarvis.voiceBrowserSecure'), support.secureContext ? t('jarvis.voiceSupported') : t('jarvis.voiceUnsupported')],
+        ]} />
+        <Hint>{t('jarvis.voiceBrowserNote')}</Hint>
         <p className="dt-hint">{t('jarvis.voiceNote')}</p></>}
     </Area>
   </Section>

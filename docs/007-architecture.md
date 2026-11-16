@@ -571,6 +571,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/client/route.ts` | The tabs, the settings groups, the typed routes that `parseRoute` reads, and the route memory with the settings group opened last |
 | `src/client/overview.tsx` | The overview |
 | `src/client/jarvis.tsx` | The read-only JARVIS dashboard: Overview, Memory, Agents, Goals, Connections, Analytics and Voice sections over existing management views, with navigation to full pages, an analytics period selector, live speech activity, and no verification claim |
+| `src/client/voice-qualification.ts` | Browser-only voice capability probe: recorder/mime/microphone/audio/secure-context availability, never permission or device verification |
 | `src/client/source.tsx`, `trigger.tsx`, `eval.tsx`, `execution.tsx` | One file per stage: its status, and its settings where it has some |
 | `src/client/thread.tsx`, `ticket.tsx` | The record pages: a Thread with its timeline, and a Ticket with its authorization, Inputs and Assignments |
 | `src/client/settings.tsx` | The Settings tab: the group navigation and the group on screen |
@@ -736,6 +737,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/client.spec.tsx`, `tests/navigation.spec.ts`, `tests/controls.spec.tsx` | The client plugin's registration and polling, Session navigation and route memory, the local controls, and the panel's imports, which have no cycle |
 | `tests/panel-overview.spec.tsx`, `panel-source.spec.tsx`, `panel-trigger.spec.tsx`, `panel-eval.spec.tsx`, `panel-execution.spec.tsx` | Each page of the panel, against a fake management API answered by route |
 | `tests/jarvis-ui.spec.tsx` | The read-only JARVIS tab: seven sections from the existing views, exact host-reported counts, explicit empty and populated rendering, no credential values, and per-section unavailable states |
+| `tests/voice-qualification.spec.ts` | Recorder format preference, API presence and unavailable/missing-API reporting without permission inference |
 | `tests/panel-settings.spec.tsx`, `panel-prompts.spec.tsx`, `panel-deployment.spec.tsx`, `panel-panel.spec.tsx` | The settings groups, drafts and history, the prompts, the Deployment page, and the panel's search, glossary and route memory |
 | `tests/draft.spec.ts`, `tests/prompt-config.spec.ts`, `tests/markdown.spec.ts`, `tests/marks.spec.ts` | Draft states, merges and the save bar's line; the prompt configuration by section and the line diff; the Markdown subset and its links; the mark of every state the views classify |
 | `tests/locales.spec.ts`, `tests/styles.spec.ts` | The copy in both languages, the stylesheet |

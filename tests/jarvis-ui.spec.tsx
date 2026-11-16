@@ -37,7 +37,10 @@ it('renders the seven read-only sections on the JARVIS tab from the existing vie
   expect(all('[data-jarvis="analytics"]').at(0)!.textContent).toContain(UNAVAILABLE)
   expect(text()).toContain('Usage fixture not configured')
   // Voice reports configuration only; absent input and output are named.
-  expect(all('[data-jarvis="voice"] .dt-kv dd').map(value => value.textContent)).toEqual([zh['jarvis.voiceOff'], zh['jarvis.voiceOff'], '0'])
+  const voiceValues = all('[data-jarvis="voice"] .dt-kv dd').map(value => value.textContent)
+  expect(voiceValues.slice(0, 3)).toEqual([zh['jarvis.voiceOff'], zh['jarvis.voiceOff'], '0'])
+  expect(voiceValues).toHaveLength(8)
+  expect(text()).toContain(zh['jarvis.voiceBrowserNote'])
   // Nothing on this page claims verification.
   expect(text()).toContain(zh['jarvis.notVerified'])
   expect(text()).toContain(zh['jarvis.voiceNote'])
