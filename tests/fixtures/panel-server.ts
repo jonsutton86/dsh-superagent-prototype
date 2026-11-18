@@ -446,6 +446,7 @@ const ROUTES: { [K in keyof Api]: Route<K> } = {
   'GET state': { answer: stateView },
   'GET overview': { answer: overviewView },
   'GET briefing': { answer: () => refuse(409, 'Briefing fixture not configured') },
+  'GET calendar': { query: ['days', 'limit'], answer: () => ({ configured: false, generatedAt: new Date(0).toISOString(), items: [] }) },
   'GET search': { query: ['q'], answer: async ({ query }) => {
     const q = query.q ?? ''
     await server.searching?.(q)

@@ -481,6 +481,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/app/views/settings.ts` | The settings page's view: each block with its revision, each Source's settings with its kind's form, and the execution environment |
 | `src/app/views/overview.ts` | The overview: Tickets that need a person, problems, the last day's flow and the Executor's load |
 | `src/app/views/briefing.ts` | Read-only operator briefing composed from the existing overview and schedule summaries; no external call or delivery |
+| `src/calendar/ics.ts` | Bounded read-only local iCalendar parsing: folding, escapes, UTC/date-only events, cancellation and upcoming window |
 | `src/security/audit.ts` | Append-only operator audit log with SHA-256 hash chaining, secret-shaped detail redaction, bounded pages and tamper verification |
 | `src/security/access.ts` | Optional bearer-token administration boundary, role/capability matrix and explicit deny-by-default connector grants |
 | `src/security/trusted-origin.ts` | Exact canonical Tailscale HTTPS origin configuration; rejects wildcard hosts, credentials, ports, paths and non-HTTPS schemes |
@@ -749,6 +750,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/class-docs.spec.ts` | Every class in `src` has a JSDoc block before it |
 | `tests/docs.spec.ts` | Numbered documents link only to earlier ones, every local link resolves, no document has merge conflict markers, and this document's tables list every module and every test |
 | `tests/briefing.spec.ts` | HTTP briefing composition and schedule-summary mapping without invented next runs |
+| `tests/calendar.spec.ts` | Local ICS parsing/limits and configured/unconfigured calendar API behavior |
 | `tests/endpoints.spec.ts` | Real endpoint HTTP and Runtime administration, private-file validation, ambiguous/restarted requests, grant generation fencing and profile composition |
 | `tests/endpoints-ui.spec.tsx` | Rendered endpoint registration, lost submission recovery, durable original-ID retries and secret-free generated profile inspection |
 | `tests/personas.spec.ts` | Immutable persona persistence, model-validation races, archived dispatch, plan changes and worker/descendant binding |

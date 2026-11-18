@@ -192,6 +192,7 @@ export interface Api {
   'GET state': { response: StateView }
   'GET overview': { response: OverviewView }
   'GET briefing': { response: { at: string; overview: OverviewView; upcoming: { id: string; title: string; nextAt: string | null; enabled: boolean; open: number }[] } }
+  'GET calendar': { query?: { days?: number; limit?: number }; response: { configured: boolean; generatedAt: string; items: { uid: string; summary: string; description?: string; start: string; end: string; allDay: boolean }[] } }
   'GET search': { query: { q: string }; response: SearchView }
   'GET sources': { response: SourceStatusView[] }
   'GET settings': { response: SettingsView }

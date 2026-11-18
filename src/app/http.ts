@@ -30,6 +30,8 @@ import type { Variable } from './execution-environment.ts'
 import { policyHistory } from './settings-history.ts'
 import { overview } from './views/overview.ts'
 import { briefing } from './views/briefing.ts'
+import { calendarEvents } from '../calendar/ics.ts'
+import { readFileSync } from 'node:fs'
 import { settingsView } from './views/settings.ts'
 import { sourcesStatus, type SetupState } from './views/sources.ts'
 import { decisionList, search, threadDetail, threadList } from './views/threads.ts'
@@ -449,6 +451,15 @@ function routes(runtime: HttpHost): Routes {
       executorLoad(store, runtime.executor.activeCount()), runtime.setupProblem ?? runtime.feishuProblem),
     'GET briefing': () => briefing(overview(views(runtime), runtime.health, policyVersion(store.settings()),
       executorLoad(store, runtime.executor.activeCount()), runtime.setupProblem ?? runtime.feishuProblem), runtime.schedules),
+    'GET calendar': ({ query }) => {
+      allow('runtime:read')
+      const generatedAt = new Date().toISOString(), file = process.env.DSH_ORCHESTRATOR_CALENDAR_ICS
+      if (!file) return { configured: false, generatedAt, items: [] }
+      const days = z.coerce.number().int().min(1).max(31).default(7).parse(query.days)
+      const limit = z.coerce.number().int().min(1).max(50).default(20).parse(query.limit)
+      try { return { configured: true, generatedAt, items: calendarEvents(readFileSync(file, 'utf8'), { now: new Date(), days, limit }) } }
+      catch { throw new RouteError(409, 'Calendar file is unavailable or invalid') }
+    },
     'GET search': ({ query }) => search(views(runtime), query.q ?? '', runtime.sourceLinks),
     'GET sources': () => sourcesStatus(views(runtime), runtime.health, setupState(runtime)),
     'GET settings': () => settingsView(store, runtime.sources, runtime.health, setupState(runtime), runtime.machine.stateDir, runtime.remoteRoot),
