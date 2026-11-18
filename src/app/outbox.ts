@@ -11,12 +11,14 @@ export interface OutboxHost {
   readonly effects: Pick<Effects, 'enqueue' | 'cancel' | 'handle' | 'idle'>
   readonly sources: Pick<SourceRegistry, 'instance' | 'channelAllowed' | 'send'>
   readonly commands: Commands
+  readonly publication?: { observe(message: OutboundMessage): Promise<'sent' | 'gone' | 'pending' | undefined>; withdraw(id: string): boolean }
   paused(): boolean
+  publicationProblem?(message: OutboundMessage): string | undefined
 }
 
 /**
  * Persists outbound channel messages as receipts and delivers them sequentially through `Effects` and `SourceRegistry`.
- * Implements the core `Outbox` port for `Engine` and source contexts, ensuring per-conversation ordering for each ticket until an earlier message fails repeatedly.
+ * Implements the core `Outbox` port for `Engine` and source contexts; unresolved publication intents retain per-ticket conversation order through repeated failures.
  * Messages wait while processing is paused or their source is unavailable, and settle as dropped when the target conversation is ignored or gone.
  */
 export class Outbox implements OutboxPort {
@@ -33,17 +35,24 @@ export class Outbox implements OutboxPort {
   status(id: string): ReplyStatus | undefined { return this.host.store.receipts.get(id)?.status }
   withdraw(id: string): void {
     const { store, effects } = this.host
-    store.atomic(() => { if (store.receipts.withdraw(id)) effects.cancel('reply', id) })
+    store.atomic(() => { if (this.host.publication?.withdraw(id) || store.receipts.withdraw(id)) effects.cancel('reply', id) })
   }
   sent(): Promise<void> { return this.host.effects.idle('reply') }
   private async deliver(id: string): Promise<void> {
     const { store, sources, commands } = this.host
     const receipt = store.receipts.get(id)
     if (receipt?.status !== 'pending') return
+    const observed = await this.host.publication?.observe(receipt)
+    if (observed === 'pending') throw new Later('The original external delivery is unresolved; inspect its receipt')
+    if (observed) { store.receipts.settle(receipt, observed === 'sent' ? 'sent' : 'channelGone'); return }
     if (!sources.instance(receipt.channel.source)?.enabled) throw new Later('The Source is off or not installed')
     // Hold later messages for the same ticket and conversation behind an earlier pending message until it exceeds the failure threshold.
-    if (store.receipts.behind(id, FAILURES_BEFORE_ERROR)) throw new Later('An earlier message of this ticket to this conversation waits')
+    if (store.receipts.behind(id, receipt.channel.source === 'publication' ? Number.MAX_SAFE_INTEGER : FAILURES_BEFORE_ERROR))
+      throw new Later('An earlier message of this ticket to this conversation waits')
     if (!sources.channelAllowed(receipt.channel)) { store.receipts.settle(receipt, 'channelIgnored'); return }
+    // Observation settles an already accepted external request; a new dispatch needs current authority.
+    const problem = this.host.publicationProblem?.(receipt)
+    if (problem) throw new Later(problem)
     // A permanently unreachable target (such as a recalled message or deleted Issue) settles as `channelGone` so its receipt prevents retries.
     const result = await sources.send(receipt, commands)
     if (result === 'waiting') throw new Later('The Source is not installed')

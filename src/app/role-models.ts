@@ -1,8 +1,23 @@
 /** Resolves and seeds per-role default models on newly created sessions without mutating the global DSH default. */
 import type { Context } from '@deepseek-ai/cordis'
-import type { Agent, ModelSelection } from '@deepseek-ai/dsh-agent'
+import { installModelSelection, type Agent, type ModelSelection } from '@deepseek-ai/dsh-agent'
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { RoleModel } from '../policy.ts'
+
+/** Public Harness selection coupling for direct Agent creation, where the Session controller would create a host directory. */
+export function installPersistedModelSelection(ctx: Context, agent: Agent): void {
+  const defaults = ctx.get('agentDefaultModel') as { currentSelection(): ModelSelection } | undefined
+  if (!defaults) throw new Error('Remote mission profiles require the Harness default model service')
+  const projections = ctx.get('sessionProjections') as { stateOf(session: Agent['session'], key: string): { pending?: ModelSelection | null } | undefined } | undefined
+  agent.ctx.effect(() => installModelSelection(agent.ctx, { assembled: undefined, get current() {
+    const pending = projections?.stateOf(agent.session, 'modelSelection')?.pending
+    if (pending) return pending
+    const header = agent.session.requestHeader()
+    return header ? { provider: header.config.provider, model: header.config.model,
+      ...(header.config.reasoningEffort && !header.adapterDefaults?.reasoningEffort ? { reasoningEffort: header.config.reasoningEffort } : {}) }
+      : defaults.currentSelection()
+  } }))
+}
 
 /** Resolve a configured route through the live provider; catalog membership is not a restriction. */
 export async function resolveRoleModel(ctx: Context, model: RoleModel): Promise<ModelSelection> {

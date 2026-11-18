@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { Effects, Later } from '../src/app/effects.ts'
+import { Effects, Later, RetryLaunch } from '../src/app/effects.ts'
 import { Store } from '../src/app/store.ts'
 import { HealthBoard } from '../src/infra/health.ts'
 import { deferred } from './fixtures/async.ts'
@@ -25,6 +25,38 @@ beforeEach(() => {
 })
 afterEach(() => { store.close(); rmSync(directory, { recursive: true, force: true }) })
 const relay = (text: string) => ({ text })
+
+it('closes a known failed launch only in the same write that spends its retry and sets backoff', async () => {
+  effects.enqueue('launch', 'atomic', { ticketId: 'ticket', assignmentId: 'atomic' })
+  effects.handle('launch', async () => { effects.beginLaunch('atomic'); throw new RetryLaunch('Known launch transport failure') }, { retry: [5000, 300000] })
+  // The database rejects a clear unless the failure count changes in that same statement.
+  store.db.exec(`CREATE TRIGGER launch_atomic BEFORE UPDATE OF launch_started ON effect
+    WHEN OLD.launch_started=1 AND NEW.launch_started=0 AND NEW.attempts!=OLD.attempts+1
+    BEGIN SELECT RAISE(ABORT, 'launch failure was not atomic'); END`)
+  await effects.idle()
+  expect(effects.retryState('launch', 'atomic')).toEqual({ attempts: 1, due: clock + 5000, launchStarted: false })
+})
+
+it('retains uncertain launch records through cancellation and skips them without starving new work', async () => {
+  const unknown = { ticketId: 'original-ticket', assignmentId: 'original-assignment' }
+  effects.enqueue('launch', unknown.assignmentId, unknown)
+  effects.beginLaunch(unknown.assignmentId)
+  const before = store.db.prepare("SELECT * FROM effect WHERE kind='launch'").get()
+  effects.cancel('launch', unknown.assignmentId)
+  const run = vi.fn(async () => {})
+  effects.handle('launch', run)
+  effects.enqueue('launch', 'new-assignment', { ticketId: 'new-ticket', assignmentId: 'new-assignment' })
+  await effects.idle()
+  expect(run).toHaveBeenCalledTimes(1)
+  expect(run).toHaveBeenCalledWith({ ticketId: 'new-ticket', assignmentId: 'new-assignment' }, 'new-assignment')
+  expect(store.db.prepare("SELECT * FROM effect WHERE kind='launch'").get()).toEqual(before)
+  await effects.drain()
+  const recovered = new Effects(store, new HealthBoard(), () => clock)
+  recovered.handle('launch', run); recovered.start(); await recovered.idle()
+  expect(run).toHaveBeenCalledTimes(1)
+  expect(recovered.retryState('launch', unknown.assignmentId)?.launchStarted).toBe(true)
+  await recovered.drain()
+})
 
 it('runs an effect queued inside a transaction once it commits, and none from a transaction that rolled back', async () => {
   const run = vi.fn(async () => {})
@@ -204,4 +236,23 @@ it('reports a failure of the queue itself under its kind, until a dispatch of th
 it('refuses a second handler for a kind', () => {
   effects.handle('relay', async () => {})
   expect(() => effects.handle('relay', async () => {})).toThrow('The relay effects already have a handler')
+})
+
+
+it('recovers the original effect budget and backoff across queue reconstruction without replacing its intent', async () => {
+  effects.handle('launch', async () => { throw new Error('temporary transport failure') }, { retry: [5000, 300000] })
+  const payload = { ticketId: 'ticket', assignmentId: 'assignment' }
+  effects.ensure('launch', 'assignment', payload); await effects.idle()
+  expect(effects.retryState('launch', 'assignment')).toEqual({ attempts: 1, due: clock + 5000, launchStarted: false })
+  const before = store.db.prepare('SELECT * FROM effect').get()
+  await effects.drain()
+  const recovered = new Effects(store, new HealthBoard(), () => clock)
+  const run = vi.fn(async () => {})
+  recovered.handle('launch', run); recovered.ensure('launch', 'assignment', payload)
+  expect(store.db.prepare('SELECT * FROM effect').get()).toEqual(before)
+  expect(() => recovered.ensure('launch', 'assignment', { ...payload, ticketId: 'different' })).toThrow('Existing effect intent differs')
+  recovered.start(); await recovered.idle(); expect(run).not.toHaveBeenCalled()
+  clock += 5000; await recovered.idle(); expect(run).toHaveBeenCalledTimes(1)
+  expect(recovered.retryState('launch', 'assignment')).toBeUndefined()
+  await recovered.drain()
 })

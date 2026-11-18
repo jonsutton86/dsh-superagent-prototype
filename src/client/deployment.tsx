@@ -18,10 +18,11 @@ export type DeploymentForm = ConfigPageForm | undefined
 type Op = Parameters<ConfigPageForm['mutate']>[0][number]
 
 const MACHINE_LIMITS = ['promptMaxChars', 'admissionContextMaxPages', 'admissionContextTimeoutMs'] as const
-type Limits = Record<typeof MACHINE_LIMITS[number], string>
+type Limits = Record<typeof MACHINE_LIMITS[number], string> & { executionMode: string }
 const text = (value: unknown): string => typeof value === 'string' || typeof value === 'number' ? String(value) : ''
-const limitsOf = (values: object | undefined): Limits =>
-  Object.fromEntries(MACHINE_LIMITS.map(key => [key, text((values as Record<string, unknown> | undefined)?.[key])])) as Limits
+const limitsOf = (values: object | undefined, mode: string): Limits =>
+  ({ ...Object.fromEntries(MACHINE_LIMITS.map(key => [key, text((values as Record<string, unknown> | undefined)?.[key])])),
+    executionMode: text((values as Record<string, unknown> | undefined)?.executionMode) || mode }) as Limits
 
 export function usePageForm(form: ConfigForm<Record<string, unknown>> | undefined): DeploymentForm {
   const subscribe = useCallback((listener: () => void) => form ? form.subscribe(listener) : () => {}, [form])
@@ -35,14 +36,16 @@ export function DeploymentPage({ setup, form, accounts: showAccounts }: { setup:
   const snapshot = form?.state
   const editable = snapshot?.status === 'ready' && snapshot.writable
   // Pass `revision` only while DSH serves writable values so a draft started before `ready` rebases once writable.
-  const draft = useDraft({ saved: limitsOf(editable ? snapshot.value : setup.machine), revision: editable ? snapshot.revision : undefined,
+  const draft = useDraft({ saved: limitsOf(editable ? snapshot.value : setup.machine, setup.executionMode), revision: editable ? snapshot.revision : undefined,
     reload: async () => {},
     save: async (value, revision, base) => {
       const ops: Op[] = MACHINE_LIMITS.filter(key => value[key].trim() !== base[key].trim())
         .map(key => value[key].trim() ? { op: 'set', path: [key], value: Number(value[key]) } : { op: 'unset', path: [key] })
+      const modeChanged = value.executionMode !== base.executionMode
+      if (modeChanged) ops.push({ op: 'set', path: ['executionMode'], value: value.executionMode })
       if (!form || !await form.mutate(ops, revision)) throw new Error(t('deploymentRefused'))
-      notify(t('saved'))
-      return { revision: revision + 1, restarting: false }
+      notify(t(modeChanged ? 'savedRestarting' : 'saved'))
+      return { revision: revision + 1, restarting: modeChanged }
     } })
   const accounts = setup.accounts
   // Remote browsers (`memory` mode) are read-only; `unavailable` indicates `dsh-superagent` is still starting.
@@ -63,11 +66,16 @@ export function DeploymentPage({ setup, form, accounts: showAccounts }: { setup:
       </div>}
       {showAccounts && <Section title={t('deploymentDerived')} hint={t('deploymentDerivedHint')}>
         <KeyValues rows={[[t('deploymentRepository'), accounts?.repository ?? '—'],
-          [t('deploymentAgent'), accounts ? `@${accounts.agent}` : '—'], [t('deploymentFeishu'), feishu]]} />
+          [t('deploymentAgent'), accounts?.agent ? `@${accounts.agent}` : '—'], [t('deploymentFeishu'), feishu]]} />
         <Hint>{t('deploymentAccountsWhere')}</Hint>
       </Section>}
       <Section title={t('deploymentMachine')}>
         {readOnlyHint && <Hint>{readOnlyHint}</Hint>}
+        <Field label={t('executionMode')} hint={t('executionModeHint')}>
+          <select value={draft.value.executionMode} disabled={!editable} onChange={event => draft.edit({ ...draft.value, executionMode: event.target.value })}>
+            <option value="local">{t('executionModeLocal')}</option><option value="repository">{t('executionModeRepository')}</option>
+          </select>
+        </Field>
         <div className="dt-field">
           <span className="dt-field-head">{t('deploymentStateDir')}<InfoTip text={t('deploymentStateDirHint')} /></span>
           <span className="dt-mono">{setup.machine.stateDir}</span>

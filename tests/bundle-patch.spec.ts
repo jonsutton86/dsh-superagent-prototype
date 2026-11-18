@@ -7,15 +7,15 @@ import { ROUTER_PRESET, WORKER_PRESET } from '../src/app/sessions.ts'
 
 interface Row { id?: string; name: string; disabled?: unknown; config?: Record<string, unknown> & { plugins?: Row[] } | Row[] }
 /** The patch as DSH reads it: Cordis's include plugin parses `!!js` scalars, and applies the inserts to an entry list. */
-async function patched(): Promise<Row[]> {
+async function patched(file = 'cordis.patch.yml', base: Row[] = []): Promise<Row[]> {
   const cordis = createRequire(createRequire(import.meta.url).resolve('@deepseek-ai/cordis/package.json'))
   const include = cordis.resolve('@deepseek-ai/cordis-plugin-include')
   const { entryListSchema, applyEntryPatches } = await import(include) as {
     entryListSchema: unknown; applyEntryPatches(data: Row[], patches: unknown[], warn: (message: string) => void): Row[] }
   const yaml = await import(createRequire(include).resolve('js-yaml')) as { load(text: string, options: { schema: unknown }): unknown }
-  const patches = yaml.load(readFileSync(join(import.meta.dirname, '..', 'cordis.patch.yml'), 'utf8'), { schema: entryListSchema }) as unknown[]
+  const patches = yaml.load(readFileSync(join(import.meta.dirname, '..', file), 'utf8'), { schema: entryListSchema }) as unknown[]
   const warnings: string[] = []
-  const rows = applyEntryPatches([], patches, message => { warnings.push(message) })
+  const rows = applyEntryPatches(base, patches, message => { warnings.push(message) })
   expect(warnings).toEqual([])
   return rows
 }
@@ -26,9 +26,20 @@ const flat = (rows: readonly Row[]): Row[] => rows.flatMap(row => [row, ...Array
 const presetOf = (rows: readonly Row[], id: string) => rows.map(row => row.config as { id?: string; order?: number; plugins: Row[] })
   .find(config => config?.id === id)!
 
+it('deploys the watchdog in a separate profile without the main plugin or Sources, with an empty assessment preset', async () => {
+  const rows = await patched('examples/watchdog.cordis.patch.yml', [
+    ...await patched(), { id: 'webserver', name: '@deepseek-ai/dsh-host-webserver', config: { host: '127.0.0.1', port: 3082 } },
+  ])
+  for (const id of ['dsh-superagent', 'dsh-superagent-sources', 'dsh-superagent-github', 'dsh-superagent-feishu'])
+    expect(rows.find(row => row.id === id)!.disabled).toBe(true)
+  expect(rows.find(row => row.id === 'webserver')!.config).toMatchObject({ host: '127.0.0.1', port: 3083 })
+  expect(rows.find(row => row.id === 'dsh-superagent-watchdog')!.name).toBe('dsh-superagent/watchdog')
+  expect(presetOf(rows, 'dsh-superagent-watchdog').plugins).toEqual([])
+})
+
 it('defines the worker preset Executor Sessions run under, with a shell that moves long commands to the background', async () => {
   const rows = await patched()
-  expect(rows.map(row => row.id)).toEqual(['dsh-superagent', 'dsh-superagent-github', 'dsh-superagent-feishu', 'dsh-superagent-worker-preset',
+  expect(rows.map(row => row.id)).toEqual(['dsh-superagent-sources', 'dsh-superagent', 'dsh-superagent-github', 'dsh-superagent-feishu', 'dsh-superagent-worker-preset',
     'dsh-superagent-router-preset'])
   const preset = presetOf(rows, WORKER_PRESET)
   expect(preset.id).toBe(WORKER_PRESET)
@@ -51,20 +62,17 @@ it('defines the worker preset Executor Sessions run under, with a shell that mov
     '@deepseek-ai/dsh-tool-workflow', '@deepseek-ai/dsh-workflow-ptc']) expect(names).not.toContain(name)
 })
 
-it('defines the router preset the main Session runs under: the worker\'s 5-second shell and job waits, and only the tools it uses', async () => {
+it('defines a routing preset without shell, filesystem, jobs, local instruction discovery or delegation', async () => {
   const rows = await patched()
-  const router = presetOf(rows, ROUTER_PRESET), worker = presetOf(rows, WORKER_PRESET)
+  const router = presetOf(rows, ROUTER_PRESET)
   expect(router.order).toBe(91)
   const plugins = flat(router.plugins)
   const named = (preset: Row[], name: string) => preset.filter(row => row.name === name).map(row => row.config)
-  for (const name of ['@deepseek-ai/dsh-bash-sandbox', '@deepseek-ai/dsh-pwsh-sandbox', '@deepseek-ai/dsh-tool-jobs']) {
-    expect(named(plugins, name), name).toEqual(named(flat(worker.plugins), name))
-  }
-  // The tools its allow list keeps: skill, bash, read, read_image and the job tools; the file tools only read.
-  for (const name of ['@deepseek-ai/dsh-tool-skill', '@deepseek-ai/dsh-skill-filesystem', '@deepseek-ai/dsh-tool-bash', '@deepseek-ai/dsh-tool-jobs',
-    '@deepseek-ai/dsh-agent-instructions', '@deepseek-ai/dsh-time-context', '@deepseek-ai/dsh-compaction-basic',
+  for (const name of ['@deepseek-ai/dsh-tool-skill', '@deepseek-ai/dsh-time-context', '@deepseek-ai/dsh-compaction-basic',
     '@deepseek-ai/dsh-compaction-tool-result-pruner']) expect(named(plugins, name).length, name).toBeGreaterThan(0)
-  expect(named(plugins, '@deepseek-ai/dsh-tool-fs')).toEqual([{ write: false, edit: false }])
+  for (const name of ['@deepseek-ai/dsh-bash-sandbox', '@deepseek-ai/dsh-pwsh-sandbox', '@deepseek-ai/dsh-tool-bash', '@deepseek-ai/dsh-tool-pwsh',
+    '@deepseek-ai/dsh-tool-jobs', '@deepseek-ai/dsh-tool-fs', '@deepseek-ai/dsh-skill-filesystem', '@deepseek-ai/dsh-agent-instructions'])
+    expect(named(plugins, name), name).toEqual([])
   const names = plugins.map(row => row.name)
   for (const name of ['@deepseek-ai/dsh-tool-subagent', '@deepseek-ai/dsh-tool-subagent-control', '@deepseek-ai/dsh-tool-web', '@deepseek-ai/dsh-tool-fs-search',
     '@deepseek-ai/dsh-tool-todo', '@deepseek-ai/dsh-tool-ask-user', '@deepseek-ai/dsh-tool-present', '@deepseek-ai/dsh-plan-mode',

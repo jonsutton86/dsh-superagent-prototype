@@ -40,6 +40,8 @@ export interface Trigger {
 
 /** Where a trigger went after intake; it grants nothing, but decides who decides a person's follow-up (see `followupOwners`). */
 export interface TriggerDisposition {
+  /** Host-directed input can steer only this existing ticket; it cannot originate or move to other work. */
+  recipient?: string
   /** Rejected by the source scope filter before entering the domain, for the Source's reason. */
   filtered?: Reason
   evalId?: string
@@ -130,7 +132,12 @@ export interface Mandate {
   basis: MandateBasis
   actor: ActorRef
   scope: string
+  /** Optional host-issued execution grant, fixed when the ticket is accepted. */
+  environment?: ExecutionGrant
 }
+
+/** Stable execution environment and the exact authorization generation admitted for this work. */
+export interface ExecutionGrant { environmentId: string; revision: number; epoch: number; world?: string }
 
 /** Active trigger evaluation on a thread; at most one exists per thread. */
 export interface Evaluation {
@@ -217,12 +224,20 @@ export type ReportState = 'progress' | 'waiting' | 'ready' | 'blocked' | 'failed
 /** Binding between a ticket and one executor instance. */
 export interface Assignment {
   id: string
+  /** Host-recorded location at admission. Later ticket retries cannot rewrite this assignment's execution provenance. */
+  execution?: ExecutionLocation
   state: AssignmentState
   createdAt: string
   startedAt?: string
   endedAt?: string
   endedReason?: string
   report?: { state: ReportState; summary: string; at: string }
+  /**
+   * Present only when the Executor proved this Assignment never crossed worker dispatch, such as a prepare command
+   * that failed before any worker Session was created. A durable fact, not an absence inference: it lets a retry
+   * stop the old attempt without holding unprovable original work.
+   */
+  dispatch?: 'none'
   /** When Inputs last reached the worker; one at or after `report.at` means the worker has been busy with Inputs since that report. */
   deliveredAt?: string
   /**
@@ -232,20 +247,20 @@ export interface Assignment {
   idleAt?: string
 }
 
-export type TicketInput =
+/** Delivery acknowledgements shared by every current input kind; legacy absent fields are unknown. */
+export interface InputDelivery {
+  /** When the worker admitted the input to Session history; null while accepted but not yet consumed. */
+  readAt?: string | null
+  /** The Assignment it was last delivered to. */
+  deliveredTo?: string
+  /** Legacy trigger delivery time, retained for the original trigger read-before semantics. */
+  deliveredAt?: string
+}
+export type TicketInput = InputDelivery & (
   /** A Trigger on one of its Threads, or attached to it; `human` when a person wrote it. */
   | { id: string; kind: 'trigger'; triggerId: string; at: string; note?: string; human?: true
     /** It reached the ticket only on a Thread its Executor follows for context. */
-    context?: true
-    /**
-     * When the worker's Session took the message that carried it into a step, from which its model reads it; `null` while
-     * it waits in the Session. One delivered before reads were recorded has none, and counts as read from `deliveredAt`.
-     */
-    readAt?: string | null
-    /** The Assignment it was last delivered to. */
-    deliveredTo?: string
-    /** When an earlier version handed it to the worker. */
-    deliveredAt?: string }
+    context?: true }
   /** The Policy changed in a way that bears on the ticket, as `effect` says; Inputs written before effects have none. */
   | { id: string; kind: 'policy-changed'; from: string; to: string; at: string; effect?: PolicyEffect }
   /** A Decision reopened the ticket; written before ended tickets resumed on their own. */
@@ -254,7 +269,7 @@ export type TicketInput =
   | { id: string; kind: 'resumed'; triggerId: string; at: string }
   | { id: string; kind: 'text'; text: string; at: string }
   /** A fact the main Session gave the ticket from other work: context, which asks for nothing and grants nothing. */
-  | { id: string; kind: 'note'; text: string; at: string }
+  | { id: string; kind: 'note'; text: string; at: string })
 
 /**
  * How a Policy change bears on a ticket: the rules it was accepted under that changed, with their instruction now, or no
@@ -312,7 +327,9 @@ export interface Ticket {
  * Thread closed; the ticket then ends unless its work has not finished (see `Tickets.unfinished`).
  */
 export interface Follow { thread: string; own: boolean; closed?: { at: string; outcome: 'merged' | 'closed' } }
-export interface Execution { name: string; directory: string; assignment: string }
+export interface Execution { name: string; directory: string; assignment: string; mode?: 'repository' | 'local'; environment?: ExecutionGrant;
+  persona?: import('../personas/model.ts').PersonaSnapshot }
+export type ExecutionLocation = Pick<Execution, 'directory' | 'mode' | 'environment'>
 
 /** Whether a ticket is open: it has not ended. */
 export const liveTicket = (ticket: Pick<Ticket, 'ended'>): boolean => !ticket.ended

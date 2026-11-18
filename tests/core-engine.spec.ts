@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Engine, MemoryRepositories, UserError, followupOwners, key, runningAssignment, ticketOutcome, ticketStage,
   waitsForPerson } from '../src/core/index.ts'
-import type { Assessor, Assignment, Candidate, EngineOptions, Executor, OutboundMessage, Outcome, Policy, Ticket, Trigger } from '../src/core/index.ts'
+import type { Assessor, Assignment, Candidate, EngineOptions, Executor, OutboundMessage, Outcome, Policy, Ticket, TicketInput, Trigger } from '../src/core/index.ts'
 
 const member = { source: 'chat', id: 'alice' }
 const guest = { source: 'chat', id: 'guest' }
@@ -57,9 +57,9 @@ function harness(policyOverrides: Partial<Policy> = {}, { emit, prepareTicket }:
     }
   }
   const pump = () => { engine.evaluateDue(); settle() }
-  /** Simulate the worker's Session taking the delivered Trigger Inputs it has not yet read into a step. */
+  /** Simulate the worker's Session taking all delivered current Inputs it has not yet read into a step. */
   const read = (ticketId: string) => engine.inputsRead(ticketId, repo.tickets.get(ticketId)!.inputs.flatMap(input =>
-    input.kind === 'trigger' && input.readAt === null ? [input.id] : []))
+    input.kind !== 'reopen' && input.readAt === null ? [input.id] : []))
   const decide = (candidate: Candidate, outcome: Outcome) => engine.decide(candidate.triggers[0]!.id, { ...outcome, evalId: candidate.evalId })
   return { repo, engine, outbox, withdrawn, requests, assessor, executor, delivered, settle, pump, read, decide,
     setVersion: (value: string) => { version = value }, setPaused: (value: boolean) => { paused = value }, tick: (seconds: number) => { clock += seconds } }
@@ -72,6 +72,28 @@ function accepted(h: ReturnType<typeof harness>, id = '1', thread = 't1') {
 }
 
 describe('intake', () => {
+  it('restricts directed fanout and mixed evaluation authority even under an otherwise permissive policy', () => {
+    const h = harness(), first = accepted(h).ticketId!, other = accepted(h, '2', 't2').ticketId!
+    const thread = h.repo.threads.get('chat:t1')!; thread.subscriptions.push(other); h.repo.threads.save(thread)
+    h.engine.receiveForTicket(trigger('3'), first); h.settle()
+    expect(h.repo.triggers.disposition('3')).toMatchObject({ recipient: first, fanout: [first] })
+    expect(h.repo.tickets.get(other)?.inputs.some(input => input.kind === 'trigger' && input.triggerId === '3')).toBe(false)
+    expect(() => h.engine.attach(other, '3')).toThrow(UserError)
+    expect(() => h.engine.decide('3', { kind: 'stop', ticketId: other, reason: 'Wrong recipient' })).toThrow(UserError)
+    h.engine.handback(first, '3', 'Outside this task'); h.engine.unsubscribe('chat:t1')
+    h.engine.receive(trigger('4')); h.pump()
+    expect(h.requests.at(-1)?.triggers.map(item => item.id)).toEqual(['3', '4'])
+    expect(() => h.decide(h.requests.at(-1)!, { kind: 'accept', title: 'New task', scope: 'Other work', reason: 'Mixed batch' })).toThrow(UserError)
+    expect(h.repo.tickets.list()).toHaveLength(2)
+    expect(h.repo.triggers.disposition('3')?.recipient).toBe(first)
+  })
+  it('lets directed participants stop their own task but cannot resume a human stop', () => {
+    const h = harness(), id = accepted(h).ticketId!
+    h.engine.receiveForTicket(trigger('2'), id)
+    expect(h.engine.decide('2', { kind: 'stop', ticketId: id, reason: 'Please stop' }).kind).toBe('stop')
+    expect(() => h.engine.receiveForTicket(trigger('3'), id)).toThrow('stopped by a person')
+    expect(h.repo.triggers.get('3')).toBeUndefined()
+  })
   it('stores a trigger once and records source filtering', () => {
     const h = harness()
     expect(h.engine.receive(trigger('1'))).toBe('stored')
@@ -699,6 +721,45 @@ describe('follow-up owners', () => {
   })
 })
 describe('interrupted assignments', () => {
+  it('requeues every current unread input kind and excludes consumed, legacy-unknown and earlier-assignment work', () => {
+    const h = harness(), id = accepted(h).ticketId!, ticket = h.repo.tickets.get(id)!, running = runningAssignment(ticket)!
+    const at = ticket.createdAt, inputs: TicketInput[] = [
+      { id: 'text', kind: 'text', text: 'Original instruction', at },
+      { id: 'policy', kind: 'policy-changed', from: 'v1', to: 'v2', at },
+      { id: 'resumed', kind: 'resumed', triggerId: '1', at },
+      { id: 'note', kind: 'note', text: 'Original context', at },
+      { id: 'consumed', kind: 'note', text: 'Already read', at },
+      { id: 'legacy', kind: 'text', text: 'Unknown historic delivery', at },
+      { id: 'earlier', kind: 'text', text: 'Earlier assignment', at, readAt: null, deliveredTo: 'earlier-assignment' },
+      { id: 'reopen', kind: 'reopen', decisionId: 'old', at },
+    ]
+    h.repo.tickets.save({ ...ticket, inputs })
+    h.engine.inputsDelivered(id, running.id, ['text', 'policy', 'resumed', 'note', 'consumed', 'reopen'])
+    h.engine.inputsRead(id, ['consumed', 'reopen'])
+    const originalMandate = ticket.mandate
+    h.tick(1); h.engine.assignmentInterrupted(id, running.id)
+    const recovered = h.repo.tickets.get(id)!
+    expect(recovered.undelivered.slice(0, -1)).toEqual(['text', 'policy', 'resumed', 'note'])
+    expect(recovered.inputs.find(input => input.id === 'reopen')).toEqual(inputs.at(-1))
+    expect(recovered.mandate).toEqual(originalMandate)
+    h.settle(); h.read(id)
+    h.tick(1); h.engine.report(id, { state: 'failed', summary: 'Retry requested after consumption' }); h.engine.retryTicket(id)
+    expect(h.repo.tickets.get(id)!.undelivered).toEqual([])
+  })
+  it.each(['waiting', 'blocked'] as const)('recovers unread inputs beside a settled %s report without restarting or releasing held automation', state => {
+    const h = harness(), id = accepted(h).ticketId!
+    h.tick(1); h.engine.receive(trigger('2')); h.engine.note(id, 'Pending background context'); h.settle()
+    const before = h.repo.tickets.get(id)!, running = runningAssignment(before)!
+    const human = before.inputs.find(input => input.kind === 'trigger')!, note = before.inputs.find(input => input.kind === 'note')!
+    h.tick(1); h.engine.report(id, { state, summary: 'Waiting for clarification' })
+    vi.mocked(h.executor.start).mockClear(); vi.mocked(h.executor.deliver).mockClear()
+    h.tick(1); h.engine.assignmentInterrupted(id, running.id)
+    const restored = h.repo.tickets.get(id)!
+    expect(restored.assignments).toHaveLength(1); expect(h.executor.start).not.toHaveBeenCalled()
+    expect(restored.undelivered).toEqual(state === 'blocked' ? [human.id] : [human.id, note.id])
+    expect(restored.inputs.find(input => input.id === note.id)?.readAt).toBeNull()
+    expect(h.executor.deliver).toHaveBeenCalledOnce()
+  })
   it('starts an Assignment interrupted mid-work again with a note, and hands one that waits what waits for it', () => {
     const h = harness()
     const interrupted = accepted(h).ticketId!
@@ -1578,7 +1639,7 @@ describe('read claims review: retries', () => {
     h.tick(1); h.engine.receive(trigger('3')); h.settle()
     h.tick(1); h.engine.report(ticketId, { state: 'blocked', summary: 'Which page?' })
     h.tick(1); h.engine.retryTicket(ticketId)
-    expect(ticket().undelivered).toEqual([inputOf('3')])
+    expect(ticket().undelivered).toEqual([inputOf('3'), ticket().inputs.find(input => input.kind === 'resumed')!.id])
   })
 })
 describe('read claims review: restarts', () => {
@@ -1595,7 +1656,7 @@ describe('read claims review: restarts', () => {
     // That Assignment blocks before a step took it, and a person retries: the retry's Assignment gets it too.
     h.tick(1); h.engine.report(ticketId, { state: 'blocked', summary: 'Which page?' })
     h.tick(1); h.engine.retryTicket(ticketId)
-    expect(ticket().undelivered).toEqual([inputOf('2')])
+    expect(ticket().undelivered).toEqual([inputOf('2'), ticket().inputs.find(input => input.kind === 'text')!.id])
   })
 })
 describe('ignores from the card', () => {

@@ -1,0 +1,82 @@
+{
+  "kind": "optional-provider-configuration-preservation",
+  "capturedAt": "2026-11-10T18:19:41.997867+00:00",
+  "testedWorkingTree": {
+    "baseRevision": "592dfa20dda1b03116cdf0b63b5182492165b42d",
+    "files": {
+      "src/providers/abliteration-config.ts": "2b1ac6003f3fc4e08e6c91a79b1890a67bf3abf6ea6a5fb9e015df7f02fdb500",
+      "tests/abliteration-provider.spec.ts": "fe16a9e0e0d8b8f69482951c05a350f678b17a4f3daf1b096e2a58252ffb1b6d",
+      "tests/abliteration-harness.spec.ts": "3c0fb404204a473f2cd6f0976c928b55ad46b5b6e20fb40841e83e864b887eab",
+      "tests/fixtures/abliteration-harness.mjs": "90aa82b92cbfbee591b53a5d579acdfc013ea3ddd0e1572d9049dc3efb1777b0"
+    }
+  },
+  "installedHarness": {
+    "package": "@deepseek-ai/dsh-app-boot",
+    "version": "0.2.1-rc.3",
+    "source": "lib/index.js",
+    "sourceSha256": "5135179ac810e4f626f32ec3bdc3293dc7d2028e8aa92e5e0c006f1a33b78e76",
+    "observedSymbols": [
+      "applyEntryPatches",
+      "renderConfigDump"
+    ]
+  },
+  "rea": {
+    "version": "6.8.0",
+    "evidenceId": "ev_067c881b133f946c392ef91e00ed55c75aaf85216bf3c2d626bc6fc2a11b65c8",
+    "selectedFiles": [
+      "lib/index.js"
+    ],
+    "parsedFiles": 1,
+    "parseFailures": 0,
+    "unselectedFiles": 24,
+    "semanticUnknowns": 5650,
+    "coverage": "partial",
+    "limitation": "Static source relationships do not prove runtime behavior; installed Harness composition is exercised separately."
+  },
+  "observedBehavior": [
+    "A supplied config replaces the whole existing entry config.",
+    "An unmerged provider example removes another explicitly configured route.",
+    "Merging the complete effective adapter config preserves other routes and adapter settings.",
+    "The existing agent-default-model entry remains unchanged."
+  ],
+  "qualification": {
+    "platform": "Darwin arm64",
+    "node": "v25.9.0",
+    "focusedFiles": 2,
+    "focusedPassed": 13,
+    "typecheck": "passed",
+    "installedHarnessAdapter": "0.2.1-rc.3",
+    "network": "loopback only for these focused tests"
+  },
+  "preparedLocalProfile": {
+    "profile": "agentic-os",
+    "preservedPriorEntries": 7,
+    "defaultBefore": {
+      "provider": "deepseek-official",
+      "model": "deepseek-flash"
+    },
+    "defaultAfter": {
+      "provider": "deepseek-official",
+      "model": "deepseek-flash"
+    },
+    "models": [
+      "abliterated-model",
+      "abliterated-model-large-flash"
+    ],
+    "isolatedHarnessCatalog": "both configured models resolved",
+    "providerCatalog": "both requested models available and ready",
+    "appStarted": false,
+    "inferenceDispatched": false,
+    "evaluationEntitlement": "not exposed by aggregate credits metadata"
+  },
+  "remaining": [
+    "Single live completion awaits confirmation that only evaluation credits can be consumed.",
+    "Application activation requires the owner deployment gate.",
+    "Final full qualification must cover the resulting committed revision."
+  ],
+  "review": {
+    "pattern": "review_code",
+    "fabricRevision": "de0b72766db0436b6c1887bb75768cb3960e67e5",
+    "evidenceWrapperVersion": 1
+  }
+}

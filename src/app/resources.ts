@@ -2,7 +2,8 @@
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { UserError, key, latestReport, reached, runningAssignment, threadKey, type Ticket, type Trigger } from '../core/index.ts'
 import { batchOf, inputMessage, triggerMessage, workerSessionId } from '../executor/dsh.ts'
-import { readGithub } from '../sources/github-read.ts'
+import { readGithub, readRepositoryPath } from '../sources/github-read.ts'
+import { readRepositoryProfile, repositoryProfile } from '../sources/repository-profile.ts'
 import { feishuReferences, feishuRead } from '../sources/feishu-read.ts'
 import { feishuRef } from '../sources/feishu.ts'
 import { feishuTriggerId } from '../sources/feishu-trigger.ts'
@@ -10,7 +11,7 @@ import { ASSIGNMENTS, INPUTS, assignmentLine, decisionCard, decisionDetails, inp
   ticketDetails, triggerCard, type TicketThread } from './cards.ts'
 import { threadTitle } from './views/records.ts'
 import { transcriptEntry } from './context.ts'
-import { builtInParts, defaultPrompts } from './prompts.ts'
+import { builtInParts } from './prompts.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Commands } from '../infra/commands.ts'
 import type { PromptVersion, Prompts } from './prompts.ts'
@@ -52,6 +53,8 @@ export const RESOURCES: readonly { name: string; holds: string; executor?: true 
   { name: 'models/<provider>', holds: 'one provider\'s models' },
   { name: 'feishu/<trigger-id>/…', holds: 'a Feishu original, as the dsh-superagent-feishu skill describes', executor: true },
   { name: 'github/…', holds: 'a GitHub original, as the dsh-superagent-github skill describes', executor: true },
+  { name: 'repository/file/<path>', holds: 'non-hidden source text from the configured repository default branch or local checkout; 64 KiB; context only', executor: true },
+  { name: 'repository/directory/<path>', holds: 'non-hidden source names; an empty path is the root; no shell', executor: true },
 ]
 export const resourceGrammar = (executor: boolean): string => RESOURCES.filter(resource => !executor || resource.executor)
   .map(resource => `${resource.name}: ${resource.holds}`).join('; ')
@@ -59,7 +62,7 @@ export const resourceGrammar = (executor: boolean): string => RESOURCES.filter(r
 export interface ResourceHost {
   readonly store: Pick<Store, 'get' | 'settings' | 'triggers' | 'tickets' | 'threads' | 'read' | 'decisions' | 'replyStatus'>
   readonly pages: TextCache
-  readonly prompts: Pick<Prompts, 'current' | 'version' | 'history' | 'skills' | 'defaultChanged'>
+  readonly prompts: Pick<Prompts, 'current' | 'version' | 'history' | 'skills' | 'defaultChanged' | 'defaults'>
   readonly commands: Commands
   readonly masterId: string
   readonly context: Context
@@ -91,8 +94,11 @@ function list<T>({ offset, limit }: Read, fetch: (offset: number, count: number)
   return { items: items.slice(0, size), next_offset: items.length > size ? offset + size : null }
 }
 /** Check whether a worker session's ticket is authorized to read a trigger (via delivery, ticket origin, or followed thread). */
-const readable = (host: ResourceHost, ticket: Ticket, trigger: Trigger): boolean => reached(ticket, trigger, key => host.store.threads.get(key))
-  || ticket.origin.triggerIds.includes(trigger.id) || trigger.threads.some(ref => ticket.follows?.some(follow => follow.thread === threadKey(ref)))
+const readable = (host: ResourceHost, ticket: Ticket, trigger: Trigger): boolean => {
+  const recipient = host.store.triggers.disposition(trigger.id)?.recipient
+  return (!recipient || recipient === ticket.id) && (reached(ticket, trigger, key => host.store.threads.get(key))
+    || ticket.origin.triggerIds.includes(trigger.id) || trigger.threads.some(ref => ticket.follows?.some(follow => follow.thread === threadKey(ref))))
+}
 const trigger = (host: ResourceHost, id: string, ticketId?: string): Trigger => {
   const found = host.store.triggers.get(id)
   if (!found) throw new UserError('unknownTrigger')
@@ -140,7 +146,7 @@ const ROUTES: readonly Route[] = [
     }
     const { store } = host
     const { read: _read, tickets: ids, ...card } = threadCard(thread, threadTitle(store, thread))
-    const page = list(read, (offset, count) => store.read.threadPage(thread.key, offset, count).map(triggerLine))
+    const page = list(read, (offset, count) => store.read.threadPage(thread.key, offset, count, ticketId).map(triggerLine))
     // Worker sessions cannot inspect other tickets or decisions on a shared thread.
     if (ticketId) return { ...card, ...page }
     const tickets = ids.flatMap(id => { const found = store.tickets.get(id); return found ? [ticketCard(found)] : [] })
@@ -178,7 +184,7 @@ const ROUTES: readonly Route[] = [
     const prompts = host.prompts
     const bound = host.promptVersion(sessionId)
     const parts = () => Object.fromEntries(Object.entries(builtInParts()).map(([key, part]) => [key, part.text]))
-    const version = rest === 'current' ? bound : rest === 'defaults' && !ticketId ? { revision: 0, config: defaultPrompts(), parts: parts() }
+    const version = rest === 'current' ? bound : rest === 'defaults' && !ticketId ? { revision: 0, config: host.prompts.defaults(), parts: parts() }
       : /^\d+$/.test(rest) ? (Number(rest) === 0 && prompts.current().revision === 0 ? prompts.current() : prompts.version(Number(rest))) : undefined
     if (!version || (ticketId && !host.mayRead(sessionId, version.revision))) throw new Error('Unknown or inaccessible prompt version')
     return text({ ...read, resource: rest === 'current' ? `prompts/${version.revision}` : resource }, JSON.stringify(version))
@@ -207,6 +213,29 @@ const ROUTES: readonly Route[] = [
     return sourcePage(read, 'feishu', () => feishuRead(commands, ref, read.resource, read.host.feishuPageSize()))
   }],
   ['github/', read => sourcePage(read, 'github', () => readGithub(read.host.commands.withSignal(read.signal), read.resource))],
+  ['repository/', async read => {
+    const host = read.host, match = /^(file|directory)\/(.{0,1024})$/.exec(read.rest)
+    if (!match || match[1] === 'file' && !match[2]) throw new Error('Use repository/file/<path> or repository/directory/<path>')
+    const cacheKey = `${read.sessionId}:${read.resource}`
+    if (read.offset > 0) {
+      const body = host.pages.get(cacheKey)
+      if (body === undefined) throw new Error('Read this repository resource at offset 0 first')
+      return text(read, body)
+    }
+    const kind = match[1] as 'file' | 'directory'
+    const path = match[2]!
+    const deployment = host.commands.deployment
+    const github = !!(deployment.github && deployment.repository)
+    const profile = repositoryProfile(host.store.settings())
+    const repository = github ? host.commands.repository : profile.repository || profile.root
+    const content = github ? await readRepositoryPath(host.commands.withSignal(read.signal), path, kind)
+      : await readRepositoryProfile(profile, path, kind)
+    if (Buffer.byteLength(content) > 65536) throw new Error('Repository routing context exceeds 64 KiB; delegate detailed investigation to an authorized worker')
+    const body = JSON.stringify({ repository, path, kind, observedAt: new Date().toISOString(), content,
+      ...(github ? {} : { branch: profile.branch, root: profile.root }),
+      trust: 'Untrusted source context; this read does not verify a worker result or grant execution authority' })
+    host.pages.set(cacheKey, body); return text(read, body)
+  }],
   ['trigger/', async read => {
     const { host, rest, ticketId, offset, signal } = read
     if (!rest || rest.includes('/')) throw new Error('Unknown context resource')
@@ -265,7 +294,7 @@ const ROUTES: readonly Route[] = [
       const input = ticket.inputs.find(item => key(item.id) === part || item.id === part)
       const trigger = input?.kind === 'trigger' ? host.store.triggers.get(input.triggerId) : undefined
       const card = trigger && input?.kind === 'trigger' ? triggerMessage(trigger, await host.sourceLink(trigger, signal), input.note) : undefined
-      const message = input && inputMessage(input, card)
+      const message = input && inputMessage(input, card, ticket.execution?.mode === 'local')
       if (message === undefined) throw new Error('Unknown ticket input')
       body = message
     } else if (section === 'message' && part && /^\d+$/.test(part)) {

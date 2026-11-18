@@ -1,0 +1,811 @@
+# Agentic OS
+
+The objective is a complete personal agentic workspace: persistent goals, conversations, shared memory, artifacts,
+specialist agents, scheduled work, execution control, and operational visibility. DeepSeek Harness remains the execution
+runtime. This extends the article implementation tracker in `IMPLEMENTATION.md`, preserving its full scope.
+
+## Foundation decision
+
+Build in `jonsutton86/dsh-superagent-prototype`, retaining its Engine, Harness sessions, SQLite store, durable effects,
+admission, worker isolation, and independent supervision. Kun has a substantial Electron workbench, but its architecture
+uses the bundled Kun runtime. Replacing that runtime while preserving desktop behavior would add a separate migration.
+A desktop shell can later attach through a versioned authenticated API.
+
+The product reference is [the Hermes Agentic OS walkthrough](https://www.youtube.com/watch?v=zqUdtL5l9yM). Its transcript
+describes mission control, shared context, personas, cost visibility, overnight reflection, onboarding, and an artifact
+library. These are requirements and inspiration, not evidence that this fork implements them. No course code/assets are
+included. The [local-model walkthrough](https://www.youtube.com/watch?v=bc7QaDmLmoA) also motivates model selection and voice.
+
+## Complete target architecture
+
+```mermaid
+flowchart TB
+  UI[Workspace: conversations, missions, memory, artifacts, calendar, agents] --> API[Authenticated workspace API]
+  API --> Missions[Durable plans and human/agent actions]
+  API --> Registry[Workspace, persona, model and connector registry]
+  API --> Knowledge[Scoped knowledge and provenance]
+  API --> Artifacts[Immutable artifacts and verification evidence]
+  API --> Schedules[Durable schedules and reflection proposals]
+  Missions --> Engine[Existing Engine: authorization, ownership, tickets, effects]
+  Schedules --> Engine
+  Registry --> Engine
+  Engine --> Harness[DeepSeek Harness sessions, inference, tools and subagents]
+  Harness --> Environments[Local or enrolled remote process and filesystem providers]
+  Harness --> Knowledge
+  Harness --> Artifacts
+  Harness --> Usage[Usage, budgets and trace events]
+  Watchdog[Independent supervision] --> Engine
+  Voice[Optional speech input and output] --> API
+  Channels[External source adapters] --> Engine
+```
+
+Execution continues through the Engine. UI state, model text, and imported documents cannot independently grant authority
+or mark verified completion. Shared context has source/workspace boundaries. Remote file and process operations must
+refer to the same environment. Remote access requires authentication; do not expose the current loopback API publicly.
+
+## Implementation ledger
+
+| Requirement | Current evidence | Remaining implementation and acceptance |
+| --- | --- | --- |
+| Persistent missions | Durable goals, editable/versioned plans, scoped planner proposals, operator review, immutable history, and transitive result invalidation | Multi-workspace ownership, plan-history retention and broader planning-quality evaluation |
+| Action execution | Operator dispatch into Engine/Harness; local and repository modes; unit/DOM flows, actual DeepSeek Flash missions, exact per-action persona versions and managed-world selection; guided model/environment setup and first-task review (`065-guided-setup.md`); immutable managed repository preparation with per-task branches (`073-remote-repositories.md`), reviewed exports and independent same-repository branch/PR publication with fresh approval and original-ID recovery (`074-repository-exports.md`, `075-repository-publication.md`) | Broader provider/tool acceptance, live GitHub publication acceptance, fork/CI/merge policies, broader Git provisioning and guided managed-endpoint deployment |
+| Human participation and completion | Human actions, reviewed dependencies; acceptance bound to ticket, library evidence, host-captured Git/environment checks and plan-bound PR targets; fresh whole-mission completion with durable original-attempt recovery (`050-mission-pull-completion.md`) | Continuous freshness, broader result/revision UX and long-horizon acceptance |
+| Conversations and steering | Unified inbox, durable read receipts, question/review filters, visible Harness text, atomic task creation, idempotent replies, mission/artifact links, resumable input uploads, exact message binding, native image projection and scoped local/remote copies (`063-attachments.md`); reviewed persona versions and default/managed-world selection with captured execution details and live inference/restart/recovery qualification (`064-inbox-execution-settings.md`) | Cross-workspace enrollment, large-history indexing/retention, browser/vision acceptance, attachment retention/GC and richer conversation tooling |
+| Shared memory and recall | Immutable scoped capsules, typed/hash-bound provenance, FTS search, bounded transitive freshness, complete review dependency closure, durable retrieval allowances and chain reads, worker tools and library UI (`043-chain-recall.md`) | Measured retrieval quality and long-horizon workloads, external-source freshness/import connectors, model-token-aware context selection, retention/scaling and multi-workspace ownership |
+| Artifact library | Content-addressed publication, search/previews/download, mission/session links, archival, immutable revisions, reviewed GitHub comment/review delivery, versioned checks, original assignment/environment evidence, source freshness capture, selected-check approval, PR-head binding and fresh whole-mission completion (`050-mission-pull-completion.md`), exact-history reviewed bundles and independent repository publication (`075-repository-publication.md`) | Continuous freshness, large/streamed files, matched-environment imports and directory sync, retention, CI/branch-policy/merge integration and broader channel/repository delivery |
+| Personas and skills | Immutable versioned definitions, model preferences, optional-tool guards, embedded skills, management UI, reviewed per-action assignment and worker/descendant resume binding; contract in `021-personas.md` | Multi-workspace ownership, stronger per-capability execution boundaries, role-quality evaluations and catalog retention |
+| Schedules and reflection | Versioned schedules, durable occurrences, timezone/DST, missed-run/run/open limits, scoped model budgets, bounded automatic reflection snapshots, reviewed memory/plan/new-mission proposals and operator UI (`044-scheduled-reflection.md`) | Reflection quality and long-horizon evaluation, broader provider budget acceptance, retention/scaling, multi-workspace ownership and broader deployment acceptance |
+| Usage and budgets | Worker concurrency, schedule run/open-mission reservations, managed Harness call/token ledger, versioned estimated pricing, scoped call/token/spend reservations, reconciliation and operator UI (`042-usage-budgets.md`); speculative reservation/promotion integration (`045-speculative-preparation.md`) | Broader provider/adapter acceptance, invoice import, metadata generation binding, non-token fees, retention and multi-workspace ownership |
+| Models and connectors | Harness configuration, opt-in Abliteration models through the existing OpenAI-compatible adapter with per-task persona selection and guarded image/output requests (`076-abliteration-provider.md`; live catalog access verified, inference unverified), optional GitHub/Feishu, local grants, authenticated remote transport, paired Harness services, persistent remote authority/revocation and native Linux namespace/cancellation CI, whole-profile and per-action world binding, durable command/file ownership and operator receipts, endpoint-owned versioned credentials, real model artifact/restart qualification, endpoint enrollment/reconciliation, independent managed worlds, prepared-host endpoint launch, configured cgroup limits/usage receipts, owned delegated-service setup, managed pinned SSH forwarding, native Ubuntu ARM64 kernel/Harness/service qualification and pinned repository preparation | Broader OS/CPU and physical/cloud qualification, privileged host-user setup, managed machine/fleet and broader/reverse transport, disk quotas, per-workspace aggregate allocation, cross-host deployment qualification and connector scope |
+| Voice | Local/HTTP speech adapters, explicit local/cloud modes, editable dictation, reply playback, interruption, durable request/restart handling and text fallback (`062-voice.md`) | Browser/microphone acceptance, cloud-provider qualification, streaming/realtime sessions, long-reply chunking, speech billing and receipt maintenance |
+| Supervision and recovery | Independent watchdog console, opt-in receipt-aware operator alert routing and original-ID recovery (`077-supervision-alerts.md`), evidence review receipts, bounded history/retention, host execution observations and coherent evidence revisions (`079-execution-observations.md`), and real-model process-failure recovery; encrypted checkpoints/held Session import, checkpoint-bound claimant replacement, configuration/receipt/input validation, core Engine/connector/mission/plan/schedule authority and artifact/check/review/completion evidence checks, authenticated held receipt application, ownership authority, endpoint and artifact/mission publication fencing and owned Runtime/dedicated/managed provider lifecycle; repository intent/export/approval graphs and encrypted held recovery of original branch/PR receipts (`075-repository-publication.md`) | Remaining product authority graphs, deployment binding/remapping, broader inbound connector/repository integration, clean-host activation/failover, live alert-destination acceptance, diagnosis quality and broader live failure tests |
+| Whole-product qualification | Deterministic unit, API/DOM flows, actual Harness restarts, live local model/tool, inbox and planner-to-execution missions; persistent local launcher (`066-persistent-launcher.md`), production browser-factory regression coverage, operator-confirmed browser startup and optional service supervision with native macOS lifecycle drills (`068-service-supervision.md`) and native Ubuntu ARM64 systemd/Harness, abrupt VM power-loss and intentional-stop reboot qualification (`072-native-linux-qualification.md`) | Full browser/desktop journeys and layout, broader provider acceptance, clean-host backup/restore drills, accessibility, broader Linux/CPU and physical/cloud reboot qualification, supported upgrades and desktop packaging |
+
+## Missions increment
+
+The Missions tab creates durable objectives with acceptance criteria, actions assigned to a person or an agent, and
+dependencies. Human actions require a result note. Agent actions require explicit dispatch; completed execution enters
+review. Acceptance binds the operator's review to the exact execution snapshot. Stopped/dropped execution is not success.
+If an accepted result changes later, its acceptance becomes stale; a completed mission is visibly flagged for re-review.
+Closing a mission is refused while any action has an open execution.
+
+`workspace` is a built-in source restricted to existing active agent actions. The host mints the operator identity; forms
+cannot submit actors, tickets, or execution directories. Endpoints inherit the loopback host/origin/header guard. Disabling
+the source prevents new admission and mandate revalidation. This is a local single-owner boundary, not multi-user auth.
+
+Every mutation supplies `requestId`; its fingerprint and receipt commit with the mission, Engine changes, and queued effects.
+Identical retries return current state without repeating an effect; changed payloads using the same ID are refused. Revisions
+prevent lost updates. Added actions depend on existing actions; complete plan proposals validate the whole dependency graph
+and reject cycles. Missions permit at most 200 actions;
+lists are paginated, and the activity view reads the latest 100 entries while older activity remains in SQLite.
+
+| API relative to `/orchestrator/api/` | Purpose |
+| --- | --- |
+| `GET missions?offset=0&limit=30` | Paginated missions |
+| `POST missions` | Create title, objective and acceptance criteria |
+| `GET missions/:id` | Mission, current execution states and recent activity |
+| `POST missions/:id/actions` | Add action/dependencies against a revision |
+| `POST missions/:id/actions/:action` | Run, steer, stop, retry or accept |
+| `PUT missions/:id` | Complete, archive or reopen against a revision |
+
+Planning works while deployment needs configuration. Execution supports the configured single-repository deployment or
+a standalone local profile without GitHub. `012-local-execution.md` documents local setup, task directories, prompt profiles,
+mode-change protection and the filesystem/process check. Local mode keeps the same Engine, worker Sessions, publication
+and review path. It does not supply OS isolation, remote environment enrollment or full product completion.
+
+## Verification record
+
+2026-11-08: `pnpm check` passed TypeScript checking, all 64 test files / 1,233 tests, and the server/client bundle builds
+on Node 25.9.0. Twelve tests were added, including a rendered create/dispatch/review/complete flow through the management
+routes and Harness adapter. Other coverage checks request replay after reopening SQLite, rollback, conflicting revisions,
+dependency ordering and invalidation, human steering, source disablement, and stale review rejection.
+
+2026-11-08, library increment: `pnpm check` passed TypeScript, all 66 test files / 1,249 tests, and server/client builds.
+Sixteen tests were added for library persistence, scope boundaries, provenance, integrity, review freshness, API integration,
+rendered revision/archive flows and a worker-produced HTML artifact preview. Original orchestration prompt-size budgets
+remain unchanged; new library tools have separate ceilings of 2,200 router / 4,500 worker characters.
+
+2026-11-08, local execution increment: `pnpm check` passed TypeScript, all 67 test files / 1,256 tests, and server/client
+builds. Tests cover a general mission with no accounts, filesystem/process mismatch and cleanup, mode mismatch, local
+prompt tool names, disabled repository preparation, and UI mode saves through the Harness configuration form.
+
+An isolated installation of `@deepseek-ai/dsh@0.2.1-rc.3` started the actual built bundle in local mode. Its loopback API
+created a mission and artifact; both identities, content/hash and idempotency receipts survived a real process restart.
+After the operator configured the DeepSeek provider, an actual `deepseek-official/deepseek-flash` worker computed
+sum/mean values, created and checked a local JSON file, published its exact bytes and reported ready. An independent
+file/content/hash check passed, then explicit API review accepted the action and completed the mission. See
+`012-local-execution.md` for the artifact hash and qualification limits. Browser/desktop acceptance remains outstanding.
+
+2026-11-08, inbox increment: `pnpm check` passed TypeScript, all 69 test files / 1,267 tests, and server/client builds.
+Eleven tests were added for atomic task creation, exact read receipts, question/reply flow, ambiguous-response replay,
+visible text projection, history paging, result follow-ups and cancellation while paused. The latter remains stoppable
+through both mission and execution controls, cannot be accepted or archived while queued, and never resumes or reroutes
+after explicit cancellation. Existing live-ticket handback behavior is unchanged.
+
+The actual DeepSeek worker asked a format question, received its answer through the inbox, computed a JSON summary and
+published it. A follow-up resumed the same ticket and produced a second artifact with a `supersedes` link. Independent
+file/content/hash checks passed before explicit acceptance and mission completion. A real Harness restart preserved all
+eight projected messages, read state, mission acceptance, artifact bytes/hash and both reply replay receipts; no additional
+assignment was created. See `013-inbox.md` for the qualification evidence and remaining projection limits. Browser and
+desktop acceptance remain outstanding.
+
+2026-11-08, mission planning increment: `pnpm check` passed TypeScript, all 71 test files / 1,278 tests, and server/client
+builds. Eleven new tests cover version history, review replay, dependency validation, migration preserving accepted results,
+planner rollback, active/paused-work protection, scope, historical restoration, transitive invalidation and rendered review
+flows. Outdated executions are also identified as outdated in the Inbox rather than offered as current review results.
+
+An actual DeepSeek Flash planner submitted a two-action proposal and reported ready without applying or executing it.
+The qualification driver inspected and approved the exact proposal, verified that no action started on approval, then
+explicitly dispatched its agent action. Independent checks confirmed the JSON values, computed total/count, exact published
+bytes and SHA-256. The driver exercised the operator review endpoints to test the dependent human action and mission
+completion; this simulated review is not a claim of human inspection. A real process restart preserved the three plan
+versions, approved proposal, completed actions and artifact hash. Replaying planning, approval and dispatch requests created
+no extra assignment. `014-mission-plans.md` records identities and evidence. Broader planning quality and browser acceptance
+remain outstanding.
+
+## Next implementation order
+
+The numbered **Implementation sequence and acceptance** in `IMPLEMENTATION.md` is the authoritative execution order.
+The earlier workspace list put fleet work first and supervision last; that conflicted with the article tracker and is
+superseded by the aligned order below. The ledger above still defines the full product scope.
+
+Reviewed repository transfer and independent same-repository branch/PR publication are implemented through increments
+074–075, with fresh approval and original-ID recovery. Live publication, fork/CI/merge policy and broader repository
+workflows remain open. These increments do not qualify deployment or complete the architecture.
+
+1. **Supervision and operational visibility:** alert destination acceptance, diagnosis quality, unattended-duration evaluation
+   and narrow audited recovery policies. Independent observation and the incident console exist; `078-supervision-failures.md`
+   qualifies provider faults and a 30-second productive job in installed Harness processes. Bounded host-collected execution
+   metadata, coherent snapshots and evidence-bound assessment/review are implemented and qualified in `079-execution-observations.md`.
+   These checks do not establish semantic quality or overnight reliability. `080-worker-recovery.md` consolidates provider
+   retries in Harness and retains unknown launch identities; `081-supervision-evaluation.md` adds isolated installed-Harness
+   evaluations with separate coverage, abstention and manual-review metrics. Live-model quality and endurance remain open.
+2. **Compute/state/environment contracts:** guided managed machine/fleet setup, broader/reverse transport, native endpoint/resource/
+   delegated-service qualification and host-user setup, broader remote repository workflows, disk quotas and per-workspace
+   aggregate allocation. Preserve paired process/filesystem, grant, ownership and host-verification boundaries.
+3. **Durable restore and state ownership:** clean-host checkpoint restore/failover, deployment/path remapping,
+   credential/identity rotation and abrupt host-loss drills preserving Harness Sessions, world authority and original receipts.
+   Same-host installed recovery does not prove cross-host recovery. Multi-workspace ownership/lifecycle still needs implementation.
+4. **Chain of Recall and long-term knowledge:** measured retrieval/reflection quality, external-source imports/freshness,
+   model-token-aware context selection, history/attachment/artifact retention, larger files and multi-workspace scope.
+5. **Speculative work and budgets:** long-horizon quality/waste evaluation, broader provider accounting and budget acceptance,
+   scaling, multi-workspace ownership and stronger confinement. Reservations, expiry and promotion are implemented.
+6. **Verified artifacts and delivery:** continuous freshness, large/streamed files, matched-environment imports/directory sync,
+   retention, fork/CI/branch-policy/merge integration, broader channel/repository delivery and live publication acceptance.
+7. **Router authority and operator experience:** task-centered incident/evidence/environment/budget navigation, richer conversation
+   tools, full browser/desktop journeys and accessibility, realtime/streaming voice and microphone/cloud-speech acceptance.
+   Keep asynchronous steering and the existing working panel.
+8. **Whole-system qualification:** supported provider/OS/CPU combinations, clean-host recovery, real logout/reboot services,
+   upgrades/packaging and repeatable workloads measuring quality, interruptions, latency, usage, waste and duplicate effects.
+   Audit every ledger row before requesting owner approval to mark the project complete.
+
+The durable memory/artifact increment is described in `011-library.md`; its application-level scope boundary does not
+replace the article's isolated execution environments. It uses the existing SQLite database and Harness tool registration.
+
+Local environment increment: `015-execution-environments.md` records paired filesystem/process verification, persisted task grants,
+explicit changed-root enrollment, revoke/reauthorize/replace controls, and mutation replay after response loss. These local
+authorization generations do not implement remote leases or OS isolation. The full remote requirement remains open.
+
+2026-11-08, environment qualification: `pnpm check` passed all 73 files / 1,294 tests and builds. The live Harness/DeepSeek
+provider path exercised a generation-1 question, revocation and refused admission, generation-3 artifact production, byte/hash
+verification, and restart/replay with no duplicate assignments. The new artifact remains for operator review; this was a
+qualification driver, not a claim of human acceptance. `015-execution-environments.md` records identities and limits.
+
+Endpoint administration increment: `020-endpoint-administration.md` records pinned endpoint registration, durable original-ID administration, grant/credential controls, explicit reconciliation and generated dedicated Harness profiles. The subsequent persona and managed-world increments add exact per-action routing; managed machine/endpoint launch remains open.
+
+Managed-world increment: `022-managed-worlds.md` records the independent registry, paired preset scopes, per-action selection,
+world lifecycle and restart contract. Code `cecfde32924209bca220bcf01fd9ac3b28aedabd` passed 1,376 local tests and both
+separate configured-model Harness cases, including delegated work, isolated revocation and continuation after restart.
+The same code passed 1,378 tests and all three native confinement cases in
+[Linux run 42528377954](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42528377954).
+
+Checkpoint increment: `023-checkpoint-recovery.md` records encrypted offline capture, complete verification, held staging and
+retryable Harness Session import. Activation remains unavailable until exclusive ownership, stale-owner fencing and remote
+receipt reconciliation are enforced. The full persistent ownership and clean-host failover requirement remains open.
+
+Checkpoint qualification: code `aef82a2ce95666a58cd7892487d3bb3e0ab35175` passed 1,386 local tests and both installed-Harness
+model cases extended through maintenance capture, verification, staging and repeated fresh-backend imports. It also passed
+1,388 tests with native confinement enabled in
+[Linux run 42531703951](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42531703951).
+These results qualify the staged recovery increment; they do not complete ownership activation or failover.
+
+Ownership increment: `024-ownership-fencing.md` records independent ownership acquisition, all-resource preparation,
+monotonic lease expiry, endpoint cancellation/reconciliation barriers and paired-world handoff with original receipt
+generations. Existing workspace grants retain their identity. Runtime/managed-pool and publication integration remain open,
+as do clean-host activation and failover drills; the recovery hold is unchanged.
+
+Ownership qualification: code `7e2a33cc4ff662188eee52417056900b4c21e0c4` passed 1,400 local tests, both installed-Harness
+cases (including the independent authority process restart/handoff), and 1,402 Linux tests in
+[run 42535557440](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42535557440). Typechecking and all
+four builds passed. Those model cases qualified existing coordinator workflows. The subsequent Runtime increment in
+`025-runtime-ownership.md` connects managed and dedicated providers to a shared process lease, stops work on loss and
+refuses unfenced local execution. Publication integration and restored activation remain open.
+
+Runtime qualification: code `ba17edd5fe09d9276b8d27168188f7f6d9b83abe` passed 1,406 local tests, all four installed
+Harness model scenarios, and 1,408 tests with native confinement in
+[Linux run 42537715231](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42537715231).
+Typechecking and all builds passed. The full product goal remains in progress.
+
+Artifact delivery increment: `026-artifact-publication.md` adds an independent Harness publication service, exact
+artifact/destination approval, private account credentials, durable original-ID receipts and unknown-outcome ownership
+barriers. The library UI reviews full text and recovers original requests. Feishu, Source Outbox and repository mutations,
+automatic mandate-based publication, host verification and restored-state activation remain in the implementation ledger.
+
+Artifact delivery qualification: code `fd058c95ad6046751fd0429a6046c1bb1e151316` passed 1,418 local tests, both owned
+installed-Harness model scenarios including the separate publication plugin, and 1,420 native Linux tests in
+[run 42540908750](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42540908750).
+Typechecking and all four builds passed. No real external messages were sent during qualification.
+
+Mission delivery increment: `027-mission-delivery.md` adds plan-bound standing consent, worker/router replies through the
+existing Outbox, immutable original intents and unknown receipt recovery after revocation, withdrawal or ownership loss.
+GitHub review and Feishu/Lark root replies extend the independent service. Owned inbound connectors, repository mutations,
+live tenant/account qualification, host verification and restored activation/failover remain open.
+
+Mission delivery qualification: code `3bf6a280f992c2e8621f6ec388879785f7827598` passed 1,437 local tests and both owned
+installed-Harness/DeepSeek Flash scenarios. It also passed 1,439 native Linux tests, typechecking and all four builds in
+[run 42543761724](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42543761724).
+Provider traffic stayed on synthetic local servers; this is implementation evidence, not a live-account deployment claim.
+
+Inbound conversation increment: `028-inbound-conversations.md` adds explicit participant/task bindings, independently fenced
+provider reads, atomic Engine admission, durable cursors and native deduplication. The mission panel controls consent,
+rescan and pause, and shows unsupported messages. Replies remain restricted to the original task through routing and worker
+context access. Repository-wide discovery and admission, rich content, Git/PR mutations, retention, live-account acceptance
+and restored-state activation remain required; this increment does not complete the full architecture.
+
+Inbound qualification: code `a558cdd5f6bf2de59512afb60373cff2465fb74b` passed 1,457 local tests and both owned
+installed-Harness/DeepSeek Flash scenarios, including actual task resumption and acknowledgement from a provider reply,
+artifact preservation, restart and native-message deduplication. It also passed 1,459 native Linux tests, typechecking and
+all builds in [run 42546908912](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42546908912).
+Provider traffic remained local; live tenant/account acceptance and the broader product requirements remain open.
+
+Recovery reservation increment: `029-recovery-reservations.md` binds independent claimant replacement to the exact
+authenticated held checkpoint. The original installation loses acquisition authority; durable original requests survive
+response loss and private-file failures without silently rotating again or adopting a newer reservation. Selected process
+clients still require the resource barrier. Maintenance retains the execution hold. Receipt reconciliation, post-checkpoint
+divergence, configuration remapping, activation and clean-host failure drills remain required.
+
+Recovery reservation qualification: code `6d2ef214431d030c82ba2174f5e52ecc10b5acef` passed 1,468 local tests, both owned
+installed-Harness/DeepSeek Flash scenarios (199.31 seconds), and 1,470 native Linux tests in
+[run 42549125311](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42549125311).
+Typechecking and all four builds passed. Real checkpoint reservation/retry retained the restore hold and invalidated the
+source claimant; provider traffic remained local. The full article and Agentic OS architecture remain in progress.
+
+Recovery audit increment: `030-recovery-receipt-audit.md` compares authenticated original intents against complete enrolled
+endpoint and publisher inventories with mutation/restart revision checks. Durable reports expose missing, changed, unknown
+and unrecorded effects, while repeated inspection observes original outcomes without replay or activation. Applying those
+observations, input/state recovery, administrative-command/configuration reconciliation, Session/backend and world validation,
+activation and clean-host failover remain required alongside the full product ledger.
+
+Recovery audit qualification: code `44b3fa54685ee4cf471c5b26db1ccc4c918337ba` passed 1,482 local tests and both owned
+installed-Harness/DeepSeek Flash scenarios in 215.31 seconds. Repeated audits covered all original receipts and identified the
+four unrecorded publication probes by exact ID while retaining the hold. The same code passed 1,484 native Linux tests,
+typechecking and all four builds in
+[run 42552272631](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42552272631).
+Provider traffic remained local; the full product and restored activation remain in progress.
+
+Held receipt preparation: `031-recovery-receipt-preparation.md` adds administrator-only revision-bound observations and a
+separate authenticated recovery image, preserving source state and execution holds. Original command/file outcomes and
+artifact/channel receipts are applied without replay, with original-ID retries and Outbox settlement. Administrative and
+configuration reconciliation, authoritative input/state recovery, actual Session validation, remapping, activation and
+clean-host failure qualification remain open alongside the full product ledger.
+
+Receipt-preparation qualification: code `66b28a49f5a81dc08c6c5f19b0d31a5cfb66ba1e` passed 1,495 local tests, both
+owned installed-Harness/DeepSeek Flash cases, and 1,497 tests with native confinement in
+[Linux run 42554537411](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42554537411). Typechecking
+and all four builds passed. Managed recovery prepared the same held image twice; the dedicated case refused unrecorded
+publication effects. The original app remained running and no restored activation was performed.
+
+Administrative recovery: `032-administrative-recovery.md` extends audit/preparation to original grant, credential,
+cancellation and reconciliation commands without resending them. Recovered grant records cannot activate before private
+credential validation; later generations/versions are not substituted for historical results. Active-world credential
+version/status comparisons detect rotation and revocation. The execution hold and the remaining full architecture ledger
+stay in place, including authoritative input/state recovery, configuration validation, Session/world remapping and activation.
+
+Administrative-recovery qualification: code `3f2d4ba2ee7058fc8f037fb4c666e074b8ac3ca3` passed 1,508 local tests,
+typechecking and all four builds. Both owned installed-Harness / DeepSeek Flash cases passed in 201.96 seconds, including
+managed subagent work and authenticated administrative receipt preparation. The live run exposed and regression tests
+reproduced false abandoned-command refusals; providers now share live command ownership within one world and retain that
+ownership through delayed catalog observations. Unknown dispatch still fences siblings until receipt reconciliation.
+The same code passed 1,510 tests with native confinement, typechecking and all builds in
+[Linux run 42558234881](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42558234881).
+The original app remained running. Provider-message traffic stayed local; restored activation and the full product remain open.
+
+Original world revocation recovery: `033-revocation-recovery.md` adds read-only historical grant-principal receipt checks,
+exact disabled-successor binding validation and separate original-generation quiescence observation. Missing or conflicting
+proof blocks recovery; confirmed acknowledgements are applied only to held world copies without replay. Original source
+state, old grant identity and all execution holds remain intact. Private configuration, input/state recovery, Session/backend
+validation, remapping, activation and the broader article/product ledger remain open.
+
+Revocation-recovery qualification: `8c1a66445b89b328ebcbdad61260b147505a10a2` passed 1,521 local tests, typechecking,
+all four builds and both owned installed-Harness / DeepSeek Flash scenarios in 195.07 seconds. Managed recovery confirmed
+the original lost revocation without another revocation request, preserved the held source and authenticated repeated
+preparation. The same code passed 1,523 tests with native confinement, typechecking and all builds in
+[Linux run 42559418182](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42559418182).
+Provider-message traffic stayed local; the original app remained running. This does not qualify restored activation.
+
+Execution configuration recovery: `034-execution-configuration-recovery.md` validates each active world's original grant
+credential, managed private pin, root identity and private endpoint credential snapshots. Audit and preparation recheck private
+files before finalizing; no work is dispatched, credentials renewed or authority acquired. Confirmed revoked worlds remain
+non-executable without requiring retired files. Broader runtime/private configuration, account permissions, authoritative state,
+Session-backend validation, remapping and activation remain required.
+
+Execution-configuration qualification: `ea66ba2384e1a82da2f24401ab3f3e93f13368b0` passed 1,544 local tests,
+typechecking and all four builds. Both owned installed-Harness / DeepSeek Flash scenarios passed in 193.93 seconds,
+including original private credential checks for an active world while retaining and reconciling two revoked worlds.
+The same code passed 1,546 tests with native confinement, typechecking and all builds in
+[Linux run 42561413655](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42561413655).
+Provider-message traffic stayed local; the original app remained running. Broader configuration and activation remain open.
+
+Destination Session recovery: `035-session-backend-recovery.md` adds mandatory verification against the maintenance profile's
+actual imported Harness backend. It claims selected writers, compares immutable headers, inherited boundaries and exact
+logical events, rejects newer/divergent/short/missing history, and rechecks related descendants before held publication.
+Signed images record only Session/event counts. No history is repaired, no hold is removed, and historical retry evidence
+does not authorize activation. Runtime/account configuration, authoritative state, remapping, coordinated live ownership
+handoff, clean-host failure qualification and the full article/product ledger remain open.
+
+Destination-Session code `915cfc28f6b2ca10425a185376f85ae3d3c6b4e0` passed 1,562 local tests, typechecking and all
+four builds. The focused recovery run passed 108 tests, and the complete suite also covers older manifests without the new
+Session summary. Authentication of historical evidence does not clear a recovery hold.
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 192.86 seconds, including preparation against the separately
+imported destination and signed Session/event counts. Linux passed 1,564 tests with native confinement, typechecking and all
+builds in [run 42562981301](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42562981301).
+Provider-message traffic stayed local; the original app remained running. Broader configuration and activation remain open.
+
+Control configuration recovery: `036-control-configuration-recovery.md` adds read-only proof of the reserved claimant and
+the coordinator's publisher credential. It checks pinned provider account identity and target access at the audited revision,
+repeats private-file checks before publishing, and records only safe successful check counts. No lease or message is created.
+Inference/source configuration, authoritative state, remapping, coordinated activation and clean-host failure qualification
+remain required alongside the complete article/product scope.
+
+Control-configuration code `56adf6dc2243fe40e41b8491a885623293a77762` passed 1,591 local tests, typechecking and all
+four builds. Focused recovery and ownership/publication runs passed 92 and 43 tests respectively.
+The same code passed 1,593 tests with native Linux confinement, typechecking and all builds in
+[run 42564344905](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42564344905).
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 224.07 seconds, including actual reserved-claimant and
+coordinator-publisher authentication, provider account/target preflight and the signed control summary in held preparation.
+Provider-message traffic stayed local; the original app remained running. Broader configuration, authoritative state and
+restored activation remain open.
+
+Inference configuration recovery: `037-inference-configuration-recovery.md` makes new held preparation check effective
+Session, queued persona and role model routes through Harness. Bounded history-free inference probes run before preparation
+and before publication; safe signed evidence records counts and configuration digests. Failures preserve the execution hold.
+These are observations of the selected restore host's inference path, including its middleware, not proof of uncaptured
+source-host settings or future availability. Source/connector configuration, authoritative state, remapping, restored activation
+and clean-host failover remain open alongside the full article/product scope.
+
+Inference-recovery code `891a31394a55825ab5d24c8eff2e8f858344f4ca` passed 1,616 local tests, typechecking and all four builds.
+The same code passed 1,618 tests with native Linux confinement, typechecking and all builds in
+[run 42567837206](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42567837206).
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 206.52 seconds. Managed recovery used the real
+Session Controller projection and provider path, verified the signed inference summary, and retrieved its original held
+image on retry. The dedicated case retained its expected refusal for unrecorded publication probes. Provider-message
+traffic stayed local; the original app remained running. Source configuration, authoritative state and restored activation
+remain open.
+
+Consumed input recovery: `038-consumed-input-recovery.md` reconciles missing live read/queue acknowledgements against
+authenticated worker history, only in the private held image. Inherited messages, foreign producer identities and
+queued/claimed/canceled inbox events are not consumption proof. Contradictory read markers and duplicate identities fail;
+later failures or cancellation roll back earlier repairs. Signed counts preserve historical retries and older image support.
+Ended outcomes and original authority stay unchanged. Source configuration, pending-work/broader state reconciliation,
+runtime remapping, supported activation and clean-host failover remain open with the full article/product scope.
+
+Consumed-input recovery code `679a97ad8f290f060c07a332ba4de3a0bad690f7` passed 1,640 local tests, typechecking and all
+four builds. The same code passed 1,642 tests with native Linux confinement, typechecking and all builds in
+[run 42570416549](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42570416549).
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 197.68 seconds. Managed recovery verified the signed
+consumption summary against actual worker inputs and returned the same held image on retry; the dedicated case retained
+its expected refusal for unrecorded publication probes. The focused recovery/delivery run passed 133 tests. Provider-message
+traffic stayed local and the original app remained running. Source configuration, broader authoritative-state reconciliation,
+supported activation and the remaining full architecture/product requirements remain open.
+
+Passive source recovery: `039-source-contract-recovery.md` separates loaded source contracts from polling and coordinator
+startup. New held preparation validates source/policy settings against the actual maintenance catalog and shared owned-mode
+eligibility, records signed counts/digests, and rejects catalog reloads or changed settings/defaults before final publication.
+Unknown explicitly disabled sources remain opaque; invalid or required missing contracts fail held. This does not establish
+uncaptured plugin versions, private connector accounts or successful polling. Actual deployment binding, broader state/cursor
+reconciliation, remapping, restored activation and the remaining full article/product scope remain open.
+
+Source-contract code `24fe27f7e172d40e2f47e03c618ced6e2e0c9bca` passed 1,656 local tests, typechecking and all four
+builds. The same code passed 1,658 tests with native Linux confinement, typechecking and all builds in
+[run 42572760163](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42572760163).
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 202.70 seconds. Managed recovery loaded the bundle's
+passive source catalog with the coordinator disabled, verified its signed source summary, and retrieved the same held image
+on retry. The dedicated case retained its expected refusal for unrecorded publication probes. Focused source/recovery tests
+passed 184 cases; bundle tests passed all three cases after their expected plugin list was updated. Provider-message traffic
+stayed local and the original app remained running. Deployment binding, authoritative pending-work/cursor reconciliation,
+supported activation, clean-host failover and the remaining architecture/product scope remain open.
+
+Pending input recovery: `040-pending-input-recovery.md` extends delivery/read provenance to every current input kind,
+requeues accepted unread work on restart/retry, and preserves the held-automation rule beside settled reports. A delivery
+retry that finds consumed history now repairs its Store acknowledgement without sending again. Held image reconciliation
+also checks non-trigger read markers. Legacy delivery ambiguity, broader state and cursor reconciliation, deployment
+binding, supported activation, clean-host failover and the remaining full architecture/product scope remain open.
+
+Pending-input code `bc50b29cd3eccbf41c667e25d5cb62a3e75f9943` passed 1,665 local tests, typechecking and all four
+builds; the focused run passed 224 tests. The same code passed 1,667 tests with native Linux confinement, typechecking
+and all builds in [run 42575419242](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42575419242).
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 213.61 seconds. Managed recovery confirmed original
+Store non-trigger read acknowledgements against authenticated worker history and preserved original-ID image retries.
+The dedicated case retained its expected unrecorded-publication refusal. Channel traffic stayed on fixture servers and
+the original app remained running. Full activation, failover and the remaining architecture/product scope remain open.
+
+Persistent schedules: `041-schedules.md` adds complete mission-plan snapshots, durable occurrence/run reservations,
+calendar/interval/one-off timing, DST handling, missed-run policies, run/open-mission limits and a bilingual operator page.
+Standing-authorization triggers remain distinct from new human messages; human actions and reviewed dependencies keep
+their existing gates. Schedule code `a9371423fb5b12c63a430fb7e42aef7829e60128` passed 1,679 local tests, typechecking
+and all builds, and 1,681 tests with native Linux confinement plus typechecking/builds in
+[run 42578515463](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42578515463).
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 235.73 seconds. A disabled schedule survived restart,
+its enabled occurrence produced independently checked file/artifact bytes, and a later restart preserved exactly one run
+and assignment. The focused run passed 40 tests. The original app remained running. Reflection proposals, spend accounting,
+multi-workspace ownership, restored activation, voice, packaging and the remaining full architecture/product scope stay open.
+
+Managed usage: `042-usage-budgets.md` adds durable managed Harness calls and provider-reported tokens, explicit versioned
+prices, conservative scoped reservations, uncertain-call reconciliation and a bilingual usage/limits surface. Mission,
+schedule and persona pages link to their limits. Costs remain estimates; invoice import, prepared-generation metadata,
+non-token fees, speculative admission integration, retention and multi-workspace ownership remain open.
+Accounting code `fd6b18542dea7df48a5ff1d67b1f50e9c7424118` passed 1,693 Linux tests with typechecking/builds in
+[run 42582670631](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42582670631).
+Local validation passed 1,690 tests and a 27-test final focused run. Both owned installed-Harness / DeepSeek Flash scenarios
+passed in 249.58 seconds: real scheduled tokens and ownership survived restart; a scoped limit refused inference before
+any admitted call; an explicit retry after disabling that limit completed and reported usage. The original app remained
+running. UI follow-up `f9eeb684c73da00cdbff86a170a57c1666affc0c` fixes provider-specific price editing and passed
+eight focused checks, typechecking and all builds without changing the qualified runtime. All other full product and
+architecture requirements remain active.
+Final code `f9eeb684c73da00cdbff86a170a57c1666affc0c` also passed 1,693 Linux tests, typechecking and all builds in
+[run 42583242628](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42583242628).
+
+Chain of Recall: `043-chain-recall.md` replaces the prompt-only recall guideline with durable per-execution/router-day
+allowances, atomic reservations, exact output-byte limits and bounded scoped graph reads. Source freshness follows
+transitive dependencies and reports incomplete checks as unknown. Mission review hashes the complete accessible source
+closure; distant changes invalidate acceptance even beyond the bounded display depth. Artifact publication refuses stale,
+contested or unknown chains. Operator controls expose limits, charges and stale-source navigation.
+Code `1aaa87cc87f577345bfb2fd5bc51d7d6f62b48ca` passed 1,708 Linux tests, typechecking and all builds in
+[run 42587579793](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42587579793).
+The full local check passed 1,704 tests, with 56 passing in the final focused run. Both owned installed-Harness / DeepSeek
+Flash scenarios passed in 254.46 seconds. A real worker obtained an exact code through three linked records and retained
+its exact retrieval receipts across restart. Usage refusal/retry, scheduled artifact production and held recovery also passed.
+The original app remained running. Automatic reflection, retrieval-quality/long-horizon evaluation, external imports and
+freshness, retention, multi-workspace, speculative admission, restored activation/failover, voice and all other full product
+and architecture requirements remain active.
+
+Scheduled reflection: `044-scheduled-reflection.md` adds bounded selection of recent missions, activity and scoped library
+records into immutable pre-dispatch snapshots. Harness workers submit memory, plan-change or new-mission candidates;
+operator review checks cited evidence and applies changes transactionally without dispatch. Captured context, omission
+counts, proposal review and resulting records are available in the Reflections tab. Private relationship filtering,
+durable snapshot-read/proposal limits, active-work protection, restart persistence and exact approval retries are covered.
+Code `b53a3fd2d268a23175f85bb024660f4ae5567ec1` passed 1,718 local tests, typechecking and all builds, and 1,720 Linux
+tests in [run 42591703174](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42591703174).
+Both owned installed-Harness / DeepSeek Flash scenarios passed in 289.10 seconds; the managed-world flow verified a
+candidate from captured-only evidence, no direct publication, explicit approval, source/agent provenance and unchanged
+snapshots/receipts/dispatch after restart. The original app remained running. Reflection/retrieval quality and long-horizon
+evaluation, imports/freshness, retention/scaling, multi-workspace ownership, speculative admission/promotion, managed
+machine launch, host-collected verification, recovery activation/failover, supervision, voice, packaging and onboarding
+remain in the full implementation scope.
+
+Speculative preparation: `045-speculative-preparation.md` adds durable reservations before execution, actual Harness model
+accounting, explicit-work preemption, quiescence and recovery holds, evidence promotion and separate message publication
+approval. The original Engine and Harness remain the execution path. Code `6f27667b1d6f6ca4572fbad02e4aa06e830ffdbb`
+passed 1,738 local tests and 1,740 Linux tests, typechecking and all builds in
+[run 42599700832](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42599700832).
+The final installed-Harness / DeepSeek Flash speculative scenario passed in 21.98 seconds, with real file/artifact and
+usage evidence, separate promotion/publication decisions and no repeated execution or delivery after restart.
+Long-horizon quality, confinement, retention/scaling and all remaining full architecture/product requirements remain active.
+
+Both owned installed-Harness / DeepSeek Flash scenarios passed against the final built artifact in 262.56 seconds,
+including managed-world scheduled reflection, usage refusal/retry, artifacts and held recovery. The original app process
+remained running. These checks qualify this increment; they do not close the remaining full Agentic OS requirements.
+
+Host verification execution: `046-host-verification.md` adds bounded host-collected file/Git manifests and checks against
+private copied inputs through the existing endpoint and Harness process provider. It records revision preconditions,
+command outcomes, full output digests and durable unknown/reconciliation state. Linux checks receive read-only source,
+isolated networking and no endpoint credentials. Operator check definitions, coordinator observation and evidence UI,
+local support, library/publication freshness gates and exact PR-head binding remain in scope, along with every remaining
+full architecture/product requirement. Runtime code `7b1ff77ea24d7f26bcff85b20c88e031fc883f39` and final test revision
+`59a5183c167e95e68cb090952574461d3ae05651` passed 1,753 local tests and 1,757 Linux / Node 24 tests with native
+confinement, typechecking and all five builds. The Linux result is
+[run 42606804140](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42606804140).
+The installed-Harness / DeepSeek Flash dedicated scenario passed in 55.54 seconds, with actual worker-created file/artifact
+bytes checked by the built helper and the original receipt preserved after restart. The original app process remains
+running. These results qualify the execution layer while the full product goal stays active.
+
+Artifact check integration: `047-artifact-checks.md` adds immutable operator definitions, original assignment/environment
+bindings, worker requests, coordinator local/remote execution and bilingual evidence controls. Source freshness is a
+separate capture without command execution. Explicit host-process execution does not claim filesystem/network isolation;
+Linux-required checks fail when that confinement is unavailable. Code `6685cb6fea83401b3489392bd83fd40fa7d1ce8b` passed
+1,768 local tests, typechecking and all five builds. The installed-Harness / DeepSeek Flash dedicated scenario passed in
+58.27 seconds, retaining actual artifact checks and freshness receipts across restart. Native Linux / Node 24 passed
+1,772 tests, typechecking and all builds in
+[run 42613515022](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42613515022).
+These results preceded selected-check binding and immediate pre-publication freshness in increment 048. Exact PR-head
+gates remain required, alongside all other remaining full architecture/product requirements. Both owned installed-Harness / DeepSeek Flash
+scenarios passed in 278.79 seconds, retaining scheduled reflection, usage refusal/retry, artifact delivery and held recovery.
+Code and qualification receipts are pushed on the feature branch. The original app process remains running.
+
+Checked approval integration: `048-checked-approvals.md` connects selected successful checks to every current artifact in
+mission acceptance and to new worker artifact publication. Durable original-source captures bind the approval and the
+independent publisher checks a 60-second freshness window before dispatch. Original receipts are observed before any retry
+can capture or send again. Human-reviewed outcomes remain explicitly labelled; historical acceptance detects known source
+changes without continuous scanning. Final runtime/test revision `77142e7c8a5373fbf59a29f3900449a4e16a8bbb` passed 1,782
+local tests, typechecking and all five builds. Linux / Node 24 passed 1,787 tests with native confinement, typechecking and
+all builds in [run 42621744787](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42621744787).
+The dedicated installed-Harness / DeepSeek Flash scenario passed in 65.52 seconds and both owned scenarios in 306.30
+seconds, including actual acceptance/publication, renewal-compatible captures, original-receipt restart and the scheduled
+reflection/usage/recovery regressions. The original app remains running; code and receipts are pushed. Exact PR-head
+gates, a fresh whole-mission closure policy, continuous source freshness and all remaining full architecture requirements
+stay open. The full product objective remains active.
+
+PR review integration is implemented in `049-pull-review-approvals.md`: independent provider head/tree observations,
+Git trees reconstructed from actual checked bytes, explicit-commit review submission and original receipt recovery after
+head changes. Runtime revision `94f41c6` passed 1,806 local tests, typechecking and all five builds. Final test revision
+`ca58691` passed 1,812 native Linux tests, typechecking and all builds in
+[run 42627757241](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42627757241).
+The dedicated and owned dedicated live Harness scenarios passed; owned managed passed after test-only recovery fixture
+correction `ca58691` accounted for the new destination. This is a review path, not an
+atomic latest-head approval or merge implementation. Mission-level repository/PR closure, merge and branch-policy
+integration, continuous freshness and every other remaining architecture/product requirement stay open.
+
+Mission repository results and fresh whole-mission completion are implemented in `050-mission-pull-completion.md`:
+operator-selected PR identities become plan/mandate requirements, acceptance binds exact checked heads, and mission
+completion freshly captures every accepted checked result and rereads required heads. Durable completion attempts retain
+original evidence-review IDs across interruption/restart; the UI exposes binding, current-head review and attempt recovery.
+Runtime revision `4e41442` passed 1,821 local tests, typechecking and all five builds. Test correction `b10dcbe` passed
+1,828 native Linux tests and all builds/typechecking in
+[run 42636176258](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42636176258).
+Dedicated, owned dedicated and owned managed installed-Harness / DeepSeek Flash scenarios passed across those revisions;
+050 records the native-helper and accepted-state fixture corrections. The original app remains running. These are
+point-in-time checks, not continuous monitoring, CI/branch-policy enforcement or merge receipts. Remote Git provisioning
+and all other remaining product/architecture requirements stay open.
+
+Coordinator role enforcement is implemented in `051-router-authority.md`: typed context/routing tools, denial of generic
+execution including late scoped tools, a router preset without execution plugins, and retirement of tracked legacy
+coordinator jobs/descendants before routing resumes. Worker-local teams retain their task authorization. Corrected runtime
+`249ba5b` passed 1,826 local tests and 1,833 Linux / Node 24 tests with native confinement, typechecking and all five builds.
+Linux evidence is [run 42642436513](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42642436513).
+All three installed-Harness / DeepSeek Flash scenarios passed, including late-tool denial and typed reads before/after
+restart while workers complete their tasks. The dedicated scenario took 73.50 seconds and both owned variants 315.85 seconds.
+051 records the initial creation-barrier defect and its regression-tested runtime correction. The original app remains
+running. OS-level isolation, broader credential separation and all other unfinished architecture/product acceptance
+remain open; this increment does not complete the full Agentic OS objective.
+
+Independent operator supervision is implemented in `052-supervision-console.md`: the watchdog's own page, service health,
+incident/evidence review, original acknowledgement receipts, history pagination and bounded retention. It stays independent
+of main Runtime availability. Runtime `59ccd4b` passed 1,837 local tests and 1,844 Linux / Node 24 tests with native
+confinement, typechecking and all six builds; native evidence is
+[run 42647851217](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42647851217).
+The final installed-Harness / DeepSeek Flash drill passed in 53.23 seconds: the shipped bundle rendered against real APIs,
+UI acknowledgement, real worker/assessor inference, abrupt process failure, original receipt recovery and observed closure.
+052 records the human-answer observation gap found and corrected by the live drill and the replay-expiry clock guard.
+The original app remains running. Alert routing, broader diagnosis quality, cross-host/browser acceptance and all other
+outstanding architecture/product requirements remain active.
+
+Held Engine state recovery is implemented in `053-engine-state-reconciliation.md`: original trigger/decision/ticket
+authority, assignment/input references, directed recipients and Outbox/effect relations are checked before signing a
+prepared image. Only derived query indexes and effects whose existing handlers can no longer act are repaired; no new
+task, authorization or external delivery is created. The signed graph counts/digest accompany the existing receipt and
+consumption proofs. Historical evaluation metadata remains readable without granting it current authority. Runtime/test
+revision `2606671` passed 1,860 local tests and 1,867 Linux / Node 24 tests with native confinement, typechecking and all
+six builds; native evidence is
+[run 42654443599](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42654443599).
+The installed-Harness / DeepSeek Flash owned-managed scenario passed in 203.36 seconds, including actual worker state,
+authenticated recovery and retrieval of the original held image. The original app remains running. Source cursor and
+product-extension reconciliation, deployment binding/remapping, restored activation/failover, and every remaining full
+architecture/product requirement remain active.
+
+Built-in connector recovery is implemented in `054-connector-state-recovery.md`: retained GitHub/Feishu cursor families,
+owned listener revisions, original task/participant/grant authority, partial-page state and inbound deduplication receipts
+are verified without polling or moving cursors. New receipts retain native provider IDs for identity and supported-content
+hash checks; historical receipts without that evidence remain explicit legacy records. Local verification passed 1,869
+tests, typechecking and all six builds, plus the final legacy-cursor regression. Runtime/test revision `5383677` passed
+1,876 Linux / Node 24 tests with native confinement, typechecking and all builds in
+[run 42659022305](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42659022305).
+The exact revision passed installed-Harness / DeepSeek Flash owned-managed recovery in 207.46 seconds with nonempty signed
+listener/message evidence and native IDs for every captured receipt. The original app remains running. Product authority
+graphs—including missions, plans and schedules—deployment binding/remapping, activation/failover, broader connector
+admission and all remaining architecture/product requirements stay active. These held checks do not activate a restore.
+
+Mission, plan and schedule authority recovery is implemented in `055-workspace-authority-recovery.md`: immutable plan
+history, applied proposal mappings, direct and routed human execution, original schedule templates, occurrence continuity,
+run limits and exact next-run cursors are checked before signing. New plan/action and Trigger revision stamps preserve
+host-captured authority; older records retain explicit legacy counts without invented proof. Local verification passed
+1,884 tests, typechecking and all six builds. Runtime/test revision `4079a49` passed 1,891 Linux / Node 24 tests with native
+confinement, typechecking and all builds in
+[run 42664952945](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42664952945).
+The exact revision passed installed-Harness / DeepSeek Flash owned-managed recovery in 195.68 seconds with nonempty signed
+mission/schedule/execution evidence, no legacy stamps and original-ID image retrieval. The original app remains running.
+Artifact/check/completion and other product graphs, deployment binding/remapping, activation/failover, broader connector
+admission and all remaining architecture/product requirements stay active. These checks retain the execution hold.
+
+Artifact and result evidence recovery is implemented in `056-result-evidence-recovery.md`: original library bytes and scoped
+provenance, check-version/configuration history, host commands/receipts, snapshot evidence, review captures/seals and mission
+completion are checked before signing. Successful review attempts retain immutable historical seals after a later explicit
+capture, and reflection-approved plans resolve through their original proposal journal. Historical revoked/expired records
+remain data rather than renewed authority. Local verification passed 1,893 tests, typechecking and all six builds, plus the
+18-test final result/reflection regression. Runtime/test revision `3731d18` passed 1,900 Linux / Node 24 tests with native
+confinement, typechecking and all builds in
+[run 42669190774](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42669190774).
+The exact revision passed installed-Harness / DeepSeek Flash owned-managed recovery in 206.85 seconds with nonempty signed
+artifact/check/review/completion evidence, no legacy review seals and original-ID image retrieval. The original app remains
+running. Other product graphs, deployment binding/remapping, activation/failover, broader connector admission and every
+remaining architecture/product requirement stay active. The restore hold remains in place.
+
+Registry authority recovery is implemented in `057-registry-authority-recovery.md`: persona versions and command history,
+environment generations, managed-world journals and original worker/Session bindings are checked without reauthorization.
+Archived persona versions and revoked worlds remain historical. Incomplete legacy bindings and opaque request payloads are
+reported, not reconstructed. Local verification passed 1,904 tests, typechecking and all six builds, plus the nine-test final
+registry regression and repeated typechecking/builds. Runtime/test revision `e1741bf` passed 1,911 Linux / Node 24 tests
+with native confinement, typechecking and all builds in
+[run 42673277799](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42673277799).
+The exact revision passed installed-Harness / DeepSeek Flash owned-managed recovery in 194.21 seconds with signed
+persona/version/worker/world history, historical revoked grants, zero legacy task-grant gaps and original-ID image retrieval.
+The original app remains running. Remaining product graphs and registry/publication cross-references, deployment
+binding/remapping, activation/handoff/failover and the full architecture/product scope remain open. The restore hold stays in place.
+
+Context and budget recovery is implemented in `058-context-budget-recovery.md`: original reflection snapshots/candidates and
+read counters, cumulative recall charges, model accounting/lineage and speculative allocations/approvals are checked without
+replaying or refunding work. New requests and timing/policy references are retained; legacy gaps remain explicit. Runtime/test
+revision `77a7aa0` passed 1,915 local tests and 1,922 Linux / Node 24 tests with native confinement, typechecking and all six
+builds in [run 42677535071](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42677535071).
+The exact revision passed installed-Harness / DeepSeek Flash owned-managed recovery in 200.27 seconds with nonempty signed
+recall/model/reflection evidence, zero legacy accounting gaps and original-ID held-image retrieval. Live speculative
+preparation, separate publication approval and restart without duplicate synthetic delivery passed in 21.43 seconds.
+The original app remains running. Remaining publication/registry cross-references, deployment binding/remapping,
+activation/handoff/failover and every other uncompleted architecture/product requirement remain in the full objective.
+
+Publication authority recovery is implemented in `059-publication-authority-recovery.md`: original artifact approvals,
+destination snapshots, selected checks/captures, plan-bound delivery grants and exact Outbox subjects are checked before
+receipt application and again before signing a held image. Historical edits/revocation and legacy gaps remain explicit.
+Full local verification passed 1,925 tests, typechecking and all six builds; the final bounded-review guard passed 22 focused
+tests and repeated typechecking/builds. Runtime/test revision `ae4732a` passed 1,932 Linux / Node 24 tests with native
+confinement, typechecking and all builds in
+[run 42681324239](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42681324239).
+The exact revision passed installed-Harness / DeepSeek Flash owned-managed recovery in 192.90 seconds with signed checked
+publications and mission delivery, no unresolved/legacy publication gaps and original-ID held-image retrieval. The original
+app remains running. Deployment binding/remapping, restored activation/handoff, clean-host failover and every remaining full
+product/architecture requirement stay open. The prepared image does not acquire execution authority.
+
+Installed recovery and Runtime handoff are implemented in `060-installed-recovery.md`: a private authenticated installation
+retains original state/Session identities and historical authority while relocating operational files. First startup checks
+original history, journals and independent resources, acquires ownership, then hands its exclusive lock and active lease to
+the real Harness Runtime. Restart preserves legitimate continued history. Subsequent backup/recovery resolves relocated
+journals and requires a new reservation. Full local verification passed 1,938 tests, typechecking and all builds; the
+terminal-revocation fix passed 27 focused tests and repeated typechecking/builds. Revision `a1c22a3` passed installed-Harness
+/ DeepSeek Flash qualification in 203.47 seconds, including a restored mission/artifact, restart and no completed-revocation
+replay. The same revision passed 1,945 native Linux / Node 24 tests with bubblewrap, typechecking and all builds in
+[run 42688097294](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42688097294).
+Cross-machine failover, dedicated-profile live startup and all remaining full
+product/architecture requirements remain open. The original app remains running.
+
+Generated recovery launch profiles are implemented in `061-recovery-launch-profile.md`: installation produces a private
+authenticated Harness patch with the complete dedicated or managed composition and optional imported JSONL backend/port
+selection. It preserves provider configuration in the base profile and refuses modified patches before activation. The
+live checks now retire original coordinator/Session/world files before consuming the generated patch and running new work.
+Full local verification passed 1,942 tests, typechecking and all builds; the final compatibility guard passed 23 focused tests
+and repeated typechecking/builds. Runtime/test revision `26718d6` passed 1,949 native Linux / Node 24 tests with bubblewrap,
+typechecking and all builds in [run 42690711226](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42690711226).
+The exact revision passed installed-Harness / DeepSeek Flash owned-managed and owned-dedicated-restore qualification in
+339.36 seconds combined: generated patches, retired old state files, new missions/artifacts and continued-history restart.
+The original app remains running. Cross-machine failover and all remaining full requirements remain open.
+
+Optional speech is implemented and qualified in `062-voice.md`. The inbox supports editable microphone drafts, explicit
+reply playback, local/cloud adapter selection, interruption and text fallback. Requests retain durable identity across
+retries/restarts without automatic provider replay; speech does not create execution authority. Revision
+`da21f8fb37f891362f9c900f3aae6a1bd25deb8e` passed the installed Harness generated-speech/DeepSeek Flash mission/restart/recovery
+drill (242.08 seconds) and native Linux typecheck, six builds and 1,969 tests (10 skipped; run 42696904836). Local full-suite
+validation passed 1,962 tests, with subsequent focused lifecycle and UI checks. Browser/microphone acceptance, cloud
+speech-provider qualification, realtime streaming, long-reply chunking, speech billing and receipt maintenance remain
+open alongside the rest of this full architecture. The original running application was left running.
+
+Conversation attachments are implemented in `063-attachments.md`: resumable uploads, atomic input/reply binding, authenticated
+previews/downloads, task-scoped reads and native Harness copies into local/remote execution directories. Canonical bytes
+live in the checkpointed Store; bound image objects are reconstructed before resumed Sessions. Local verification passed 1,981 tests, typechecking and six builds; integration fixes passed 26 focused checks and actual
+bundled-helper execution. Exact revision `ba44a813777991f59a9b8e355dd7827b0dc8f949` passed installed-Harness / DeepSeek Flash
+input delivery, checked artifact, deleted-cache restart and installed checkpoint recovery (253.21 seconds), plus native Linux
+typecheck, six builds and 1,989 tests (10 skipped; run 42707238123). Real browser/vision-provider acceptance, large-file stress
+and retention/GC remain open alongside the full architecture. The original app remains running.
+
+Inbox execution selection is implemented in `064-inbox-execution-settings.md`: reviewed persona versions, exact default
+environment grants, explicit managed worlds, original captured settings and retry of accepted Sends after catalog changes.
+Local verification passed 1,988 tests, typechecking and six builds. Exact runtime/test revision
+`432f4aeeca76177f32a2944932db48899a8d77db` passed 1,996 native Linux / Node 24 tests (10 skipped), typechecking and six builds
+in [run 42716861135](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42716861135).
+After resumption the prior temporary installation and app process were absent. A new persistent local profile passed
+authenticated page, management-health and default-environment HTTP checks and remains running for private provider setup.
+This does not recover the removed instance's history. After private provider setup, the owned-managed installed-Harness /
+DeepSeek Flash inbox/attachment/restart/recovery drill passed in 285.90 seconds on runtime build
+`bfebde2ec8fbb85e47f3a1529db142fef36cb43e`, with copied JSON-form profile support in the test fixture.
+The app remained running. Broader browser/provider acceptance and the full remaining architecture/product scope stay open.
+
+Guided setup is implemented in `065-guided-setup.md`: live role/default model catalog hints, default/managed environment
+guidance, optional persona/budget/context setup, empty inbox draft entry without dispatch, and current mission review status.
+Local verification passed 1,994 tests, typechecking and six builds. Exact runtime/test revision
+`bfebde2ec8fbb85e47f3a1529db142fef36cb43e` passed 2,002 native Linux / Node 24 tests (10 skipped), typechecking and six builds
+in [run 42719686052](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42719686052).
+Authenticated retrieval confirmed the running app serves the guide bundle. After private provider setup, the catalog
+advertised DeepSeek without lookup failures and the real inbox/attachment/restart/recovery drill passed as recorded above.
+Catalog presence alone is not inference success. Visual browser acceptance, managed endpoint launch, broader packaging
+and the full remaining architecture stay open.
+
+Persistent local launch is implemented in `066-persistent-launcher.md`: pinned Harness source-checkout installation,
+private durable paths, resumable profile setup, detached start, graceful stop/restart, exact installation process ownership,
+intentional-stop markers, serialized controls and authenticated browser shortcuts without printing access tokens.
+Process-level launcher/control checks passed 24 tests. A fresh installed-Harness profile passed initialization, duplicate
+start, authenticated access, graceful restart retaining pause and intentional-stop handling while the user app stayed up.
+Local `pnpm check` passed typechecking, six builds and 2,003 tests (16 skipped; 133.16 seconds). Revision
+`8a8da447eda816ee530e8c1453a72d9915e31f40` passed native Linux / Node 24 typechecking, six builds and 2,011 tests
+(10 skipped; 270.24 seconds) in [run 42724896883](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42724896883).
+It creates new installations without replacing an existing profile or claiming to migrate its history. Login/boot services,
+automatic crash recovery, supervised upgrades, desktop packaging and the full remaining architecture stay open.
+
+A user-reported browser bootstrap failure exposed host-only imports through the shared persona model schema. The schema
+now lives in `src/role-model.ts`; the browser explicitly bundles Zod and loads with only React platform modules. The new
+production-bundle factory regression check catches this class of failure independently of source-level component tests.
+Focused validation passed 342 tests and typechecking; local `pnpm check` passed typechecking, six builds and 2,004 tests
+(16 skipped; 129.91 seconds). Authenticated HTTP confirms the running app serves the repaired
+bundle; a hard refresh replaces its cached predecessor. Exact repair revision
+`e889f97871d1cab9ce8f8df8d348ccad03b954dd` passed native Linux / Node 24 typechecking, six builds and 2,012 tests
+(10 skipped; 293.71 seconds) in [run 42725936622](https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42725936622).
+The operator subsequently confirmed that the app opens after refresh. This establishes browser startup for the observed
+installation, not acceptance of every page, task journey, microphone flow, layout or accessibility behavior. The remaining
+architecture stays open.
+
+Managed endpoint launch is implemented in `067-managed-endpoint-launch.md`: a prepared Linux host can install/start the
+pinned Harness endpoint, verify native confinement and its persisted identity, export private enrollment metadata and
+restart without replacing authority or effect receipts. Local focused checks passed 25 tests (three platform/native
+qualification cases skipped). Local `pnpm check` passed typechecking, six builds and 2,005 tests (19 skipped; 136.55 seconds).
+Installed-Harness Linux validation is pending: no checks exist for runtime revision
+`8de414a1465ff1cdb38d2d9e9beaed6e16c5e1b8`, and explicit workflow dispatch returned HTTP 422 because GitHub Actions
+is disabled for the repository. Earlier successful Linux runs do not qualify this new launcher.
+
+Service supervision is implemented in `068-service-supervision.md`: optional launchd/systemd user services, a single
+foreground supervisor, durable automatic-start budgets/holds and manual stops, live unhealthy-process preservation,
+exact-process graceful shutdown and owned-service removal. The actual macOS service-manager and installed Harness drills
+passed with persisted executor pause through removal/reinstallation; eight focused tests passed in 22.32 seconds. The
+existing user app remained running. Local `pnpm check` passed typechecking, six builds and 2,011 tests (22 skipped;
+145.74 seconds). Native Linux user-manager/boot qualification and actual logout/reboot/power-loss acceptance remain
+outstanding, alongside the rest of the full architecture.
+Execution resource enforcement is implemented in `069-execution-resources.md`: optional cgroup v2 worker-pool and
+per-process-tree CPU, memory/swap and process/thread ceilings; pre-exec entry, whole-tree cancellation, population-aware
+quiescence/reconciliation and pinned restart policy. Kernel usage receipts reach the operator UI, and launcher health checks
+the configured resource boundary. Focused local integration passed 32 tests with three native/platform cases skipped;
+these simulated-kernel checks do not establish native enforcement. The real-kernel qualification is added but not yet run.
+Final local `pnpm check` passed TypeScript, seven builds and 2,022 tests (23 skipped; 128.63 seconds). The existing app
+remained running, ready and unpaused. Rejected resource policy changes leave ownership binding unchanged.
+
+Automatic machine/fleet provisioning, managed transport, automatic cgroup delegation/boot setup, disk quotas,
+per-workspace aggregate allocation, supported policy migration, cross-host qualification and the rest of the full
+architecture remain open. These increments do not substitute for those requirements.
+
+Delegated endpoint service setup is implemented in `070-delegated-endpoint-service.md`: service-budget initialization,
+pinned user-unit/cgroup identity, automatic subgroup preparation, durable supervisor-mediated Start/Restart, cancelled/failed
+request fences and kernel-aware service removal. The host administrator must still delegate the controllers to the user
+manager. Simulated-kernel tests and actual macOS service compatibility checks pass; native Linux user-service, actual
+reboot and cross-machine acceptance remain pending. Cloud provisioning/transport, disk quotas, workspace allocation,
+supported resource migration and the rest of the full architecture remain open.
+Final local `pnpm check` passed typechecking, seven builds and 2,032 tests (24 skipped; 129.04 seconds). The combined
+local control/native macOS service run passed 18 tests (two skipped; 21.56 seconds). The existing app remained ready and
+unpaused, and temporary native service fixtures were removed. These checks do not qualify Linux delegation or reboot.
+
+Managed SSH transport is implemented in `071-managed-ssh-transport.md`: a separate persistent coordinator-side role,
+pinned host key/identity/endpoint credential, one loopback forward, verified endpoint and resource identity, private enrollment
+and bounded supervised reconnect. Native OpenSSH and macOS service checks passed with a synthetic endpoint; Linux Harness
+execution through SSH and physical cross-host/reboot acceptance remain pending. It neither replays remote effects nor
+provides cloud/fleet provisioning, credential rotation, an ownership-authority reverse route or full product completion.
+Local `pnpm check` passed typechecking, seven builds and 2,039 tests (25 skipped; 129.37 seconds). Native macOS service,
+pinned Harness and SSH tests passed 16 cases (one Linux parser case skipped; 21.72 seconds); the app stayed ready and
+unpaused. The real SSH fixture uses a synthetic HTTP endpoint and does not qualify Linux Harness execution.
+
+Native Linux qualification is recorded in `072-native-linux-qualification.md`. An isolated Ubuntu 22.04 ARM64 VM
+now exercises real kernel resource limits, installed Harness through SSH, delegated user services and abrupt power-loss
+recovery. Credential/profile durability, recent-lock startup and clock-stable Linux process identity fixes preserve the
+original endpoint and unknown command receipt without replay. This does not qualify physical/cloud networking, x86-64
+changes, clean-host failover or all remaining product requirements.
+
+Managed repository preparation is implemented in `073-remote-repositories.md`: immutable HTTPS source and commit selection,
+endpoint-bound credentials, one durable preparation command and branch per task, cancellation before worker startup, and
+receipt-based reuse without resetting task commits. The executor, UI and recovery registry use the same source. Independent
+branch/PR publication, CI/merge policy, complete remote Git recovery, fleet/cloud deployment and every remaining full-scope
+requirement stay open.
+Validation passed typechecking, seven builds, 2,063 macOS tests and 2,076 native Ubuntu ARM64 tests, plus 30 native Linux
+service/Harness/SSH checks. Twelve repository cases use real Git and private HTTPS, with bubblewrap in the Linux run.
+The app remained ready and unpaused; external provider, cloud, browser and full-product acceptance are not implied.

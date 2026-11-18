@@ -4,6 +4,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { freezeMessage, MessageId, type ContextFormed, type UserMessage } from '@deepseek-ai/dsh-llm'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-persistence'
+import { admissionTrace, traceAgent } from '../infra/admission-trace.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -15,7 +16,7 @@ type Seen = { ids: Set<string>; loaded?: Promise<void> }
 /** The id of the message delivered under `requestId`, the same on every retry. */
 export const messageId = (requestId: string) => MessageId(`dsh-superagent:${requestId}`)
 /** Extracts the idempotency key from current or legacy plugin message sources. */
-function deliveryId(message: UserMessage): string | undefined {
+export function deliveryId(message: UserMessage): string | undefined {
   // Persisted sources may predate the current producer-specific source map.
   const source: { kind: string; plugin?: unknown; rpcId?: unknown } = message.source
   if (source.kind === 'dsh-superagent' || (source.kind === 'plugin' && source.plugin === 'dsh-superagent')) return message.id
@@ -62,25 +63,32 @@ export class AgentDelivery {
     const id = messageId(requestId)
     return (await this.history(agent)).ids.has(id) || [...agent.inbox.nextTurn, ...agent.inbox.nextStep].some(message => deliveryId(message) === id)
   }
-  /** Delivers once to the selected inbox, or injects into history without waking the agent, and flushes Session persistence before acknowledging the producer. */
+  /** Deliver once and flush before acknowledging; returns whether history already contains the input, including a deduplicated retry. */
   async send(agent: Agent, requestId: string, text: string, mode: 'queue' | 'steer' | { inject: string }, signal: AbortSignal, authorize?: () => void,
-    accepted?: () => void): Promise<void> {
+    accepted?: () => void): Promise<boolean> {
     signal.throwIfAborted()
     const seen = await this.history(agent)
     signal.throwIfAborted()
     if (this.ctx.agents.get(agent.id) !== agent) throw new Error('Delivery target was disposed')
+    admissionTrace('delivery.authorize', { agent: traceAgent(agent), mode: typeof mode === 'object' ? 'inject' : mode })
     authorize?.()
+    admissionTrace('delivery.authorized', { agent: traceAgent(agent) })
     const id = messageId(requestId)
     const pending = [...agent.inbox.nextTurn, ...agent.inbox.nextStep].some(message => deliveryId(message) === id)
     if (!seen.ids.has(id) && !pending) {
       const source = typeof mode === 'object' ? { kind: 'dsh-superagent' as const, form: 'notice' as const, summary: mode.inject }
         : { kind: 'dsh-superagent' as const, form: 'relay' as const }
       const message = freezeMessage({ id, role: 'user' as const, content: [{ type: 'text' as const, text }], source })
+      admissionTrace('delivery.enqueue', { agent: traceAgent(agent), mode: typeof mode === 'object' ? 'inject' : mode })
       if (typeof mode === 'object') { agent.inject(message); seen.ids.add(id) }
       else if (mode === 'steer') agent.steer(message)
       else agent.followup(message)
+      admissionTrace('delivery.enqueued', { agent: traceAgent(agent) })
     }
+    admissionTrace('delivery.accept', { agent: traceAgent(agent) })
     accepted?.()
+    admissionTrace('delivery.accepted', { agent: traceAgent(agent) })
     await this.ctx.sessionPersistence.flush()
+    return seen.ids.has(id)
   }
 }

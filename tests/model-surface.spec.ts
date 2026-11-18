@@ -3,7 +3,7 @@
  * orchestrator and worker roles against tool schemas, environment variables, glossary rules (`docs/001`), and size budgets.
  */
 import { Context } from '@deepseek-ai/cordis'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, expect, it, vi } from 'vitest'
@@ -23,6 +23,7 @@ import { SettingsSchema } from '../src/policy.ts'
 import { feishuKind, feishuTrigger } from '../src/sources/feishu.ts'
 import { githubKind } from '../src/sources/github.ts'
 import { testMachine } from './fixtures/deployment.ts'
+import { filesystem } from './fixtures/filesystem.ts'
 
 type Role = 'orchestrator' | 'worker'
 interface Surface { where: string; owner: string; role: Role | 'both'; text: string }
@@ -34,10 +35,16 @@ type Section = (context: { signal?: AbortSignal }) => string
 interface Skill { name: string; description: string; content: string }
 
 /**
- * Maximum combined character count of system prompt and tool definitions per role (~5% above baseline).
+ * Maximum combined character count of system prompt and original orchestration tools per role (~5% above baseline).
  * Lower this limit when shrinking model-facing text; raise it only intentionally and explain why in the commit message.
  */
 const BUDGET: Record<Role, number> = { orchestrator: 59_000, worker: 40_500 }
+// New library capabilities have a separate ceiling so they do not relax the original routing/work prompt budget.
+const LIBRARY_BUDGET: Record<Role, number> = { orchestrator: 2_200, worker: 4_500 }
+// Host verification adds a bounded tool surface without relaxing the existing prompt or library ceilings.
+// Operator input tools have their own ceiling; existing orchestration/library/check budgets stay unchanged.
+const ATTACHMENT_BUDGET: Record<Role, number> = { orchestrator: 2, worker: 2_200 }
+const CHECK_BUDGET: Record<Role, number> = { orchestrator: 2, worker: 3_600 }
 const PROMPTS = 'prompts/, skills/', TOOLS = 'src/app/tools/', SESSIONS = 'src/app/sessions.ts'
 const NOTICES = 'src/app/notices.ts', LINKS = 'src/app/links.ts', ASSESSMENT = 'src/app/assessment.ts'
 const EXECUTOR = 'src/executor/dsh.ts', ERRORS = 'src/core/errors.ts'
@@ -92,7 +99,7 @@ async function start() {
   const subprocess = { spawn: (spec: { argv: readonly string[] }) => {
     const argv = [...spec.argv]
     while (argv[0] === 'env' || /^[A-Z_]+=/.test(argv[0] ?? '')) argv.shift()
-    const collected = { stdout: reader(answers[argv.join(' ')] ?? ''), stderr: reader('') }
+    const collected = { stdout: reader(argv[0] === 'cat' ? readFileSync(argv[1]!, 'utf8') : answers[argv.join(' ')] ?? ''), stderr: reader('') }
     return { done: Promise.resolve({ exitCode: 0, signal: null }), collected }
   } }
   const agents = new Map<string, { status: string }>()
@@ -108,7 +115,21 @@ async function start() {
     const register = (tool: Tool) => { own.set(tool.name, tool); return () => own.delete(tool.name) }
     agentCtx.reflect.provide('tools', { register, get: () => undefined, restrict: () => () => {}, guard: () => () => {} })
     agentCtx.reflect.provide('skills', { register: (skill: Skill) => { registered.push(skill); return () => {} } })
-    const section = (spec: { text: Section }) => { sections.set(sessionId, spec.text); return () => {} }
+    // The stop gate's prompt section throws until the replacement assignment is admitted. Keep the
+    // earlier sections; that refusal is the gate, not prompt text.
+    const section = (spec: { text: Section }) => {
+      const previous = sections.get(sessionId)
+      const combined: Section = context => {
+        const prior = previous ? previous(context) : ''
+        try { return prior + spec.text(context) }
+        catch (error) {
+          if (error instanceof Error && /has not been admitted|Ticket ended/.test(error.message)) return prior
+          throw error
+        }
+      }
+      sections.set(sessionId, combined)
+      return () => {}
+    }
     agentCtx.reflect.provide('systemPrompt', { section })
     const inbox = { nextTurn: [] as UserMessage[], nextStep: [] as UserMessage[],
       // A pending message taken out, as DSH's inbox does by its id.
@@ -130,7 +151,7 @@ async function start() {
   const resolveAgent = async (id: string) => agents.has(id) ? { agent: agents.get(id) } : { error: { code: 'session/not-found' } }
   const ctx = new Context()
   const history = { read: async () => ({ events: [] }), [Symbol.asyncDispose]: async () => {} }
-  const services = { agents, llm: { resolveCallConfig: async (value: unknown) => value },
+  const services = { agentDefaultModel: { currentSelection: () => ({ provider: 'test', model: 'test' }) }, fs: filesystem, agents, llm: { resolveCallConfig: async (value: unknown) => value },
     workspaceRegistry: { create: async (cwd: string) => ({ id: cwd }) },
     sessionController: { create, resolveAgent, selectModel: async () => {}, rename: async () => {}, inspect: async () => ({ events: [] }) },
     sessionPersistence: { flush: async () => {}, open: async () => history }, permissionPresets: { set: () => {} }, subprocess,
@@ -167,13 +188,13 @@ async function drive(host: Host) {
     { kind: 'accept', trigger_id: request.id, title: '修复回归', worktree_name: 'fix-regression', acknowledgement: '收到，修复回归。' },
     { kind: 'ignore', trigger_id: thanks.id, reason: 'Thanks only.' }, { kind: 'ignore', trigger_id: chat.id, reason: 'Lunch chat.' }] }) as
     { results: { decision?: string; reason?: string; ticket?: { ticket_id: string } }[] }
-  expect(routed.results.map(result => result.decision)).toEqual(['accept', 'ignore', 'ignore'])
+  expect(routed.results.map(result => result.decision), JSON.stringify(routed)).toEqual(['accept', 'ignore', 'ignore'])
   expect(routed.results[2]!.reason).toMatch(/^Ignored from its card/)
   const a = routed.results[0]!.ticket!.ticket_id
   const answer = { trigger_id: request.id, purpose: 'answer', text: '是配置。' }
   const refusal = await run(master, 'orchestrator_reply', answer).then(() => '', (error: Error) => error.message)
   const proposal = feishu('5', '把副标题改成“浏览网页”', { mentions: [] })
-  await runtime.receive(proposal)
+  await runtime.receive(proposal); await runtime.idle()
   vi.spyOn(Commands.prototype, 'lark').mockResolvedValue({ items: [{ message_id: 'om_5', chat_id: CHAT }] })
   await run(master, 'orchestrator_eval', { trigger_id: proposal.id })
   const proactive = (await run(master, 'orchestrator_eval_decide', { trigger_id: proposal.id, decision: 'accept', title: '文案修订', worktree_name: 'copy-fix',
@@ -348,21 +369,26 @@ function failures(): Map<string, string> {
 }
 
 it('collects both roles\' tools, prompts, skills and inputs', () => {
-  expect([...toolsOf('worker').keys()].sort()).toEqual(['orchestrator_ack', 'orchestrator_read', 'orchestrator_report',
+  expect([...toolsOf('worker').keys()].sort()).toEqual(['orchestrator_ack', 'orchestrator_fetch', 'orchestrator_file_read', 'orchestrator_read', 'orchestrator_report',
     'orchestrator_thread_follow',
-    'orchestrator_thread_unrelated', 'orchestrator_trigger_handback'])
+    'orchestrator_thread_unrelated', 'orchestrator_trigger_handback', 'workspace_attachment_copy', 'workspace_attachment_read', 'workspace_attachments', 'workspace_check_cancel', 'workspace_check_list', 'workspace_check_output',
+    'workspace_check_read', 'workspace_check_request', 'workspace_publish', 'workspace_read', 'workspace_search'])
+  expect(toolsOf('orchestrator').has('workspace_publish')).toBe(false)
   expect([...toolsOf('orchestrator').keys()]).toEqual(expect.arrayContaining(['orchestrator_route', 'orchestrator_eval_decide', 'orchestrator_reply']))
   // The one routing tool takes the place of four.
   for (const name of ['orchestrator_ticket_accept', 'orchestrator_ticket_attach', 'orchestrator_ticket_stop', 'orchestrator_trigger_ignore']) {
     expect(toolsOf('orchestrator').has(name)).toBe(false)
   }
   const wheres = new Set(surfaces.map(surface => surface.where))
-  for (const where of ['orchestrator prompt runtime/dispatch', 'worker prompt runtime/work', 'skill dsh-superagent-github', 'skill dsh-superagent-feishu',
+  const required = ['orchestrator prompt runtime/dispatch', 'worker prompt runtime/work', 'skill dsh-superagent-github', 'skill dsh-superagent-feishu',
     'orchestrator prompt runtime/admission', 'orchestrator input candidate', 'orchestrator input worker_attention', 'orchestrator input worker_report',
     'orchestrator input thread_unrelated', 'orchestrator input ticket_ended', 'orchestrator input settings_saved', 'worker input assignment (explicit)',
-    'worker input assignment (inferred)', 'worker input policy-changed', 'worker input resumed', 'worker input status',
-    'worker input recovery', 'worker input note', 'worker input trigger (context)', 'orchestrator input follow_up',
-    'orchestrator input thread_followed', 'orchestrator tool orchestrator_reply error']) expect(wheres).toContain(where)
+    'worker input assignment (inferred)', 'worker input policy-changed', 'worker input status',
+    'worker input note', 'worker input trigger (context)', 'orchestrator input follow_up',
+    'orchestrator input thread_followed', 'orchestrator tool orchestrator_reply error']
+  // A replacement assignment is not delivered while its original stop is still unknown, so the resumed
+  // input and the recovery note stay on the ticket instead of in the worker session.
+  expect(required.filter(where => !wheres.has(where))).toEqual([])
   expect(sessions.refusal).not.toBe('')
 })
 
@@ -392,7 +418,13 @@ it.each(['orchestrator', 'worker'] as const)('keeps the %s within its character 
   const builtIn = (text: string) => ruleLines().reduce((rest, line) => rest.replace(line, ''), text).replace(/ = "[^"\n]*"/g, ' = ""')
   const prompt = Math.max(...ids.map(id => builtIn(host.sections.get(id)!({})).length))
   const definitions = [...toolsOf(role).values()].map(({ name, description, parameters }) => ({ name, description, parameters }))
-  const tools = JSON.stringify(definitions).length
+  const checks = JSON.stringify(definitions.filter(tool => tool.name.startsWith('workspace_check_'))).length
+  expect(checks, `${checks} characters of verification tools`).toBeLessThanOrEqual(CHECK_BUDGET[role])
+  const attachments = JSON.stringify(definitions.filter(tool => tool.name.startsWith('workspace_attachment'))).length
+  expect(attachments, `${attachments} characters of input attachment tools`).toBeLessThanOrEqual(ATTACHMENT_BUDGET[role])
+  const library = JSON.stringify(definitions.filter(tool => tool.name.startsWith('workspace_') && !tool.name.startsWith('workspace_check_') && !tool.name.startsWith('workspace_attachment'))).length
+  expect(library, `${library} characters of library tools`).toBeLessThanOrEqual(LIBRARY_BUDGET[role])
+  const tools = JSON.stringify(definitions.filter(tool => !tool.name.startsWith('workspace_'))).length
   expect(prompt + tools, `${prompt} characters of prompt and ${tools} of tools`).toBeLessThanOrEqual(BUDGET[role])
 })
 

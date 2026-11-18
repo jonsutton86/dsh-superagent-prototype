@@ -9,6 +9,7 @@ import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import { Runtime } from '../src/app/runtime.ts'
 import { jobRegistry } from './fixtures/host.ts'
+import { filesystem } from './fixtures/filesystem.ts'
 import { evalsHealth } from '../src/app/views/overview.ts'
 import { mandateInstructions } from '../src/executor/dsh.ts'
 import { masterPrompt } from '../src/app/context.ts'
@@ -30,11 +31,13 @@ import { IM_WORDS } from '../src/infra/text.ts'
 import { observePull, pullOf } from '../src/sources/github-pull.ts'
 import { credentialHelper, workerGitConfig } from '../src/infra/environment.ts'
 import { policyHistory } from '../src/app/settings-history.ts'
+import { canRetry, ticketStage } from '../src/core/stage.ts'
 import { overview } from '../src/app/views/overview.ts'
 import { preview, readable } from '../src/app/views/text.ts'
 import { decisionList, search, threadDetail, threadList } from '../src/app/views/threads.ts'
 import { executorLoad, ticketDetail, ticketList } from '../src/app/views/tickets.ts'
 
+const originalGitConfig = process.env.GIT_CONFIG_GLOBAL
 let runtime: Runtime
 const viewsOf = (value: Runtime) => ({ store: value.store, sources: value.sources, links: value.links() })
 const overviewOf = (value: Runtime) => overview(viewsOf(value), value.health, policyVersion(value.store.settings()), executorLoad(value.store, value.executor.activeCount()), value.setupProblem ?? value.feishuProblem)
@@ -55,7 +58,9 @@ async function api(method: string, path: string): Promise<{ status: number; body
   await http(req, { writeHead: (code: number) => { status = code }, end: (data: string) => { text = data } })
   return { status, body: JSON.parse(text) }
 }
-let agents: Map<string, { id: string; status: string; inbox: { nextTurn: UserMessage[]; nextStep: UserMessage[] }; cancel: ReturnType<typeof vi.fn>; inject: ReturnType<typeof vi.fn> }>
+let finishTurns: Map<string, () => void>
+const finishTurn = (sessionId: string) => finishTurns.get(sessionId)!()
+let agents: Map<string, { id: string; session: import('@deepseek-ai/dsh-agent').Agent['session']; status: string; inbox: { nextTurn: UserMessage[]; nextStep: UserMessage[] }; cancel: ReturnType<typeof vi.fn>; inject: ReturnType<typeof vi.fn> }>
 const runTool = async (sessionId: string, name: string, args: unknown) => {
   const tool = tools.get(sessionId)?.get(name)
   if (!tool) throw new Error(`Tool ${name} is not registered for ${sessionId}`)
@@ -89,7 +94,7 @@ const subprocess = { spawn: vi.fn((spec: { argv: readonly string[] }) => {
   // Strip leading `env` and `KEY=VALUE` arguments before looking up the command response.
   const argv = [...spec.argv]
   while (argv[0] === 'env' || /^[A-Z_]+=/.test(argv[0] ?? '')) argv.shift()
-  const answer = answers[argv.join(' ')] ?? ''
+  const answer = argv[0] === 'cat' ? readFileSync(argv[1]!, 'utf8') : answers[argv.join(' ')] ?? ''
   const reader = (text: string) => ({ readFrom: () => ({ text, nextOffset: text.length, lossy: false }) })
   return { done: Promise.resolve({ exitCode: answer instanceof Error ? 1 : 0, signal: null }), collected: { stdout: reader(answer instanceof Error ? '' : answer), stderr: reader(answer instanceof Error ? answer.message : '') } }
 }) }
@@ -154,6 +159,7 @@ beforeEach(async () => {
   }
   const ctx = new Context()
   agents = new Map()
+  finishTurns = new Map()
   tools = new Map()
   sections = new Map()
   guards = new Map()
@@ -163,6 +169,8 @@ beforeEach(async () => {
     create: vi.fn(async ({ sessionId, agentPreset }) => {
       if (agents.has(sessionId)) return
       const agentCtx = new Context()
+      // Mirror native inherited registry visibility rather than an isolated empty worker scope.
+      agentCtx.reflect.provide('jobs', jobs.service)
       const preset = {}
       const inherited = ['bash', 'read', 'read_image', 'skill', 'job_output', 'job_list', 'job_kill', 'grep', 'web_search',
         'ask_user_question', 'plugin_manager', 'schedule_create', 'create_goal', 'session_create', 'session_send_message', 'feishu_doc_edit']
@@ -181,7 +189,15 @@ beforeEach(async () => {
         }),
         guard: vi.fn((check: Guard) => { guards.set(sessionId, check); return () => {} }) })
       agentCtx.reflect.provide('skills', { register: () => () => {} })
-      agentCtx.reflect.provide('systemPrompt', { section: (spec: Section) => { sections.set(sessionId, spec); return () => {} } })
+      const promptSections = new Map<string, Section>()
+      agentCtx.reflect.provide('systemPrompt', { section: (spec: Section) => {
+        promptSections.set(spec.name, spec)
+        // Harness composes all registered sections, including admission guards. Keeping only
+        // the last registration hid the policy prompt whenever a new guard was installed.
+        sections.set(sessionId, { name: 'fixture-composed', interpolate: false,
+          text: context => [...promptSections.values()].map(part => part.text(context)).join('\n\n') })
+        return () => { if (promptSections.get(spec.name) === spec) promptSections.delete(spec.name) }
+      } })
       const inbox = { nextTurn: [] as UserMessage[], nextStep: [] as UserMessage[],
         // A pending message taken out, as DSH's inbox does by its id.
         remove: (id: string) => [inbox.nextTurn, inbox.nextStep].some(list => {
@@ -190,12 +206,24 @@ beforeEach(async () => {
           return at >= 0
         }) }
       const modelEvents: { type: string; data: unknown }[] = []
+      let turn = 0
       const deliver = (mode: 'queue' | 'steer') => vi.fn((message: UserMessage) => {
         inbox[mode === 'queue' ? 'nextTurn' : 'nextStep'].push(message)
         deliveries({ sessionId, mode, id: message.id, text: message.content.map(block => block.type === 'text' ? block.text : '').join('') })
-        agents.get(sessionId)!.status = 'running'
+        const agent = agents.get(sessionId)!
+        if (agent.status !== 'idle') return
+        agent.status = 'running'
+        // Native Harness records turn/start synchronously when delivery wakes an idle Session.
+        // Prompt/tool admission must see that lifecycle, not bypass the production guard.
+        ctx.emit('session/event', agent.session, { type: 'turn/start', data: { turn: ++turn } } as never)
       })
-      agents.set(sessionId, { id: sessionId, ctx: agentCtx, inbox, followup: deliver('queue'), steer: deliver('steer'), status: 'idle', inject: vi.fn(), session: { id: sessionId, header: { agentPreset }, snapshotEvents: () => modelEvents, requestHeader: () => undefined, append: vi.fn((type: string, data: unknown) => { modelEvents.push({ type, data }) }) }, cancel: vi.fn(), whenIdle: async () => {} } as never)
+      agents.set(sessionId, { id: sessionId, ctx: agentCtx, inbox, followup: deliver('queue'), steer: deliver('steer'), status: 'idle', inject: vi.fn(), session: { id: sessionId, header: { agentPreset }, snapshotEvents: () => modelEvents, requestHeader: () => undefined, append: vi.fn((type: string, data: unknown) => { modelEvents.push({ type, data }) }) }, cancel: vi.fn(), whenIdle: async () => { agents.get(sessionId)!.status = 'idle' } } as never)
+      finishTurns.set(sessionId, () => {
+        const agent = agents.get(sessionId)!
+        ctx.emit('session/event', agent.session, { type: 'turn/end', data: { turn, reason: { kind: 'completed' } } } as never)
+        agent.status = 'idle'
+        ctx.emit('agent/status', { agent, status: 'idle' } as never)
+      })
       bindScopeParent(agents.get(sessionId)!, preset)
     }),
     selectModel: vi.fn(async () => {}), resolveAgent: vi.fn(async id => agents.has(id) ? { agent: agents.get(id) } : { error: { code: 'session/not-found' } }), rename: vi.fn(async () => {}),
@@ -203,7 +231,7 @@ beforeEach(async () => {
     inspect: vi.fn(async () => ({ events: [] })),
   }
   jobs = jobRegistry()
-  services = { agents, llm: { resolveCallConfig: vi.fn(async value => value) }, sessionController: controller, sessionPersistence: { flush: vi.fn(async () => {}), open: vi.fn(async () => ({ read: async () => ({ events: [] }), [Symbol.asyncDispose]: async () => {} })) }, workspaceRegistry: { create: async (cwd: string) => ({ id: cwd }) }, permissionPresets: { set: () => {} }, subprocess, webServer: { host: '127.0.0.1', port: 3082, register: (route: { handler: HttpHandler }) => { http = route.handler; return () => {} } }, jobs: jobs.service }
+  services = { agentDefaultModel: { currentSelection: () => ({ provider: 'test', model: 'test' }) }, fs: filesystem, agents, llm: { resolveCallConfig: vi.fn(async value => value) }, sessionController: controller, sessionPersistence: { flush: vi.fn(async () => {}), open: vi.fn(async () => ({ read: async () => ({ events: [] }), [Symbol.asyncDispose]: async () => {} })) }, workspaceRegistry: { create: async (cwd: string) => ({ id: cwd }) }, permissionPresets: { set: () => {} }, subprocess, webServer: { host: '127.0.0.1', port: 3082, register: (route: { handler: HttpHandler }) => { http = route.handler; return () => {} } }, jobs: jobs.service }
   for (const [name, service] of Object.entries(services)) ctx.reflect.provide(name, service)
   for (const cli of [AGENT(), OTHER(), BOT()]) writeFileSync(cli, '#!/bin/sh\n', { mode: 0o755 })
   const store = new Store(join(directory, 'orchestrator.sqlite')); seed(store); store.close()
@@ -311,10 +339,10 @@ it('accepts silently under a rule that says so, gives the worker the rule proced
   await expect(runTool(runtime.masterId, 'orchestrator_reply', { ticket_id: ticket.id, purpose: 'result', text: 'x' })).rejects.toThrow('not ready')
   await runTool(`worker-${ticket.id}`, 'orchestrator_report', { state: 'blocked', summary: 'needs a decision' })
   await expect(runTool(runtime.masterId, 'orchestrator_reply', { ticket_id: ticket.id, purpose: 'result', text: 'x' })).rejects.toThrow('not ready')
-  // Nothing left for a human: the ticket closes instead of waiting, and the rule's closing sentence can still be delivered.
+  // A dropped preparation closes, but its queued closing sentence has no promoted evidence or publication approval.
   await runTool(`worker-${ticket.id}`, 'orchestrator_report', { state: 'dropped', summary: 'too complex; recorded in #123' })
   expect(runtime.store.tickets.get(ticket.id)).toMatchObject({ ended: expect.objectContaining({ by: 'executor', outcome: 'dropped' }) })
-  expect(await runTool(runtime.masterId, 'orchestrator_reply', { ticket_id: ticket.id, purpose: 'result', text: '看到这个问题我试了一下，能复现，修复需要较大改动，已记在 #123。' })).toEqual({ status: 'sent' })
+  expect(await runTool(runtime.masterId, 'orchestrator_reply', { ticket_id: ticket.id, purpose: 'result', text: '看到这个问题我试了一下，能复现，修复需要较大改动，已记在 #123。' })).toEqual({ status: 'pending' })
 })
 
 it('records worker reports, binds the task PR, ends the ticket on ready without a PR, and relays attention', async () => {
@@ -683,12 +711,16 @@ it('retries only a failed, blocked or undelivered ticket with a new assignment, 
   expect(retried.assignments.at(-2)!.endedReason).toBe('retried')
   // The worker's Session holds the assignment, so the new one says only that a person retried it.
   expect(relays(`worker-${ticket.id}`).at(-1)).toEqual({ ticket_id: ticket.id, assignment: 2, note: expect.stringContaining('A person retried this ticket') })
-  // A Session someone deleted gets the whole first message again with the next Assignment.
+  // A deleted original Session cannot be recreated until original work has independent stop proof.
   runtime.store.atomic(() => { runtime.engine.report(ticket.id, { state: 'failed', summary: 'LlmError: offline' }) })
   agents.delete(`worker-${ticket.id}`)
+  const delivered = relays(`worker-${ticket.id}`).length
   runtime.engine.retryTicket(ticket.id)
-  await runtime.idle()
-  expect(relays(`worker-${ticket.id}`).at(-1)).toMatchObject({ ticket_id: ticket.id, title: '修复回归', trigger: expect.objectContaining({ text: '@bot 修一下回归' }) })
+  await runtime.idle(); await runtime.executor.stops.idle()
+  expect(relays(`worker-${ticket.id}`)).toHaveLength(delivered)
+  expect(agents.has(`worker-${ticket.id}`)).toBe(false)
+  expect(runtime.store.tickets.get(ticket.id)!.assignments.at(-1)).toMatchObject({ state: 'pending' })
+  expect(runtime.executor.stops.list(ticket.id).items).toEqual(expect.arrayContaining([expect.objectContaining({ state: 'unknown', proof: null })]))
   expect(search(viewsOf(runtime), '修复', new TextCache(0)).tickets).toEqual([expect.objectContaining({ id: ticket.id })])
   expect(decisionList(viewsOf(runtime), [], 0, 10, '2999-01-01T00:00:00Z').items).toEqual([])
   const accepted = runtime.store.read.recentDecisions(0, 1)[0]!
@@ -966,7 +998,7 @@ it('runs setup again while the Feishu bot check failed, and restores the process
   const broken = await restart()
   await broken.ready
   expect(broken.setupProblem).toMatchObject({ place: 'deployment', code: 'gitTooOld' })
-  expect(process.env.GIT_CONFIG_GLOBAL).toBeUndefined()
+  expect(process.env.GIT_CONFIG_GLOBAL).toBe(originalGitConfig)
   expect(process.env.PATH?.split(':')).not.toContain(join(directory, 'worker-bin'))
 })
 
@@ -986,7 +1018,7 @@ it('writes worker shims and the agent environment from the configuration only, a
   expect(process.env.GIT_AUTHOR_NAME).toBeUndefined()
   expect(process.env.PATH?.split(':')[0]).toBe(bin)
   await next.stop()
-  expect(process.env.GIT_CONFIG_GLOBAL).toBeUndefined()
+  expect(process.env.GIT_CONFIG_GLOBAL).toBe(originalGitConfig)
   expect(process.env.PATH?.split(':')).not.toContain(bin)
 })
 
@@ -1101,7 +1133,8 @@ it('counts a ticket whose directory the host prepared before prepare commands ex
   await runTool(sessionId, 'orchestrator_report', { state: 'failed', summary: 'offline' })
   // A ticket from before prepare commands has its worktree.
   const stored = runtime.store.tickets.get(ticket.id)!
-  runtime.store.tickets.save({ ...stored, execution: { ...stored.execution!, directory } })
+  runtime.store.tickets.save({ ...stored, mandate: { ...stored.mandate, environment: undefined },
+    execution: { ...stored.execution!, environment: undefined } })
   runtime.store.saveSettings({ ...runtime.store.settings(), executor: { ...runtime.store.settings().executor, prepare: 'exit 1' } })
   subprocess.spawn.mockClear()
   await runtime.engine.retryTicket(ticket.id)
@@ -1226,7 +1259,11 @@ it('resumes several ended tickets on one thread from one message without the lau
   await receive(another)
   await runTool(first.sessionId, 'orchestrator_trigger_handback', { trigger_id: another.id, reason: 'Another change.' })
   const second = await acceptedTicket(another)
-  for (const ticket of [first, second]) await runTool(ticket.sessionId, 'orchestrator_report', { state: 'dropped', summary: 'nothing to do' })
+  for (const ticket of [first, second]) {
+    await runTool(ticket.sessionId, 'orchestrator_report', { state: 'dropped', summary: 'nothing to do' })
+    finishTurn(ticket.sessionId)
+  }
+  await runtime.idle(); await runtime.executor.stops.idle()
   await receive(feishu('32', '还有问题', { mentions: [], root_id: 'om_1', sender_id: 'ou_guest' }))
   await vi.waitFor(() => expect([first, second].map(ticket => runtime.store.tickets.get(ticket.ticket.id)!.ended)).toEqual([undefined, undefined]), { timeout: 3000 })
   await vi.waitFor(() => expect([first, second].map(ticket => runtime.store.tickets.get(ticket.ticket.id)!.assignments.at(-1)!.state)).toEqual(['running', 'running']), { timeout: 3000 })
@@ -1486,73 +1523,43 @@ it('relays the status-request hint when a worker\'s turn ends with no text and n
 
 it('fails a ticket at once on a worker error that is not passing, and relays it', async () => {
   const { ticket, sessionId } = await acceptedTicket()
-  ;(runtime as unknown as { ctx: Context }).ctx.emit('agent/error', { agent: agents.get(sessionId), turn: 1, step: 1, error: new Error('Invalid tool schema') } as never)
-  await vi.waitFor(() => expect(runtime.store.tickets.get(ticket.id)!.assignments.at(-1)!.report).toMatchObject({ state: 'failed', summary: expect.stringContaining('Invalid tool schema') }))
+  const ctx = (runtime as unknown as { ctx: Context }).ctx, agent = agents.get(sessionId)! as any
+  ctx.emit('session/event', agent.session, { type: 'turn/start', data: { turn: 1 } } as never)
+  await ctx.waterfall('agent/request', { agent, turn: 1, step: 1, signal: new AbortController().signal } as never, async () => ({} as never))
+  ctx.emit('agent/error', { agent, turn: 1, step: 1, error: new Error('Invalid tool schema') } as never)
+  await vi.waitFor(() => expect(runtime.store.tickets.get(ticket.id)!.assignments.at(-1)!.report).toMatchObject({ state: 'failed', summary: expect.not.stringContaining('Invalid tool schema') }))
+  await runtime.idle()
   expect(relays(runtime.masterId).at(-1)).toMatchObject({ kind: 'worker_report', ticket: { ticket_id: ticket.id }, state: 'failed' })
 })
 
-it('refuses the main Session a bash command that runs sleep and a long job wait, as reports arrive by themselves, and no worker', async () => {
-  const bash = (command: string) => ({ name: 'bash', arguments: { command, description: 'x' } })
+it('enforces routing-only coordinator tools independently of presets and preserves worker execution', async () => {
   const main = guards.get(runtime.masterId)!
-  for (const command of ['sleep 60; echo done', 'cd x && sleep 5', 'gh pr checks 7 || sleep 30', 'echo a\nsleep 90', 'while true; do sleep 30; done',
-    '(sleep 5)', '/bin/sleep 240', 'while sleep 30; do gh pr checks 7; done', 'if sleep 5; then gh pr view 7; fi', '{ sleep 60; }', '! sleep 5',
-    'nohup sleep 60', 'exec sleep 60', 'time sleep 60', 'until sleep 1; do :; done', 'command sleep 5', 'env sleep 5'])
-    expect(main(bash(command)), command).toMatch(/^Reports, follow_up notices, new candidates and a background job's end/)
-  // A command that names sleep as data, not at a command position, runs.
-  for (const command of ['gh api repos/acme/widgets/pulls', 'echo "sleep"', 'grep sleep file', 'sleeper --help', 'command -v sleep'])
-    expect(main(bash(command)), command).toBeUndefined()
-  // A command that asks to hold the step longer than 30 seconds, however it waits, under any preset.
-  const timed = (command: string, args: { timeoutMs?: number; run_in_background?: boolean } = {}) =>
-    ({ name: 'bash', arguments: { command, description: 'x', ...args } })
-  expect(main(timed('gh api repos/acme/widgets/pulls', { timeoutMs: 120_000 }))).toMatch(/^Reports/)
-  expect(main(timed("python3 -c 'import time;time.sleep(240)'", { timeoutMs: 600_000 }))).toMatch(/^Reports/)
-  expect(main(timed('gh api repos/acme/widgets/pulls', { timeoutMs: 20_000 }))).toBeUndefined()
-  // Under the router preset, the shell moves a command without a timeout to a background job after 5 seconds, and a job
-  // wait without one ends after 5 seconds too; a longer job wait waits for nothing that arrives that way.
-  expect(main(timed('gh pr checks 7 --watch'))).toBeUndefined()
-  expect(main({ name: 'job_output', arguments: { job_id: 'j', wait: true } })).toBeUndefined()
-  expect(main({ name: 'job_output', arguments: { job_id: 'j', wait: true, timeout_ms: 30_000 } })).toMatch(/^Reports/)
-  expect(main({ name: 'job_output', arguments: { job_id: 'j', wait: true, timeout_ms: 5_000 } })).toBeUndefined()
-  expect(main({ name: 'job_output', arguments: { job_id: 'j' } })).toBeUndefined()
-  // A main Session created before runs under standard, whose shell waits 60 seconds by default and whose job waits last 30:
-  // a command without a timeout runs in the background or names one, and a job wait names one.
-  ;(agents.get(runtime.masterId) as unknown as { session: { header: { agentPreset: string } } }).session.header = { agentPreset: 'standard' }
-  expect(main(timed('gh pr checks 7 --watch'))).toMatch(/^This shell waits up to 60 seconds by default: pass timeoutMs of at most 30000/)
-  expect(main(timed('gh pr checks 7 --watch', { run_in_background: true }))).toBeUndefined()
-  expect(main(timed('gh api repos/acme/widgets/pulls', { timeoutMs: 20_000 }))).toBeUndefined()
-  expect(main({ name: 'job_output', arguments: { job_id: 'j', wait: true } })).toMatch(/^Reports/)
-  expect(main({ name: 'job_output', arguments: { job_id: 'j', wait: true, timeout_ms: 5_000 } })).toBeUndefined()
-  // A worker waits for its own work as it needs.
+  const agent = agents.get(runtime.masterId) as unknown as { session: { header: { agentPreset: string } } }
+  for (const preset of ['standard', 'dsh-superagent-router', 'custom-executor']) {
+    agent.session.header.agentPreset = preset
+    for (const name of ['bash', 'pwsh', 'read', 'write', 'edit', 'read_image', 'glob', 'grep', 'job_output', 'job_list', 'job_kill',
+      'subagent', 'send_message', 'web_fetch', 'plugin_install', 'later_plugin_tool', 'workspace_publish'])
+      expect(main({ name, arguments: {} }), `${preset}:${name}`).toContain('routing authority only')
+    for (const name of ['orchestrator_route', 'orchestrator_read', 'orchestrator_eval_read', 'workspace_read', 'workspace_search', 'skill', 'run_code'])
+      expect(main({ name, arguments: {} }), `${preset}:${name}`).toBeUndefined()
+  }
   const { sessionId } = await acceptedTicket()
-  expect(guards.get(sessionId)!(bash('sleep 60'))).toBeUndefined()
-  // The main Session's role says so.
-  expect(masterPrompt).toContain('Worker reports, follow_up notices, new candidates and a background job\'s end, with its output, arrive by themselves as messages')
+  expect(guards.get(sessionId)!({ name: 'bash', arguments: { command: 'sleep 60' } })).toBeUndefined()
+  expect(masterPrompt).toContain('routing tools and scoped skills only')
 })
 
-it('reads the main Session\'s preset from a registry with or without presetForSession, and takes standard\'s caps when it cannot', async () => {
-  const watch = { name: 'bash', arguments: { command: 'gh pr checks 7 --watch', description: 'x' } }
-  const route = { name: 'orchestrator_route', arguments: { decisions: [] } }
-  const guard = async (registry: Record<string, unknown>, projections?: Record<string, unknown>) => {
-    services.agentPresets = registry
-    if (projections) services.sessionProjections = projections; else delete services.sessionProjections
-    await (await restart()).ready
-    return guards.get(runtime.masterId)!
+it('denies restored coordinator descendants and retains their lineage when parent Sessions are unloaded', async () => {
+  const created = (runtime as unknown as { ctx: Context }).ctx
+  const create = controller.create as (options: { sessionId: string }) => Promise<void>
+  for (const [id, parent] of [['router-child', runtime.masterId], ['router-grandchild', 'router-child']] as const) {
+    await create({ sessionId: id })
+    const agent = agents.get(id)! as unknown as { session: { header: { parentSession?: string } } }
+    agent.session.header = { parentSession: parent }
+    await created.parallel('agent/created', { agent } as never)
+    expect(guards.get(id)!({ name: 'bash', arguments: {} })).toContain('Coordinator descendants cannot execute')
+    expect(runtime.store.get(KV.sessions.routerOwner(id))).toBe(runtime.masterId)
+    agents.delete(parent)
   }
-  // A released DSH's registry has no presetForSession: the projection says standard, so standard's caps apply, and the
-  // other tools run.
-  let main = await guard({ select: vi.fn() }, { stateOf: vi.fn((_session: unknown, key: string) => key === 'agentPreset' ? 'standard' : undefined) })
-  expect(main(route)).toBeUndefined()
-  expect(main(watch)).toMatch(/^This shell waits up to 60 seconds by default/)
-  // Without the projection either, the preset it was created with counts: the router preset.
-  main = await guard({ select: vi.fn() })
-  expect([main(route), main(watch)]).toEqual([undefined, undefined])
-  // The registry says standard though the Session was created with the router preset: standard's caps apply.
-  main = await guard({ select: vi.fn(), presetForSession: () => 'standard' })
-  expect(main(watch)).toMatch(/^This shell waits up to 60 seconds by default/)
-  // A registry that fails is read as standard, the safer caps, and the guard does not throw.
-  main = await guard({ select: vi.fn(), presetForSession: () => { throw new Error('no projection') } })
-  expect(main(route)).toBeUndefined()
-  expect(main(watch)).toMatch(/^This shell waits up to 60 seconds by default/)
 })
 
 it('refuses an ended ticket\'s worker its tools, and restricts the main Session to the tools it may use', async () => {
@@ -1560,7 +1567,7 @@ it('refuses an ended ticket\'s worker its tools, and restricts the main Session 
   expect(guards.get(sessionId)!()).toBeUndefined()
   runtime.engine.stopTicket(ticket.id)
   expect(guards.get(sessionId)!()).toBe('Ticket ended; new work needs a new authorized ticket')
-  expect(restricts.get(runtime.masterId)).toEqual([{ allow: ['skill', 'bash', 'read', 'read_image', 'job_output', 'job_list', 'job_kill'] }])
+  expect(restricts.get(runtime.masterId)).toEqual([{ allow: ['skill'] }])
   // A worker keeps only the profile's work tools: none that ask a person, change the profile, schedule or start work outside
   // the worker slots, reach other Sessions or edit documents, whenever they were registered.
   expect(restricts.get(sessionId)).toEqual([{ allow: ['read', 'read_image', 'grep', 'bash', 'job_output', 'job_list', 'job_kill', 'web_search', 'skill'] }])
@@ -1793,4 +1800,93 @@ it('keeps the Policy the main Session judges by in its prompt, after admission a
   await runtime.settings.save('policy', { ...saved.policy, rules: rules.map(rule => ({ ...rule, enabled: false })) }, runtime.store.blockRevision('policy'), 'panel')
   expect(policy()).toContain('No rule is enabled: a proactive candidate can only be ignored.')
   expect(policy()).toContain('The accept mode and the rules decide proactive candidates only')
+})
+
+
+it('preserves the exact pending launch backoff and spent retry budget through a Runtime restart', async () => {
+  const original = controller.resolveAgent.getMockImplementation()! as (id: string) => Promise<unknown>
+  let tries = 0
+  controller.resolveAgent.mockImplementation(async (id: string) => {
+    if (String(id).startsWith('worker-')) { tries++; throw Object.assign(new Error('private response'), { status: 503 }) }
+    return original(id)
+  })
+  const { ticket } = await acceptedTicket()
+  await runtime.idle()
+  const assignmentId = ticket.assignments.at(-1)!.id
+  const row = () => runtime.store.db.prepare('SELECT * FROM effect WHERE kind=? AND key=?').get('launch', assignmentId)
+  const originalIntent = row()
+  expect(originalIntent?.attempts).toBe(1)
+  const recovered = await restart(); await recovered.ready; await recovered.idle()
+  expect(row()).toEqual(originalIntent); expect(tries).toBe(1)
+  let clock = Date.now()
+  for (let attempt = 0; attempt < 3; attempt++) {
+    clock += 5000 * 2 ** attempt + 1000
+    vi.useFakeTimers({ toFake: ['Date'], now: clock })
+    try { await runtime.pump(); await runtime.idle() } finally { vi.useRealTimers() }
+  }
+  expect(tries).toBe(4)
+  expect(row()).toBeUndefined()
+  expect(runtime.store.tickets.get(ticket.id)!.assignments.at(-1)!.report?.state).toBe('failed')
+  expect(JSON.stringify(runtime.store.tickets.get(ticket.id))).not.toContain('private response')
+})
+
+
+it('holds an interrupted launch under its original assignment and queue identity after restart', async () => {
+  const original = controller.resolveAgent.getMockImplementation()! as (id: string) => Promise<unknown>
+  let tries = 0
+  controller.resolveAgent.mockImplementation(async (id: string) => {
+    if (String(id).startsWith('worker-')) { tries++; throw Object.assign(new Error('private'), { status: 503 }) }
+    return original(id)
+  })
+  const { ticket, trigger } = await acceptedTicket(); await runtime.idle()
+  const assignment = ticket.assignments.at(-1)!
+  // Durable boundary before I/O, then process loss before a known return. The original intent remains uncertain.
+  runtime.effects.beginLaunch(assignment.id)
+  const intent = runtime.store.db.prepare("SELECT value,seq,generation FROM effect WHERE kind='launch' AND key=?").get(assignment.id)
+  const recovered = await restart(); await recovered.ready; await recovered.idle()
+  expect(tries).toBe(1)
+  const after = runtime.store.tickets.get(ticket.id)!
+  expect(after.assignments.map(item => item.id)).toEqual([assignment.id])
+  expect(after.assignments.at(-1)!.report).toMatchObject({ state: 'failed', summary: expect.stringContaining('outcome is unknown') })
+  expect(runtime.effects.retryState('launch', assignment.id)?.launchStarted).toBe(true)
+  expect(runtime.store.db.prepare("SELECT value,seq,generation FROM effect WHERE kind='launch' AND key=?").get(assignment.id)).toEqual(intent)
+  expect(() => runtime.effects.enqueue('launch', assignment.id, { ticketId: ticket.id, assignmentId: assignment.id })).toThrow('uncertain launch')
+  // This case exercises an admitted human follow-up, independently of the fixture's reset source filters.
+  vi.spyOn(runtime.sources, 'scope').mockReturnValue({ listened: true, observed: false })
+  vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 1000 })
+  try {
+    expect(runtime.engine.receiveForTicket({ ...trigger, id: 'unknown-followup', at: new Date().toISOString(), text: 'What happened to this task?' }, ticket.id)).toBe('stored')
+    await runtime.idle()
+  } finally { vi.useRealTimers() }
+  const held = runtime.store.tickets.get(ticket.id)!
+  expect(ticketStage(held)).toEqual({ stage: 'person', action: 'failed' })
+  expect(canRetry(held)).toBe(true)
+  expect(held.inputs.some(input => input.kind === 'trigger' && input.triggerId === 'unknown-followup' && held.undelivered.includes(input.id))).toBe(true)
+  expect(tries).toBe(1)
+})
+
+it('holds a launch accepted by Harness when its acknowledgement fails, including after coordinator restart', async () => {
+  const original = runtime.sessions.prompt.bind(runtime.sessions)
+  let dispatches = 0
+  const prompt = vi.spyOn(runtime.sessions, 'prompt').mockImplementation(async (...args) => {
+    const result = await original(...args)
+    if (args[0].startsWith('worker-')) { dispatches++; throw Object.assign(new Error('private acknowledgement detail'), { status: 503 }) }
+    return result
+  })
+  const { ticket, sessionId } = await acceptedTicket(); await runtime.idle()
+  const assignment = ticket.assignments.at(-1)!
+  expect(dispatches).toBe(1)
+  expect(agents.get(sessionId)!.cancel).toHaveBeenCalled()
+  expect(runtime.store.tickets.get(ticket.id)!.assignments.at(-1)!.report).toMatchObject({ state: 'failed', summary: expect.stringContaining('outcome is unknown') })
+  const row = runtime.store.db.prepare("SELECT * FROM effect WHERE kind='launch' AND key=?").get(assignment.id)
+  expect(row?.launch_started).toBe(1)
+  prompt.mockRestore()
+  const recovered = await restart(); await recovered.ready; await recovered.idle()
+  expect(dispatches).toBe(1)
+  const after = runtime.store.tickets.get(ticket.id)!
+  expect(after.assignments.map(item => item.id)).toEqual([assignment.id])
+  expect(after.assignments.at(-1)!.report?.state).toBe('failed')
+  expect(runtime.store.db.prepare("SELECT value,seq,generation,launch_started FROM effect WHERE kind='launch' AND key=?").get(assignment.id))
+    .toEqual({ value: row!.value, seq: row!.seq, generation: row!.generation, launch_started: 1 })
+  expect(JSON.stringify(after)).not.toContain('private acknowledgement detail')
 })

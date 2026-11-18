@@ -16,6 +16,16 @@
     "./client": "./lib/client.js",
     "./github-watch": "./lib/github-watch.js",
     "./feishu-watch": "./lib/feishu-watch.js",
+    "./sources": "./lib/sources.js",
+    "./watchdog": "./lib/watchdog.js",
+    "./remote-endpoint": "./lib/remote-endpoint.js",
+    "./remote-world": "./lib/remote-world.js",
+    "./scoped-world": "./lib/scoped-world.js",
+    "./recovery": "./lib/recovery.js",
+    "./ownership": "./lib/ownership.js",
+    "./ownership-authority": "./lib/ownership-authority.js",
+    "./publication": "./lib/publication.js",
+    "./remote-client": "./lib/remote-client.js",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json"
   },
@@ -48,6 +58,7 @@
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:remote-linux": "pnpm build && DSH_REMOTE_ISOLATION=1 vitest run tests/remote.spec.ts",
     "check": "pnpm typecheck && pnpm test && pnpm build"
   },
   "engines": {
@@ -56,6 +67,7 @@
   },
   "packageManager": "pnpm@11.7.0",
   "dependencies": {
+    "@js-temporal/polyfill": "0.5.1",
     "proper-lockfile": "4.1.2",
     "zod": "4.4.3"
   },
@@ -82,7 +94,8 @@
     "@deepseek-ai/dsh-skill": "^0.2.1-alpha.2",
     "@deepseek-ai/dsh-attachment": "^0.2.1-alpha.2",
     "@deepseek-ai/dsh-client-ui-slots": "^0.2.1-alpha.2",
-    "@deepseek-ai/dsh-subprocess": "^0.2.1-alpha.2"
+    "@deepseek-ai/dsh-subprocess": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-fs": "^0.2.1-alpha.2"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.5-alpha.1",
@@ -101,6 +114,7 @@
     "@deepseek-ai/dsh-scope": "0.2.1-alpha.2",
     "@deepseek-ai/dsh-session": "0.2.1-alpha.2",
     "@deepseek-ai/dsh-session-persistence": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-session-persistence-jsonl": "0.2.1-alpha.2",
     "@deepseek-ai/dsh-settings": "0.2.1-alpha.2",
     "@deepseek-ai/dsh-system-prompt": "0.2.1-alpha.2",
     "@deepseek-ai/dsh-tools": "0.2.1-alpha.2",
@@ -120,6 +134,10 @@
     "@deepseek-ai/dsh-client-ui-slots": "0.2.1-alpha.2",
     "react-dom": "18.3.1",
     "@types/react-dom": "18.3.7",
-    "@deepseek-ai/dsh-subprocess": "0.2.1-alpha.2"
+    "@deepseek-ai/dsh-subprocess": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-fs": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-fs-local": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-subprocess-local": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-attachment-local": "0.2.1-alpha.2"
   }
 }

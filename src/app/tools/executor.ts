@@ -9,20 +9,51 @@ import type { Store } from '../store.ts'
 import { reportRelay, threadFollowedNotice } from '../notices.ts'
 import type { Sessions } from '../sessions.ts'
 import { AcknowledgementSchema, readTool, tool, type Tool } from './tool.ts'
+import type { Library } from '../../workspace/library.ts'
+import { libraryTools } from './library.ts'
+import { planningTools } from './planning.ts'
+import type { Reflections } from '../../workspace/reflection.ts'
+import { reflectionTools } from './reflection.ts'
+import type { Planning } from '../../workspace/plans.ts'
+import type { Personas } from '../../personas/service.ts'
+import type { WorldPool } from '../../environments/pool.ts'
+import type { Verification } from '../../verification/service.ts'
+import { verificationTools } from './verification.ts'
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { Attachments } from '../../attachments/service.ts'
+import { attachmentTools } from './attachments.ts'
+import { operatorTools, type OperatorToolHost } from './operator-tools.ts'
+import { memoryTools } from './memory.ts'
+import type { Memory } from '../../memory/service.ts'
 
-export interface ExecutorToolsHost {
+export interface ExecutorToolsHost extends OperatorToolHost {
+  readonly attachments?: Attachments
+  readonly library: Library
+  readonly verification?: Verification
+  readonly planning: Planning
+  readonly reflections?: Reflections
+  readonly personas?: Pick<Personas, 'list'>
+  readonly worlds?: Pick<WorldPool, 'list'>
   readonly engine: Pick<EngineForExecutor, 'report' | 'reply' | 'markUnrelated' | 'handback' | 'followForContext'>
-  readonly store: Pick<Store, 'tickets' | 'replyStatus' | 'atomic'>
+  readonly store: Pick<Store, 'tickets' | 'triggers' | 'settings' | 'replyStatus' | 'atomic'>
   readonly sessions: Pick<Sessions, 'relay' | 'notify'>
   readonly resources: ResourceHost
+  /** Persistent memory; worker tools appear only for a ticket with explicit grants. */
+  readonly memory?: Memory
   /** GitHub Source context whose pull-request rules govern claiming a reported PR. */
   readonly github: SourceContext
   sendReplies(): Promise<void>
 }
 
-export function executorTools(host: ExecutorToolsHost, ticket: Ticket): Tool[] {
-  const ticketId = ticket.id
+export function executorTools(host: ExecutorToolsHost, ticket: Ticket, agent?: Agent): Tool[] {
+  const ticketId = ticket.id, reflection = host.reflections?.forTicket(ticketId)
   return [
+    ...host.attachments ? attachmentTools(host.attachments, ticketId, agent) : [],
+    ...reflection ? [] : libraryTools(host.library, { role: 'worker', ticketId }),
+    ...!reflection && host.verification ? verificationTools(host.verification, ticketId) : [],
+    ...(reflection ? reflectionTools(host.reflections!, ticketId) : ticket.mandate.actor.source === 'workspace' ? planningTools(host.planning, ticketId, host.personas, host.worlds) : []),
+    ...operatorTools(host, ticket),
+    ...(host.memory ? memoryTools(host.memory, ticketId) : []),
     readTool('Read one page of a resource of this ticket that the resource parameter lists. Follow next_offset, and next_resource where a page names one.',
       true, (resource, offset, limit, signal) => readResource(host.resources, resource, offset, limit, ticketId, signal)),
     tool({
@@ -79,12 +110,15 @@ export function executorTools(host: ExecutorToolsHost, ticket: Ticket): Tool[] {
         summary: z.string().min(1),
         human_action: z.string().trim().min(1).max(1000).nullish().describe('One concrete question for a person, also with state=progress; omit to keep the pending one, null to clear it.'),
         question_for_trigger_id: z.string().optional().describe('With human_action: the human message that raised the question, which is asked where that person wrote.'),
-        pr_number: z.number().int().positive().nullish().describe(`The ticket's PR: its source PR, or one by ${host.github.deployment.github.login} from a branch named after this ticket (DSH_SUPERAGENT_NAME).`),
+        pr_number: z.number().int().positive().nullish().describe(host.github.deployment.github
+          ? `The ticket's PR: its source PR, or one by ${host.github.deployment.github.login} from a branch named after this ticket (DSH_SUPERAGENT_NAME).`
+          : 'Unavailable in local mode; omit.'),
         reply_to_trigger_id: z.string().optional().describe('The explicit human question this report answers; never for ordinary progress.'),
       }).strict(),
       execute: async (args, signal) => {
         const current = host.store.tickets.get(ticketId)
         if (!current || !liveTicket(current)) throw new Error('Ticket ended (PR was closed or work finished); do not resume it')
+        if (args.pr_number != null && !host.github.deployment.github) throw new Error('GitHub reporting is unavailable in local mode')
         const pull = args.pr_number != null ? await readPull(host.github, args.pr_number, signal) : undefined
         // Claim the PR, record the report, and queue the relay atomically so a rejected PR claim or invalid report leaves no partial state, and a recorded report always reaches the main Session.
         return host.store.atomic(() => {

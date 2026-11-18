@@ -77,13 +77,15 @@ it('adds the working sets to a database that predates them, from the rows it hol
   const db = new DatabaseSync(path)
   db.exec(`CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL); CREATE TABLE ticket (id TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE thread (key TEXT PRIMARY KEY, value TEXT NOT NULL)`)
-  db.prepare('INSERT INTO kv VALUES (?,?)').run('schema', String(SCHEMA_VERSION))
+  // This handcrafted layout predates schema 13 stop authority; it is not a valid current-schema database.
+  db.prepare('INSERT INTO kv VALUES (?,?)').run('schema', '12')
   db.prepare('INSERT INTO ticket VALUES (?,?)').run('t', JSON.stringify(ticket('t', 'open', [{ state: 'running' }])))
   db.prepare('INSERT INTO thread VALUES (?,?)').run('github:1', JSON.stringify(thread('1', 'github', { pending: ['a'], subscriptions: ['t'] })))
   db.close()
   const store = new Store(path)
   expect([ids(store.tickets.open()), ids(store.tickets.active())]).toEqual([['t'], ['t']])
   expect([ids(store.threads.active()), ids(store.read.subscribedThreads('github'))]).toEqual([['github:1'], ['github:1']])
+  expect(store.db.prepare('SELECT state FROM executor_stop WHERE ticket=?').get('t')).toMatchObject({ state: 'unknown' })
   store.close()
 })
 it('names a thread by its first human trigger', () => {
@@ -207,13 +209,15 @@ it('replaces a working-set column an earlier build defined otherwise, and drops 
     ALTER TABLE ticket ADD COLUMN open INTEGER AS (CASE WHEN value ->> '$.state' = 'open' THEN 1 END);
     ALTER TABLE ticket ADD COLUMN ref TEXT AS (nullif(value ->> '$.assignments[#-1].ref', ''));
     CREATE INDEX ticket_open ON ticket(open) WHERE open IS NOT NULL; CREATE INDEX ticket_ref ON ticket(ref) WHERE ref IS NOT NULL`)
-  db.prepare('INSERT INTO kv VALUES (?,?)').run('schema', String(SCHEMA_VERSION))
+  // This handcrafted layout predates schema 13 stop authority; it is not a valid current-schema database.
+  db.prepare('INSERT INTO kv VALUES (?,?)').run('schema', '12')
   db.prepare('INSERT INTO ticket (id, value) VALUES (?,?)').run('t', JSON.stringify(ticket('t', 'open', [{ state: 'running' }])))
   db.close()
   const store = new Store(path)
   // The open set reads the ticket's end now.
   expect(ids(store.tickets.open())).toEqual(['t'])
   expect(store.db.prepare("SELECT name FROM pragma_table_xinfo('ticket') WHERE name = 'ref'").all()).toEqual([])
+  expect(store.db.prepare('SELECT state FROM executor_stop WHERE ticket=?').get('t')).toMatchObject({ state: 'unknown' })
   store.close()
 })
 

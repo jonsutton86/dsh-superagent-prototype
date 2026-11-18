@@ -68,7 +68,7 @@ it('shows a Ticket with its stage, its Mandate details with the Trigger and Deci
   await click(zh['term.channel'])
   expect(all('.dt-disclosure-body a').map(link => [link.textContent, link.getAttribute('href')])).toEqual([['飞书消息',
     'https://applink.feishu.cn/client/chat/open?openChatId=oc_1'], ['GitHub #42', 'https://github.com/acme/widgets/issues/42']])
-  await click(zh['term.environment'])
+  await click(all('[data-disclosure-row]').find(summary => summary.textContent === zh['term.environment'])!)
   expect(all('.dt-disclosure-body .dt-table tr').map(row => row.textContent)).toEqual(['DSH_SUPERAGENT_DIR/w/t1',
     'DSH_SUPERAGENT_GITHUB_NUMBER—'])
   await click(document.querySelector<HTMLElement>('.dt-trigger-link')!)

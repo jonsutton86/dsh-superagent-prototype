@@ -24,3 +24,14 @@ export function ticketStage(ticket: Ticket): TicketStage {
 export function canRetry(ticket: Ticket): boolean {
   return !ticket.ended && (waitsForPerson(ticket) || !!ticket.delivery)
 }
+
+/** An ended ticket has a person's follow-up waiting to resume under its existing mandate. */
+export function hasPendingFollowup(ticket: Ticket): boolean {
+  return !!ticket.ended && ticket.ended.by !== 'human' && ticket.inputs.some(input =>
+    input.kind === 'trigger' && input.human && ticket.undelivered.includes(input.id))
+}
+
+/** A person can stop active work or cancel a follow-up waiting for processing to resume. */
+export function canStop(ticket: Ticket): boolean {
+  return !ticket.ended || hasPendingFollowup(ticket)
+}

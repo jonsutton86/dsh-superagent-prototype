@@ -1,0 +1,629 @@
+{
+  "schemaVersion": 1,
+  "kind": "watchdog-evaluation-source-contract",
+  "capturedAt": "2026-11-10T20:42:36.975617+00:00",
+  "revision": "db367fe3ba03e3dc1ea1c8bc2a5188b5d498fb12",
+  "scope": "Read-only source analysis; no live inference, model/profile/default edits, credentials inspection, app process changes or tracked source edits.",
+  "pattern": {
+    "source": "danielmiessler/Fabric",
+    "revision": "de0b72766db0436b6c1887bb75768cb3960e67e5",
+    "path": "prompts/operations/fabric/review_design/system.md",
+    "wrapper": "prompts/operations/EVIDENCE.md",
+    "wrapperVersion": 1
+  },
+  "sources": [
+    {
+      "id": "project/src/supervision/plugin.ts",
+      "originalPath": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/src/supervision/plugin.ts",
+      "sha256": "dd7bf9fde26026c302edf4507a2820bc4d236c7ccd5c81775edb006b48f77596",
+      "bytes": 12119
+    },
+    {
+      "id": "project/src/supervision/protocol.ts",
+      "originalPath": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/src/supervision/protocol.ts",
+      "sha256": "f979c28b01fc85324704b154c818753e9dbc788f48d6b7b776242e9feff948c3",
+      "bytes": 4323
+    },
+    {
+      "id": "project/src/supervision/journal.ts",
+      "originalPath": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/src/supervision/journal.ts",
+      "sha256": "1369ab6e17b928c18905dc35d9beb117b8fde586b8670d7ca61d761cee2d169f",
+      "bytes": 19899
+    },
+    {
+      "id": "project/src/supervision/monitor.ts",
+      "originalPath": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/src/supervision/monitor.ts",
+      "sha256": "fbeab4e64f283aaf0ad66c5655dcbae628424db5bc7892bfdefc12d6af26e80e",
+      "bytes": 3865
+    },
+    {
+      "id": "project/src/supervision/client.ts",
+      "originalPath": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/src/supervision/client.ts",
+      "sha256": "81f4bba5a1144b90b89da0fdf95e3eda874d5e0bb83d26ef2bc6a13e2519943f",
+      "bytes": 3958
+    },
+    {
+      "id": "project/src/app/role-models.ts",
+      "originalPath": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/src/app/role-models.ts",
+      "sha256": "52390e3b87a88ee8f5b8c60e86a35aee623362e46072c429af1b0e7accd542bb",
+      "bytes": 3712
+    },
+    {
+      "id": "project/src/app/delivery.ts",
+      "originalPath": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/src/app/delivery.ts",
+      "sha256": "c1a543a142e7c96244e949854b999c46923ac883f6f30f9619ce3222e6a07e32",
+      "bytes": 4588
+    },
+    {
+      "id": "project/src/usage/runtime.ts",
+      "originalPath": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/src/usage/runtime.ts",
+      "sha256": "568158573b36df084072505724e144673448743e61a619d06b81f9065f0d93c7",
+      "bytes": 6137
+    },
+    {
+      "id": "project/src/providers/abliteration-config.ts",
+      "originalPath": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/src/providers/abliteration-config.ts",
+      "sha256": "2b1ac6003f3fc4e08e6c91a79b1890a67bf3abf6ea6a5fb9e015df7f02fdb500",
+      "bytes": 2324
+    },
+    {
+      "id": "project/tests/watchdog-process-harness.spec.ts",
+      "originalPath": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/tests/watchdog-process-harness.spec.ts",
+      "sha256": "33788b4b54a7331950fd421ae3de7cb7874ea4a8c001bb15d7211ac7d508a003",
+      "bytes": 13889
+    },
+    {
+      "id": "project/prompts/operations/EVIDENCE.md",
+      "originalPath": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/prompts/operations/EVIDENCE.md",
+      "sha256": "614e03addb8855370da0c93b465cac69432cd47e579144ca13ac27ced9cfa989",
+      "bytes": 4077
+    },
+    {
+      "id": "project/prompts/operations/fabric/review_design/system.md",
+      "originalPath": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/prompts/operations/fabric/review_design/system.md",
+      "sha256": "75ea9f2270321ccf56817a1aecc15f62ac2cbe9c486f064bfe227ad9f046550a",
+      "bytes": 3712
+    },
+    {
+      "id": "harness/dsh-agent-loop/lib/index.js",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js",
+      "sha256": "cf57e3ecd487ac5c2553455aaa5cef2c6fb41e6bd61be5aa455675d1d7193033",
+      "bytes": 74599
+    },
+    {
+      "id": "harness/dsh-agent/lib/types/runtime-types.d.ts",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-agent/lib/types/runtime-types.d.ts",
+      "sha256": "7c03f0f92be4a48cc7960ac02fc040b2088b462ae790eab1427e50bfe5e74b31",
+      "bytes": 20625
+    },
+    {
+      "id": "harness/dsh-session/lib/index.js",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-session/lib/index.js",
+      "sha256": "2f5dd07cb5c744a29abbb8003a8a4cefd9e582c6e2538074ca299a0ddd02a3bf",
+      "bytes": 94982
+    },
+    {
+      "id": "harness/dsh-session/lib/types/types.d.ts",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-session/lib/types/types.d.ts",
+      "sha256": "8e3b1b7f54d504ca91d3496376f9ea619f99ce1afe2739d35d9c2f2f69320950",
+      "bytes": 25369
+    },
+    {
+      "id": "harness/dsh-session/lib/types/index.d.ts",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-session/lib/types/index.d.ts",
+      "sha256": "f3e7b142a37713ec13a40a7269ee871cff83ad8184d84ce58c8b6adcc8107b08",
+      "bytes": 30240
+    },
+    {
+      "id": "harness/dsh-llm/lib/types/types.d.ts",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-llm/lib/types/types.d.ts",
+      "sha256": "f07f8f22ba299522421716e5abcf2d3ed4147a9ffc500b14d943701ee40d6ee8",
+      "bytes": 23784
+    },
+    {
+      "id": "harness/dsh-llm/lib/types/assistant-stream.d.ts",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-llm/lib/types/assistant-stream.d.ts",
+      "sha256": "0bb9bdf2ae67cf51e1a08742238b6780d0dded4786b8ae9c970e1b452b29ddaa",
+      "bytes": 8338
+    },
+    {
+      "id": "harness/dsh-llm/lib/types/assistant-stream.js",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-llm/lib/types/assistant-stream.js",
+      "sha256": "7e0cc96a4d60aed34381b552f9cb4549d70df36dbd28c0630da4cd93fa44b7a1",
+      "bytes": 19887
+    },
+    {
+      "id": "harness/dsh-llm/lib/types/index.d.ts",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-llm/lib/types/index.d.ts",
+      "sha256": "895a2d357b3da2d2ec18eada1271274d43169acaa6591d57bb6e84878e1b88fe",
+      "bytes": 24302
+    },
+    {
+      "id": "harness/dsh-llm-pi-ai/lib/index.js",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-llm-pi-ai/lib/index.js",
+      "sha256": "99b5c20830a52f69641df8a18a39206079b0c725201958cce2c4a934f1d4f7cd",
+      "bytes": 125589
+    },
+    {
+      "id": "harness/dsh-credentials/lib/types/index.d.ts",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-credentials/lib/types/index.d.ts",
+      "sha256": "46d888d9d6115911539b9124a7b4bd05ad19988ac4b31e3753ae76587a77c653",
+      "bytes": 10649
+    },
+    {
+      "id": "harness/dsh-llm-retry/lib/index.js",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-llm-retry/lib/index.js",
+      "sha256": "cbb99f1c5038e4a9167aedf333343cb3e3adfb5c9f45a37ef7562b024429d050",
+      "bytes": 6280
+    },
+    {
+      "id": "harness/dsh-agent/package.json",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-agent/package.json",
+      "sha256": "3ed4384bc3bf273bfc1d8cba104f073daf9d72fb8e7e995325708cd22b510f99",
+      "bytes": 1978
+    },
+    {
+      "id": "harness/dsh-agent-loop/package.json",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-agent-loop/package.json",
+      "sha256": "dfda3a973125f1ff946d292740d0bfad6333bbb81cd94f77c8c9ba8803f815a5",
+      "bytes": 1986
+    },
+    {
+      "id": "harness/dsh-session/package.json",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-session/package.json",
+      "sha256": "ac94962142eea00322f5d52370e1bd83a7f37a1de88b1b96e923427aa7dcebe6",
+      "bytes": 1576
+    },
+    {
+      "id": "harness/dsh-llm/package.json",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-llm/package.json",
+      "sha256": "381b8948adee1ae66db2a301a22df879aa780604143e494daf1b07ada57d668f",
+      "bytes": 2099
+    },
+    {
+      "id": "harness/dsh-llm-pi-ai/package.json",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-llm-pi-ai/package.json",
+      "sha256": "7ea54aa1b0c42ece4661182b45fd34b7ef19b7f843b151d904cd9c0290ae01da",
+      "bytes": 2225
+    },
+    {
+      "id": "harness/dsh-credentials/package.json",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-credentials/package.json",
+      "sha256": "7672716f52622df2280568086ca027623df1b232a9cdc431c8b55742c6b85ac9",
+      "bytes": 1081
+    },
+    {
+      "id": "harness/dsh-llm-retry/package.json",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-llm-retry/package.json",
+      "sha256": "ea0b5d17bd0eda5398819dea3e7be8e627f236ba2739d90712ba30020f78ae0b",
+      "bytes": 2176
+    },
+    {
+      "id": "supplemental/@deepseek-ai/dsh-tools/lib/types/index.d.ts",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-tools/lib/types/index.d.ts",
+      "sha256": "049df0624956583b8ca05badfd6e9115c6933481571dc17965f36f407bdf95f0",
+      "bytes": 44379,
+      "reaSelected": false
+    },
+    {
+      "id": "supplemental/@deepseek-ai/dsh-tools/lib/index.js",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-tools/lib/index.js",
+      "sha256": "1e53932e7c4213ea24a7d87f06960b7a7702cb21f8a5741c97242b4a470a442a",
+      "bytes": 162201,
+      "reaSelected": false
+    },
+    {
+      "id": "supplemental/@earendil-works/pi-ai/dist/api/openai-completions.js",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@earendil-works/pi-ai/dist/api/openai-completions.js",
+      "sha256": "df81627c173163d0b918692f4a3b87e22cbdb5883b809e4d70d6152d1e68d948",
+      "bytes": 64433,
+      "reaSelected": false
+    },
+    {
+      "id": "supplemental/@earendil-works/pi-ai/dist/utils/provider-retry.js",
+      "originalPath": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@earendil-works/pi-ai/dist/utils/provider-retry.js",
+      "sha256": "46da2f14c0f5d58164a44c1b2837d8ab7674ded3ae4c732d02ae62c87b39b939",
+      "bytes": 4131,
+      "reaSelected": false
+    },
+    {
+      "id": "baseline/src/supervision/plugin.ts",
+      "originalPath": "git:db367fe3ba03e3dc1ea1c8bc2a5188b5d498fb12:src/supervision/plugin.ts",
+      "capturedPath": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/.artifacts/increment-081/assessment-plugin-baseline.ts",
+      "sha256": "49c28e8264bd9e68ce3b58fbf6737712b6be75d70e2bec6c07228f04816f365a",
+      "bytes": 13602,
+      "reaSelected": false
+    }
+  ],
+  "sourcePackageVersions": {
+    "dsh-agent": "0.2.1-rc.3",
+    "dsh-agent-loop": "0.2.1-rc.3",
+    "dsh-session": "0.2.1-rc.3",
+    "dsh-llm": "0.2.1-rc.3",
+    "dsh-llm-pi-ai": "0.2.1-rc.3",
+    "dsh-credentials": "0.2.1-rc.3",
+    "dsh-llm-retry": "0.2.1-rc.3"
+  },
+  "codegraph": {
+    "artifact": "assessment-codegraph.json",
+    "sha256": "8df60d50066f38bb84f153e02804e6bb7a94b402bb1b91065bc2eff5d2339723",
+    "query": "HarnessWatchdog --limit 3 --json",
+    "limitation": "Static symbol lookup; query was deliberately truncated at three symbols. Parent reported index synchronized at548files; no new indexing performed here."
+  },
+  "rea": {
+    "version": "6.8.0",
+    "parentEvidenceId": "ev_d8b460df32089a164e12dd5733701aa8a8e50d820860c5825ade3dee8af0b064",
+    "artifact": {
+      "path": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/.artifacts/increment-081/assessment-contract-input",
+      "sha256": "8a4c8043ab9f2ce6c5ef9d5155845f4934c7dea2c89910a5fe8b8da5feb7c0d4"
+    },
+    "bundle": "assessment-contract.rea.json",
+    "bundleSha256": "f41150c1a6673421060e6b3852e0dd09e24dea5a0335124fdad773aab0f79964",
+    "selectedPaths": [
+      "project/src/supervision/plugin.ts",
+      "project/src/supervision/journal.ts",
+      "harness/dsh-agent-loop/lib/index.js",
+      "harness/dsh-session/lib/index.js",
+      "harness/dsh-llm/lib/types/assistant-stream.js",
+      "harness/dsh-llm-pi-ai/lib/index.js"
+    ],
+    "statistics": {
+      "relevant_files": 29,
+      "nested_asar_containers": 0,
+      "text_bytes_read": 347075,
+      "invalid_utf8_files": 0,
+      "parsed_javascript_files": 6,
+      "skipped_javascript_files": 0,
+      "visited_ast_nodes": 37561,
+      "findings": 288,
+      "modules": 0,
+      "parse_failures": 0
+    },
+    "coverage": {
+      "static_sources": {
+        "sources": 22,
+        "unmeasured_sources": 0,
+        "syntax": {
+          "complete": 6,
+          "recovered": 0,
+          "failed": 0,
+          "not-examined": 16
+        },
+        "semantics": {
+          "unknown_sources": 2,
+          "unexamined_sources": 16
+        },
+        "examination": {
+          "complete": 6,
+          "limited": 0,
+          "not-examined": 16
+        },
+        "electron_applicability": {
+          "observed": 0,
+          "unknown": 22
+        }
+      },
+      "application": {
+        "status": "partial",
+        "truncated": false,
+        "omitted_count": null,
+        "limits": []
+      },
+      "semantic": {
+        "status": "partial",
+        "truncated": false,
+        "omitted_nodes": null,
+        "omitted_relations": null,
+        "limits": [],
+        "families": [
+          {
+            "family": "boundary",
+            "status": "partial",
+            "retained_relations": 54,
+            "omitted_relations": null,
+            "unknown_count": 27
+          },
+          {
+            "family": "call-flow",
+            "status": "partial",
+            "retained_relations": 1481,
+            "omitted_relations": null,
+            "unknown_count": 2099
+          },
+          {
+            "family": "child-process",
+            "status": "partial",
+            "retained_relations": 0,
+            "omitted_relations": null,
+            "unknown_count": 16
+          },
+          {
+            "family": "closure",
+            "status": "partial",
+            "retained_relations": 1165,
+            "omitted_relations": null,
+            "unknown_count": 16
+          },
+          {
+            "family": "configuration",
+            "status": "partial",
+            "retained_relations": 1,
+            "omitted_relations": null,
+            "unknown_count": 17
+          },
+          {
+            "family": "data-flow",
+            "status": "partial",
+            "retained_relations": 14996,
+            "omitted_relations": null,
+            "unknown_count": 2341
+          },
+          {
+            "family": "event",
+            "status": "partial",
+            "retained_relations": 18,
+            "omitted_relations": null,
+            "unknown_count": 29
+          },
+          {
+            "family": "object-flow",
+            "status": "partial",
+            "retained_relations": 2463,
+            "omitted_relations": null,
+            "unknown_count": 3943
+          },
+          {
+            "family": "promise-ownership",
+            "status": "partial",
+            "retained_relations": 202,
+            "omitted_relations": null,
+            "unknown_count": 134
+          },
+          {
+            "family": "request",
+            "status": "partial",
+            "retained_relations": 3,
+            "omitted_relations": null,
+            "unknown_count": 17
+          },
+          {
+            "family": "resource-lifecycle",
+            "status": "partial",
+            "retained_relations": 0,
+            "omitted_relations": null,
+            "unknown_count": 16
+          },
+          {
+            "family": "timer",
+            "status": "partial",
+            "retained_relations": 1,
+            "omitted_relations": null,
+            "unknown_count": 17
+          }
+        ]
+      },
+      "application_unknowns": 23,
+      "semantic_unknowns": 8672
+    },
+    "limitations": [
+      "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+      "Caller-selected source analysis leaves 23 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+      "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+      "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+      "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+      "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+      "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+      "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+      "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+      "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+      "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+      "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+      "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+      "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+      "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+      "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+      "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+      "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+    ],
+    "unknowns": [
+      "23 application graph unknowns remain in the parent Evidence.",
+      "8672 semantic graph unknowns remain in the parent Evidence.",
+      "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+      "Caller-selected source analysis leaves 23 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+      "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+      "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+      "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+      "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+      "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+      "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+      "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+      "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+      "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+      "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+      "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+      "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+      "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+      "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+      "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+      "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code.",
+      "graph.coverage.status is partial",
+      "semantic_graph.coverage.status is partial"
+    ]
+  },
+  "facts": [
+    {
+      "id": "assessment-authority",
+      "classification": "Observed",
+      "claim": "Only journal.assess accepting the exact open incident revision writes assessment and assessed audit atomically; it rejects changed or already-current incidents. Tool return is accepted:true/reason:assessment_recorded. Queue acknowledgement or chat text is not assessment.",
+      "sources": [
+        "project/src/supervision/journal.ts:149-178",
+        "baseline/src/supervision/plugin.ts:160-166",
+        "project/src/supervision/protocol.ts:29-40"
+      ]
+    },
+    {
+      "id": "assessment-persistence",
+      "classification": "Observed",
+      "claim": "Watchdog owns independent sqlite database with WAL and synchronous FULL. Delivery id, exact observation/revision and text are reserved before send; sent acknowledgement waits AgentDelivery Session flush.",
+      "sources": [
+        "project/src/supervision/journal.ts:38",
+        "project/src/supervision/journal.ts:149-167",
+        "project/src/app/delivery.ts:65-84"
+      ]
+    },
+    {
+      "id": "model-selection",
+      "classification": "Observed",
+      "claim": "Watchdog config.model is optional provider/model/reasoningEffort. initializeRoleModel resolves and appends model/selection only on a new unselected Session, without the operation that changes global default. Reusing a case stateDir may preserve its earlier route.",
+      "sources": [
+        "baseline/src/supervision/plugin.ts:27-44",
+        "baseline/src/supervision/plugin.ts:132-145",
+        "project/src/app/role-models.ts:25-60"
+      ]
+    },
+    {
+      "id": "synthetic-input",
+      "classification": "Observed",
+      "claim": "SupervisionClient fetches authenticated GET /orchestrator/api/supervision at strictly http://127.0.0.1:<port>, reads tokenFile, refuses redirects, bounds one page to 1MiB, validates SnapshotSchema. POST /intervene is the only command.",
+      "sources": [
+        "project/src/supervision/client.ts:11-61",
+        "project/src/supervision/protocol.ts:5-27"
+      ]
+    },
+    {
+      "id": "monitor-bounds",
+      "classification": "Observed",
+      "claim": "Actual monitor polls independently while model busy, cancels after assessmentTimeoutMs, latches fixed model error, sends one delivery per poll, and journal limits to three deliveries per task/review cycle. Fresh accepted assessment clears modelError; enqueue, idle or turn end do not.",
+      "sources": [
+        "project/src/supervision/monitor.ts:20-50",
+        "project/src/supervision/journal.ts:149-177",
+        "baseline/src/supervision/plugin.ts:106-112",
+        "baseline/src/supervision/plugin.ts:160-166"
+      ]
+    },
+    {
+      "id": "loop-session-identity",
+      "classification": "Observed",
+      "claim": "Loop buildRequest stamps exact Session id into frozen GenerateOptions.sessionId; llm/stream is public waterfall receiving immutable loop request and next async iterator. Counter before next measures an admitted model stream attempt, not proof of network dispatch/billing.",
+      "sources": [
+        "harness/dsh-agent-loop/lib/index.js:1276-1288",
+        "harness/dsh-llm/lib/types/index.d.ts:35-45",
+        "harness/dsh-llm/lib/types/types.d.ts:506-563"
+      ]
+    },
+    {
+      "id": "usage-shape",
+      "classification": "Observed",
+      "claim": "Usage chunk is {type:usage,usage:{inputTokens,outputTokens,totalTokens?,cacheReadTokens?,cacheWriteTokens?,reasoningTokens?}}. Adapter emits usage before finish, and assembler retains last usage. Missing usage is unknown, not zero. Preserve fields separately; reasoning/cache are not unconditional addends to total.",
+      "sources": [
+        "harness/dsh-llm/lib/types/types.d.ts:160-174",
+        "harness/dsh-llm/lib/types/types.d.ts:425-464",
+        "project/src/usage/runtime.ts:84-97"
+      ]
+    },
+    {
+      "id": "attempt-settlement",
+      "classification": "Observed",
+      "claim": "Successful or interrupted visible output settles assistant/message with optional usage; failures/retries/no-visible canceled output settle assistant/attempt with compact stream. Durable stream raw chunk records include usage and finish; assistant-stream helpers can inspect last usage without saving text. Do not add Session usage and llm/stream usage together.",
+      "sources": [
+        "harness/dsh-session/lib/types/types.d.ts:321-349",
+        "harness/dsh-llm/lib/types/assistant-stream.d.ts:13-40",
+        "harness/dsh-agent-loop/lib/index.js:1080-1158"
+      ]
+    },
+    {
+      "id": "turn-close",
+      "classification": "Observed",
+      "claim": "session/event is post-commit fire-and-forget, with exact Session object and sequenced typed event. turn/end carries turn and reason kind completed|aborted|blocked|error|max-tokens|interrupted|forked. Completed can follow an empty turn, and whenIdle is not disk flush; explicitly await Session persistence flush before claiming stored turn completion.",
+      "sources": [
+        "harness/dsh-session/lib/types/index.d.ts:51-70",
+        "harness/dsh-session/lib/types/types.d.ts:166-211",
+        "harness/dsh-session/lib/types/types.d.ts:257-277"
+      ]
+    },
+    {
+      "id": "error-shape",
+      "classification": "Observed",
+      "claim": "agent/error provides exact Agent, turn, step and verbatim unknown error, emitted before turn/end. Do not persist raw error or turn error.message; retain event kind and fixed whitelisted code only. Assessment accepted before a later failure remains recorded, so retain assessmentOutcome and turnOutcome separately.",
+      "sources": [
+        "harness/dsh-agent/lib/types/runtime-types.d.ts:393-408",
+        "harness/dsh-agent-loop/lib/index.js:1007-1043",
+        "baseline/src/supervision/plugin.ts:106-112"
+      ]
+    },
+    {
+      "id": "requested-tools",
+      "classification": "Observed",
+      "claim": "Durable Session tool/call event carries turn,step,callId,name,arguments. AgentLoop appends it before scheduler.prepare and guards, so it includes denied/unknown requests. Calls skipped after cancel also get synthetic call/result pairs. Count whitelisted names plus other only; this measures model-requested tools, not execution. tools/execute misses guard-denied requests.",
+      "sources": [
+        "harness/dsh-session/lib/types/types.d.ts:350-393",
+        "harness/dsh-agent-loop/lib/index.js:578-606",
+        "harness/dsh-agent-loop/lib/index.js:663-688",
+        "supplemental/@deepseek-ai/dsh-tools/lib/index.js:3302-3355",
+        "supplemental/@deepseek-ai/dsh-tools/lib/index.js:3416-3428"
+      ]
+    },
+    {
+      "id": "credential-route",
+      "classification": "Observed",
+      "claim": "llm-pi-ai provider config names apiKeyEnv as credential reference plus api/baseURL/models/compat/retryPolicy. Adapter resolves explicit reference via ctx.credentials.resolve or launch environment; absent reference fails instead of silently falling back. Credential service describe exposes presence metadata without resolving value.",
+      "sources": [
+        "harness/dsh-llm-pi-ai/lib/index.js:1049-1081",
+        "harness/dsh-llm-pi-ai/lib/index.js:2892-2899",
+        "harness/dsh-credentials/lib/types/index.d.ts:106-137"
+      ]
+    },
+    {
+      "id": "inner-retries",
+      "classification": "Observed",
+      "claim": "Harness llm-retry requests a new stream attempt after error; DSH pi-ai passes maxRetries:0 and its OpenAI client SDK/request helper also receives zero, so this selected route does not hide an SDK retry loop. No statement about unexamined adapters, provider infrastructure or network attempts before stream admission.",
+      "sources": [
+        "harness/dsh-agent-loop/lib/index.js:1127-1149",
+        "harness/dsh-llm-pi-ai/lib/index.js:1753-1765",
+        "supplemental/@earendil-works/pi-ai/dist/api/openai-completions.js:191-204",
+        "supplemental/@earendil-works/pi-ai/dist/utils/provider-retry.js:76-101"
+      ]
+    },
+    {
+      "id": "existing-accounting-scope",
+      "classification": "Observed",
+      "claim": "Main UsageRuntime attributes coordinator and worker lineage; the independently deployed watchdog is outside that Store and main runtime. A scoped evaluation stream observer can reuse the public hook pattern without instantiating the main accounting system.",
+      "sources": [
+        "project/src/usage/runtime.ts:23-56",
+        "baseline/src/supervision/plugin.ts:1-24"
+      ]
+    }
+  ],
+  "unknowns": [
+    "No real model evaluation run here; diagnosis quality, token costs, provider availability and credential presence are unverified.",
+    "Model-call admission count is not provider billing, HTTP dispatch, or cost proof. Metadata/discovery/credential operations are outside the stream metrics.",
+    "Case labels and pass criteria require versioned product review; blocked/stalled/drift cannot be assumed from clock silence alone.",
+    "Main app profile and private key location were intentionally not inspected.",
+    "Live evaluation spend, route selection and credential source must be explicitly configured; provider configuration alone is not authorization for paid evaluation.",
+    "REA is selected static analysis with partial relationships,23 application graph unknowns and8672 semantic unknowns; it supplies no runtime trace."
+  ],
+  "devSdkComparison": {
+    "devVersion": "0.2.1-alpha.2",
+    "installedVersion": "0.2.1-rc.3",
+    "agentRuntimeTypesAndAssistantStreamTypes": "byte-identical",
+    "sessionTypesDifference": "Only rc.3 Typert resource import/declaration added; reviewed Session event shapes unchanged.",
+    "llmTypesDifference": "Only rc.3 provider endpoint/native-auth discovery fields added; reviewed TokenUsage/GenerateOptions/StreamChunk unchanged.",
+    "limitation": "Comparison of selected declaration files does not prove runtime equivalence."
+  },
+  "sourceState": {
+    "initialWorkingTree": "clean at db367fe",
+    "stagedProjectSources": "All selected project sources match baseline except plugin.ts, which was concurrently changed by parent to extract shared prompt/tool constants before staging. Its manifest hash records exact captured bytes; original baseline plugin retained separately. Sealed REA input was not modified.",
+    "baselinePluginSha256": "49c28e8264bd9e68ce3b58fbf6737712b6be75d70e2bec6c07228f04816f365a",
+    "capturedPluginSha256": "dd7bf9fde26026c302edf4507a2820bc4d236c7ccd5c81775edb006b48f77596",
+    "citationConvention": "Plugin line citations in facts refer to retained baseline plugin. Other line citations refer to captured sources."
+  },
+  "originalCapture": {
+    "path": ".artifacts/increment-081/assessment-contract.json",
+    "sha256": "293a1e5432d379fadc41f04759eb15a4c3190227f2dda50b27dc37b07e741da2"
+  },
+  "followupObservation": {
+    "classification": "Observed",
+    "source": "installed-rc3/dsh-llm-pi-ai/lib/index.js:35-49,1638-1651",
+    "claim": "Adapter error events can carry synthesized all-zero usage before an error/aborted finish. Installed loopback HTTP503 reproduced this; failed all-zero snapshots must remain unavailable, while known positive usage remains partial."
+  }
+}

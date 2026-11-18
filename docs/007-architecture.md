@@ -30,7 +30,7 @@ flowchart TB
 
 `Runtime` is the composition root; it contains no domain rules. Its constructor locks the state directory, opens the Store and builds each component. If construction fails, it closes the Store and releases the lock.
 
-Startup registers management routes and runs Setup. After setup resolves, it installs Session and Executor hooks, ensures the main Session exists, starts Policy syncs, resumes interrupted Assignments, and starts passes and effects. `ready` marks completion of startup.
+Startup registers management routes, acquires configured independent ownership, and runs Setup. After setup resolves, it installs Session and Executor hooks, ensures the main Session exists, starts Policy syncs, resumes interrupted Assignments, and starts passes and effects. `ready` marks completion of startup. Ownership loss stops dispatch and turns while preserving read-only health and receipts; owned profiles require matching remote resources and refuse local worker fallback.
 
 Shutdown cancels turns, waits for passes, effects and agents, restores the process environment, closes the Store and releases the lock. Source plugins inject Runtime as the `orchestrator` service through the narrow `SourceHost` interface.
 
@@ -38,7 +38,7 @@ Shutdown cancels turns, waits for passes, effects and agents, restores the proce
 | --- | --- | --- |
 | Setup | `src/app/setup.ts` | Resolves the repository and the accounts by probing their CLIs the way worker shells run them, writes and applies the workers' environment and command shims, and keeps the setup problems; Settings checks a changed account through it, and restarts through it, which runs setup again |
 | Passes | `src/app/passes.ts` | One pass at a time, every two seconds and whenever a command asks: the due effects, then `Engine.evaluateDue`; a Source's Trigger reaches the Engine through it |
-| Outbox | `src/app/outbox.ts` | The Engine's `Outbox` port, and the only writer of the receipts: `send` keeps a message's receipt and queues its `reply` effect in one transaction, and the effect's handler sends it through `SourceRegistry.send`; a message waits while its Source is off, and is dropped when the conversation is gone or not listened to |
+| Outbox | `src/app/outbox.ts` | The Engine's `Outbox` port: `send` keeps a message's receipt and queues its `reply` effect in one transaction, and the effect's handler sends it through `SourceRegistry.send`; independent publication observation can also settle the original receipt, including after revocation |
 | Notices | `src/app/notices.ts` | Converts domain events and worker activity into main-Session messages. `eventNotice` handles domain notices; `reportRelay` forwards questions immediately, keeps ordinary progress on its Ticket, and relays other reports; `followupRelay` names the Tickets that own a human follow-up. Relays arriving during a turn are delivered together at its next step through the DeepSeek Harness inbox |
 
 ### Engine
@@ -66,6 +66,7 @@ Callers receive only their role's `Pick` of the Engine: `EngineForSources`, `Eng
 | Role | Method | Effect |
 | --- | --- | --- |
 | Sources | `receive(trigger)` | Stores a Trigger once and answers `stored`, `duplicate`, or `filtered` when no Source receives it; fans it out to the Tickets subscribed to its Threads, where a person's message resumes an ended Ticket at once unless processing is paused, and queues it for Eval on its primary Thread, unless it is a person's message that reached a Ticket, which stays that Ticket's |
+| Host adapters | `receiveForTicket(trigger, ticketId)` | Receives an authorized human reply only for an existing subscribed ticket; persists its recipient restriction through routing, evaluation, worker reads and acknowledgements |
 | Sources | `bindThread(ticketId, thread, own)` | Makes an open Ticket follow one of the Source's Threads, such as a pull request's, `own` when the Ticket opened it; a closed Thread bound again is open again. The Threads' closes, not a `ready` Report, end the Ticket |
 | Sources | `threadClosed(thread, outcome, at)` | A Thread closed: each open Ticket that follows it records the close, and ends once it is done with the Threads it follows (`followsDone`): no Thread it opened is open, or, when it opened none, every Thread it follows closed. It ends `merged` or `closed` as the latest of those closes did, unless work resumed after the close has not reported `ready`, or its Executor took up, by acknowledging or answering it, a person's follow-up it decides after its latest Report other than `progress`, or the end of its last turn; a `dropped` Report then ends it as the close did |
 | Main Session | `candidate(triggerId)` | The Eval that holds a Trigger, as its assessor sees it |
@@ -202,7 +203,7 @@ That context supplies deployment and commands, setup readiness (`ready`, `config
 
 `WorkerSlots` reserves capacity before a launch or a delivery that wakes an idle worker. A human message can use one slot beyond `maxWorkers`, and wakes have priority over launches. `activeCount` supplies panel load.
 
-Transient provider and network failures get three retries. Launches use effect backoff; failed turns receive continuation messages after 15, 30 and 60 seconds. `inputMessage` renders each Input from current Ticket state, and `mandateInstructions` adds the matched-rule limits for inferred work.
+Harness owns provider-request retries; terminal worker errors produce a sanitized, lifecycle-fenced failed hold without extra continuation turns. Definite launch failures use at most three retries from the durable effect row. Schema 12 marks dispatch before I/O and atomically settles known failures; uncertain launches remain held under original IDs even after task retirement. Host restart replacement is bounded to three using existing assignment history. `inputMessage` renders each Input from current Ticket state, and `mandateInstructions` adds the matched-rule limits for inferred work.
 
 `install` subscribes to Session events; `dispose` unsubscribes. A turn end normally reports waiting, except after readiness or while human action is required. Errors report failed. At startup, `resume` reports interrupted Assignments through `assignmentInterrupted` and requeues pending launches that do not wait for a person, oldest Ticket first.
 
@@ -246,7 +247,7 @@ Each model request binds the Session to the current prompt revision. The revisio
 | --- | --- |
 | `src/app/runtime.ts` | The composition root: builds the parts with the interfaces they use, registers the routes and the Source host, and starts and stops dsh-superagent |
 | `src/app/notices.ts` | Domain events and worker reports into notices and relays for the main Session |
-| `src/app/tools/main.ts`, `src/app/tools/executor.ts` | Tool arguments of the main Session and the Executor Sessions into calls of the core classes, and their results into cards |
+| `src/app/tools/main.ts`, `src/app/tools/executor.ts`, `src/app/tools/operator-tools.ts` | Tool arguments of the main Session and the Executor Sessions into calls of the core classes, and their results into cards. `operator-tools.ts` is the worker's scoped file read and public fetch |
 | `src/app/http.ts`, `src/app/views/`, `src/app/api.ts` | HTTP requests into calls, and Store reads into the panel's views; `api.ts` types every route for the panel |
 | `src/app/resources.ts`, `src/app/links.ts`, `src/app/cards.ts` | Resource names into reads, source messages into links, records into compact cards for models |
 | `src/sources/github*.ts`, `src/sources/feishu*.ts`, `src/sources/poll.ts` | GitHub and Feishu payloads into Triggers and Thread facts, and messages into CLI calls |
@@ -255,7 +256,7 @@ Each model request binds the Session to the current prompt revision. The revisio
 ## Dependency rules
 
 - **Explicit, narrow dependencies.** Each class receives an interface that names what it uses, mostly as `Pick` types of other classes: `ExecutorHost`, `AssessorHost`, `SessionsHost`, `SettingsHost`, `SetupHost`, `PassesHost` and `OutboxHost` for the core classes, and `HttpHost`, `MainToolsHost`, `ExecutorToolsHost`, `ResourceHost`, `LinkHost` and `SourceContextDeps` for the glue, with the Engine as the `Pick` of the role that calls it. The Runtime passes itself only behind such an interface. A Source plugin injects the `orchestrator` service, which its type names as a `SourceHost`: the registry and `context(kind)`; its kind's code sees only its `SourceContext`.
-- **What may import what.** `src/core` imports nothing outside itself apart from Node's hashing, and does no I/O. `src/sources` imports nothing from `src/app`. The panel imports only types from the host side, and the plain values of `src/admission.ts`, `src/limits.ts`, `src/setup.ts`, `src/navigation.ts`, `src/sources/host.ts`, `src/core/errors.ts`, `src/core/reasons.ts` and the filter lists of `src/app/api.ts`.
+- **What may import what.** `src/core` imports nothing outside itself apart from Node's hashing, and does no I/O. `src/sources` imports nothing from `src/app`. The panel imports host implementations only as types. Runtime imports are browser-safe constants, formatting, navigation and validation contracts; shared model selection lives in `src/role-model.ts`, not the host Policy implementation. The browser build bundles Zod and permits only React, React DOM and the JSX runtime as external modules. `tests/client-bundle.spec.ts` builds the production entry and evaluates its factory without Node globals or implicit package factories, catching host import leakage that source-level component tests cannot catch.
 - **One writer per state.** Each kind of state has one writer, and the others read it or ask that writer.
 
   | State | Writer |
@@ -290,12 +291,66 @@ Some generic modules still refer directly to GitHub or Feishu:
 
 | Path | Responsibility |
 | --- | --- |
+| `src/speculation/model.ts`, `service.ts`, `src/client/speculation.tsx` | Durable speculative allocations, quotas, quiescence, evidence promotion, separate message approval and panel. |
 | `src/index.ts` | The main plugin entry: reads the machine settings, starts the Runtime, and gives it the restart that a save of a Source's account uses |
+| `src/supervision/protocol.ts` | Bounded observation, assessment and intervention schemas shared by independent processes |
+| `src/supervision/execution-evidence.ts` | Pure bounded execution-metadata schema, explicit availability/attribution and unavailable projections |
+| `src/workspace/library-model.ts` | Scoped memory/artifact contracts, immutable provenance and bounded publication/recall schemas |
+| `src/workspace/freshness.ts`, `recall-model.ts`, `recall.ts` | Bounded transitive source inspection, persisted retrieval policy and atomic cumulative allowances with metered graph context |
+| `src/client/recall.tsx` | Recall allowance editing, original-request retries and persisted retrieval history |
+| `src/workspace/library.ts` | Transactional content-addressed storage, search, scope authorization, provenance, archival and evidence revisions |
+| `src/app/tools/library.ts` | Host-bound worker publication and worker/router recall tools |
+| `src/client/library.tsx` | Library search, authoring, immutable revisions, inert previews, downloads and source history |
+| `src/client/creative.tsx` | Creative workspace: Markdown artifact publishing through the existing library and a recent-artifact list |
+| `src/client/verification.tsx` | Operator check definition/authority forms, artifact requests, original evidence/output, freshness captures and quiescence review |
+| `src/workspace/model.ts` | Mission, action and activity contracts, validated commands and workspace errors |
+| `src/workspace/pull-model.ts`, `pulls.ts`, `completion.ts` | Immutable mission PR targets, revision-ordered provider observations and durable whole-mission completion attempts with original evidence-review IDs |
+| `src/workspace/plan-model.ts` | Complete plan definitions, dependency validation, immutable version and proposal contracts |
+| `src/workspace/plans.ts` | Plan history, legacy migration, session-bound proposals, operator review and atomic planner requests |
+| `src/app/tools/planning.ts` | Mission-scoped worker plan reading and proposal tools, with no approval or dispatch tool |
+| `src/client/plans.tsx` | Plan editing, proposal comparison/review, planner requests and history restoration as new drafts |
+| `src/workspace/inbox-model.ts` | Validated inbox queries, task/reply contracts and conversation projections |
+| `src/workspace/inbox.ts` | Durable read receipts and text projections, atomic new tasks, authorized replies and bounded history pages |
+| `src/client/inbox.tsx` | Inbox filters, conversation reading, task/reply forms and mission/artifact navigation |
+| `src/client/inbox-settings.tsx` | Reviewed persona versions and default/managed execution selection, stale-grant review and captured task settings |
+| `src/client/getting-started.tsx` | Read-only model/environment guidance, private provider setup instructions, task draft entry and fresh mission review status |
+| `src/workspace/service.ts` | Durable missions, dependency checks, operator dispatch, review and transactional request receipts |
+| `src/workspace/schedule-model.ts`, `cadence.ts`, `schedules.ts` | Versioned schedule authorization, timezone-aware occurrences, durable run limits and bounded transactional mission dispatch |
+| `src/client/schedules.tsx` | Plan snapshot scheduling, calendar/interval controls, limits, original-request retries and occurrence navigation |
+| `src/workspace/reflection-model.ts`, `reflection.ts` | Bounded automatic context snapshots, durable reflection proposals, scoped reads and operator-only promotion with evidence checks |
+| `src/app/tools/reflection.ts` | Assignment-bound snapshot paging and candidate submission without approval or execution tools |
+| `src/client/reflections.tsx` | Reflection scheduling, captured evidence, candidate review, original-request retries and result navigation |
+| `src/usage/model.ts`, `service.ts`, `runtime.ts` | Scoped accounting contracts, versioned prices/limits, atomic reservations, reconciliation and managed Harness stream attribution |
+| `src/client/usage.tsx` | Usage totals, scoped limits, price editing, paginated calls and evidenced operator reconciliation |
+| `src/personas/model.ts` | Bounded immutable persona definitions, exact version references, management commands and catalog contracts |
+| `src/personas/service.ts` | Transactional persona versions, revision checks, model validation, idempotent receipts and archive semantics |
+| `src/personas/runtime.ts` | Harness scoped persona instructions, embedded skills and monotonic optional-tool guards |
+| `src/client/personas.tsx` | Persona catalog, version editing/history, archive/restore and exact-version action selectors |
+| `src/client/missions.tsx` | Mission workspace: creation, action ownership, dependencies, execution controls and reviewed completion |
+| `src/client/mission-pulls.tsx`, `mission-completion.tsx` | Plan-visible PR target consent, current-head result review, completion receipts and original-attempt recovery |
+| `src/supervision/service.ts` | Main-process supervision observations and transactional, idempotent, assignment-bounded progress requests |
+| `src/supervision/client.ts` | Authenticated loopback transport, bounded responses, consistent pagination and restart fencing |
+| `src/supervision/journal.ts` | Independent SQLite incident history, assessment reservations, operator review receipts, consistent pages and bounded retention |
+| `src/supervision/monitor.ts` | Continuous monitoring, bounded semantic assessments, timeout cancellation, sanitized delivery failures and incident reconciliation |
+| `src/supervision/assessment-contract.ts` | Shared production watchdog prompt, tool contracts and compiled-contract digest for isolated evaluation |
+| `src/supervision/evaluation.ts` | Strict curated evaluation schemas, conservative scoring, abstention/coverage metrics and unknown-aware usage |
+| `src/supervision/evaluation-cases.ts` | Versioned synthetic observations and separate manual evidence rubrics without model-visible expectations |
+| `src/supervision/evaluation-runner.ts` | Explicit installed-Harness evaluation, isolated profiles, original case intents, private reports and artifact verification |
+| `src/supervision/evaluation-probe.ts` | Evaluation-only admission gate, exact Session attempt/stream limits and fsynced metadata trace |
+| `src/supervision/plugin.ts` | Separate Harness profile/Session lifecycle, restricted tools, scoped inference failures, current-assessment recovery, local console and periodic retention |
+| `src/supervision/http.ts` | Same-origin standalone console assets and bounded operator incident/history/acknowledgement APIs |
+| `src/supervision/console.tsx`, `console-entry.tsx`, `console.css` | Independent operator console, service health, evidence review, durable ambiguous-response retry and paginated history |
+| `src/supervision/execution-evidence-view.tsx` | Read-only execution observations with coverage, attribution, unknown outcomes and activity-versus-progress distinctions |
+| `src/supervision/alert-protocol.ts` | Host-only alert routes, immutable evidence/destination identities and strict receiver receipt protocol |
+| `src/supervision/alert-journal.ts` | Watchdog-database alert intents, dispatch-before-I/O receipts, deduplication, admission limits and bounded retention |
+| `src/supervision/alerts.ts` | Independent authenticated alert routing, conservative unknown outcomes and observation without resend |
+| `src/supervision/alerts-console.tsx` | Operator alert receipts, original-ID observation, unsent retry/cancel and pagination |
 | `src/deployment.ts` | The plugin `Config` and `Machine`; `resolveDeployment` and `resolveFeishuBot` read the repository and the accounts from the Source settings, each CLI run as Executor shells run it; `SETUP_FIELDS` lists the Source fields setup reads. The code names no person, account or organization |
 | `src/setup.ts` | Setup problems: `SetupError`, with a code, the place that fixes it and the English text the log, the main Session and the panel share |
 | `src/policy.ts` | The Policy: the settings schemas by block, the Policy version, the gate and Mandate revalidation |
 | `src/admission.ts` | The admission table's values, each cell's options and defaults, shared with the panel |
 | `src/limits.ts` | The limits of the values a person sets, which the settings schemas check and the panel's fields offer |
+| `src/role-model.ts` | Browser-safe model selection schema shared by host settings and personas |
 | `src/kv.ts` | `KV`: every family of `kv` records with its key, its value's type and its owner, and the `Key` and `Family` types the Store and `SourceContext.state` take |
 | `src/navigation.ts` | Opens a DeepSeek Harness Session from the panel once the host's catalog lists it |
 | `src/core/model.ts` | The domain types, among them the typed Ticket and `MandateBasis`, with `threadKey`, `ticketOutcome`, `reached`, `followupOwners`, `settled`, `waitsForPerson`, `liveTicket`, `runningAssignment`, `latestAssignment` and `latestReport` |
@@ -305,6 +360,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/core/intake.ts` | `Intake`: Triggers from Sources, to their Tickets and, unless a person's message reached one, to Eval |
 | `src/core/evals.ts` | `Evals`: the Evals of Threads and their Decisions |
 | `src/core/tickets.ts` | `Tickets`: the Ticket lifecycle, the Threads a Ticket follows, Subscriptions and Inputs |
+| `src/core/recovery.ts` | Automatic host-restart allowance and exact recovery-input identity derived from existing assignment history |
 | `src/core/assignments.ts` | `Assignments`: the Executor's facts and its workers' Reports |
 | `src/core/replies.ts` | `Replies`: the Engine's Channel writes |
 | `src/core/stage.ts` | `ticketStage` and `canRetry`: the Ticket stages of [003 Execution](003-execution.md) |
@@ -314,6 +370,73 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/core/memory.ts` | `MemoryRepositories`: the Store's repositories in memory, in the Store's order and with its nested rollback, for domain tests |
 | `src/core/index.ts` | The core's exports |
 | `src/app/runtime.ts` | The Runtime, the composition root, with its start and stop |
+| `src/environments/model.ts` | Local and remote environment enrollment, operator grant contracts and views |
+| `src/environments/pool-model.ts`, `pool.ts` | Durable managed-world authority, independent lifecycle, exact scoped-provider checks and bounded catalogs |
+| `src/environments/service.ts` | Persistent grants, paired filesystem/process verification, execution binding, revocation and replacement |
+| `src/environments/endpoint-model.ts` | Operator endpoint registration, administration requests, metadata and profile contracts |
+| `src/environments/endpoints.ts` | Pinned administrator registry, durable original-ID commands, generation fencing and profile composition |
+| `src/environments/endpoint-files.ts` | Private owned credential reads, content pins and synced whole-file publication under the Runtime lock |
+| `src/environments/remote-profile.ts` | Dedicated Harness remote-world overlay with paired providers, permission boundary and isolated coordinator state |
+| `src/client/endpoints.tsx` | Endpoint registration, grant/credential administration, reconciliation, command recovery and inspectable profile UI |
+| `src/client/operator-command.ts` | Shared operator submission hook retaining payloads and IDs across ambiguous management responses |
+| `src/environments/remote-workspace.ts` | Bound remote provider verification and workspace preparation without host path interpretation |
+| `src/environments/repository-model.ts`, `repository.ts`, `repository-program.ts` | Immutable managed repository sources, original preparation receipts and confined pinned Git checkout with no-replace publication |
+| `src/remote/recovery.ts` | Safe revision-bound historical administration/revocation receipts, current resources and original-generation quiescence observations |
+| `src/remote/protocol.ts`, `limits.ts` | Versioned endpoint RPC, grant generations, process/file receipts and bounded transport windows |
+| `src/remote/journal.ts` | Independent single-writer SQLite state, HMAC credentials, intent deduplication, output offsets and restart uncertainty |
+| `src/remote/endpoint.ts`, `http.ts` | Authenticated execution admission, lease expiry, process supervision, mutation serialization and browser-request refusal |
+| `src/remote/isolation.ts`, `filesystem-runner.ts`, `fs-worker.ts` | Linux bubblewrap process worlds and standalone confined filesystem operations |
+| `src/remote/resource-model.ts`, `resources.ts`, `resource-worker.ts` | Pinned cgroup v2 pool/process-tree limits, pre-exec enforcement, whole-tree cancellation, kernel usage receipts and population-aware reconciliation |
+| `src/verification/model.ts`, `snapshot.ts`, `snapshot-worker.ts`, `runner.ts` | Bounded host-captured file/Git manifests, private copied inputs, revision-pinned checks, output digests and quiescence-bound cleanup through Harness |
+| `src/verification/git-tree.ts` | Canonical Git blob/tree reconstruction from captured bytes and modes, independent of index and local objects |
+| `src/verification/contracts.ts`, `definitions.ts` | Strict operator-authored check contracts, immutable versions, scope/worker authority, durable command receipts and metadata limits |
+| `src/verification/service.ts`, `local.ts` | Assignment/environment-bound artifact checks, local/remote Harness execution, captured-source freshness, original receipt recovery and explicit local isolation strength |
+| `src/verification/review-model.ts`, `reviews.ts`, `missions.ts` | Exact selected-check seals, durable grouped freshness capture, original-ID recovery and all-current-artifact mission acceptance |
+| `src/app/tools/verification.ts` | Worker selection of fixed authorized check versions, own-artifact evidence/output and original-ID cancellation |
+| `src/remote/credentials.ts`, `command-worker.ts` | Endpoint-private immutable credential snapshots, version binding/revocation and credential loading inside the command namespace without secret argv |
+| `src/remote/client.ts`, `admin.ts` | Pinned host-side RPC, same-ID retry, reconnect observation and explicit uncertain outcomes |
+| `src/remote/world.ts`, `world-journal.ts` | Persistent execution-world authority binding, serialized lease maintenance, durable self-revocation and independent quiescence observations |
+| `src/remote/effects.ts` | Durable pre-dispatch command/file ownership, trusted tool scopes, request fingerprints and receipt-only restart recovery |
+| `src/client/execution-receipts.tsx` | Paginated task/global remote receipts, explicit outcome and quiescence, read-only refresh and same-ID command cancellation |
+| `src/remote/presets.ts` | Authority-specific Harness presets for remote workers, children and the typed-tool router |
+| `src/remote/search.ts` | Bounded remote glob/grep tools using endpoint ripgrep and grant-checked paths |
+| `src/remote/filesystem.ts`, `subprocess.ts` | Paired Harness filesystem/process services, scoped targets, guarded writes, stream cursors, world-scoped live command ownership and independent exit observation |
+| `src/remote/endpoint-plugin.ts`, `provider-plugin.ts` | Dedicated endpoint and execution-world Harness composition; bounded lease renewal |
+| `src/ownership/protocol.ts` | Separate coordinator ownership generations, role-scoped RPC and protected endpoint operations |
+| `src/ownership/authority.ts` | Independent single-writer authority, monotonic lease deadlines, persistent epochs, checkpoint claimant replacement and all-resource handoff barrier |
+| `src/ownership/http.ts`, `client.ts` | Bounded, identity-pinned ownership HTTP with private role credentials and original-ID intents |
+| `src/ownership/gate.ts` | Resource verification, durable generation floor, cancellation and quiescence acknowledgement |
+| `src/ownership/inventory.ts` | Private revision-bound resource inventories with SQLite mutation invalidation, bounded pages and payload-free receipt projections |
+| `src/ownership/lease.ts` | Process-instance acquisition, conservative deadlines, renewal and terminal loss without silent reacquisition |
+| `src/ownership/runtime.ts` | Runtime configuration, durable authority/identity binding, workspace credential separation and shared ownership checks |
+| `src/ownership/authority-plugin.ts`, `index.ts` | Dedicated Harness authority host and public host-only lease/resource composition |
+| `src/publication/protocol.ts` | Exact artifact/destination approvals, bounded private RPC and immutable delivery receipts |
+| `src/publication/journal.ts` | Independent locked publication journal, private roles, immutable bindings and unknown restart outcomes |
+| `src/publication/service.ts` | Ownership-fenced publication, final pre-dispatch verification and unresolved-effect handoff barrier |
+| `src/publication/github.ts` | Fixed-origin account/target checks, single-attempt issue comments and exact provider receipt observation |
+| `src/publication/github-pull.ts`, `pull-model.ts` | Provider-observed immutable PR identities, explicit-commit reviews, exact captured-tree evidence and historical review receipt recovery |
+| `src/publication/feishu.ts`, `providers.ts` | Fixed-origin Feishu/Lark bot authentication, pinned root replies, exact receipt recovery and provider routing |
+| `src/publication/channels.ts` | Plan-bound mission delivery grants, Outbox intent persistence, revocation and receipt recovery |
+| `src/publication/inbound.ts` | Exact participant/task listeners, independently fenced provider reads, durable cursors and atomic directed admission with native-message deduplication |
+| `src/publication/http.ts`, `client.ts` | Private pinned HTTP transport, bounded payloads and original-ID dispatch without automatic retries |
+| `src/publication/runtime.ts` | Operator artifact approval, persistent intents, duplicate guard and receipt recovery after ownership loss |
+| `src/publication/repository-export-model.ts` | Browser-safe original-source/check export contracts, bundle digests and capacity bounds |
+| `src/publication/repository-export-program.ts` | Endpoint-confined exact-history Git bundle helper with clean-source, ancestry and durable-byte verification |
+| `src/publication/repository-export-job.ts` | Original-ID paired job observation, exact intent verification and bounded bundle metadata |
+| `src/publication/repository-exports.ts` | Reviewed resumable bundle staging, atomic chunks, fresh source seals, cancellation and verified downloads |
+| `src/publication/repository-chunks.ts` | Shared bounded complete-bundle integrity iterator, preserving independent stores and error contracts |
+| `src/publication/repository-model.ts`, `repository-runtime-model.ts` | Browser-safe private service and workspace repository intent, approval and receipt contracts |
+| `src/publication/repository-journal.ts` | Independent transfer chunks, immutable publication requests, dispatch boundaries and restart holds in the existing publisher journal |
+| `src/publication/repository-git.ts` | Paired Harness subprocess private imports, object/bundle verification and create-only branch push |
+| `src/publication/repository-provider.ts` | Fixed-origin GitHub identity checks and exact branch/PR publication and observation |
+| `src/publication/repository-publisher.ts` | Separate branch/PR dispatch, fresh evidence and ownership fencing, cache/cancellation and unknown-outcome recovery |
+| `src/publication/repository-runtime.ts`, `repository-observation.ts` | Coordinator export/destination intents, resumable private preparation, explicit fresh approval, receipt validation and original-ID recovery |
+| `src/providers/abliteration-config.ts`, `abliteration-guard.ts`, `abliteration-smoke.ts` | Optional Harness provider configuration, provider-specific history/image/output limits and bounded metadata-only connection check |
+| `src/publication/plugin.ts` | Dedicated loopback Harness publication service with independent account credentials |
+| `src/client/publications.tsx` | Complete artifact and destination review, delivery status and original-intent recovery controls |
+| `src/client/repository-publications.tsx` | Exact repository/commit/PR review, private preparation, fresh approval, original-response recovery and cancellation controls |
+| `src/client/mission-delivery.tsx`, `destinations.ts` | Mission reply consent, immutable destination display and original delivery recovery controls |
+| `src/client/mission-inbound.tsx` | Participant/task authorization, original-intent retry, incoming receipt display, polling/rescan and listener pause |
 | `src/app/setup.ts` | Setup, and `setupChanged`, whether a save changes a field setup reads |
 | `src/app/passes.ts` | Passes, the pass scheduler |
 | `src/app/outbox.ts` | The Outbox: the Engine's `Outbox` port, the receipts and the `reply` effects that send them |
@@ -321,6 +444,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/app/store.ts` | The Store, and `Receipt`, a message of the outbox |
 | `src/app/store-read.ts` | `storeReads`: the Store's read queries for the views, the tools and the Sources' polls, which never write |
 | `src/app/migration.ts` | The schema 11 migration: one step from schema 10 that writes every stored record in its current shape |
+| `src/app/emergency.ts` | Durable global emergency stop: persist-first engagement, halt of open assignments through original-stop receipts, explicit release, and replay identity |
 | `src/app/effects.ts` | Effects |
 | `src/app/versions.ts` | `Versions`: a record kept as numbered snapshots with a pointer to the current one, for the settings and the prompts |
 | `src/app/cache.ts` | `TextCache`: texts kept in memory within a size, the least recently used dropped first |
@@ -330,6 +454,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/app/context.ts` | The built-in prompt text, read from `prompts/`, and the transcript entries Sessions read |
 | `src/app/skill-files.ts` | Packaged text: `promptFile`, which joins a file's one-sentence lines into paragraphs, and the bundled skills |
 | `src/app/sessions.ts` | Sessions |
+| `src/app/router-authority.ts` | Coordinator identity-based tool guards, legacy execution retirement and fail-closed quiescence checks |
 | `src/app/delivery.ts` | `AgentDelivery`: delivers a message to a DeepSeek Harness agent once per request id, also across a restored Session |
 | `src/app/retry-health.ts` | `RetryHealth`: which Sessions wait on a model budget retry, for the `models` health entry |
 | `src/app/role-models.ts` | Resolves the Eval and Executor models, and seeds a new Session with its role's model |
@@ -339,9 +464,13 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/app/links.ts` | `sourceLink`, the page of a Trigger's message, and `candidateCard` |
 | `src/app/cards.ts` | Compact cards of Triggers, Tickets, Threads and Decisions for models, the closed set of ticket card states `TICKET_STATES`, and `textPage` |
 | `src/app/resources.ts` | `RESOURCES` and `readResource`: what `orchestrator_read` reads, for each role |
+| `src/app/fetch-url.ts` | One bounded public GET: https only, no credentials, no redirect off the operator's allowed URLs |
+| `src/app/scoped-files.ts` | Read-only attachment and ticket-directory files, and the copy into the ticket directory |
 | `src/app/tools/tool.ts` | The `Tool` type, `readTool`, the `orchestrator_read` of both roles, and `AcknowledgementSchema` |
 | `src/app/tools/main.ts` | The main Session's tools |
 | `src/app/tools/executor.ts` | An Executor Session's tools |
+| `src/app/tools/memory.ts` | Worker memory search/write tools, registered only for a ticket with explicit scope grants |
+| `src/app/tools/operator-tools.ts` | The worker's scoped file read and bounded public fetch |
 | `src/app/http.ts` | The `/orchestrator/api` routes: the same-origin check, request limits and one status per kind of failure |
 | `src/app/api.ts` | `Api`, every route with its parameters, query, body and response, and the filters of the lists; it imports only types, so the panel bundles it |
 | `src/app/views/text.ts` | The two forms of a view's text: `preview`, plain text on one line, and `markdown` without HTML; `plain` and `readable` |
@@ -351,15 +480,38 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/app/views/sources.ts` | The Source status: each Source instance's state, its last day's counts, and what it filtered and dropped in that day |
 | `src/app/views/settings.ts` | The settings page's view: each block with its revision, each Source's settings with its kind's form, and the execution environment |
 | `src/app/views/overview.ts` | The overview: Tickets that need a person, problems, the last day's flow and the Executor's load |
+| `src/app/views/briefing.ts` | Read-only operator briefing composed from the existing overview and schedule summaries; no external call or delivery |
+| `src/calendar/ics.ts` | Bounded read-only local iCalendar parsing: folding, escapes, UTC/date-only events, cancellation and upcoming window |
+| `src/security/audit.ts` | Append-only operator audit log with SHA-256 hash chaining, secret-shaped detail redaction, bounded pages and tamper verification |
+| `src/security/access.ts` | Optional bearer-token administration boundary, role/capability matrix and explicit deny-by-default connector grants |
+| `src/security/trusted-origin.ts` | Exact canonical Tailscale HTTPS origin configuration; rejects wildcard hosts, credentials, ports, paths and non-HTTPS schemes |
+| `src/security/credentials.ts` | Confined 0600 credential vault: atomic writes, names-only listing, traversal and symlink refusal |
+| `src/security/providers.ts` | Validated provider endpoints/models from the environment and a redacted view that never claims live verification |
+| `src/security/model-routing.ts` | Pure deterministic provider/model selection from configured providers with explicit budget ceilings and refusal reasons |
+| `src/security/provider-execution.ts` | Ordered fallback execution over an injected transport, per-attempt reservation settlement, abort handling and attempt reporting; no provider client or network access |
+| `src/security/provider-client.ts` | OpenAI-compatible chat-completions transport over an injectable fetch, with credential lookup, bounded timeout and usage mapping |
+| `src/app/provider-runner.ts` | Binds ordered fallback execution to `Usage.begin` reservations so every attempt reserves and settles a call |
+| `src/memory/service.ts` | Typed persistent memory: scoped access, dedup/upsert, FTS5 search, bounded advisory context, configurable conversation retention, extractive digests, profiles, provenance events and hard deletion |
+| `src/memory/import.ts` | Consent-gated parsing/chunking of operator-provided Markdown/text and ChatGPT/Claude/Codex exports into provenance-tagged memory |
+| `src/executor/failure.ts` | Typed sanitized failure facts and exact live Agent/Session/assignment/turn/step fencing |
 | `src/executor/dsh.ts` | The DshExecutor, `WorkerSlots`, `ticketExecution`, `inputMessage` and `mandateInstructions` |
+| `src/executor/stop-model.ts`, `stop-store.ts`, `stops.ts` | Original-scope stop authority in the main Store, retained control receipts and execution admission holds |
+| `src/executor/stop-view-model.ts`, `stop-view.ts` | Shared bounded stop-hold projections for task, Inbox, mission and supervision views |
+| `src/client/stop-recovery.tsx` | Original stop inspection, observation-only recheck and retained operator confirmation through response loss |
 | `src/executor/background.ts` | A worker's background work in DeepSeek Harness, the shell jobs its Session owns (`ctx.jobs`) and its subagents (`ctx.subagents`): `runningJobs`, `untilQuiet`, `killJobs`, `collectJobs`, `stopSubagents`, `stopBackground`, `until`, and `cancelled`, the workers whose turn a stop of their subagents cancelled |
+| `src/executor/evidence.ts` | Synchronous bounded projections of existing registry metadata; excludes raw output and preserves uncertain assignment/lifecycle attribution |
 | `src/infra/commands.ts` | `Commands`, the CLI transport: `run`; `api` and `pages`, limited to the configured repository and validated; `lark` as the bot; `git`. `CliError` carries the code a command's output reports, such as a GitHub HTTP status, and a command that prints nothing fails with how it ended, never with its arguments; `validItems` skips and counts the malformed items of a list |
 | `src/infra/environment.ts` | The agent's process environment: command shims, the git configuration and credential helper, `runAsWorker`, and the checks of the environment and of a Ticket's directory |
 | `src/infra/paths.ts` | The package's root, where packaged files are |
 | `src/infra/text.ts` | Word counts and the chat message limit, `fill` and `sameName` |
 | `src/infra/health.ts` | The `HealthBoard`, every part's health entry, each claimed by its one writer |
+| `src/infra/admission-trace.ts` | Optional ordered trace of worker admission, written only when `DSH_ADMISSION_TRACE` names a file |
 | `src/sources/kind.ts` | The `SourceKind` protocol |
 | `src/sources/registry.ts` | `SourceRegistry` |
+| `src/sources/contracts.ts` | Shared built-in source schemas and owned/local availability rules |
+| `src/sources/catalog.ts` | Passive Cordis source-contract service and registration lifetime tracking, exported as `./sources` |
+| `src/sources/operator.ts` | Coordinator GUI messages stored as explicit operator triggers |
+| `src/sources/repository-profile.ts` | Read-only local checkout for `repository/file` and `repository/directory` when GitHub is not configured |
 | `src/sources/host.ts` | `SourceHost`, `SourceContext`, `Health`, `health` and the fixed health texts |
 | `src/sources/poll.ts` | What GitHub and Feishu polling share: `POLL_HORIZON_MS`, `polled`, `cursorAt`, and `pollThreads`, which keeps a failure on its Thread as `pollError` |
 | `src/sources/github.ts` | The GitHub kind and plugin entry, exported as `./github-watch`: a poll round of notifications, the pull requests of open Tickets with their CI, and subscribed Threads |
@@ -376,10 +528,56 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/sources/feishu-image.ts` | Reads a Feishu message's image as an attachment for the assessing Session |
 | `src/client/index.tsx` | The client plugin entry: the sidebar entry, the main panel and the page in DeepSeek Harness's Plugin Manager |
 | `src/client/app.tsx` | The panel: header, search, glossary, tabs and the page of the current route |
+| `src/client/environments.tsx` | Environment enrollment, proof status, revocation, reauthorization and replacement controls |
+| `src/client/worlds.tsx` | Managed-world activation, lifecycle, receipts and exact-generation action selectors |
+| `src/recovery/index.ts` | Host-only maintenance plugin for checkpoint, verification, staging, held Session import, ownership reservation and receipt audit |
+| `src/recovery/checkpoint.ts` | Offline writer ownership, consistent manifests, database/world validation and execution-fenced staging |
+| `src/recovery/ownership.ts` | Verified checkpoint reservation, durable original intent, independent claimant replacement and private credential publication without activation |
+| `src/recovery/administration.ts` | Historical endpoint-administration reconciliation without replay or replacement authority |
+| `src/recovery/revocation.ts` | Exact original grant-principal revocation proof, generation/quiescence comparison and held world-state reconciliation |
+| `src/recovery/configuration.ts` | Original managed/dedicated execution credential selection, pinned private-file checks and read-only endpoint/vault/root validation |
+| `src/recovery/prepare.ts` | Original-ID held receipt preparation, revision-bound observation application and atomic recovery image publication |
+| `src/recovery/image.ts` | Authenticated prepared-state manifests, private member hashing and complete image verification |
+| `src/recovery/installation.ts` | Private checkpoint installation, copied credential pins, authenticated deployment paths and preserved historical requests |
+| `src/recovery/activation.ts` | Verified Session startup, independent resource checks and exclusive lock/ownership handoff to the real Runtime |
+| `src/recovery/bindings.ts` | Operational path resolution retained across subsequent checkpoint and restore cycles |
+| `src/recovery/profile.ts` | Complete installed Harness launch patches for dedicated and managed execution, with optional JSONL backend selection |
+| `src/attachments/model.ts`, `service.ts`, `copy-program.ts` | Durable original input uploads, exact task/message bindings, native image projection and verified scoped file transfer |
+| `src/app/tools/attachments.ts` | Task-bound worker attachment list/read/copy tools |
+| `src/client/attachments.tsx` | Resumable file selection, explicit Send binding, authenticated previews/downloads and cancellation |
+| `src/voice/model.ts`, `config.ts` | Bounded speech API contracts and optional Harness adapter configuration |
+| `src/voice/adapters.ts` | Fixed local speech commands and explicit local/cloud HTTP contracts, private files, limits and cancellation |
+| `src/voice/service.ts` | Durable speech request identity, transient content, interruption/restart semantics and expiry |
+| `src/client/voice.tsx`, `voice-media.ts` | Editable dictation drafts, explicit playback, microphone lifecycle and interruption |
+| `src/recovery/audit.ts` | Complete resource coverage, original receipt comparison, divergence/quiescence findings and durable held audit reports |
+| `src/recovery/state.ts` | Incremental logical SQLite comparison of held and authenticated state, excluding only hold/reservation/audit metadata |
+| `src/recovery/sessions.ts` | Public Harness logical export/import and exact destination-backend verification under held Session writers |
+| `src/recovery/control.ts` | Original recovery claimant, coordinator publication credential and pinned provider account/target verification without execution |
+| `src/recovery/inference.ts` | Public Harness cold model-selection projection and bounded, history-free recovery inference probes |
+| `src/recovery/inputs.ts` | Transactional reconciliation of live input acknowledgements against authenticated worker consumption history |
+| `src/recovery/graph.ts` | Held Engine authority graph validation, transactional derived-index repair and retirement of proven obsolete effects |
+| `src/recovery/connectors.ts` | Read-only built-in cursor and conversation authority/deduplication verification without polling or activation |
+| `src/recovery/workspace.ts` | Read-only mission/plan/schedule authority, historical execution binding and exact occurrence/cursor verification |
+| `src/recovery/results.ts` | Recorded artifact content/provenance, check/receipt history, review seals and mission-completion authority in held images |
+| `src/recovery/registries.ts` | Read-only persona history, original execution generations and immutable worker/Session ownership in held images |
+| `src/recovery/reader.ts` | Bounded read-only product-state scanning, normalized persisted-value checks and static diagnostics |
+| `src/recovery/context.ts` | Original reflection snapshots/proposals/read charges and cumulative recall reservations in held images |
+| `src/recovery/budgets.ts` | Recorded model liabilities, original accounting lineage and speculative policy/approval evidence without release |
+| `src/recovery/publications.ts` | Original artifact approvals/checks, delivery grant histories, exact Outbox subjects and independent publication outcomes before and after receipt application |
+| `src/recovery/repository-exports.ts` | Read-only original repository/check/review bindings and bounded streaming verification of checkpointed bundle chunks |
+| `src/recovery/repository-publications.ts` | Retained repository export/owner/approval authority, expected inventories and revision-bound held receipt application |
+| `src/verification/evidence.ts` | Shared pure predicates for completed host checks and immutable evidence bindings |
+| `src/recovery/sources.ts` | Actual passive source catalog and authenticated settings qualification with repeated registration/default checks |
+| `src/recovery/crypto.ts` | Private inputs, separate key files and streaming authenticated checkpoint encryption |
+| `src/remote/scoped-plugin.ts` | Harness preset-owned paired providers borrowing one managed execution world |
 | `src/client/provider.tsx` | What every page reads from its host: copy, calls, navigation, notices, the state poll, and `restart`, which reads the state quickly while dsh-superagent restarts |
 | `src/client/api.ts` | Calls and polls of the management API, typed by `src/app/api.ts`, and the Decision filters of the Eval status |
 | `src/client/route.ts` | The tabs, the settings groups, the typed routes that `parseRoute` reads, and the route memory with the settings group opened last |
 | `src/client/overview.tsx` | The overview |
+| `src/client/jarvis.tsx` | The read-only JARVIS dashboard: Overview, Memory, Agents, Goals, Connections, Analytics and Voice sections over existing management views, with navigation to full pages, an analytics period selector, live speech activity, and no verification claim |
+| `src/client/assistant.tsx` | JARVIS action bar: Inbox compose, Missions, master Session deep link and confirmed pause/resume with state reload |
+| `src/client/access-token.tsx` | Browser-only administration-token entry; stores the bearer in this origin's localStorage and never displays or logs it |
+| `src/client/voice-qualification.ts` | Browser-only voice capability probe: recorder/mime/microphone/audio/secure-context availability, never permission or device verification |
 | `src/client/source.tsx`, `trigger.tsx`, `eval.tsx`, `execution.tsx` | One file per stage: its status, and its settings where it has some |
 | `src/client/thread.tsx`, `ticket.tsx` | The record pages: a Thread with its timeline, and a Ticket with its authorization, Inputs and Assignments |
 | `src/client/settings.tsx` | The Settings tab: the group navigation and the group on screen |
@@ -397,14 +595,104 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/client/locales.ts` | All copy in both languages, and the glossary of [001 Domain model](001-domain.md) |
 | `src/client/client.css`, `css.d.ts` | The panel's stylesheet, loaded as text |
 
-`src/sources/github.ts` and `src/sources/feishu.ts` are also the entries of the two Source plugins, built by `tsdown.config.ts` and exported in `package.json` as `./github-watch` and `./feishu-watch`. The bundle's `cordis.patch.yml` inserts the three plugins, with Feishu disabled.
+`src/sources/github.ts` and `src/sources/feishu.ts` are also the entries of the two Source plugins, built by `tsdown.config.ts` and exported in `package.json` as `./github-watch` and `./feishu-watch`. The bundle's `cordis.patch.yml` inserts the coordinator, passive `./sources` catalog and both source plugins, with Feishu disabled. Source contracts register without a coordinator; polling starts only when `orchestrator` is available.
 
 ## Tests
 
 | Test | Covers |
 | --- | --- |
+| `tests/speculation.spec.ts`, `tests/speculation-runtime.spec.ts`, `tests/speculation-ui.spec.tsx`, `tests/speculation-harness.spec.ts` | Reservation races, preemption, recovery, promotion/publication, HTTP/DOM and opt-in installed-Harness qualification. |
+| `tests/verification-snapshot.spec.ts`, `tests/verification-endpoint.spec.ts` | Actual file/Git evidence, copied-input checks, revision changes, output retention, timeout/cancellation, unknown restart and native Linux read-only/network isolation |
+| `tests/verification-service.spec.ts` | Immutable check definitions, exact artifact/assignment/environment binding, actual local and native remote checks, scope, quotas, output, cancellation, freshness and restart evidence |
+| `tests/verification-review.spec.ts`, `tests/fixtures/verification.ts`, `tests/fixtures/host-verification.ts` | Real Harness checks and grouped source captures, all-artifact acceptance, historical validity, concurrent edits and unknown restart |
+| `tests/publication-evidence.spec.ts`, `tests/evidence-review-ui.spec.tsx` | Selected evidence approval, publisher expiry, observation-before-retry, native Linux acceptance/publication and rendered all-artifact review |
 | `tests/core-engine.spec.ts` | Domain rules on in-memory repositories: receiving, Eval, fan-out, resume and stop, interrupted Assignments, the pause, Policy changes, reports and outcomes, attaching, replies, failed deliveries and dismissed problems |
+| `tests/emergency.spec.ts` | Emergency engagement halting running work, admission refusal, durable state, idempotent replay, release, independent pause, and audit chain/redaction/tamper detection |
+| `tests/admin-access.spec.ts` | No-token loopback default, bearer-token authentication, role capability denial with audit facts, connector deny-by-default grants, and malformed configuration that does not echo secrets |
+| `tests/credentials.spec.ts` | Atomic 0600 vault storage, names-only listing, traversal/symlink refusal, provider URL/model validation, redacted API views, audit without values, and viewer denial |
+| `tests/memory.spec.ts` | Memory persistence across restart, FTS/tag search, scope isolation, dedup/upsert, bounded advisory context, conversation capture/retention, extractive digests, profile upserts, consent-gated imports, prompt injection, ticket grants, worker tools, hard deletion, API flows and viewer denial |
+| `tests/model-routing.spec.ts` | Deterministic provider selection, ordered fallback candidates, budget/ceiling boundaries, refusals, default-model preference and task validation |
+| `tests/provider-execution.spec.ts` | First-success, ordered fallback, exhaustion, no-candidate, pre-attempt and mid-attempt abort, reservation settlement and attempt callbacks |
+| `tests/provider-client.spec.ts` | Request encoding, credential lookup, HTTP/JSON/content failures, malformed input and abort handling without network calls |
+| `tests/provider-runner.spec.ts` | Successful reservation/settlement, failed-attempt accounting and budget-refused fallback through a real Usage service |
+| `tests/environments.spec.ts` | Runtime/API enrollment, persistent grants, paired-provider proof, races, revocation, replacement and legacy task binding |
+| `tests/environments-ui.spec.tsx` | Rendered enrollment/recovery and exact mutation retry after response loss and polling |
+| `tests/world-pool.spec.ts` | Independent paired worlds, per-action dispatch, revocation/recovery, credential fencing and revoked receipts |
+| `tests/worlds-ui.spec.tsx` | Lost activation/revocation replies, preserved revisions, exact-generation selection and receipt routing |
+| `tests/remote-repository.spec.ts` | Authenticated HTTPS Git preparation, pinned task branches, continued commits, cancellation, unknown/original receipts and recovery validation |
+| `tests/repository-exports.spec.ts` | Independent exact-commit bundle reconstruction, partial-transfer restart, source races, lost acknowledgements, cancellation and recovery corruption rejection |
+| `tests/repository-publication.spec.ts`, `tests/repository-publication-boundaries.spec.ts` | Real local Git push and simulated GitHub API, response loss, ownership/cancellation/capacity races, substituted receipts and private import failures |
+| `tests/repository-workspace.spec.ts` | Owned coordinator, real host checks and exact-history export through independent private preparation and explicit publication |
+| `tests/repository-publications-ui.spec.tsx` | Rendered repository review and fresh consent, original-ID response-loss recovery, unknown outcomes and cancellation confirmation |
+| `tests/recovery-repository-publications.spec.ts` | Repository intent/export/evidence graph validation, audited missing-private-work handling, receipt substitution and read-only destination verification |
+| `tests/repository-publisher-harness.spec.ts` | Opt-in actual installed Harness publisher activation, paired Git execution, retained transfer/restart and uncertain PR observation using only local transports |
+| `tests/abliteration-provider.spec.ts` | Opt-in route/default preservation, provider-specific request guards, catalog smoke behavior and pinned model selection |
+| `tests/abliteration-harness.spec.ts`, `tests/fixtures/abliteration-harness.mjs` | Opt-in real installed Harness OpenAI adapter against loopback streaming/tool/image/catalog contracts with synthetic credentials |
 | `tests/stage.spec.ts` | The Ticket stages, row by row |
+| `tests/supervision.spec.ts` | Real HTTP transport, token authentication, stale commands, transactional receipts and existing worker delivery integration |
+| `tests/library.spec.ts` | Library restart/replay, atomic rollback, scoping, provenance, integrity, freshness, review invalidation and Runtime/API integration |
+| `tests/creative-ui.spec.tsx`, `tests/creative.spec.ts` | Creative tab rendering and Markdown artifact publish/list/read through the library |
+| `tests/recall.spec.ts`, `tests/recall-ui.spec.tsx` | Source-chain traversal/freshness, complete review closure, UTF-8 output ceilings, cumulative and interrupted allowances, private scopes and rendered policy/history controls |
+| `tests/library-ui.spec.tsx` | Rendered library creation/revision/archive and worker artifact preview through actual management routes |
+| `tests/workspace.spec.ts` | Mission persistence, deduplication, dependencies, review freshness, rollback and Runtime/Harness wiring |
+| `tests/schedules.spec.ts`, `tests/schedules-ui.spec.tsx` | DST and missed runs, standing authorization, restart deduplication, limits, dispatch rollback, review gates and rendered API retry/pause/navigation |
+| `tests/reflection.spec.ts`, `tests/reflection-ui.spec.tsx` | Snapshot scope/UTF-8 bounds/reopen/integrity, dispatch rollback, stale-evidence and active-work refusals, proposal/read limits, review retry and rendered schedule/review flow |
+| `tests/usage.spec.ts`, `tests/usage-ui.spec.tsx` | Pricing, atomic overlapping limits, uncertain calls, SQLite reopen, Harness middleware/ancestry, scoped API forms and reconciliation |
+| `tests/workspace-ui.spec.tsx` | Rendered mission forms through management routes, Harness adapter, worker result review and completion |
+| `tests/plans.spec.ts` | Plan persistence, migration, approval races, dependency invalidation, active work protection, worker scope and planner integration |
+| `tests/plans-ui.spec.tsx` | Rendered plan editing/review, ambiguous proposal replay, historical drafts and stale planner proposals |
+| `tests/inbox.spec.ts` | Inbox persistence, dispatch/reply replay, read races, authority, history projection and follow-up review/cancellation gates |
+| `tests/inbox-ui.spec.tsx` | Rendered task/question/reply flow, lost reply response, safe text and artifact/mission links |
+| `tests/inbox-settings.spec.ts`, `tests/inbox-settings-ui.spec.tsx` | Pinned persona/default grants, managed-world dispatch, stale/revoked selection refusal and accepted Send replay after catalog changes |
+| `tests/getting-started-ui.spec.tsx` | Guided draft navigation without dispatch, model overrides/catalog failure, managed selection, pause/offline recovery and stale mission review display |
+| `tests/attachments.spec.ts`, `tests/attachments-ui.spec.tsx` | Native image reconstruction, upload/Send replay, copy authority and recovery, streamed HTTP and file-picker/preview DOM lifecycle |
+| `tests/voice.spec.ts`, `tests/voice-ui.spec.tsx` | Speech lifecycle contracts, real local qualification, and microphone/draft/playback/cancellation DOM flows |
+| `tests/worker-specialization.spec.ts` | Native persona specialization: capability→tool grants and denials, partial grants and model carriage |
+| `tests/local-execution.spec.ts` | General local missions without accounts, filesystem/process probes, mode mismatch, local prompts and GitHub exclusion |
+| `tests/remote.spec.ts` | Real Harness/HTTP execution, acknowledgement loss, lease fencing, sibling command concurrency, delayed catalog observations, uncertain recovery, confined-helper semantics, output backpressure and opt-in native Linux qualification |
+| `tests/remote-resources.spec.ts` | Resource policy/control contracts, kernel-interface fixture, durable endpoint policy/reconciliation and opt-in native CPU, memory/OOM, process-limit and restart qualification |
+| `tests/remote-harness.spec.ts` | Opt-in installed Harness qualification with a configured model, remote artifacts, restart, maintenance-plugin checkpoint/import/reservation and ownership-authority process handoff |
+| `tests/recovery.spec.ts` | Official JSONL round trips, exclusive ownership, corruption/cancellation refusal, fork imports, held restore, original reservation retries, competing restores and preserved remote receipts |
+| `tests/recovery-audit.spec.ts` | Real HTTP receipt inventories, late effects, original observations, revoked worlds, missing/mismatched resources, revision races, restart, cancellation, authenticated receipt preparation, interruption/retry, tamper refusal, historical administrative and lost-revocation recovery, credential binding comparison and retained restore holds |
+| `tests/recovery-inference.spec.ts` | Effective model selection, role/persona routes, bounded streams, cancellation, sanitized failures and repeated inference preflight |
+| `tests/recovery-inputs.spec.ts` | Real Session consumption attribution, inherited boundaries, pending/ended state and rollback of contradictory input acknowledgements |
+| `tests/recovery-graph.spec.ts` | Actual Engine graph consistency, directed authority, expired history, stable live effects, derived-index repair, bounded records and cancellation rollback |
+| `tests/recovery-connectors.spec.ts` | Actual provider adapters, partial-page listener reconstruction, historical receipts, cursor/authority corruption, legacy families and cancellation |
+| `tests/recovery-workspace.spec.ts` | Original plan/action authority, proposal review, human follow-ups, schedule history/cursors, legacy stamps and corruption refusal |
+| `tests/recovery-results.spec.ts` | Actual local/remote checks, historical approvals, original captures, content/evidence corruption, legacy records and cancellation |
+| `tests/recovery-registries.spec.ts` | Actual persona/environment/world history, deep Session ancestry, revoked grants, corruption refusal and incomplete legacy bindings |
+| `tests/recovery-resources.spec.ts` | Actual reflection/recall/model/speculation history, uncertain charges, approvals, corruption refusal, legacy evidence and cancellation |
+| `tests/recovery-publications.spec.ts` | Historical artifact/grant authority, exact original destinations, uncertain withdrawn delivery, receipt substitution refusal and legacy publication evidence |
+| `tests/recovery-installation.spec.ts` | Private installation and authenticated launch patches, managed/dedicated composition, changed-state refusal, ownership interruption/retry, continued Session history and repeated recovery cycles |
+| `tests/recovery-sources.spec.ts` | Real passive source plugin lifecycle, shared eligibility, strict settings checks, registration changes, cancellation and safe failures |
+| `tests/remote-ownership.spec.ts` | Pre-dispatch persistence, concurrent attribution, lost responses, assignment fences, restart/cancel recovery and receipt mismatch refusal |
+| `tests/ownership.spec.ts` | Competing coordinators, all-resource barriers, claimant replacement/supersession, monotonic expiry/restart, endpoint handoff/outage and immutable receipt generations |
+| `tests/ownership-runtime.spec.ts` | Profile compatibility, owned Runtime startup/loss, managed command attribution, competing writers, startup cleanup and held-restore refusal |
+| `tests/publication.spec.ts` | Provider/service acknowledgement loss, late commits, ownership barriers, account checks, exact intents and independent reconciliation |
+| `tests/publication-pull.spec.ts`, `tests/publication-pull-ui.spec.tsx`, `tests/fixtures/pull-review.ts` | Actual Git/check evidence, PR identity/head races, three review events, restart/dismissal recovery and rendered exact-head consent |
+| `tests/mission-pull.spec.ts`, `tests/mission-pull-ui.spec.tsx`, `tests/fixtures/mission-pull.ts` | PR-bound mission authorization, fresh all-action closure, changed-head/source/plan holds, original capture recovery, shutdown and rendered managed-world completion |
+| `tests/publication-runtime.spec.ts` | Management approval, stale artifact/destination refusal, duplicate prevention and observation after ownership loss |
+| `tests/publication-ui.spec.tsx` | Rendered content/destination review, unchanged approval IDs after lost responses and unknown receipt recovery |
+| `tests/channel-publication.spec.ts` | Owned managed execution through acknowledgements/results, exact grants, revoked/withdrawn unknown sends and ordered Outbox recovery |
+| `tests/mission-delivery-ui.spec.tsx` | Rendered standing consent, lost configuration acknowledgement, active-work restrictions and observation after revocation |
+| `tests/inbound.spec.ts` | Directed provider replies, sender/root checks, duplicate and cursor recovery, shared-thread isolation and revocation during reads |
+| `tests/mission-inbound-ui.spec.tsx` | Rendered participant consent, ambiguous saves, inbound and unsupported receipts, rescan and pause against the Runtime |
+| `tests/remote-credentials.spec.ts` | Private import validation, environment/file bindings, secret-free provider argv and receipts, rotation/rebind, restart, tamper refusal and native Linux mounts/cancellation |
+| `tests/execution-receipts-ui.spec.tsx` | Rendered receipt pagination, separate outcome/quiescence and same-ID cancellation retry after an ambiguous response |
+| `tests/watchdog.spec.ts` | Independent journal recovery, assessment budgets, service outages, bounded interventions and concurrent polling |
+| `tests/supervision-evaluation.spec.ts` | Coverage/label/preferred-diagnosis scoring, unknown usage and accepted-assessment versus completed-turn boundaries |
+| `tests/supervision-evaluation-cases.spec.ts` | Curated observations, production incident reservation, expectation isolation and initial-outage control |
+| `tests/supervision-evaluation-probe.spec.ts` | Exact Session limits, contract mismatch, partial usage, bounded streams and metadata-only trace |
+| `tests/supervision-evaluation-harness.spec.ts`, `tests/fixtures/supervision-evaluation-provider.ts` | Opt-in real installed Harness evaluation using loopback scripted inference, failures, cancellation and retained evidence |
+| `tests/supervision-endurance-harness.spec.ts`, `tests/fixtures/supervision-endurance-provider.mjs` | Plan/output guards and opt-in sustained real-worker Harness qualification with watchdog faults, restart, exact output and cancellation quiescence |
+| `tests/watchdog-runtime.spec.ts` | Independent Cordis/Harness composition with simulated inference: restricted tools, scoped errors, evidence-bound recovery, Session creation, state ownership and shutdown |
+| `tests/watchdog-console.spec.ts`, `tests/fixtures/watchdog.ts` | Journal migration, review fencing/replay, consistent pages, bounded retention and real HTTP access controls |
+| `tests/watchdog-ui.spec.tsx` | Rendered standalone console, outage evidence, response-loss retry after remount, stale review refusal and pagination |
+| `tests/watchdog-alert-ui.spec.tsx` | Rendered alert actions, original-ID response-loss recovery, stale refusals, untrusted text and pagination |
+| `tests/watchdog-alerts.spec.ts` | Authenticated local receivers, crash/response-loss recovery, no resend, retargeting refusal, source/receipt limits and loopback management |
+| `tests/watchdog-harness.spec.ts` | Opt-in real-model, two-process Harness supervision with abrupt main/watchdog failure, receipt recovery and observed resolution |
+| `tests/watchdog-process-harness.spec.ts`, `tests/fixtures/watchdog-scripted-provider.ts` | Opt-in fresh installed Harness processes with synthetic loopback inference, provider failures/deadlines, real productive output and original receipt recovery; not semantic diagnosis evaluation |
+| `tests/execution-evidence.spec.ts` | Host metadata ownership/coverage, handoffs, unavailable sources, replacement identity, world rotation and read-only exact-assignment receipts |
 | `tests/policy.spec.ts` | Source scope, the gate, the admission table, Mandate revalidation, the Policy version, settings migrations and assessment outcomes |
 | `tests/registry.spec.ts` | `SourceRegistry`: instances, validation, Policy parts, Channels and Thread context |
 | `tests/sources.spec.ts` | The Feishu and GitHub Sources on a `SourceContext`: translation, polls and read positions, the pull request rules, health |
@@ -414,6 +702,13 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/assessment.spec.ts` | What the MasterAssessor keeps per Eval, and when it lets go |
 | `tests/background.spec.ts` | Waiting for a worker's shell jobs and subagents: an end that woke it, and a host that stops |
 | `tests/bundle-patch.spec.ts` | The bundle's patch, read as DeepSeek Harness reads it, and the agent preset of Executor Sessions it defines |
+| `tests/core-recovery.spec.ts`, `tests/executor-failure.spec.ts` | Durable host-restart bounds, held original recovery notes, typed failure facts and lifecycle callback fencing |
+| `tests/executor-stop-harness.spec.ts`, `tests/fixtures/executor-stop-provider.ts`, `tests/fixtures/executor-stop-probe.mjs` | Opt-in installed Harness retry with real bounded worker, injected cancellation uncertainty, original-ID admission holds and independently checked cleanup |
+| `tests/executor-stop.spec.ts`, `tests/fixtures/stop-record.ts` | Original stop lifecycle, admission, recovery and durable proof contracts |
+| `tests/stop-service-identity.spec.ts` | Real Cordis service-proxy continuity, changed worker/host registry refusal and preservation of unknown cold-stop holds |
+| `tests/stop-http.spec.ts`, `tests/stop-views.spec.ts` | Original-target HTTP controls and bounded shared stop projections |
+| `tests/stop-recovery-ui.spec.tsx` | Rendered original-request recovery, response-loss remount, stale refusal and storage failure |
+| `tests/executor-recovery-harness.spec.ts`, `tests/fixtures/executor-recovery-provider.ts`, `tests/fixtures/executor-recovery-observer.mjs` | Opt-in fresh installed Harness native retry chain and terminal failed hold beyond the old continuation timer; synthetic loopback only |
 | `tests/effects.spec.ts` | The effect queue: coalescing, limits, retries with backoff, health and shutdown |
 | `tests/passes.spec.ts` | Passes: one at a time, the ones asked for during a pass run as one after it, and the runtime health a failed pass reports |
 | `tests/outbox.spec.ts` | The Outbox on a running Runtime: messages wait while processing is paused or their Source is not installed |
@@ -424,7 +719,9 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/delivery.spec.ts` | `AgentDelivery` |
 | `tests/retry-health.spec.ts`, `tests/role-models.spec.ts` | Model budget retries, and the models of the two roles |
 | `tests/runtime.spec.ts` | The whole application on a simulated DeepSeek Harness host, through tools and HTTP |
+| `tests/router-authority.spec.ts`, `tests/fixtures/router-harness.mjs` | Real Harness tool guards, late local tools, permissive pre-policy, tracked legacy jobs/children and installed-runtime canary denial |
 | `tests/tools.spec.ts` | The Sessions' tools: what `orchestrator_read` reads for each role, and the shapes and checks of the other main Session tools |
+| `tests/operator-tooling.spec.ts` | GUI trigger intake, the local repository profile, scoped attachment reads, public fetch and prepare on the worker shim path |
 | `tests/runtime-concurrency.spec.ts` | Work that overlaps: Triggers during a pass, Tickets that change during deliveries and launches |
 | `tests/http.spec.ts` | The same-origin and loopback checks, the status of each kind of failure, the body limit, path parameters and queries |
 | `tests/settings.spec.ts` | Settings saves that race a model or account check, a Policy sync that a save outran, and the refusals of the pause, a sync and a block |
@@ -437,15 +734,34 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `tests/model-surface.spec.ts` | Everything models read: tools, prompts, skills and inputs, checked against the tool schemas, the execution environment and the glossary, within a size budget per role |
 | `tests/deployment.spec.ts`, `tests/environment.spec.ts`, `tests/index.spec.ts` | The plugin configuration and setup, the agent's process environment, the plugin entry |
 | `tests/service-script.spec.ts` | `scripts/dsh-superagent` against fake `ps`, `tmux` and `dsh` |
+| `tests/client-bundle.spec.ts` | Actual production browser factory with declared React modules and standalone watchdog entry mounted without a package resolver; rejects host-only or undeclared imports |
+| `tests/launcher.spec.ts` | Persistent installation, real detached process ownership, graceful restart, stop markers, locks, health identity and private browser shortcuts |
+| `tests/endpoint-launcher.spec.ts` | Installed Linux Harness endpoint/coordinator enrollment through native SSH, managed-world activation, confinement and original-job recovery through connection interruption and daemon restarts |
+| `tests/launcher-service.spec.ts` | Foreground supervisor, persistent crash budgets/manual stops, real native service installation/removal, changed-definition refusal, systemd parser and installed-Harness service lifecycle |
+| `tests/delegated-service.spec.ts` | Owned cgroup topology, refusal/drain checks, durable service Start/Restart requests and opt-in native delegated Harness lifecycle |
+| `tests/remote-journal.spec.ts` | Durable endpoint credentials, storage sync failure, missing/damaged identity refusal and linked-file rejection |
+| `tests/transport-launcher.spec.ts` | Pinned SSH transport configuration/readiness, private credentials, native forwarding/host-key refusal, supervisor reconnection and owned user-service lifecycle |
 | `tests/client.spec.tsx`, `tests/navigation.spec.ts`, `tests/controls.spec.tsx` | The client plugin's registration and polling, Session navigation and route memory, the local controls, and the panel's imports, which have no cycle |
 | `tests/panel-overview.spec.tsx`, `panel-source.spec.tsx`, `panel-trigger.spec.tsx`, `panel-eval.spec.tsx`, `panel-execution.spec.tsx` | Each page of the panel, against a fake management API answered by route |
+| `tests/jarvis-ui.spec.tsx` | The read-only JARVIS tab: seven sections from the existing views, exact host-reported counts, explicit empty and populated rendering, no credential values, and per-section unavailable states |
+| `tests/voice-qualification.spec.ts` | Recorder format preference, API presence and unavailable/missing-API reporting without permission inference |
 | `tests/panel-settings.spec.tsx`, `panel-prompts.spec.tsx`, `panel-deployment.spec.tsx`, `panel-panel.spec.tsx` | The settings groups, drafts and history, the prompts, the Deployment page, and the panel's search, glossary and route memory |
 | `tests/draft.spec.ts`, `tests/prompt-config.spec.ts`, `tests/markdown.spec.ts`, `tests/marks.spec.ts` | Draft states, merges and the save bar's line; the prompt configuration by section and the line diff; the Markdown subset and its links; the mark of every state the views classify |
 | `tests/locales.spec.ts`, `tests/styles.spec.ts` | The copy in both languages, the stylesheet |
 | `tests/class-docs.spec.ts` | Every class in `src` has a JSDoc block before it |
 | `tests/docs.spec.ts` | Numbered documents link only to earlier ones, every local link resolves, no document has merge conflict markers, and this document's tables list every module and every test |
+| `tests/briefing.spec.ts` | HTTP briefing composition and schedule-summary mapping without invented next runs |
+| `tests/calendar.spec.ts` | Local ICS parsing/limits and configured/unconfigured calendar API behavior |
+| `tests/endpoints.spec.ts` | Real endpoint HTTP and Runtime administration, private-file validation, ambiguous/restarted requests, grant generation fencing and profile composition |
+| `tests/endpoints-ui.spec.tsx` | Rendered endpoint registration, lost submission recovery, durable original-ID retries and secret-free generated profile inspection |
+| `tests/personas.spec.ts` | Immutable persona persistence, model-validation races, archived dispatch, plan changes and worker/descendant binding |
+| `tests/personas-runtime.spec.ts` | Actual Harness scoped prompt/skill services and monotonic guards, with independent worker isolation |
+| `tests/personas-ui.spec.tsx` | Lost persona response recovery, immutable edits/history restoration, archive/restore and pinned plan selectors |
 
-`tests/fixtures/` holds what several tests share: `host.ts`, a simulated DeepSeek Harness host; `panel-server.ts` and `panel.tsx`, the fake management API and the panel around a page; `deployment.ts`, a resolved deployment; `git.ts`, the environment of every git the tests start, which names no repository; and `async.ts`.
+`tests/fixtures/` holds what several tests share: `host.ts`, a simulated DeepSeek Harness host; `filesystem.ts`, its real local filesystem seam; `panel-server.ts` and `panel.tsx`, the fake management API and the panel around a page; `deployment.ts`, a resolved deployment; `git.ts`, the environment of every git the tests start, which names no repository; and `async.ts`.
+
+`tests/fixtures/channel-publication.ts` composes an owned Runtime, managed world and independent publisher against local
+provider HTTP. `publication-harness.ts` qualifies the installed publication plugin and retained journal across restart.
 
 ## Persistence
 
@@ -461,6 +777,11 @@ One SQLite file, `<stateDir>/orchestrator.sqlite`, which only the Store opens.
 | `decision` | Decisions, by Thread | Engine |
 | `effect` | The effect queue: per kind and key, the payload, its order, failed attempts with the last error, and when it is due | Effects; the schema 11 migration queues what earlier versions kept for the main Session |
 | `outbox` | The receipt of each message for a Channel, by id, with the Ticket it is for and its `status`, `pending`, `sent` or `dropped`, kept so an id is never queued twice; for a dropped message, when and why, as the generated column `dropped`, its time, and a reason code. A message that waits has a `reply` effect, which holds its attempts | The Outbox |
+| `delivery_grant`, `channel_publication` | Historical exact-plan destination consent and original mission message intents/receipts; attempted withdrawals retain unresolved delivery evidence | ChannelPublications |
+| `repository_export`, `repository_export_chunk` | Original reviewed repository transfer intents, immutable bundle metadata and resumable offset/hash-bound binary chunks | RepositoryExports |
+| `conversation_binding`, `conversation_message` | Historical participant/task authority, durable provider cursors, native deduplication and received/unsupported message receipts | ConversationInbox |
+| `mission_pull_target`, `mission_completion` | Immutable PR identities and latest ordered observations; original whole-mission completion commands and per-action review IDs | MissionPulls, MissionCompletions |
+| `workspace_schedule`, `workspace_schedule_version`, `workspace_occurrence`, `workspace_schedule_command` | Versioned standing authorizations, due cursors, lifetime run reservations, immutable occurrence identities and operator command receipts | Schedules |
 | `kv` | Every other record, by key | The part that names it |
 
 A generated column is computed from its row's JSON and is empty outside its set, and each has an index over its set, so a pass reads only active work. A database that predates a column gets it when the Store opens it.
@@ -473,6 +794,7 @@ A generated column is computed from its row's JSON and is empty outside its set,
 | Settings versions | `settings-revision`, `settings-version:<n>`, `settings-block-revision:<block>`; snapshots include origin, Policy version and affected Tickets |
 | Prompt versions | `prompt-revision`, `prompt-version:<n>` |
 | Main Session | `master-id` |
+| Recovery maintenance | Restore hold, immutable ownership-reservation request/selection/private credential path and latest receipt audit with resource revisions and findings; no credential value |
 | Session prompt history | `session-prompts:<session id>` |
 | Source state | Read positions such as `github-cursor:<number>`, PR CI fingerprints and seen Feishu-topic messages; keys begin with the kind or `thread-` plus a Thread key |
 | Display names | `source-labels:<source id>` |
@@ -504,15 +826,15 @@ The main Session has 14 application tools:
 
 Settings saves select `policy`, `eval`, `executor`, `pause`, or `source`; the last also names its Source id. A prompt save with `preview: true` composes text without saving.
 
-The main Session also has DeepSeek Harness's `skill`, `bash`, `read`, `read_image`, `job_output`, `job_list` and `job_kill`. Avoiding code reads is a prompt rule, not a tool restriction.
+The main Session has DeepSeek Harness's `skill` and its registered typed host tools. `orchestrator_read` includes bounded default-branch repository file/directory observations; candidate text/images use `orchestrator_eval_read`, and shared records use scoped workspace recall. Generic shell, filesystem, job, web, delegation and unrelated plugin tools are denied by the Session's routing authority. Harness's sandboxed `run_code` transport may compose allowed tools; nested calls still pass the same guards.
 
-### Presets and wait limits
+### Presets and role authority
 
-New main Sessions use `dsh-superagent-router` (`ROUTER_PRESET`). Shell commands and job waits return after 5 seconds. If the Web UI selects another preset before the first turn, `Sessions` restores this preset, or `WORKER_PRESET` for a worker.
+New main Sessions use `dsh-superagent-router` (`ROUTER_PRESET`), which loads time context, scoped skills and compaction without shell, file, job, delegation or local instruction-discovery plugins. If the Web UI selects another preset before the first turn, `Sessions` restores this preset, or `WORKER_PRESET` for a worker.
 
-The `noWait` guard in `src/app/sessions.ts` refuses main-Session shell commands that invoke `sleep` at a command position, shell `timeoutMs` above 30 seconds, and `job_output` waits above 5 seconds. Reports and job results arrive automatically, so waiting only delays incoming candidates.
+`RouterAuthority` uses a monotonic guard after Harness pre-execution policy, so a permissive policy cannot grant the coordinator another tool. The inherited tool restriction handles visibility; the guard also refuses later registrations in the agent's own scope. Prompt overrides and legacy preset selection do not change this boundary.
 
-Existing main Sessions on `standard` also need explicit timeouts for foreground commands and job waits; otherwise that preset's defaults hold the step for 60 and 30 seconds respectively. The host determines the current preset through `presetForSession`, falls back to the Session projection or header, and assumes `standard` if it cannot read the value.
+Before routing becomes ready, the host cancels the coordinator's prior turn while preserving inbox input, inventories at most 1,024 known coordinator/descendant Sessions, denies descendant execution, and retires their tracked jobs. It checks actual registry/agent quiescence under one 15-second preparation deadline. Unknown inventory or incomplete termination holds initialization. Durable `session-router-owner:` anchors deny resumed known descendants even when parents are unloaded. Independent worker jobs and worker-local teams retain their existing authorization. This is a model-tool boundary inside trusted Harness processes, not an OS sandbox or proof about untracked processes.
 
 ### Executor tools
 
@@ -603,7 +925,7 @@ Most built-in instructions live in `prompts/*.md`, with one sentence per line jo
 
 ## Configuration reload
 
-Every plugin configuration key except `stateDir` is volatile. The panel's Deployment settings and DeepSeek Harness's Plugin Manager edit them through DeepSeek Harness's configuration form; the host writes `cordis.patch.yml` and updates the values in place, and dsh-superagent reads each limit when it uses it, so a change applies without a restart.
+The main plugin's limits are volatile; `stateDir`, `executionMode`, `ownership` and `publication` changes remount it. The panel's Deployment settings and DeepSeek Harness's Plugin Manager edit limits and mode through DeepSeek Harness's configuration form. The host writes `cordis.patch.yml`; limits update in place, while a mode change restarts the plugin. Setup and launch refuse tickets recorded under a different mode; legacy tickets are repository tickets.
 
 A settings save that changes a Source field setup reads, such as an account's CLI, and any save while setup waits, restarts dsh-superagent. DeepSeek Harness's settings service does not serve the entry during that restart, so after its own restart dsh-superagent asks it to read the entry again, and an open form becomes editable again.
 

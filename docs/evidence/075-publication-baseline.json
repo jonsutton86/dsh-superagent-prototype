@@ -1,0 +1,522 @@
+{
+  "schema": 1,
+  "revision": "5c487b6729acd0ac931499d5fd6844a647cc8304",
+  "tools": {
+    "codegraph": "1.6.2",
+    "rea": "6.8.0",
+    "reaNode": "24.22.1"
+  },
+  "codegraph": {
+    "files": 509,
+    "nodes": 13249,
+    "edges": 48646,
+    "state": "complete"
+  },
+  "rea": {
+    "evidenceId": "ev_105c2a4823bbe52f717a8a2ed6c233854bee12d1edf59b8cbf1ff05a8a1534ae",
+    "bundleSha256": "cfba55f6b6afc8003ac9cf1338899f3f5e5ea5528b461e4ed859365b080dfa9a",
+    "artifactSha256": "fce038a034c3628627def2231e84484c8ab78c49458612fd42818bff17c8221c",
+    "selectedSources": [
+      "app/runtime.ts",
+      "publication/runtime.ts",
+      "publication/repository-exports.ts",
+      "publication/repository-model.ts",
+      "publication/repository-journal.ts",
+      "publication/repository-publisher.ts",
+      "publication/repository-provider.ts",
+      "publication/repository-git.ts",
+      "publication/service.ts",
+      "publication/client.ts",
+      "verification/reviews.ts",
+      "recovery/audit.ts",
+      "ownership/gate.ts"
+    ],
+    "unselectedFiles": 290,
+    "statistics": {
+      "findings": 555,
+      "invalid_utf8_files": 0,
+      "modules": 0,
+      "nested_asar_containers": 0,
+      "parse_failures": 0,
+      "parsed_javascript_files": 13,
+      "relevant_files": 303,
+      "skipped_javascript_files": 0,
+      "text_bytes_read": 182318,
+      "visited_ast_nodes": 28585
+    },
+    "graphStatus": "partial",
+    "semanticStatus": "partial",
+    "semanticUnknowns": 10248,
+    "limitations": [
+      "Caller-selected source analysis leaves 290 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+      "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+      "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+      "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+      "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+      "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+      "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+    ]
+  },
+  "sourceNodes": [
+    {
+      "id": "jsrg_node_5de04361869ed0b4fcd01d9644bb1843d340cf486aac8212e22e1d55d4eaa606",
+      "source": "src/ownership/gate.ts",
+      "symbol": "authorize",
+      "sha256": "7faf1fda4e89c8dab7920f77ae12694d3cc88742cc1225e11e43067d507af020",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 105
+        },
+        "start": {
+          "column": 2,
+          "line": 91
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_74493851144cdb4519d681e9b9e825afb735c0b8503329b5b094c99a0b0505d4",
+      "source": "src/ownership/gate.ts",
+      "symbol": "verify",
+      "sha256": "7faf1fda4e89c8dab7920f77ae12694d3cc88742cc1225e11e43067d507af020",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 120
+        },
+        "start": {
+          "column": 2,
+          "line": 107
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_8e971c75dbd98915c4b5fb19a17a3d4a71e2563b709af76748531a05add5b93f",
+      "source": "src/publication/client.ts",
+      "symbol": "call",
+      "sha256": "ac1e7f0f748931cc7dbf2eec1827521ddc608d7aa9b989c7bbc7731b76ad9c9f",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 38
+        },
+        "start": {
+          "column": 2,
+          "line": 22
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_74ae82363424ad4a152b101141a511b2c847e06c83ddbf33a44b3c9dc7cd4a61",
+      "source": "src/publication/repository-exports.ts",
+      "symbol": "prepare",
+      "sha256": "78ea410e6e72f64de0d34243bf69bdb3a5370977b385725720e19ae118ffb333",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 82
+        },
+        "start": {
+          "column": 2,
+          "line": 63
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_5a4e6195b3dfd67a80e55559fed0a1000be14e3fe2f4aeb83a759b99b33a81ea",
+      "source": "src/publication/repository-exports.ts",
+      "symbol": "execute",
+      "sha256": "78ea410e6e72f64de0d34243bf69bdb3a5370977b385725720e19ae118ffb333",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 133
+        },
+        "start": {
+          "column": 2,
+          "line": 93
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_9d265da7a8eedcd53d8736d281878990e8a2b410bccfd6edebf0e70bc65ee42a",
+      "source": "src/publication/repository-exports.ts",
+      "symbol": "chunks",
+      "sha256": "78ea410e6e72f64de0d34243bf69bdb3a5370977b385725720e19ae118ffb333",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 148
+        },
+        "start": {
+          "column": 2,
+          "line": 134
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_f7b8787f9b023c2b57a035b96f16841017979396524f109ecf8b4a86bd25f736",
+      "source": "src/publication/repository-exports.ts",
+      "symbol": "download",
+      "sha256": "78ea410e6e72f64de0d34243bf69bdb3a5370977b385725720e19ae118ffb333",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 154
+        },
+        "start": {
+          "column": 2,
+          "line": 150
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_16161b94046aca2365b66e693e375f448e241fde1dd9f87c1742b51b69f50693",
+      "source": "src/publication/repository-exports.ts",
+      "symbol": "cancelOriginal",
+      "sha256": "78ea410e6e72f64de0d34243bf69bdb3a5370977b385725720e19ae118ffb333",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 179
+        },
+        "start": {
+          "column": 2,
+          "line": 161
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_5498a498d2a6b3ac4f14f4782570d40a02520d57234fbeafb2de292ea349e557",
+      "source": "src/publication/repository-journal.ts",
+      "symbol": "constructor",
+      "sha256": "6296612a98b6c061cd0f228bbc7ff21a0e32ea6e3ca5b06567ddab76aaeb12d9",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 29
+        },
+        "start": {
+          "column": 2,
+          "line": 15
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_56aeb0659b162c7bdb8a97bd7f1f94070c52998079ea7af5ba8561a7ea6a0032",
+      "source": "src/publication/repository-journal.ts",
+      "symbol": "begin",
+      "sha256": "6296612a98b6c061cd0f228bbc7ff21a0e32ea6e3ca5b06567ddab76aaeb12d9",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 55
+        },
+        "start": {
+          "column": 2,
+          "line": 40
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_d2b180df2dba264669378896e5017f4b2bffeaece90fd6def75f61e4ed138c41",
+      "source": "src/publication/repository-journal.ts",
+      "symbol": "chunk",
+      "sha256": "6296612a98b6c061cd0f228bbc7ff21a0e32ea6e3ca5b06567ddab76aaeb12d9",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 68
+        },
+        "start": {
+          "column": 2,
+          "line": 56
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_cc53cfac0d0e2d26ff0956104a4ee53d4b355a4664bd7753a3842117d95aacdd",
+      "source": "src/publication/repository-journal.ts",
+      "symbol": "chunks",
+      "sha256": "6296612a98b6c061cd0f228bbc7ff21a0e32ea6e3ca5b06567ddab76aaeb12d9",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 82
+        },
+        "start": {
+          "column": 2,
+          "line": 69
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_09e0743c9250c56bbed3e368d6f98bcae16a3516e7cfcccd7a3988b9b7140145",
+      "source": "src/publication/repository-journal.ts",
+      "symbol": "finish",
+      "sha256": "6296612a98b6c061cd0f228bbc7ff21a0e32ea6e3ca5b06567ddab76aaeb12d9",
+      "range": {
+        "end": {
+          "column": 217,
+          "line": 83
+        },
+        "start": {
+          "column": 2,
+          "line": 83
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_745ba26c822751f09bd18eda9a87ea3cf9f3e05e16b801fcb9983b40a2c68b0f",
+      "source": "src/publication/repository-journal.ts",
+      "symbol": "cancel",
+      "sha256": "6296612a98b6c061cd0f228bbc7ff21a0e32ea6e3ca5b06567ddab76aaeb12d9",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 94
+        },
+        "start": {
+          "column": 2,
+          "line": 84
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_2e07110c5b86320a527f55b2f756ff8b3f21ec87002f8e3217e27ef02a7f9c8f",
+      "source": "src/publication/repository-journal.ts",
+      "symbol": "accept",
+      "sha256": "6296612a98b6c061cd0f228bbc7ff21a0e32ea6e3ca5b06567ddab76aaeb12d9",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 113
+        },
+        "start": {
+          "column": 2,
+          "line": 100
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_135a4489d6fc0be9e7266c79a03308a8d56ad58f763d05404f953a70a411d48d",
+      "source": "src/publication/repository-publisher.ts",
+      "symbol": "branchResult",
+      "sha256": "7a854f81ddd59f031e58b8151671c5a00fd981122e5e870f0d2ecf75624c6da2",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 48
+        },
+        "start": {
+          "column": 2,
+          "line": 43
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_6231511b2bc9a7f5c4ecb04aa652fcce174be60beab3efa00f188f34c4a0a875",
+      "source": "src/publication/repository-publisher.ts",
+      "symbol": "pullResult",
+      "sha256": "7a854f81ddd59f031e58b8151671c5a00fd981122e5e870f0d2ecf75624c6da2",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 56
+        },
+        "start": {
+          "column": 2,
+          "line": 49
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_3d454c11d589be3390631ee6682a5eadd06c8f96c0af80e6446b8130a7e59e94",
+      "source": "src/publication/repository-publisher.ts",
+      "symbol": "cancel",
+      "sha256": "7a854f81ddd59f031e58b8151671c5a00fd981122e5e870f0d2ecf75624c6da2",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 102
+        },
+        "start": {
+          "column": 2,
+          "line": 90
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_69daf17115d18021e6a9c186509ce7f6477ec366ecc202783dece0490a9d069e",
+      "source": "src/publication/repository-publisher.ts",
+      "symbol": "prepare",
+      "sha256": "7a854f81ddd59f031e58b8151671c5a00fd981122e5e870f0d2ecf75624c6da2",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 131
+        },
+        "start": {
+          "column": 2,
+          "line": 103
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_671ab38750374642b903cf4d196a61593db00b52ee863eabc9ed56fb659fe317",
+      "source": "src/publication/repository-publisher.ts",
+      "symbol": "observe",
+      "sha256": "7a854f81ddd59f031e58b8151671c5a00fd981122e5e870f0d2ecf75624c6da2",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 153
+        },
+        "start": {
+          "column": 2,
+          "line": 132
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_aaec7343b03efdca4b6cf36856892c55d55b46211c6baf18a4262b54bc643ca0",
+      "source": "src/publication/repository-publisher.ts",
+      "symbol": "boundary",
+      "sha256": "7a854f81ddd59f031e58b8151671c5a00fd981122e5e870f0d2ecf75624c6da2",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 162
+        },
+        "start": {
+          "column": 2,
+          "line": 154
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_30e5eee4911708da7c6a2929089f7538553d91ac6164b433659e8cc2313fee3c",
+      "source": "src/publication/repository-publisher.ts",
+      "symbol": "publish",
+      "sha256": "7a854f81ddd59f031e58b8151671c5a00fd981122e5e870f0d2ecf75624c6da2",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 200
+        },
+        "start": {
+          "column": 2,
+          "line": 163
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_4c07d0127cd3fd71cafcb70caef2f16602840e84a1832ad34ba248374a9486c9",
+      "source": "src/publication/runtime.ts",
+      "symbol": "save",
+      "sha256": "e26ce2b936354e27edc128dfcb9cbadb9f89118f4b6a6c84dc66883b48e98c46",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 70
+        },
+        "start": {
+          "column": 2,
+          "line": 67
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_2c1f3a77c67b22cbb230a231f1479ef4aafc4a65566b6339544757ea9e8d855c",
+      "source": "src/publication/service.ts",
+      "symbol": "constructor",
+      "sha256": "6261bce879faad7e1425b57c77c4eb601252f56ff3a8826fe3edbaeb48a3c099",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 66
+        },
+        "start": {
+          "column": 2,
+          "line": 29
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_c8f43ad5399866ae4d280c355fef709bd17ce5425f2d148c6f3281c65f51c45b",
+      "source": "src/publication/service.ts",
+      "symbol": "dispatch",
+      "sha256": "6261bce879faad7e1425b57c77c4eb601252f56ff3a8826fe3edbaeb48a3c099",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 205
+        },
+        "start": {
+          "column": 2,
+          "line": 88
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_c4f7eff6209eb310b2d480fab076d95e6189688eb71876ade3eb04678ab6c532",
+      "source": "src/verification/reviews.ts",
+      "symbol": "assert",
+      "sha256": "914a91d42e7536a1405c8216917f62cf5e811415e30e57418aaa4d4779809b49",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 51
+        },
+        "start": {
+          "column": 2,
+          "line": 47
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_8d07d0c42f761920a6d817befd24072eab8019c92d7ae0dee5a359c9e6aec36a",
+      "source": "src/verification/reviews.ts",
+      "symbol": "prepare",
+      "sha256": "914a91d42e7536a1405c8216917f62cf5e811415e30e57418aaa4d4779809b49",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 59
+        },
+        "start": {
+          "column": 2,
+          "line": 52
+        }
+      }
+    },
+    {
+      "id": "jsrg_node_5ce1513c6ad9edf641c7738547128ae78e007ff94b470824d95567f761749483",
+      "source": "src/verification/reviews.ts",
+      "symbol": "execute",
+      "sha256": "914a91d42e7536a1405c8216917f62cf5e811415e30e57418aaa4d4779809b49",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 108
+        },
+        "start": {
+          "column": 2,
+          "line": 60
+        }
+      }
+    }
+  ],
+  "baseline": {
+    "typecheck": "passed",
+    "testFiles": [
+      "tests/repository-publication.spec.ts",
+      "tests/publication.spec.ts",
+      "tests/remote-repository.spec.ts"
+    ],
+    "testsPassed": 42,
+    "durationSeconds": 22.55,
+    "runtime": "Node 25.9.0 macOS",
+    "liveProviderCalls": false
+  }
+}

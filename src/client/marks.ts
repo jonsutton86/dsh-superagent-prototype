@@ -6,7 +6,8 @@ import type { DotState, IconName, TagTone } from './controls.tsx'
 
 export interface Mark { label: string; tone: TagTone; dot: DotState; icon: IconName }
 
-export function ticketMark(t: T, ticket: TicketStage & Pick<TicketSummary, 'ended'>): Mark {
+export function ticketMark(t: T, ticket: TicketStage & Pick<TicketSummary, 'ended' | 'stopHold'>): Mark {
+  if (ticket.stopHold) return { label: t('stopHold.title'), tone: 'warning', dot: 'warning', icon: 'blocked' }
   switch (ticket.stage) {
     case 'ended': return { label: valueLabel(t, 'outcome', ticket.ended?.outcome), tone: 'neutral', dot: 'idle', icon: 'stop' }
     case 'person': {

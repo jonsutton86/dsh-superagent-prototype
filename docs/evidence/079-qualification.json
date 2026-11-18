@@ -1,0 +1,174 @@
+{
+  "kind": "increment-079-qualification",
+  "capturedAt": "2026-11-10T19:46:34.498259+00:00",
+  "testedRevision": "418bb6de16e546058557191e4068e77f2b6e7174",
+  "sourceArchiveSha256": "8f28676c2c22df4d04b9f45d6ebca2c4189c8dcd429e8c2153a4b7212a5b4324",
+  "macOS": {
+    "os": "Darwin27.2.0 arm64",
+    "node": "25.9.0",
+    "pnpm": "11.25.0",
+    "typecheck": "passed",
+    "builds": 7,
+    "full": {
+      "passed": 2200,
+      "skipped": 25,
+      "filesPassed": 158,
+      "filesSkipped": 4,
+      "seconds": 257.96
+    },
+    "nativeServices": {
+      "passed": 16,
+      "skipped": 1,
+      "filesPassed": 2,
+      "seconds": 22.27
+    },
+    "installedHarness": "0.2.1-rc.3",
+    "publicationHarnessEnabled": true,
+    "abliterationInstalledAdapterEnabled": true,
+    "watchdogProcessHarnessEnabled": true,
+    "logs": {
+      "full": {
+        "file": "/tmp/dsh-079-full-macos.log",
+        "sha256": "95f28f53af0620c6f061c42408a3293c96e9ffe4e25bceacc7b609aa809d3332"
+      },
+      "native": {
+        "file": "/tmp/dsh-079-native-macos.log",
+        "sha256": "05b163376ded14d167c4e07d001b8db97f9ba4f04ee8bd7181a7a896f3c88159"
+      },
+      "typecheck": {
+        "file": "/tmp/dsh-079-full-typecheck.log",
+        "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+      },
+      "build": {
+        "file": "/tmp/dsh-079-full-build.log",
+        "sha256": "07859f024f0c12217ee13bfe05c7db8510b5d19bde032e9fafa802076915ffdb"
+      }
+    }
+  },
+  "boundaries": {
+    "liveProviderInference": "not dispatched; evaluation entitlement confirmation pending",
+    "existingAppDeployment": "not started or restarted",
+    "liveOperatorAlerts": "not configured or sent",
+    "runtime": "DeepSeek Harness retained",
+    "defaultModel": "deepseek-official/deepseek-flash unchanged",
+    "cleanHostRecovery": "not qualified by this increment",
+    "diagnosisQuality": "host metadata and scripted provider tests do not qualify semantic diagnosis quality",
+    "longRunningDuration": "30seconds at accelerated stale threshold; not overnight unattended endurance",
+    "fullProject": "incomplete; tracker requirements remain open"
+  },
+  "linux": {
+    "schema": 1,
+    "status": "passed",
+    "revision": "418bb6de16e546058557191e4068e77f2b6e7174",
+    "repository": "jonsutton86/dsh-superagent-prototype",
+    "branch": "feat/full-superagent-architecture",
+    "run": {
+      "id": 42887099007,
+      "url": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42887099007",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-11-10T19:37:19Z",
+      "completedAt": "2026-11-10T19:44:25Z",
+      "jobId": 130078186609,
+      "jobDurationSeconds": 423
+    },
+    "platform": {
+      "os": "Ubuntu 22.04.5 LTS",
+      "architecture": "x64",
+      "runnerImage": "ubuntu-22.04",
+      "runnerImageVersion": "20261101.347.1",
+      "runnerVersion": "2.338.2",
+      "node": "24.22.2",
+      "npm": "11.19.1",
+      "effectivePnpm": "11.7.0",
+      "installedPnpmBootstrap": "11.25.0",
+      "pnpmExplanation": "The repo packageManager pin selects 11.7.0; install/test preparation logs explicitly report pnpm v11.7.0.",
+      "harness": "0.2.1-rc.3"
+    },
+    "validation": {
+      "typecheck": "passed",
+      "buildsPassed": 7,
+      "fullSuite": {
+        "filesPassed": 159,
+        "filesSkipped": 3,
+        "testsPassed": 2213,
+        "testsSkipped": 14,
+        "durationSeconds": 303.17
+      },
+      "nativeServicesAndSsh": {
+        "filesPassed": 3,
+        "testsPassed": 30,
+        "testsSkipped": 0,
+        "durationSeconds": 24.17
+      },
+      "selectedSuites": {
+        "executionEvidence": {
+          "testsPassed": 10,
+          "durationMilliseconds": 30
+        },
+        "watchdogUi": {
+          "testsPassed": 7,
+          "durationMilliseconds": 956
+        },
+        "clientBundle": {
+          "testsPassed": 2,
+          "durationMilliseconds": 846
+        }
+      }
+    },
+    "requiredBoundaryTests": {
+      "watchdogInstalledProcesses": {
+        "testsPassed": 1,
+        "durationMilliseconds": 72780,
+        "evidence": "tests/watchdog-process-harness.spec.ts passed, not skipped"
+      },
+      "repositoryPublisherInstalledHarness": {
+        "testsPassed": 1,
+        "durationMilliseconds": 74403,
+        "evidence": "tests/repository-publisher-harness.spec.ts passed, not skipped"
+      },
+      "abliterationInstalledAdapter": {
+        "testsPassed": 1,
+        "durationMilliseconds": 489,
+        "evidence": "tests/abliteration-harness.spec.ts passed, not skipped"
+      }
+    },
+    "flags": [
+      "DSH_REMOTE_ISOLATION=1",
+      "DSH_ENDPOINT_LAUNCHER_QUALIFICATION=1",
+      "DSH_SSH_TRANSPORT_QUALIFICATION=1",
+      "DSH_PUBLICATION_HARNESS_QUALIFICATION=1",
+      "DSH_WATCHDOG_PROCESS_QUALIFICATION=1",
+      "DSH_ABLITERATION_ADAPTER_PACKAGE=installed pinned Harness adapter",
+      "DSH_DELEGATED_SERVICE_QUALIFICATION=1",
+      "DSH_NATIVE_SERVICE_QUALIFICATION=1",
+      "DSH_INSTALLED_SERVICE_QUALIFICATION=1"
+    ],
+    "evidence": {
+      "logFile": "/tmp/dsh-079-hosted-qualification.log",
+      "logSha256": "73a96904bfb43d74409ced9ddd8b077e7bff6c4736b8a2ab9de026c1e09254fd",
+      "workflowSha256": "73073f4bfba5777a8bde6c52412726b060ab702fae6e2f20d73029e5dfbe5e6d",
+      "runMetadataFile": "/tmp/dsh-079-hosted-run.json",
+      "jobsMetadataFile": "/tmp/dsh-079-hosted-jobs.json"
+    },
+    "scope": {
+      "modelTraffic": "Only loopback/scripted provider qualification and synthetic credentials; no live paid model request",
+      "deployment": false,
+      "supervisionSemanticDiagnosisQuality": "Not claimed by scripted inference tests",
+      "cleanHostCrossMachineFailover": "Not claimed by these tests",
+      "additionalDispatches": 0
+    },
+    "annotations": [
+      "SHA-pinned checkout/setup-node v4 actions declare Node20; GitHub forced their action runtime to Node24. Workflow succeeded without changing action pins.",
+      "Some jsdom UI tests emitted React act scheduling warnings; their assertions and the complete job passed. This is not a claim of warning-free logs."
+    ]
+  },
+  "documentationValidation": {
+    "passed": 6,
+    "files": 1,
+    "seconds": 0.135,
+    "scope": "Documentation-only receipt update after tested runtime revision; no runtime/test edits",
+    "logSha256": "be2072fc3cc058d53a1433e90fab33eb567d237e810838554fc26ccb06b04919"
+  }
+}

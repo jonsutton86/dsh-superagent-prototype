@@ -1,0 +1,282 @@
+{
+  "kind": "increment-082-qualification",
+  "capturedAt": "2026-11-10T22:17:02.667721+00:00",
+  "testedRevision": "59497bc31932d1073ca44e872d454a7a6347d938",
+  "sourceArchiveSha256": "0158f7485e375cfc0c7f9270860fb1dcb2b3788c1d198a2343edb5f5096e01ac",
+  "macOS": {
+    "capturedAt": "2026-11-10T22:15:12.590513+00:00",
+    "testedRevision": "59497bc31932d1073ca44e872d454a7a6347d938",
+    "sourceArchiveSha256": "0158f7485e375cfc0c7f9270860fb1dcb2b3788c1d198a2343edb5f5096e01ac",
+    "os": "Darwin27.2.0 arm64",
+    "node": "25.9.0",
+    "pnpm": "11.25.0",
+    "typecheck": "passed",
+    "builds": 7,
+    "full": {
+      "passed": 2290,
+      "skipped": 25,
+      "filesPassed": 166,
+      "filesSkipped": 4,
+      "seconds": 402.55
+    },
+    "installedHarness": "0.2.1-rc.3",
+    "publicationHarnessEnabled": true,
+    "abliterationInstalledAdapterEnabled": true,
+    "watchdogProcessHarnessEnabled": true,
+    "executorRecoveryHarnessEnabled": true,
+    "supervisionEvaluationHarnessEnabled": true,
+    "supervisionEnduranceHarnessEnabled": true,
+    "nativeServices": {
+      "passed": 16,
+      "skipped": 1,
+      "filesPassed": 2,
+      "seconds": 21.56
+    },
+    "endurance": {
+      "durationSeconds": 120,
+      "chunks": 2,
+      "nativeWakes": 2,
+      "jobOutput": 2,
+      "productiveMonotonicSeconds": 120.523519334,
+      "monotonicSeconds": 120.631713542,
+      "wallSeconds": 120.631884,
+      "samples": 122,
+      "maximumWallGapMs": 1007.479,
+      "snapshotManifestSha256": "86c916210f90a585628d6b97240af6cb28fa5bd9f77fa008c12d74b855081e14",
+      "completion": {
+        "state": "completed",
+        "workerQuiescence": "confirmed_group_absent",
+        "errors": []
+      },
+      "cancellation": {
+        "state": "completed",
+        "workerQuiescence": "confirmed_group_absent",
+        "errors": []
+      }
+    },
+    "logs": {
+      "full": {
+        "file": "/tmp/dsh-082-macos-full.log",
+        "sha256": "6f794a6810633e2ada7f2efe6bd796c1345b2b07e29b532eb5c8bf88ba08524d"
+      },
+      "native": {
+        "file": "/tmp/dsh-082-macos-native.log",
+        "sha256": "da0efab0e53b227b837214a6c49c4dd03838493d257fb2d00cf5c5015127730d"
+      },
+      "typecheck": {
+        "file": "/tmp/dsh-082-macos-typecheck.log",
+        "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+      },
+      "build": {
+        "file": "/tmp/dsh-082-macos-build.log",
+        "sha256": "dc63fd801731fa9182377f53bdbe21914ba943e9c53a4cfb49f29e905c799384"
+      }
+    }
+  },
+  "linux": {
+    "schema": 1,
+    "status": "passed",
+    "revision": "59497bc31932d1073ca44e872d454a7a6347d938",
+    "repository": "jonsutton86/dsh-superagent-prototype",
+    "branch": "feat/full-superagent-architecture",
+    "run": {
+      "id": 42911385292,
+      "url": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42911385292",
+      "event": "push",
+      "attempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "createdAt": "2026-11-10T22:06:16Z",
+      "startedAt": "2026-11-10T22:06:16Z",
+      "completedAt": "2026-11-10T22:14:51Z",
+      "jobId": 130162629619,
+      "jobStartedAt": "2026-11-10T22:06:18Z",
+      "jobCompletedAt": "2026-11-10T22:14:50Z",
+      "jobDurationSeconds": 512,
+      "jobHeadSha": "59497bc31932d1073ca44e872d454a7a6347d938"
+    },
+    "platform": {
+      "os": "Ubuntu 22.04.5 LTS",
+      "architecture": "x64",
+      "runnerImage": "ubuntu-22.04",
+      "runnerImageVersion": "20261101.347.1",
+      "runnerVersion": "2.338.2",
+      "node": "24.22.2",
+      "npm": "11.19.1",
+      "effectivePnpm": "11.7.0",
+      "installedPnpmBootstrap": "11.25.0",
+      "pnpmExplanation": "Repository packageManager pin selects 11.7.0; preparation logs explicitly report pnpm v11.7.0.",
+      "harness": "0.2.1-rc.3"
+    },
+    "validation": {
+      "typecheck": "passed",
+      "buildsPassed": 7,
+      "fullSuite": {
+        "filesPassed": 167,
+        "filesSkipped": 3,
+        "testsPassed": 2303,
+        "testsSkipped": 14,
+        "durationSeconds": 380.27
+      },
+      "nativeServicesAndSsh": {
+        "filesPassed": 3,
+        "filesSkipped": 0,
+        "testsPassed": 30,
+        "testsSkipped": 0,
+        "durationSeconds": 22.83
+      },
+      "finalNativeSuites": {
+        "transport-launcher.spec.ts": {
+          "testsPassed": 8,
+          "testsSkipped": 0,
+          "durationMilliseconds": 5986
+        },
+        "delegated-service.spec.ts": {
+          "testsPassed": 13,
+          "testsSkipped": 0,
+          "durationMilliseconds": 17004
+        },
+        "launcher-service.spec.ts": {
+          "testsPassed": 9,
+          "testsSkipped": 0,
+          "durationMilliseconds": 22614
+        }
+      }
+    },
+    "requiredBoundaryTests": {
+      "supervisionEnduranceInstalledHarness": {
+        "testsPassed": 1,
+        "testsSkipped": 0,
+        "durationMilliseconds": 147969,
+        "fileTestsPassed": 7,
+        "fileDurationMilliseconds": 147984,
+        "evidence": "tests/supervision-endurance-harness.spec.ts: qualifies two minutes of real productive work across watchdog faults and restart, then proves cancellation quiescence passed, not skipped",
+        "observed": {
+          "durationSeconds": 120,
+          "chunks": 2,
+          "nativeWakes": 2,
+          "jobOutput": 2,
+          "productiveMonotonicSeconds": 120.18272845499999,
+          "monotonicSeconds": 120.350108494,
+          "wallSeconds": 120.350101754,
+          "samples": 122,
+          "maximumWallGapMs": 1008.718458,
+          "snapshotManifestSha256": "aa4f0e50f5b87ea0e94e064b5998da89d81eb21cab4d33237d9a384d706ce458",
+          "completion": {
+            "state": "completed",
+            "workerQuiescence": "confirmed_group_absent",
+            "errors": []
+          },
+          "cancellation": {
+            "state": "completed",
+            "workerQuiescence": "confirmed_group_absent",
+            "errors": []
+          }
+        }
+      },
+      "supervisionEvaluationInstalledHarness": {
+        "testsPassed": 1,
+        "testsSkipped": 0,
+        "durationMilliseconds": 60004,
+        "fileTestsPassed": 5,
+        "fileDurationMilliseconds": 60020,
+        "evidence": "tests/supervision-evaluation-harness.spec.ts: qualifies actual isolated watchdog assessment, limits, usage and incomplete outcomes using only a loopback provider passed, not skipped"
+      },
+      "executorRecoveryInstalledHarness": {
+        "testsPassed": 1,
+        "testsSkipped": 0,
+        "durationMilliseconds": 22046,
+        "fileTestsPassed": 1,
+        "fileDurationMilliseconds": 22047,
+        "evidence": "tests/executor-recovery-harness.spec.ts: uses native installed Harness request retries then holds the failed worker without an outer continuation passed, not skipped"
+      },
+      "watchdogInstalledProcesses": {
+        "testsPassed": 1,
+        "testsSkipped": 0,
+        "durationMilliseconds": 71427,
+        "fileTestsPassed": 1,
+        "fileDurationMilliseconds": 71428,
+        "evidence": "tests/watchdog-process-harness.spec.ts: keeps installed supervision observable through provider faults while a real productive worker finishes once passed, not skipped"
+      },
+      "repositoryPublisherInstalledHarness": {
+        "testsPassed": 1,
+        "testsSkipped": 0,
+        "durationMilliseconds": 72876,
+        "fileTestsPassed": 1,
+        "fileDurationMilliseconds": 72877,
+        "evidence": "tests/repository-publisher-harness.spec.ts: preserves credentialed repository uploads and original publication outcomes in the installed Harness across process restarts passed, not skipped"
+      },
+      "abliterationInstalledAdapter": {
+        "testsPassed": 1,
+        "testsSkipped": 0,
+        "durationMilliseconds": 448,
+        "fileTestsPassed": 1,
+        "fileDurationMilliseconds": 449,
+        "evidence": "tests/abliteration-harness.spec.ts: qualifies the installed Harness OpenAI adapter on a loopback server with synthetic credentials passed, not skipped"
+      }
+    },
+    "flags": [
+      "DSH_REMOTE_ISOLATION=1",
+      "DSH_ENDPOINT_LAUNCHER_QUALIFICATION=1",
+      "DSH_SSH_TRANSPORT_QUALIFICATION=1",
+      "DSH_PUBLICATION_HARNESS_QUALIFICATION=1",
+      "DSH_WATCHDOG_PROCESS_QUALIFICATION=1",
+      "DSH_EXECUTOR_RECOVERY_QUALIFICATION=1",
+      "DSH_SUPERVISION_EVALUATION_QUALIFICATION=1",
+      "DSH_SUPERVISION_ENDURANCE_QUALIFICATION=1",
+      "DSH_ABLITERATION_ADAPTER_PACKAGE=installed pinned Harness adapter",
+      "DSH_DELEGATED_SERVICE_QUALIFICATION=1",
+      "DSH_NATIVE_SERVICE_QUALIFICATION=1",
+      "DSH_INSTALLED_SERVICE_QUALIFICATION=1"
+    ],
+    "evidence": {
+      "logFile": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/.artifacts/increment-082/linux-ci.log",
+      "logSha256": "e4d28cbb596cc1de11fb378e492045a507a8fedc579188c49cdcab514cdc8856",
+      "workflowSha256": "bbcdfdd1e4f07e23c75590692ce0b5d4ddcc5a452cc641d5308de641836142fd",
+      "sourceArchiveSha256": "0158f7485e375cfc0c7f9270860fb1dcb2b3788c1d198a2343edb5f5096e01ac",
+      "runMetadataFile": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/.artifacts/increment-082/linux-ci-run.json",
+      "jobsMetadataFile": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/.artifacts/increment-082/linux-ci-jobs.json"
+    },
+    "scope": {
+      "modelTraffic": "Only loopback/scripted provider qualification and synthetic credentials; no live paid model request",
+      "deployment": false,
+      "additionalDispatches": 0,
+      "supervisionSemanticDiagnosisQuality": "Not claimed: scripted inference qualifies installed execution boundaries, not model semantic judgment.",
+      "cleanHostCrossMachineFailover": "Not claimed by these tests",
+      "endurance": "120 seconds requested, two 60-second productive chunks under one assignment, exact hash-chain proof, two native completion wakes and two nonwaiting output reads; watchdog faults/restart, settled main restart and cancellation cleanup. No eight-hour endurance claim."
+    },
+    "priorAttempt": {
+      "revision": "6f41fda605eeeacdc5e7ec8e83b1d7be7eb4bdc4",
+      "linuxRunId": 42909202250,
+      "linuxConclusion": "success",
+      "macOSConclusion": "failed: final evaluation trace classification race",
+      "receipt": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/.artifacts/increment-082/linux-first-attempt-qualification.json"
+    },
+    "annotations": [
+      "SHA-pinned checkout/setup-node v4 actions declare Node20; GitHub forced their action runtime to Node24. Workflow succeeded without changing action pins.",
+      "Some jsdom UI tests emitted React act scheduling warnings; their assertions and the complete Linux job passed. Logs are not claimed warning-free."
+    ]
+  },
+  "priorCombinedAttempt": {
+    "revision": "6f41fda605eeeacdc5e7ec8e83b1d7be7eb4bdc4",
+    "macOS": {
+      "passed": 2288,
+      "failed": 1,
+      "skipped": 25,
+      "seconds": 419.65,
+      "failure": "Evaluation limit classification race; response_limit recorded as provider_error.",
+      "log": ".artifacts/increment-082/macos-first-attempt.log",
+      "logSha256": "85f28eee9639946ad25a07b91275c75a0c4779a6a5ccf4d59de30e22e0dbaf8b"
+    },
+    "linux": "passed separately; combined qualification was not accepted"
+  },
+  "scope": {
+    "endurance": "Synthetic 120-second mission in two60-second chunks on macOS and Linux, native completion wake/read, watchdog fault/restart, settled-main restart and separate cancellation cleanup.",
+    "longRun": "Eight-hour execution pending; two-minute test is not overnight-duration evidence.",
+    "defaults": "Existing default model unchanged; Abliteration remains optional.",
+    "liveAbliterationInference": "Not exercised; evaluation-credit confirmation still pending.",
+    "deployed": false,
+    "manualSemanticReview": "pending",
+    "fullProject": "incomplete; original stop/quiescence retry defect and other tracker items remain open."
+  }
+}

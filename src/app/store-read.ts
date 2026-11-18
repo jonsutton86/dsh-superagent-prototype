@@ -36,8 +36,10 @@ export function storeReads(db: DatabaseSync) {
     return values<Trigger>(`SELECT t.value FROM trigger_thread x JOIN trigger t ON t.id = x.id WHERE x.thread = ? ${place}
       ORDER BY x.at DESC, x.id DESC LIMIT ?`, threadKeyValue, ...before ? [before.at, before.id] : [], limit).reverse()
   },
-  threadPage: (threadKeyValue: string, offset: number, limit: number): Trigger[] => values(`SELECT t.value FROM trigger_thread x
-    JOIN trigger t ON t.id = x.id WHERE x.thread = ? ORDER BY x.at DESC, t.rowid DESC LIMIT ? OFFSET ?`, threadKeyValue, limit, offset),
+  threadPage: (threadKeyValue: string, offset: number, limit: number, ticketId?: string): Trigger[] => values(`SELECT t.value FROM trigger_thread x
+    JOIN trigger t ON t.id = x.id LEFT JOIN disposition d ON d.id=t.id WHERE x.thread = ?
+    ${ticketId ? "AND (json_extract(d.value,'$.recipient') IS NULL OR json_extract(d.value,'$.recipient')=?)" : ''}
+    ORDER BY x.at DESC, t.rowid DESC LIMIT ? OFFSET ?`, threadKeyValue, ...ticketId ? [ticketId] : [], limit, offset),
   /** Nearest non-CI triggers on a thread immediately before and after `(at, id)`. */
   neighbours: (threadKeyValue: string, at: string, id: string): { before?: Trigger; after?: Trigger } => {
     const nearest = (side: '<' | '>') => values<Trigger>(`SELECT t.value FROM trigger_thread x JOIN trigger t ON t.id = x.id

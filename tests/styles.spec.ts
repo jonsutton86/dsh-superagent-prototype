@@ -14,6 +14,12 @@ it('styles only classes a component uses', () => {
   expect([...classes].filter(name => !used(name))).toEqual([])
 })
 
+it('keeps a phone layout with safe-area and anti-zoom input sizing', () => {
+  expect(css).toContain('@media (max-width: 640px)')
+  expect(css).toContain('env(safe-area-inset-bottom)')
+  expect(css).toContain('font-size: 16px')
+})
+
 it('writes one rule per line, each selector once within its block', () => {
   const blocks: string[][] = [[]]
   for (const line of css.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map(text => text.trim()).filter(Boolean)) {

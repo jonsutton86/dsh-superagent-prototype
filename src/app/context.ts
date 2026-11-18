@@ -7,6 +7,8 @@ export { textPage } from './cards.ts'
 export const sharedPrompt = promptFile('shared')
 export const masterPrompt = promptFile('orchestrator')
 export const workerPrompt = promptFile('worker')
+export const localPrompts = { shared: promptFile('local/shared'), orchestrator: promptFile('local/orchestrator'), worker: promptFile('local/worker') }
+export const localDefaults = { communication: promptFile('local/communication'), scope: promptFile('local/scope'), delivery: promptFile('local/delivery') }
 /** Built-in policy sections referenced by role prompts; a team may override them. */
 export const guides: Readonly<Record<string, string>> = Object.fromEntries(['subscriptions', 'replies', 'dispatch', 'work']
   .map(name => [name, promptFile(name)]))

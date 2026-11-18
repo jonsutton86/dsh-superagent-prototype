@@ -1,0 +1,134 @@
+{
+  "schema": 1,
+  "repository": "jonsutton86/dsh-superagent-prototype",
+  "ref": "feat/full-superagent-architecture",
+  "revision": "592dfa20dda1b03116cdf0b63b5182492165b42d",
+  "observedDate": "2026-11-10",
+  "status": "baseline_hosted_run_passed",
+  "workflow": {
+    "id": 411358062,
+    "name": "Remote execution qualification",
+    "path": ".github/workflows/remote-execution.yml",
+    "state": "active",
+    "runner": "ubuntu-22.04",
+    "featureBranchTriggers": [
+      "push",
+      "pull_request",
+      "workflow_dispatch"
+    ]
+  },
+  "readOnlyVerification": {
+    "repositoryVisibility": "public",
+    "repositoryFork": true,
+    "repositoryArchived": false,
+    "repositoryDisabled": false,
+    "repositoryActionsEnabled": true,
+    "allowedActions": "all",
+    "callerRepositoryAdmin": true,
+    "runsAtRevision": 1,
+    "latestBranchRun": {
+      "id": 42725936622,
+      "revision": "e889f97871d1cab9ce8f8df8d348ccad03b954dd",
+      "createdAt": "2026-11-10T00:08:05Z",
+      "event": "push",
+      "conclusion": "success",
+      "url": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42725936622"
+    }
+  },
+  "diagnosis": {
+    "observed": "The initial repository Actions page reported suppression of this fork due to Actions usage scale. The root agent used the authenticated maintainer re-enable control and observed Actions Enabled. A new dispatch was accepted and created a hosted run.",
+    "source": "https://github.com/jonsutton86/dsh-superagent-prototype/actions",
+    "inferred": "The fork-level suppression caused the original disabled-repository rejection; removing it restored dispatch without changing workflow source, ordinary Actions permissions, billing, or main.",
+    "unknown": "The prepared expanded workflow and subsequent source changes still require their own hosted run; baseline success does not qualify them."
+  },
+  "manualDispatchPrerequisite": {
+    "defaultBranch": "main",
+    "defaultBranchRevision": "8c32a9dc5d72c033816c6a8110b37f40cf94fba4",
+    "workflowFileOnDefaultBranch": false,
+    "evidence": "Contents API for the workflow at main returned 404; the main root tree has no .github directory.",
+    "requirement": "GitHub documentation says workflow_dispatch requires the file on the default branch. In this repository, the existing registered workflow accepted the feature-branch dispatch despite the inspected default branch lacking that file. Observed acceptance supersedes any inference that this would block the run.",
+    "source": "https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow",
+    "availableExistingTrigger": "The feature-branch push trigger can qualify progress after the fork suppression is cleared; no main merge was performed."
+  },
+  "scope": {
+    "settingsChanged": true,
+    "billingChanged": false,
+    "mainChanged": false,
+    "hostedTestsExecuted": true,
+    "localQualificationSubstitutedForHostedSuccess": false,
+    "settingsChangeScope": "Only the authenticated fork Actions re-enable control; repository Actions permissions and billing unchanged."
+  },
+  "attempts": [
+    {
+      "at": "2026-11-10T18:13:58.223349+00:00",
+      "method": "POST",
+      "path": "/repos/jonsutton86/dsh-superagent-prototype/actions/workflows/411358062/dispatches",
+      "httpStatus": 422,
+      "message": "Actions has been disabled for this repository.",
+      "requestId": "F66C:131C9:1D8687:5C73B7:6AF35EE5",
+      "replayed": false
+    },
+    {
+      "at": "2026-11-10T18:19:29.106014+00:00",
+      "method": "POST",
+      "path": "/repos/jonsutton86/dsh-superagent-prototype/actions/workflows/411358062/dispatches",
+      "httpStatus": 204,
+      "requestId": "F774:2BCE1:28481E:7DAE2E:6AF3602F",
+      "afterConfirmedForkReenable": true,
+      "replayedAfterUncertainResponse": false
+    }
+  ],
+  "forkReenable": {
+    "method": "Authenticated GitHub Actions UI",
+    "control": "I understand my workflows, go ahead and re-enable them",
+    "observedResult": "Actions Enabled.",
+    "evidenceSource": "Root agent observed UI before the successful dispatch; the 204 response and hosted run independently confirm dispatch eligibility.",
+    "before": "2026-11-10T18:19:29.106014+00:00",
+    "permissionsOrBillingChanged": false
+  },
+  "hostedRun": {
+    "id": 42874025804,
+    "revision": "592dfa20dda1b03116cdf0b63b5182492165b42d",
+    "event": "workflow_dispatch",
+    "createdAt": "2026-11-10T18:19:28Z",
+    "status": "completed",
+    "conclusion": "success",
+    "url": "https://github.com/jonsutton86/dsh-superagent-prototype/actions/runs/42874025804",
+    "completedAt": "2026-11-10T18:27:08Z",
+    "jobId": 130032454416,
+    "jobDurationSeconds": 456,
+    "validation": {
+      "typecheck": "passed",
+      "builds": 7,
+      "fullSuite": {
+        "filesPassed": 153,
+        "filesSkipped": 5,
+        "testsPassed": 2147,
+        "testsSkipped": 16,
+        "durationSeconds": 335.62
+      },
+      "delegatedService": {
+        "filesPassed": 1,
+        "testsPassed": 13,
+        "durationSeconds": 16.91
+      },
+      "logSha256": "ce60f1880ef218a89ca0cb72def4fdc2a356621b02bed1e359acb5ee0b2d2787"
+    }
+  },
+  "workflowCoverage": {
+    "baselineWorkflowSha256": "b2c55a6033e5ef1a5090c83f446289274de1f9b55c879e938da365c0952b8487",
+    "baseline": "Typecheck/build, full suite with native confinement, endpoint launcher and SSH flags, then delegated-service qualification. Real publisher restart and installed provider adapter tests are gated off.",
+    "preparedWorkflowSha256": "dbd2fe7467165a962db194dd6cc97575642505217daf569502453f7eeb4950a1",
+    "prepared": "Adds real publisher restart and installed Harness provider adapter loopback qualification, four test workers, and native/installed launcher plus SSH transport service qualification. Uses synthetic credentials and local fixtures; no paid model traffic.",
+    "preparedValidation": [
+      "YAML parsed with the existing installed Harness yaml package",
+      "All run blocks passed bash -n",
+      "git diff --check passed"
+    ],
+    "preparedHostedValidation": "Pending a source commit and feature-branch push; the baseline run does not qualify these workflow edits.",
+    "runnerUnchanged": "ubuntu-22.04",
+    "permissionsUnchanged": {
+      "contents": "read"
+    }
+  }
+}

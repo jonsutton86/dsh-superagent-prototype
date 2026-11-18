@@ -8,6 +8,18 @@ import { ExecutionStatus } from './execution.tsx'
 import { ticketMark } from './marks.ts'
 import { GLOSSARY, GLOSSARY_VALUES, en, zh, type DshSuperagentKey } from './locales.ts'
 import { OverviewPage } from './overview.tsx'
+import { JarvisPage } from './jarvis.tsx'
+import { MissionsPage } from './missions.tsx'
+import { SchedulesPage } from './schedules.tsx'
+import { SpeculationPage } from './speculation.tsx'
+import { ReflectionsPage } from './reflections.tsx'
+import { UsagePage } from './usage.tsx'
+import { LibraryPage } from './library.tsx'
+import { CreativePage } from './creative.tsx'
+import { InboxPage } from './inbox.tsx'
+import { GettingStartedPage } from './getting-started.tsx'
+import { EnvironmentsPage } from './environments.tsx'
+import { PersonasPage } from './personas.tsx'
 import { PanelProvider, usePanel, usePanelData } from './provider.tsx'
 import { HOME, TABS, initialLocation, lastSettingsGroup, remember, routeLabel, settingsRoute, type Location, type Route,
   type Tab } from './route.ts'
@@ -146,7 +158,19 @@ function Pages({ route, openTab, deploymentForm }: { route: Route; openTab: (tab
   const waiting = error ? <p className="dt-error" role="alert">{error.message}</p> : <p className="dt-hint">{t('loading')}</p>
   const page = (() => {
     switch (route.page) {
+      case 'environments': return <EnvironmentsPage />
+      case 'personas': return <PersonasPage />
+      case 'usage': return <UsagePage key={`${route.query?.scope ?? 'workspace'}:${route.query?.subject ?? ''}`} scope={route.query?.scope} subject={route.query?.subject} />
+      case 'guide': return <GettingStartedPage />
+      case 'inbox': return <InboxPage key={route.id ?? 'list'} id={route.id} filter={route.query?.filter} compose={route.query?.compose} />
+      case 'library': return <LibraryPage key={`${route.id ?? 'list'}:${route.query?.scope ?? ''}`} id={route.id} scope={route.query?.scope} />
+      case 'creative': return <CreativePage />
+      case 'missions': return <MissionsPage key={route.id ?? 'list'} id={route.id} />
+      case 'schedules': return <SchedulesPage key={`${route.id ?? 'list'}:${route.query?.mission ?? ''}`} id={route.id} missionId={route.query?.mission} />
+      case 'speculation': return <SpeculationPage key={route.id ?? 'list'} id={route.id} />
+      case 'reflections': return <ReflectionsPage key={route.id ?? 'list'} id={route.id} />
       case 'overview': return <OverviewPage />
+      case 'jarvis': return <JarvisPage />
       case 'source': return <SourceStatus />
       case 'trigger': return route.id !== undefined ? <ThreadPage key={route.id} id={route.id} target={route.query?.trigger} />
         : <TriggerStatus filter={route.query?.filter ?? 'subscribed'} />
@@ -161,6 +185,8 @@ function Pages({ route, openTab, deploymentForm }: { route: Route; openTab: (tab
   return <div className="dt-page">
     <div className="dt-column">
       <Header masterId={state?.masterId} />
+      {state && !state.environment?.ready && route.page !== 'environments' && <p role="status">{t('environment.unavailable')}{' '}
+        <Button onClick={() => openTab('environments')}>{t('tab.environments')}</Button></p>}
       {error && state && <p className="dt-error" role="status">{error.message}</p>}
       <SegmentedTabs className="dt-tabs" label={t('pagesLabel')} value={route.page} onChange={openTab}
         items={TABS.map(value => ({ value, label: t(`tab.${value}`), id: `dt-tab-${value}`, panelId: 'dt-page' }))} />

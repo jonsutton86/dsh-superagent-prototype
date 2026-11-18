@@ -6,6 +6,12 @@ import type { PromptVersion } from './app/prompts.ts'
 import type { SettingsVersion } from './app/store.ts'
 import type { SettingsSave } from './policy.ts'
 import type { Retry } from './sources/github.ts'
+import type { InterventionResult } from './supervision/protocol.ts'
+import type { RecoveryIntent } from './recovery/ownership.ts'
+import type { ReceiptAudit } from './recovery/audit.ts'
+import type { ReceiptPreparation } from './recovery/prepare.ts'
+import type { RecoveryBindings } from './recovery/bindings.ts'
+import type { EmergencyRecord } from './app/emergency.ts'
 
 /** Key of a KV record whose value has type `V`; a plain string represents an untyped key. */
 export type Key<V> = string & { readonly __value?: V }
@@ -30,9 +36,22 @@ export const KV = {
     /** The built-in text of a prompt part an override was edited from, by its `base`, which shows what an upgrade changed. */
     builtIn: family<string, [base: string]>('prompt-built-in:') },
   /** Runtime: the main Session's ID. */
-  runtime: { masterId: record<string>('master-id') },
+  runtime: { masterId: record<string>('master-id'), ownership: record<{ authorityId: string; coordinatorId: string; credentialFile?: string }>('runtime:ownership'),
+    publication: record<{ serviceId: string; credentialFile?: string }>('runtime:publication'),
+    /** Durable global emergency stop; distinct from the ordinary processing pause. */
+    emergency: record<EmergencyRecord>('runtime:emergency') },
+  /** Copying a staged checkpoint cannot make its data an execution owner. */
+  recovery: { hold: record<{ checkpoint: string; at: string; state: 'staged' | 'prepared'; requestId?: string }>('recovery:restore-hold'),
+    reservation: record<RecoveryIntent>('recovery:ownership-reservation'), audit: record<ReceiptAudit>('recovery:receipt-audit'),
+    preparation: record<ReceiptPreparation>('recovery:receipt-preparation'), activation: record<string>('recovery:activation'),
+    deployment: record<RecoveryBindings>('recovery:deployment') },
+  /** Supervision: acknowledged commands and the single status request allowed for each assignment. */
+  supervision: { receipt: family<{ fingerprint: string; result: InterventionResult }>('supervision-receipt:'),
+    nudged: family<string>('supervision-nudged:') },
   /** Sessions: prompt revisions each Session has worked under, ordered oldest first; the last entry (`.at(-1)`) is its active revision. */
-  sessions: { prompts: family<number[], [session: string]>('session-prompts:') },
+  sessions: { prompts: family<number[], [session: string]>('session-prompts:'), world: family<string, [session: string]>('session-world:'),
+    persona: family<string, [session: string]>('session-persona:'), personaOwner: family<string, [session: string]>('session-persona-owner:'),
+    routerOwner: family<string, [session: string]>('session-router-owner:') },
   /** Schema 11 migration: legacy main-Session queues imported into the effect table. */
   queues: { relays: record<{ id: string; text: string }[]>('relay-queue'), unsubscribed: record<string[]>('subscription-results'),
     prompts: record<number | null>('prompt-notification'), settings: record<number | null>('settings-notification') },

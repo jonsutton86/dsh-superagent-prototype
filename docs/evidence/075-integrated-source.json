@@ -1,0 +1,73 @@
+{
+  "tool": "rea-agents",
+  "version": "6.8.0",
+  "operation": "analyze_javascript_application",
+  "evidenceId": "ev_208c807c44381336f1fca1ef17c8c3d2a588b80e390c0e7951fe835ffe966fad",
+  "baseCommit": "3d62647a5e1d558b3c614d06701cdd8fa2bd264f",
+  "bundleSha256": "6e9c40d1a2474d5ad37d5c9bda897b1c1a679c932919ffc825397cc51d469586",
+  "statistics": {
+    "findings": 154,
+    "invalid_utf8_files": 0,
+    "modules": 0,
+    "nested_asar_containers": 0,
+    "parse_failures": 0,
+    "parsed_javascript_files": 8,
+    "relevant_files": 312,
+    "skipped_javascript_files": 0,
+    "text_bytes_read": 57902,
+    "visited_ast_nodes": 8921
+  },
+  "selection": {
+    "requested_paths": [
+      "publication/repository-runtime.ts",
+      "publication/repository-runtime-model.ts",
+      "publication/repository-observation.ts",
+      "publication/repository-exports.ts",
+      "recovery/repository-publications.ts",
+      "providers/abliteration-config.ts",
+      "providers/abliteration-guard.ts",
+      "providers/abliteration-smoke.ts"
+    ],
+    "unselected_files": 304
+  },
+  "sources": [
+    {
+      "path": "src/publication/repository-runtime.ts",
+      "sha256": "245d05259a4a3aae0f5df22a32a9525c7a9d1c7ffd25fe5b7c75379ad36eb0b7"
+    },
+    {
+      "path": "src/publication/repository-runtime-model.ts",
+      "sha256": "d1796e708885e0d24c1d3d1bcdf0591eb4c1fb2afa572d91f9e5453ba0a7aeea"
+    },
+    {
+      "path": "src/publication/repository-observation.ts",
+      "sha256": "b7ef0003a1fc3375736c6de8d1fd6dad82ed64a0b30e5975328d0cbf2187d457"
+    },
+    {
+      "path": "src/publication/repository-exports.ts",
+      "sha256": "d287b0f4012288d6d6c10963ba1474c4c60fad9be4f55ff40a2ce01486d75f05"
+    },
+    {
+      "path": "src/recovery/repository-publications.ts",
+      "sha256": "e4f62669b0caa35a4ab6e809bdf2c5f2b15156c145373859f1399a81d9c8bbed"
+    },
+    {
+      "path": "src/providers/abliteration-config.ts",
+      "sha256": "96ce49488222a4cb01c6b8d9ebd10082bb8e4ffb13f7e5c3d8122a56913ccdeb"
+    },
+    {
+      "path": "src/providers/abliteration-guard.ts",
+      "sha256": "08366c0d8a6034e8f65beb4a568d058693c48399f3a743243ce226156e045256"
+    },
+    {
+      "path": "src/providers/abliteration-smoke.ts",
+      "sha256": "a27b4f85e89a576568bae3543cb7bf958eff8d00ccbc6125d335a69cd548b253"
+    }
+  ],
+  "limitations": [
+    "Selected source static analysis only; not a runtime proof.",
+    "304 inventoried sources were unselected.",
+    "Dynamic dispatch and external provider behavior require the recorded contract and installed-Harness tests.",
+    "Source hashes identify working-tree content before the qualification commit."
+  ]
+}

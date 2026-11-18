@@ -280,6 +280,9 @@ export class Evals extends EnginePart {
   }
   /** Apply an outcome to an Eval of a Thread: the one in progress, or a gate-only one. */
   private decideEval(thread: Thread, evaluation: Evaluation, outcome: AssessmentOutcome): Decision {
+    const recipients = evaluation.triggerIds.flatMap(id => this.repo.triggers.disposition(id)?.recipient ?? [])
+    if (recipients.length && (outcome.kind === 'accept' || outcome.kind === 'stop' && recipients.some(id => id !== outcome.ticketId)))
+      throw new UserError('notReached')
     const audit = outcome.audit ? { audit: outcome.audit } : {}
     // Requeue if Policy changed without a live policyChanged call (such as across an upgrade or restart).
     if (this.policy().version !== evaluation.policyVersion) {

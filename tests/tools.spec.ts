@@ -16,6 +16,32 @@ const words = (count: number) => Array.from({ length: count }, () => 'word').joi
 const read = (resource: string, page: { offset?: number; limit?: number } = {}) =>
   h.runTool(h.runtime.masterId, 'orchestrator_read', { resource, ...page })
 
+it('reads bounded repository context through fixed API calls and retains one observation across pages', async () => {
+  const contents = 'untrusted source context\n'.repeat(400)
+  const calls = vi.mocked(Commands.prototype.run).mockResolvedValue(contents)
+  const page = await read('repository/file/src/example.ts') as { text: string; next_offset: number }
+  expect(calls.mock.calls.at(-1)?.[1]).toEqual(['api', 'repos/acme/widgets/contents/src/example.ts', '-H', 'Accept: application/vnd.github.raw'])
+  calls.mockResolvedValue('changed after the first read')
+  let body = page.text, offset: number | null = page.next_offset
+  while (offset !== null) {
+    const next = await read('repository/file/src/example.ts', { offset }) as { text: string; next_offset: number | null }
+    body += next.text; offset = next.next_offset
+  }
+  expect(JSON.parse(body)).toMatchObject({ repository: 'acme/widgets', path: 'src/example.ts', kind: 'file', content: contents })
+  for (const resource of ['repository/file/../private', 'repository/file/.env', 'repository/file/node_modules/config'])
+    await expect(read(resource)).rejects.toThrow('Only non-hidden')
+  await expect(read('repository/file/new.ts', { offset: 1 })).rejects.toThrow('offset 0 first')
+  calls.mockResolvedValue('x'.repeat(65537))
+  await expect(read('repository/file/large.ts')).rejects.toThrow('exceeds 64 KiB')
+  vi.mocked(Commands.prototype.gh).mockResolvedValue([{ name: 'src' }, { name: '.private' }, { name: 'node_modules' }, { name: 'README.md' }])
+  const listing = await read('repository/directory/') as { text: string }
+  expect(JSON.parse(listing.text).content).toBe('README.md\nsrc')
+  const { sessionId } = await h.acceptedTicket(feishu('repo-context', '@bot Review the source'))
+  calls.mockResolvedValue('worker copy')
+  const worker = await h.runTool(sessionId, 'orchestrator_read', { resource: 'repository/file/src/example.ts' }) as { text: string }
+  expect(JSON.parse(worker.text).content).toBe('worker copy')
+})
+
 it('reads the lists, a ticket, a decision, the settings, the prompts and the models as resources', async () => {
   const { ticket, trigger } = await h.acceptedTicket(feishu('1', '@bot 修一下回归'))
   await h.acceptedTicket(feishu('2', '@bot 再修一个'))
@@ -271,6 +297,10 @@ it('saves a settings block by name, a Source\'s block with the Source\'s id', as
   await expect(save({ block: 'source:github', value: off, revision: github.revision })).rejects.toThrow()
   expect(await save({ block: 'source', source: 'github', value: off, revision: github.revision })).toMatchObject({ saved: true })
   expect(h.runtime.store.settings().sources.github?.enabled).toBe(false)
+  const again = h.runtime.store.blockRevision('source:github')
+  expect(await save({ block: 'source', source: 'github', value: JSON.stringify({ enabled: true, config: github.config }), revision: again })).toMatchObject({ saved: true })
+  expect(h.runtime.store.settings().sources.github?.enabled).toBe(true)
+  await expect(save({ block: 'pause', value: '{', revision: 0 })).rejects.toThrow('value is not valid JSON')
   expect(await save({ block: 'pause', value: { paused: true }, revision: 0 })).toEqual({ paused: true })
 })
 

@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Explicitly selected development operations; not runtime or default prompt configuration",
+  "recordedDate": "2026-11-10",
+  "upstream": {
+    "repository": "https://github.com/danielmiessler/Fabric",
+    "revision": "de0b72766db0436b6c1887bb75768cb3960e67e5",
+    "version": "v1.4.568",
+    "license": "MIT"
+  },
+  "files": [
+    {
+      "name": "review_code",
+      "path": "fabric/review_code/system.md",
+      "sourcePath": "data/patterns/review_code/system.md",
+      "sourceUrl": "https://github.com/danielmiessler/Fabric/blob/de0b72766db0436b6c1887bb75768cb3960e67e5/data/patterns/review_code/system.md",
+      "rawSourceUrl": "https://raw.githubusercontent.com/danielmiessler/Fabric/de0b72766db0436b6c1887bb75768cb3960e67e5/data/patterns/review_code/system.md",
+      "upstreamGitBlobSha": "a214ee0ab48cd7701d01a16dd8bee3c3254edce0",
+      "contentSha256": "d67da54180f1c8e447beec7297d70ffd485d0b3a8350573a31a21480f68d6fb6",
+      "bytes": 4831,
+      "modified": false
+    },
+    {
+      "name": "review_design",
+      "path": "fabric/review_design/system.md",
+      "sourcePath": "data/patterns/review_design/system.md",
+      "sourceUrl": "https://github.com/danielmiessler/Fabric/blob/de0b72766db0436b6c1887bb75768cb3960e67e5/data/patterns/review_design/system.md",
+      "rawSourceUrl": "https://raw.githubusercontent.com/danielmiessler/Fabric/de0b72766db0436b6c1887bb75768cb3960e67e5/data/patterns/review_design/system.md",
+      "upstreamGitBlobSha": "aeab746dd90a9577a924c1c71e8ca2a5833cbbc8",
+      "contentSha256": "75ea9f2270321ccf56817a1aecc15f62ac2cbe9c486f064bfe227ad9f046550a",
+      "bytes": 3712,
+      "modified": false
+    },
+    {
+      "name": "summarize",
+      "path": "fabric/summarize/system.md",
+      "sourcePath": "data/patterns/summarize/system.md",
+      "sourceUrl": "https://github.com/danielmiessler/Fabric/blob/de0b72766db0436b6c1887bb75768cb3960e67e5/data/patterns/summarize/system.md",
+      "rawSourceUrl": "https://raw.githubusercontent.com/danielmiessler/Fabric/de0b72766db0436b6c1887bb75768cb3960e67e5/data/patterns/summarize/system.md",
+      "upstreamGitBlobSha": "b655b620b895c71593ea578fb4ea5e975cfdd3a0",
+      "contentSha256": "29d393bf16f9a89464ef1f734cfd523e5949c01e5e580039540fd65823bc4a06",
+      "bytes": 960,
+      "modified": false
+    },
+    {
+      "name": "extract_product_features",
+      "path": "fabric/extract_product_features/system.md",
+      "sourcePath": "data/patterns/extract_product_features/system.md",
+      "sourceUrl": "https://github.com/danielmiessler/Fabric/blob/de0b72766db0436b6c1887bb75768cb3960e67e5/data/patterns/extract_product_features/system.md",
+      "rawSourceUrl": "https://raw.githubusercontent.com/danielmiessler/Fabric/de0b72766db0436b6c1887bb75768cb3960e67e5/data/patterns/extract_product_features/system.md",
+      "upstreamGitBlobSha": "a6754b2c8971d3a808db2653cbc415f35fdc6256",
+      "contentSha256": "c0d89086c418b8102f19c514ab50fd1f32f01ca65d6682e91329eb4d72ca4832",
+      "bytes": 793,
+      "modified": false
+    },
+    {
+      "name": "license",
+      "path": "fabric/LICENSE",
+      "sourcePath": "LICENSE",
+      "sourceUrl": "https://github.com/danielmiessler/Fabric/blob/de0b72766db0436b6c1887bb75768cb3960e67e5/LICENSE",
+      "rawSourceUrl": "https://raw.githubusercontent.com/danielmiessler/Fabric/de0b72766db0436b6c1887bb75768cb3960e67e5/LICENSE",
+      "upstreamGitBlobSha": "fb06a6f8c497f15063059ff224965d9e60e98a01",
+      "contentSha256": "42b554b17b8fd7ae4d6bc488f0857ae91d9179f04db3da466c2fc5425686f4f9",
+      "bytes": 1084,
+      "modified": false
+    }
+  ],
+  "wrapper": {
+    "path": "EVIDENCE.md",
+    "version": 1,
+    "contentSha256": "614e03addb8855370da0c93b465cac69432cd47e579144ca13ac27ced9cfa989",
+    "appliesTo": [
+      "review_code",
+      "review_design",
+      "summarize",
+      "extract_product_features"
+    ],
+    "upstreamPatternsModified": false
+  }
+}

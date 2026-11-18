@@ -23,6 +23,12 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+function pluginContext(value: unknown, disposers: (() => unknown)[]): never {
+  const context = { orchestrator: value, superagentSources: { register: () => () => {} },
+    effect: (effect: () => () => unknown) => { disposers.push(effect()) },
+    inject: (_keys: string[], apply: (child: unknown) => void) => { apply(context) } }
+  return context as never
+}
 const MEMBER = 'ou_alice'
 function host(overrides: Partial<SourceContextDeps> = {}) {
   const store = new Store(join(mkdtempSync(join(tmpdir(), 'sources-')), 'db.sqlite'))
@@ -95,7 +101,7 @@ describe('feishu source', () => {
       // The fixture's registry already holds the kind; this one starts empty so the plugin's registration shows.
       const value = host({ sources: emptyRegistry(), ...overrides })
       const disposers: (() => unknown)[] = []
-      applyFeishu({ orchestrator: value, effect: (effect: () => () => unknown) => { disposers.push(effect()) } } as never)
+      applyFeishu(pluginContext(value, disposers))
       await vi.waitFor(() => expect(value.health.history).toBeDefined())
       const registered = value.sources.kind('feishu')
       // Snapshot health before disposal clears the registered entries.
@@ -770,7 +776,7 @@ describe('github source', () => {
         healthOf.set(sources, board)
         const value = host({ sources, ...overrides })
         const disposers: (() => unknown)[] = []
-        applyGithub({ orchestrator: value, effect: (effect: () => () => unknown) => { disposers.push(effect()) } } as never)
+        applyGithub(pluginContext(value, disposers))
         return { value, stop: async () => { for (const dispose of disposers) await dispose(); value.store.close() } }
       }
       const pending = await start({ configured: () => false })
@@ -806,7 +812,7 @@ describe('github source', () => {
     // The fixture's registry already holds the kind; this one starts empty so the plugin can register it.
     const value = host({ sources: emptyRegistry(), ready: Promise.reject(new Error('lock held')) })
     const disposers: (() => unknown)[] = []
-    applyGithub({ orchestrator: value, effect: (effect: () => () => unknown) => { disposers.push(effect()) } } as never)
+    applyGithub(pluginContext(value, disposers))
     await vi.waitFor(() => expect(value.health.github).toMatchObject({ state: 'error', detail: expect.stringContaining('lock held') }))
     for (const dispose of disposers) await dispose()
     value.store.close()
@@ -1043,7 +1049,7 @@ describe('feishu event consumer', () => {
    * A bot CLI whose `event consume` behaves as `mode` says: `never` gets ready, `warn` warns once ready, `ready` stays up,
    * and `flaky` exits after its first ready. It records each run and the PID of the latest.
    */
-  function cli(mode: 'never' | 'warn' | 'ready' | 'flaky' | 'events' | 'late'): string {
+  function cli(mode: 'never' | 'warn' | 'ready' | 'flaky' | 'events' | 'late' | 'late-ready'): string {
     const path = join(dir, 'lark-bot')
     writeFileSync(path, `#!/bin/sh
   [ "$1" = event ] || { echo '{"ok":true,"data":{}}'; exit 0; }
@@ -1055,6 +1061,7 @@ describe('feishu event consumer', () => {
     flaky) echo '[event] ready' >&2; [ "$n" -gt 1 ] && exec sleep 60; exit 1 ;;
     events) echo '[event] ready' >&2; cat '${dir}/events'; touch '${dir}/printed'; exec sleep 60 ;;
     late) echo '[event] ready' >&2; sleep 1; cat '${dir}/events'; touch '${dir}/printed'; exec sleep 60 ;;
+    late-ready) cat '${dir}/events'; while [ ! -f '${dir}/allow-ready' ]; do sleep 0.02; done; echo '[event] ready' >&2; exit 0 ;;
   esac
   `, { mode: 0o755 })
     return path
@@ -1095,6 +1102,18 @@ describe('feishu event consumer', () => {
     expect(['om_1', 'om_2'].map(id => store.triggers.get(feishuTriggerId(id))?.meta.direct)).toEqual([false, true])
     expect(store.get(KV.feishu.chats)).toEqual({ oc_group: false, oc_dm: true })
     expect(health.feishu).toMatchObject({ state: 'error', detail: expect.stringContaining('JSON') })
+    controller.abort(); await running; store.close()
+  }, 20_000)
+  it('preserves a parsing error when stderr readiness arrives after stdout events', async () => {
+    writeFileSync(join(dir, 'events'), 'not json\n')
+    const { ctx, health, store } = consumerSource(cli('late-ready'))
+    const reports = vi.spyOn(ctx, 'report')
+    running = runFeishu(ctx, controller.signal)
+    await vi.waitFor(() => expect(health.feishu).toMatchObject({ state: 'error', detail: expect.stringContaining('JSON') }), until)
+    const beforeReady = reports.mock.calls.length
+    writeFileSync(join(dir, 'allow-ready'), '')
+    await vi.waitFor(() => expect(health.feishu).toMatchObject({ state: 'error', detail: expect.stringContaining('ready=true') }), until)
+    expect(reports.mock.calls.slice(beforeReady).some(([name, value]) => name === 'feishu' && value.state === 'ready')).toBe(false)
     controller.abort(); await running; store.close()
   }, 20_000)
   it('drops the events it reads once the Source is off', async () => {
@@ -1148,11 +1167,14 @@ describe('feishu event consumer', () => {
     const { ctx, health, store } = consumerSource(cli('never'))
     running = runFeishu(ctx, controller.signal)
     await vi.waitFor(() => expect(runs()).toBe(1), until)
-    const pid = Number(readFileSync(join(dir, 'pid'), 'utf8'))
+    // The shell writes runs before pid, and a newly truncated PID file can briefly be empty (Number('') is 0).
+    let pid = 0
+    await vi.waitFor(() => { pid = Number(readFileSync(join(dir, 'pid'), 'utf8')); expect(pid).toBeGreaterThan(0) }, until)
     await vi.advanceTimersByTimeAsync(45_000)
     await vi.waitFor(() => expect(health.feishu).toMatchObject({ state: 'error',
       detail: expect.stringContaining('did not become ready within 45 seconds') }), until)
-    expect(alive(pid)).toBe(false)
+    // Error reporting precedes OS process reaping; fake timer advancement cannot reap the child synchronously.
+    await vi.waitFor(() => expect(alive(pid)).toBe(false), until)
     controller.abort(); await running; store.close()
   }, 20_000)
   it('reports a warning the consumer prints as an error', async () => {

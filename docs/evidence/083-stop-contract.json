@@ -1,0 +1,309 @@
+{
+  "schemaVersion": 2,
+  "kind": "canonical-stop-authority-refinement",
+  "capturedAt": "2026-11-10T22:20:05.634578+00:00",
+  "currentRevision": "ec3313e9e90cba0c280b19f81f65eda0e0bb2e1e",
+  "executionSourceBaseline": "6f41fda605eeeacdc5e7ec8e83b1d7be7eb4bdc4",
+  "supersedes": "stop-quiescence-design.json persistence and provisional64-episode policy only; prior call-site/test map still applies.",
+  "status": "Design only, root approved canonical-table direction and observation-only recheck; no source/test/docs changes or implementation permission yet.",
+  "sourceManifest": [
+    {
+      "path": "src/executor/dsh.ts",
+      "sha256": "05ddf03be05eb375b79a971449bafeb77caec41e9f5c51cee41a949cd9b98691",
+      "bytes": 62301,
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/executor/background.ts",
+      "sha256": "60b98302d412426cda7df12ed69d750183f60fb00ac802a01ae2c963cfc79420",
+      "bytes": 9288,
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/app/effects.ts",
+      "sha256": "c4d2135ecf8c77299673557bc8977848aa7b5041e1a426edac5fe069a00b60aa",
+      "bytes": 12352,
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/app/store.ts",
+      "sha256": "eb11e270425eb585c75eda81a9f94e08d7982d8971f475a4178a7f93b1e98772",
+      "bytes": 21787,
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/app/migration.ts",
+      "sha256": "9fc084f77798d9f03eac7ddcdd97b65451e92d85c0c433b9d38ee0f1fccf3a39",
+      "bytes": 46222,
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/app/sessions.ts",
+      "sha256": "0da3946172c2a93755b58b417cd690c72b7758bef1f5fb549b0cd6793eebc074",
+      "bytes": 36818,
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/app/runtime.ts",
+      "sha256": "51a1f6a4a8c45e6da52585fea06895ebeaa0e4b63455381c16b638426e441b93",
+      "bytes": 37802,
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/core/tickets.ts",
+      "sha256": "a0add48ff4e3c62bdd5db07f75a2f66706d7bf4dde1f59c0538545404ab69dcc",
+      "bytes": 28167,
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/core/assignments.ts",
+      "sha256": "cd731782a2bc3cb9c84f9986e9904505000936ae4d507c900902bfc5cef29e06",
+      "bytes": 9828,
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/core/model.ts",
+      "sha256": "8641cfbcd640b70f6f63cd9eb0c4805d3d8f62405ace77862a108d21ceb0a417",
+      "bytes": 20599,
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/core/recovery.ts",
+      "sha256": "ad011b655e372d06ca7dcad0ac08027228c514c9488e706b20202e2e97a07aa2",
+      "bytes": 2093,
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/recovery/graph.ts",
+      "sha256": "f7bf3705351729d250765f8c34f4a44bba6c20e10dde12d0454c874caba13e1a",
+      "bytes": 24228,
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/recovery/activation.ts",
+      "sha256": "251fbfbca9fc5437f6a16a1c6e43e6241dc6464cea8e3dac14bad496ad3ecd64",
+      "bytes": 11460,
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/ownership/runtime.ts",
+      "sha256": "da3634a0ce87d6d0d4feec1796730489bacfcf29983495b92df2712e0dcfb841",
+      "bytes": 2835,
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/ownership/lease.ts",
+      "sha256": "175a90a5f1d14cae1a27ec3b41ce216188d80d45b0b4d6c02eb716151e9710fb",
+      "bytes": 8034,
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/ownership/gate.ts",
+      "sha256": "7faf1fda4e89c8dab7920f77ae12694d3cc88742cc1225e11e43067d507af020",
+      "bytes": 10028,
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/remote/world.ts",
+      "sha256": "6cc84d4f545923348039243ec1353743ff3ce4ad20a7e89202476a598b3563cb",
+      "bytes": 16620,
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/remote/subprocess.ts",
+      "sha256": "e4021b4a54b4d1573c7af778d4b2ada5699f24b5b51842b272692130c2b7204c",
+      "bytes": 14740,
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/speculation/service.ts",
+      "sha256": "028c85744a6fd8d253735d1224e85f23fb903f13e2e14131373ae52a92453207",
+      "bytes": 25121,
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/verification/service.ts",
+      "sha256": "e83666f11dbfaed78e9bd00fecd00c67f985255591deb892e3b6985bd5706cbc",
+      "bytes": 39557,
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/supervision/service.ts",
+      "sha256": "d0a4087c48eb5c215fb4c5d95a7e1881082f1b8c8b81c5a2b7fa345a53db3404",
+      "bytes": 8307,
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/workspace/service.ts",
+      "sha256": "1db22edf27a154def80a5aaf45e1f6466c3404cb859ee948d95f9a3cf73ae924",
+      "bytes": 37334,
+      "matchesBaseline": true
+    },
+    {
+      "path": "prompts/operations/EVIDENCE.md",
+      "sha256": "614e03addb8855370da0c93b465cac69432cd47e579144ca13ac27ced9cfa989",
+      "bytes": 4077,
+      "matchesBaseline": true
+    },
+    {
+      "path": "prompts/operations/fabric/review_design/system.md",
+      "sha256": "75ea9f2270321ccf56817a1aecc15f62ac2cbe9c486f064bfe227ad9f046550a",
+      "bytes": 3712,
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/recovery/state.ts",
+      "revision": "ec3313e9e90cba0c280b19f81f65eda0e0bb2e1e",
+      "sha256": "ce9644db543a2533c84412cce0ad615be1ee926258c9f58dc6ceabba41466bdd",
+      "bytes": 1734
+    },
+    {
+      "path": "src/recovery/checkpoint.ts",
+      "revision": "ec3313e9e90cba0c280b19f81f65eda0e0bb2e1e",
+      "sha256": "5eac9947fc19ffca90991c09b7c77223eb8690bc9ce7d77fe4ce6f2e08bf2eba",
+      "bytes": 25333
+    },
+    {
+      "path": "src/recovery/reader.ts",
+      "revision": "ec3313e9e90cba0c280b19f81f65eda0e0bb2e1e",
+      "sha256": "460ae981c1627ef77145675ad6265c7de902fdf5bad95e4370c4a347a9eaaf22",
+      "bytes": 3454
+    },
+    {
+      "path": "src/recovery/results.ts",
+      "revision": "ec3313e9e90cba0c280b19f81f65eda0e0bb2e1e",
+      "sha256": "1a6d09ca6ffb96b1e003b266c08348f6ce2e31dc0ad23db9c56d7f99a9ade7ce",
+      "bytes": 36957
+    },
+    {
+      "path": "src/app/delivery.ts",
+      "revision": "ec3313e9e90cba0c280b19f81f65eda0e0bb2e1e",
+      "sha256": "c1a543a142e7c96244e949854b999c46923ac883f6f30f9619ce3222e6a07e32",
+      "bytes": 4588
+    }
+  ],
+  "decisions": {
+    "approvedByParent": [
+      "One canonical executor_stop table inside existing Store SQLite; no Assignment copy and no separate database/journal.",
+      "Immutable original stop/assignment/execution identity, dedicated material revision, pointer-only Effects.",
+      "No arbitrary64-episode admission policy. Cover all previously identified scoped stop triggers while preserving handed-off jobs.",
+      "Recheck is repeatable observation only under original stopID/scope, not a durable per-request acceptance promise; never cancellation/retarget/new-assignment.",
+      "Attestation retains immutable requestID/body digest and durable terminal receipt, read-onlylookup, exact replay before stale-revision validation.",
+      "Same-live-registry evidence covers known Harness Agents/jobs/descendants and original remote receipts, not arbitrary native process-range confinement."
+    ],
+    "stillProposed": "Concrete schema columns, legacy dormant coverage representation and retention details below are presented for review before implementation."
+  },
+  "comparison": [
+    {
+      "dimension": "Canonical facts",
+      "assignmentJSON": "Existing ticket transaction is convenient, but stop/control histories rewrite the aggregate and duplicate large assignment views.",
+      "canonicalTable": "Same Store transaction preserves atomicity; one stop row is sole fact authority. Assignment remains original immutable reference, not a duplicate projection."
+    },
+    {
+      "dimension": "Supervision budgets",
+      "assignmentJSON": "Supervision.observe hashes JSON.stringify(ticket), so even pending recheck/attestation receipts reset episodeRevision unless every metadata field is explicitly filtered.",
+      "canonicalTable": "No incidental Ticket mutation. Add only explicit material stop projection to observation revision; keep task episode hash unchanged for control/poll bookkeeping. New stop episode renewal semantics explicit."
+    },
+    {
+      "dimension": "64 cap",
+      "assignmentJSON": "63 records plus final64slot collides with partial-scope stop then later full cancellation. Quiet receipts cannot be discarded without losing original identity; widening dispatched scope is invalid.",
+      "canonicalTable": "Independent bounded rows and cursor pagination eliminate per-assignment episode quota. Matching unresolved scopes coalesce, but genuinely later episodes retain new IDs without invented63-work policy."
+    },
+    {
+      "dimension": "Restore",
+      "assignmentJSON": "Needs schema13 plus strict nested stop/control schemas and graph reference validation anyway; loose-object graph would otherwise accept unvalidated new fields.",
+      "canonicalTable": "Needs schema13 table/index creation, strict stop/control validation and pointer checks. Slight new loader cost, but generic recoveryStateDigest already includes all tables/schema/row order. Existing verification_run/control establish the same Store pattern."
+    },
+    {
+      "dimension": "Retention",
+      "assignmentJSON": "Cannot page/prune a single assignment history independently without editing core history/hash; cap creates cancellation corner cases.",
+      "canonicalTable": "Index unsettled rows and query history in bounded pages; never prune unresolved, referenced, attested or operator-command-bound rows. Initial implementation can retain compact settled rows instead of unsafe deletion; no claim of finite whole-history retention until an explicit tombstone/reference policy exists."
+    }
+  ],
+  "canonicalSchema": {
+    "executor_stop": {
+      "id": "original stopID primary key",
+      "ticket": "original Ticket.id indexed",
+      "assignment": "known original lifecycle Assignment.id, immutable and validated; does not assert every Session job was produced by that assignment",
+      "session": "original worker SessionID",
+      "identityHash": "canonical immutable identity/scope/execution digest",
+      "revision": "integer material revision, CAS for observations and operator review",
+      "phase": "prepared | observing | unknown | quiet; optional legacy dormant coverage basis below",
+      "value": "strict bounded original intent, target evidence, per-target control boundaries, proof/attestation reference",
+      "indexes": [
+        "ticket+phase+id",
+        "assignment+scopeHash+phase",
+        "unsettled admission and stable creation/id cursor"
+      ],
+      "noCopies": "No matching authoritative stop fields in Ticket/Assignment, watchdog DB or independent sidecar."
+    },
+    "executor_stop_control": {
+      "purpose": "Only actual operator attestations need immutable request receipt authority; no duplicate stop facts. Existing same-Store verification_control pattern is precedent.",
+      "key": "requestId primary key",
+      "fields": "stopID, canonical body digest including route IDs, immutable body, pending|accepted|refused, immutable result/reason, receipt timestamp",
+      "transaction": "Persist pending accepted authorization before async validation; terminal control receipt and any stop material transition commit atomically. Replay checks exact digest before stale revision; GET never probes."
+    },
+    "effects": "Add stop pointer payload {stopId}; canonical row resolves original ticket/assignment/session/scope. Original effect key is stopID. Maintain existing launch/delivery keys and launch_started. Stop handler must not be paused by normal executor pause. Recheck does NOT redispatch the cancellation path; it calls a separate observe-only method for the original stop.",
+    "boundedness": "Bound each identity/string/record and target closure (reuse existing256 sample /128 descendant traversal ceilings where compatible), reject incomplete coverage as unknown; bounded concurrency, timer and page sizes. Coalesce only exact unresolved identity/scope matches. Do not add a per-assignment quota that can prevent safety cancellation. A whole-history storage cap requires explicit reserve/retention design; do not silently delete referenced receipts to pretend capacity is free."
+  },
+  "noNewWorkReuse": {
+    "rule": "A quiet full-stop receipt on an unchanged ended original assignment can be returned unchanged without issuing another stop. Proof includes recorded original scope and no later work admitted under that same lifecycle episode. A later authorized turn in a non-ended Assignment is a new episode; no reuse of old proof.",
+    "criticalFence": "Late halt/stop for an ended old assignment MUST NOT cancel whatever Agent now occupies worker-<ticketId>. Existing halt unconditionally cancels current Session after only conditionally fencing effect cancellation (dsh.ts454-461); new stop target checks must prevent retargeting onto the newer assignment.",
+    "matchingUnsettled": "Same unresolved original identity/scope joins original stopID and effects; request metadata differences do not authorize a larger scope or fresh cancellation after lost response."
+  },
+  "legacyMigration": {
+    "principle": "Migration is state-only and cannot prove processes stopped. It records current reconciliation intents/coverage uncertainty, never past kill completion or producer-assignment attribution. Do not mutate original assignment/input IDs, reports, timestamps, launch markers or recovery budget.",
+    "steps": [
+      "Create schema13 canonical stop/control tables and indexes transactionally. Existing10/11 migrations and schema12 launch markers retain their existing conservative behavior. Old binaries refuse13.",
+      "For legacy open running assignments, add one original-ID legacy-session reconciliation hold anchored to the recorded running lifecycle assignment. Its target ownership remains Session-scoped/producer-assignment-unknown. Mark observation unknown until the permitted proof rules succeed; do not forge a quiet receipt from report/idleAt.",
+      "For legacy pending replacements, anchor predecessor stop coverage to the recorded predecessor lifecycle boundary when available, retain the new pending assignment and original launch effect. Unknown job producer remains unknown. If historical original execution is absent, store explicit unknown execution identity; never fill it from current defaults or a later world.",
+      "For a legacy first pending assignment, pending state alone is insufficient: interrupted preparation/uncertain launch can exist. Retain launch_started1 without alteration. Conservative default is a legacy hold unless a source-supported undispatched boundary is proven; fresh schema13 pending-only assignments that never crossed beginLaunch do not acquire an invented stop.",
+      "Closed legacy history remains unproven rather than silently quiet. To avoid making every old completed task a live stop incident, retain a canonical dormant legacy-coverage row (no claimed stop dispatch). Activate its hold before any later resumption/launch/delivery in that old Session, or when original live registry activity is actually found. A dormant row is not a quiescence receipt. This representation requires parent review; an equivalent explicit migration coverage floor is acceptable only if it cannot skip an old Session on new admission.",
+      "Install hold guards and adopt already-loaded exact original Agent/Session/registry identity before any worker ensure/resume, Effects dispatch or native-notice turn can act. Migration does not load a missing worker just to prove it idle.",
+      "Runtime legacy reconciliation may cancel/observe only an authorized exact live original Session/world. A cold empty registry or recreated same-ID Agent cannot establish continuity. Unknown original execution/world stays held; operator evidence must bind the original recorded scope, not invent missing provenance."
+    ],
+    "attributionNote": "AssignmentID denotes the original lifecycle/stop authorization boundary, not a claim that arbitrary Session jobs belonged to it. Legacy targets explicitly state producer assignment unknown. If even the lifecycle anchor is unavailable or inconsistent, fail restore/hold; do not mint an imaginary assignment."
+  },
+  "proofAndRecovery": {
+    "sameLiveRegistry": "Exact retained Agent object + Session object + registry/service incarnation observed while closing admission; complete bounded descendant closure; original target jobs terminal and no relevant known running/stopping targets; original Agent idle. Revalidate before committing quiet. No output consumption. Timeouts, missing service, partial coverage, unexpected new targets or recycled IDs stay unknown.",
+    "coldLocal": "No registry/Agent continuity means unknown, even if same SessionID resolves idle or old report says ready. Original-stop-bound operator attestation may resolve admission only after fresh checks reject known active original work; original outcome remains unknown where applicable. It is an operator assertion, visibly separate from runtime-observed proof.",
+    "remote": "Observe original command receipts and original world binding; existing RemoteSubprocess already retains cancel requestId cancel-<commandID> and original native handle. Do not create a second remote cancel identity, query a replacement world, or let local attestation override remote unsettled receipts.",
+    "ownership": "Existing coordinator lease/world/restore activation gates remain required. Same-owner retry has no new resource fence; new lease cannot turn absent local evidence into quiet. Retain original owner/world identity and stop/control receipt references across restore.",
+    "graph": "Extend reconcileStateGraph or a StateReader stop subgraph: strict rows, bounded shapes, identity/digest consistency, known Ticket/Assignment/Session/world relation, control receipt relation, Effects pointer validity and original unresolved rows retained even after domain end. Generic recoveryStateDigest already captures table bytes/schema, but semantic validation is mandatory. Checkpoint Session inventory must include stop-owned original worker/descendant IDs where needed rather than only current assignments."
+  },
+  "operatorProtocol": {
+    "recheck": {
+      "request": "POST original stopID recheck with immutable scope/identity confirmation; host-authenticated and bounded",
+      "meaning": "Repeatable read/probe only, no separate durable command acknowledgment. May coalesce one live observation Promise. Never cancel, retarget, reopen, replace assignment or repurpose Effects cancellation handler.",
+      "response": "Observation requested/current evidence; lost response is resolved by GET current original stop or repeat same read/probe. GET is read-only and never starts probing."
+    },
+    "attestation": {
+      "request": "{schema:1,requestId,stopId,expectedRevision,identityHash,scopeHash,confirmed:true,note}; route IDs included in canonical digest",
+      "authorize": "Host/operator-only, exact original local scope; fresh checks reject original known active Agents/jobs/descendants and any unresolved remote requirement. Source/default changes are not accepted as proof.",
+      "responseLoss": "Persist original request identity and pending receipt before async checks; exact duplicate digest lookup happens BEFORE expectedRevision validation. Return immutable accepted/refused original receipt plus separate current stop projection. New requestID cannot silently replace an unknown one. GET command receipt only reads.",
+      "remount": "UI persists original exact request before sending; after remount recover same receipt/payload. Unmounted404/5xx/lost network response do not prove request rejection. Absent receipt permits only exact same-ID resubmit, never replacement authorization.",
+      "effect": "Accepted attestation clears only its original stop admission hold and records basis=operator-attested; does not mark task successful, cancel new work, waive other stop holds or mint/replay an operation."
+    }
+  },
+  "projectionAndSupervision": {
+    "ticketMutation": "Stop/control observation bookkeeping never rewrites Ticket; stop revision changes only material state.",
+    "revision": "Task episodeRevision can retain current Ticket basis. Observation material revision adds strict bounded stop projection including original stop/assignment IDs, scope, phase and proof basis; exclude lastCheckedAt and command receipt metadata.",
+    "endedTasks": "Bounded supervision selection includes ended tasks with ACTIVE unresolved stop holds. WatchdogJournal.reconcile must explicitly recognize stopHold rather than relabel ended domain stage working/blocked. canNudge=false while held. Dormant migration coverage alone is not a dispatched-stop incident.",
+    "ui": "One pure hold projection for task detail/inbox/mission; original stop owner stays separate from latest pending assignment. Normal Retry cannot erase an old hold or imply it is quiet."
+  },
+  "validationDeltas": [
+    "Reject historical quiet reuse when original assignment admitted later work; late old halt cannot affect newer assignment sharing Session.",
+    "Exercise repeated partial/full scopes without quota64 or widened original payloads.",
+    "Migration open running/pending replacement/fresh schema13 pending/legacy unknown execution/closed-session resumption and cold missing registry.",
+    "Round-trip schema13 checkpoint graph with original stopped assignment ended, original launch uncertainty, control accepted/pending/refused and stale world binding.",
+    "Recheck response loss/remount is observation-only; attestation response loss replay returns original receipt even after material revision advances.",
+    "Stop/control metadata writes do not reset watchdog task episode or refresh model allowance; material stop phase changes do update observation."
+  ],
+  "implementationStatus": "Source/design evidence captured before implementation. Implementation is now authorized and in progress; this record is not runtime validation.",
+  "captureSha256": "37df4b7092c5210988c6ee5070c42fd59078eb57dee309da0512e79c51b91373",
+  "sourceReproduction": {
+    "record": ".artifacts/increment-082/next-quiescence-review.json",
+    "sha256": "72aa1b960582b0ffd8b8ea202e026600169b8dfb437219aa2053d16ec7a84624",
+    "scope": "Controlled Runtime fixture with fake jobs: stop wait returns running, replacement and input nevertheless dispatched. No native process overlap was claimed."
+  }
+}

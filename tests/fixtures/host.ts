@@ -3,11 +3,17 @@
  * allowed member Alice (`ou_alice`), listened chat `oc_team`, and `auto` eval mode. Stop it with `stop()`.
  */
 import { Context } from '@deepseek-ai/cordis'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { vi, type Mock } from 'vitest'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
+import type { Agent, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
+import { scopeTarget } from '@deepseek-ai/dsh-scope'
+import type { FileSystem } from '@deepseek-ai/dsh-fs'
+import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
+import { ApiSessionNotFound } from '@deepseek-ai/dsh-api-session-controller'
+import type { RemoteWorld } from '../../src/remote/world.ts'
 import { Runtime } from '../../src/app/runtime.ts'
 import { Store } from '../../src/app/store.ts'
 import { SettingsSchema } from '../../src/policy.ts'
@@ -17,6 +23,12 @@ import { Commands } from '../../src/infra/commands.ts'
 import { credentialHelper, workerGitConfig } from '../../src/infra/environment.ts'
 import type { Trigger } from '../../src/core/index.ts'
 import { testMachine } from './deployment.ts'
+import { filesystem } from './filesystem.ts'
+import type { CoordinatorOwnershipConfig } from '../../src/ownership/lease.ts'
+import type { PublicationConnection } from '../../src/publication/client.ts'
+import type { VoiceConfig } from '../../src/voice/model.ts'
+import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
+import { Session, SessionId } from '@deepseek-ai/dsh-session'
 
 export const MEMBER = 'ou_alice'
 export const CHAT = 'oc_team'
@@ -132,7 +144,9 @@ export function subagentRuntime(agents: Map<string, FakeAgent>) {
 }
 
 /** @param seed - writes to the database before the Runtime opens it, such as records an earlier version stored. */
-export async function startRuntime(seed?: (store: Store) => void) {
+export async function startRuntime(seed?: (store: Store) => void, options: { executionMode?: 'local' | 'repository'; noAccounts?: boolean; managed?: boolean; ownership?: CoordinatorOwnershipConfig; publication?: PublicationConnection; voice?: VoiceConfig; attachments?: AttachmentStore;
+  captureSessions?: Map<string, Session>;
+  remote?: { world: RemoteWorld; filesystem: FileSystem; subprocess: SubprocessRuntime } } = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'orchestrator-host-'))
   const AGENT = join(directory, 'agent-gh'), BOT = join(directory, 'lark-bot')
   const repository = { default_branch: 'master', permissions: { push: true } }
@@ -158,25 +172,33 @@ export async function startRuntime(seed?: (store: Store) => void) {
     const reader = (text: string) => ({ readFrom: () => ({ text, nextOffset: text.length, lossy: false }) })
     const exited = { exitCode: 0, signal: null }
     const done = argv[0] === 'sh' && hooks.prepare ? hooks.prepare.then(() => exited) : Promise.resolve(exited)
-    return { done, collected: { stdout: reader(answers[argv.join(' ')] ?? ''), stderr: reader('') } }
+    return { done, collected: { stdout: reader(argv[0] === 'cat' ? readFileSync(argv[1]!, 'utf8') : answers[argv.join(' ')] ?? ''), stderr: reader('') } }
   }) }
   const agents = new Map<string, FakeAgent>()
   /** Each Session's next step, which takes the messages that wait for one. */
   const steps = new Map<string, () => void>(), claims = new Map<string, () => void>()
+  const finishes = new Map<string, (reason?: 'completed' | 'aborted' | 'error') => void>()
   const tools = new Map<string, Map<string, RegisteredTool>>()
+  const promptSections = new Map<string, { sessionId: string; name: string; text: (context: Record<string, unknown>) => string }>()
   const deliveries = vi.fn<(request: Delivery) => void>()
   let http!: HttpHandler
   const resolveDefault = async (id: string) => agents.has(id) ? { agent: agents.get(id) } : { error: { code: 'session/not-found' } }
-  const controller = {
-    create: vi.fn(async ({ sessionId }: { sessionId: string }) => {
+  const createAgent = async ({ sessionId, workspaceId, agentPreset }: { sessionId: string; workspaceId?: string; agentPreset?: string }) => {
       if (agents.has(sessionId)) return
       const agentCtx = new Context()
+      // Native worker scopes inherit the host registries. An independent empty Context would
+      // model a different execution boundary and correctly lose original-stop continuity.
+      agentCtx.reflect.provide('jobs', jobs.service)
+      agentCtx.reflect.provide('subagents', subagents.service)
       const sessionTools = new Map<string, RegisteredTool>()
       tools.set(sessionId, sessionTools)
       const register = (tool: RegisteredTool) => { sessionTools.set(tool.name, tool); return () => sessionTools.delete(tool.name) }
       agentCtx.reflect.provide('tools', { register, get: () => undefined, restrict: vi.fn(() => () => {}), guard: vi.fn(() => () => {}) })
       agentCtx.reflect.provide('skills', { register: () => () => {} })
-      agentCtx.reflect.provide('systemPrompt', { section: () => () => {} })
+      agentCtx.reflect.provide('systemPrompt', { section: (spec: { name: string; text: (context: Record<string, unknown>) => string }) => {
+        promptSections.set(`${sessionId}:${spec.name}`, { sessionId, name: spec.name, text: spec.text })
+        return () => {}
+      } })
       const inbox = { nextTurn: [] as UserMessage[], nextStep: [] as UserMessage[],
         // A pending message taken out, as DSH's inbox does by its id.
         remove: (id: string) => [inbox.nextTurn, inbox.nextStep].some(list => {
@@ -186,15 +208,25 @@ export async function startRuntime(seed?: (store: Store) => void) {
         }) }
       // A step claims each message once, all that wait for a step and, as a turn starts, the next queued one, and takes them into
       // the Session's history, unless it is `cut` off before, as a cancel in its pre-step does; DSH says each.
-      const taken = new Set<string>()
-      let turn = 0
+      let turn = 0, activeTurn: number | undefined
+      finishes.set(sessionId, (reason = 'completed') => {
+        const agent = agents.get(sessionId)!
+        if (activeTurn === undefined) return
+        const ended = activeTurn
+        activeTurn = undefined
+        ctx.emit('session/event', session as never, { type: 'turn/end', data: { turn: ended, reason: { kind: reason } } } as never)
+        agent.status = 'idle'
+        ctx.emit('agent/status', { agent, status: 'idle' } as never)
+      })
       const take = (starts: boolean, cut = false) => {
         const agent = agents.get(sessionId)!
-        const queued = starts ? inbox.nextTurn.filter(message => !taken.has(message.id)).slice(0, 1) : []
-        for (const message of [...inbox.nextStep.filter(item => !taken.has(item.id)), ...queued]) {
-          taken.add(message.id)
+        const queued = starts ? inbox.nextTurn.splice(0, 1) : []
+        for (const message of [...inbox.nextStep.splice(0), ...queued]) {
           ctx.emit('agent/inbox/claimed', { agent, message, turn } as never)
-          if (!cut) ctx.emit('session/event', session as never, { type: 'user/message', data: message } as never)
+          if (!cut) {
+            options.captureSessions?.get(sessionId)?.append('user/message', message, { surfaceOp: 'append' })
+            ctx.emit('session/event', session as never, { type: 'user/message', data: message } as never)
+          }
         }
       }
       steps.set(sessionId, () => { take(false) })
@@ -208,9 +240,16 @@ export async function startRuntime(seed?: (store: Store) => void) {
         agent.status = 'running'
         ctx.emit('agent/status', { agent, status: 'running' } as never)
         turn++
+        activeTurn = turn
+        ctx.emit('session/event', session as never, { type: 'turn/start', data: { turn } } as never)
         take(true)
+        void Promise.resolve().then(() => ctx.waterfall('agent/request', { agent, turn, step: 1, signal: new AbortController().signal } as never, async () => ({} as never)))
+          .catch(error => { ctx.emit('agent/error', { agent, turn, step: 1, error } as never); finishes.get(sessionId)!('error') })
       })
-      const session = { id: sessionId, snapshotEvents: () => [], requestHeader: () => undefined, append: vi.fn() }
+      const session = options.captureSessions ? Session.create(SessionId(sessionId), [],
+        { ...Session.create(SessionId(sessionId)).header, cwd: workspaceId, agentPreset })
+        : { id: sessionId, header: { id: sessionId, cwd: workspaceId, agentPreset }, snapshotEvents: () => [], requestHeader: () => undefined, append: vi.fn() }
+      if (options.captureSessions) options.captureSessions.set(sessionId, session as Session)
       let status = 'idle'
       const idle: (() => void)[] = []
       // A cancel drops the inbox unless kept, and the turn it stops ends a moment later, which DSH says.
@@ -220,52 +259,90 @@ export async function startRuntime(seed?: (store: Store) => void) {
         queueMicrotask(() => {
           const agent = agents.get(sessionId)!
           if (agent.status === 'idle') return
-          agent.status = 'idle'
-          ctx.emit('agent/status', { agent, status: 'idle' } as never)
+          if (activeTurn !== undefined) finishes.get(sessionId)!('aborted')
+          else { agent.status = 'idle'; ctx.emit('agent/status', { agent, status: 'idle' } as never) }
         })
       })
       agents.set(sessionId, { id: sessionId, ctx: agentCtx, inbox, followup: deliver('queue'), steer: deliver('steer'), inject: vi.fn(), session, cancel,
         get status() { return status }, set status(next: string) { status = next; if (next === 'idle') for (const wake of idle.splice(0)) wake() },
         // Once its turn ended, as DSH's does.
         whenIdle: () => status === 'idle' ? Promise.resolve() : new Promise<void>(resolve => { idle.push(resolve) }) } as never)
-    }),
+    }
+  const controller = {
+    create: vi.fn(createAgent),
     selectModel: vi.fn(async () => {}), resolveAgent: vi.fn(resolveDefault), rename: vi.fn(async () => {}),
     prompt: vi.fn(() => { throw new Error('Plugin delivery must not use user RPC') }),
-    inspect: vi.fn(async () => ({ events: [] })),
+    inspect: vi.fn(async (id: string) => {
+      const agent = agents.get(id) as unknown as Agent | undefined
+      if (!agent) throw new ApiSessionNotFound('Session not found')
+      return { meta: agent.session.header, events: [] }
+    }),
   }
   const reader = { read: async () => ({ events: [] }), [Symbol.asyncDispose]: async () => {} }
   const persistence = { flush: vi.fn(async () => {}), open: vi.fn(async () => reader) }
   const webServer = { host: '127.0.0.1', port: 3082, register: (route: { handler: HttpHandler }) => { http = route.handler; return () => {} } }
   const jobs = jobRegistry(id => agents.get(id))
   const subagents = subagentRuntime(agents)
-  const services = { agents, llm: { resolveCallConfig: vi.fn(async (value: unknown) => value) }, sessionController: controller,
-    sessionPersistence: persistence, workspaceRegistry: { create: async (cwd: string) => ({ id: cwd }) }, permissionPresets: { set: () => {} }, subprocess, webServer,
+  const presets = new Map<string, { id: string; plugins: unknown[] }>()
+  const mounted = new WeakMap<Context, string>()
+  const registry = Object.assign(agents, { create: vi.fn(async (options: CreateAgentOptions) => {
+    await createAgent({ sessionId: options.sessionId, workspaceId: options.meta?.cwd, agentPreset: options.meta?.agentPreset })
+    const agent = agents.get(options.sessionId) as unknown as Agent
+    try { const ready = await options.setup?.(agent.ctx, agent); ready?.commit?.() }
+    catch (error) { agents.delete(options.sessionId); await agent.ctx.fiber.dispose(); throw error }
+    return { agent, dispose: () => agent.ctx.fiber.dispose() }
+  }) })
+  const services = { agentDefaultModel: { currentSelection: () => ({ provider: 'test', model: 'test' }) }, fs: options.remote?.filesystem ?? filesystem, agents: registry, llm: { resolveCallConfig: vi.fn(async (value: unknown) => value) }, sessionController: controller,
+    ...(options.attachments ? { attachments: options.attachments } : {}),
+    sessionPersistence: persistence, workspaceRegistry: { create: async (cwd: string) => ({ id: cwd }) }, permissionPresets: { set: () => {} },
+    subprocess: options.remote?.subprocess ?? subprocess, webServer,
+    ...(options.remote ? { superagentRemoteWorld: options.remote.world } : {}),
+    ...(options.remote || options.managed ? {
+      agentDefaultModel: { currentSelection: () => ({ provider: 'test', model: 'test' }) },
+      sandboxPolicy: { resolve: () => ({ mode: 'danger-full-access' }) },
+      sessionProjections: { stateOf: () => ({ pending: null }) },
+      agentPresets: { register: async (definition: { id: string; plugins: unknown[] }) => { presets.set(definition.id, definition); return async () => { presets.delete(definition.id) } },
+        resolve: async (id: string) => { if (!presets.has(id)) throw new Error('Preset unavailable'); return { id } },
+        mount: async (scope: Context, id: string) => { mounted.set(scope, id) },
+        serviceFor: (agent: Agent, name: string) => {
+          const binding = mounted.get(agent.ctx)?.split('-').at(-1), member = binding && runtime.worlds.lookup(binding)
+          return member ? name === 'fs' ? member.filesystem : name === 'subprocess' ? member.subprocess : undefined : undefined
+        } } } : {}),
     jobs: jobs.service, subagents: subagents.service }
   const ctx = new Context()
   for (const [name, service] of Object.entries(services)) ctx.reflect.provide(name, service)
   for (const cli of [AGENT, BOT]) writeFileSync(cli, '#!/bin/sh\n', { mode: 0o755 })
   const seeded = new Store(join(directory, 'orchestrator.sqlite'))
-  const sources = { github: { enabled: true, config: { repository: 'acme/widgets', cli: AGENT } }, feishu: { enabled: true, config: { cli: BOT } } }
+  const sources = options.noAccounts ? {} : { github: { enabled: true, config: { repository: 'acme/widgets', cli: AGENT } }, feishu: { enabled: true, config: { cli: BOT } } }
   seeded.saveSettings(SettingsSchema.parse({ ...seeded.settings(), sources }))
   seed?.(seeded)
   seeded.close()
-  const runtime = new Runtime(ctx, testMachine({ stateDir: directory }), vi.fn())
-  await runtime.ready
+  const runtime = new Runtime(ctx, testMachine({ stateDir: directory, executionMode: options.executionMode, ownership: options.ownership, publication: options.publication, voice: options.voice }), vi.fn())
+  try { await runtime.ready }
+  catch (error) { await runtime.stop(); await ctx.fiber.dispose(); rmSync(directory, { recursive: true, force: true }); throw error }
   runtime.sources.register(feishuKind); runtime.sources.register(githubKind)
   const settings = runtime.store.settings()
   runtime.store.saveSettings({ ...settings, eval: { ...settings.eval, mode: 'auto' },
     policy: { ...settings.policy, sources: { feishu: { allowed: [{ id: MEMBER, name: 'Alice' }], syncChat: CHAT }, github: { allowed: [{ id: 'alice' }] } } },
-    sources: { ...sources, feishu: { enabled: true, config: { cli: BOT, chats: [{ chatId: CHAT, listen: 'all' }], directMessages: true } } } })
+    sources: options.noAccounts ? {} : { ...sources, feishu: { enabled: true, config: { cli: BOT, chats: [{ chatId: CHAT, listen: 'all' }], directMessages: true } } } })
   deliveries.mockClear()
 
   /** Parsed JSON payloads delivered to `sessionId`. */
   const relays = (sessionId: string) => deliveries.mock.calls.map(([call]) => call).filter(call => call.sessionId === sessionId)
     .map(call => JSON.parse(call.text) as Record<string, unknown>)
   const candidates = () => relays(runtime.masterId).filter(item => item.kind === 'candidate').map(item => item.trigger_id)
+  const withTool = async <T>(sessionId: string, name: string, operation: () => Promise<T>): Promise<T> => {
+    const agent = ctx.agents.get(sessionId as never)!
+    return await agent.ctx.waterfall(scopeTarget(agent.ctx.tools, agent), 'tools/execute', {
+      callId: `fixture-${name}`, rootCallId: `fixture-${name}`, name, arguments: {}, agent, signal: new AbortController().signal,
+    } as never, async () => await operation() as never) as unknown as T
+  }
   const runTool = async (sessionId: string, name: string, args: unknown) => {
     const tool = tools.get(sessionId)?.get(name)
     if (!tool) throw new Error(`Tool ${name} is not registered for ${sessionId}`)
-    return await tool.execute(args, { signal: new AbortController().signal }) as Record<string, unknown>
+    const signal = new AbortController().signal
+    if (!options.remote) return await tool.execute(args, { signal }) as Record<string, unknown>
+    return withTool(sessionId, name, async () => await tool.execute(args, { signal }) as Record<string, unknown>)
   }
   /** Route one decision with the main Session's orchestrator_route, answering its result; a refused one throws its reason. */
   async function route(item: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -281,10 +358,10 @@ export async function startRuntime(seed?: (store: Store) => void) {
     const ticket = runtime.store.tickets.get((result.ticket as { ticket_id: string }).ticket_id)!
     return { trigger, ticket, sessionId: `worker-${ticket.id}` }
   }
-  async function api(method: string, path: string, json?: unknown) {
+  async function api(method: string, path: string, json?: unknown, headers: Record<string, string> = {}) {
     let status = 0, text = ''
     const chunks = json === undefined ? [] : [Buffer.from(JSON.stringify(json))]
-    const req = { method, url: `/orchestrator/api/${path}`, headers: { host: '127.0.0.1:3082', 'x-orchestrator-request': '1' }, async *[Symbol.asyncIterator]() { yield* chunks } }
+    const req = { method, url: `/orchestrator/api/${path}`, headers: { host: '127.0.0.1:3082', 'x-orchestrator-request': '1', ...headers }, async *[Symbol.asyncIterator]() { yield* chunks } }
     await http(req, { writeHead: (code: number) => { status = code }, end: (data: string) => { text = data } })
     return { status, body: JSON.parse(text) as Record<string, unknown> }
   }
@@ -293,7 +370,9 @@ export async function startRuntime(seed?: (store: Store) => void) {
   const step = (sessionId: string) => { steps.get(sessionId)!() }
   /** A step of the worker claims what waits for it, and is cut off before the Session took it. */
   const claim = (sessionId: string) => { claims.get(sessionId)!() }
-  return { runtime, ctx, directory, agents, tools, deliveries, relays, candidates, runTool, route, acceptedTicket, api, controller, subprocess, hooks, resolveDefault, stop,
-    jobs, subagents, step, claim }
+  return { runtime, ctx, directory, agents, tools, deliveries, relays, candidates, runTool, withTool, route, acceptedTicket, api, controller, subprocess, hooks, resolveDefault, stop,
+    jobs, subagents, step, claim, presets, http, promptSections,
+    /** End the actual simulated model turn, separately from any tool report it submitted. */
+    finishTurn: (sessionId: string) => { finishes.get(sessionId)!() } }
 }
 export type Host = Awaited<ReturnType<typeof startRuntime>>

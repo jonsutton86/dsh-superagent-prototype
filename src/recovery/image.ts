@@ -1,0 +1,121 @@
+/** Authenticated prepared state is a held recovery artifact, never an execution permit. */
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
+import { lstat, open, readdir, realpath } from 'node:fs/promises'
+import { join } from 'node:path'
+import { z } from 'zod'
+import { InventoryPage } from '../ownership/inventory.ts'
+import { RecoveryReservation } from '../ownership/protocol.ts'
+import { privateInput, recoveryKey } from './crypto.ts'
+
+const digest = z.string().regex(/^[a-f0-9]{64}$/)
+export const ReceiptImage = z.object({ version: z.literal(1), requestId: z.string().uuid(), requestHash: digest,
+  checkpoint: z.string().uuid(), digest, auditId: z.string().uuid(), at: z.string().datetime(),
+  recovery: RecoveryReservation, epoch: z.number().int().nonnegative(), executionOwnership: z.literal(false),
+  resources: z.array(z.object({ identity: InventoryPage.shape.identity, revision: InventoryPage.shape.revision,
+    total: InventoryPage.shape.total, quiescent: z.literal(true) }).strict()).max(257),
+  applied: z.object({ commands: z.number().int().nonnegative(), mutations: z.number().int().nonnegative(), publications: z.number().int().nonnegative(),
+    repositoryPublications: z.number().int().nonnegative().optional() }).strict(),
+  files: z.array(z.object({ member: z.string().regex(/^(?:orchestrator\.sqlite|[a-z0-9-]+\.bin)$/),
+    kind: z.enum(['store', 'world', 'session']), bytes: z.number().int().nonnegative().max(2 ** 40), sha256: digest,
+    binding: digest.optional() }).strict()).min(1).max(20000),
+  administration: z.object({ verified: z.number().int().nonnegative(), recovered: z.number().int().nonnegative(), superseded: z.number().int().nonnegative() }).strict().optional(),
+  revocations: z.object({ verified: z.number().int().nonnegative(), recovered: z.number().int().nonnegative() }).strict().optional(),
+  executionConfiguration: z.object({ worlds: z.number().int().nonnegative(), bindings: z.number().int().nonnegative() }).strict().optional(),
+  sessionBackend: z.object({ sessions: z.number().int().positive(), events: z.number().int().nonnegative() }).strict().optional(),
+  controlConfiguration: z.object({ claimant: z.literal(true), publication: z.boolean(), destinations: z.number().int().nonnegative().max(100) }).strict().optional(),
+  inferenceConfiguration: z.object({ routes: z.number().int().positive().max(256), sessions: z.number().int().positive(), selections: digest, resolved: digest }).strict().optional(),
+  consumedInputs: z.object({ tickets: z.number().int().nonnegative(), inputs: z.number().int().nonnegative(),
+    consumed: z.number().int().nonnegative(), readMarkers: z.number().int().nonnegative(), undelivered: z.number().int().nonnegative() }).strict().optional(),
+  sourceConfiguration: z.object({ kinds: z.number().int().nonnegative(), enabled: z.number().int().nonnegative(), inactive: z.number().int().nonnegative(),
+    retained: z.number().int().nonnegative(), configuration: digest }).strict().optional(),
+  stateGraph: z.object({ version: z.literal(1), triggers: z.number().int().nonnegative(), dispositions: z.number().int().nonnegative(),
+    threads: z.number().int().nonnegative(), evaluations: z.number().int().nonnegative(), decisions: z.number().int().nonnegative(),
+    tickets: z.number().int().nonnegative(), assignments: z.number().int().nonnegative(), inputs: z.number().int().nonnegative(),
+    outbox: z.number().int().nonnegative(), effects: z.number().int().nonnegative(), historicalEvaluations: z.number().int().nonnegative(),
+    indexes: z.object({ triggerTimes: z.number().int().nonnegative(), triggerThreads: z.number().int().nonnegative(), decisionThreads: z.number().int().nonnegative() }).strict(),
+    retiredEffects: z.number().int().nonnegative(), digest }).strict().optional(),
+  connectorState: z.object({ version: z.literal(1), records: z.number().int().nonnegative(), github: z.number().int().nonnegative(),
+    feishu: z.number().int().nonnegative(), bindings: z.number().int().nonnegative(), messages: z.number().int().nonnegative(),
+    nativeMessages: z.number().int().nonnegative(), legacyMessages: z.number().int().nonnegative(), cycles: z.number().int().nonnegative(), digest }).strict().optional(),
+  workspaceState: z.object({ version: z.literal(1), records: z.number().int().nonnegative(), missions: z.number().int().nonnegative(),
+    actions: z.number().int().nonnegative(), planVersions: z.number().int().nonnegative(), proposals: z.number().int().nonnegative(),
+    schedules: z.number().int().nonnegative(), scheduleVersions: z.number().int().nonnegative(), occurrences: z.number().int().nonnegative(),
+    executions: z.number().int().nonnegative(), scheduledExecutions: z.number().int().nonnegative(), routedExecutions: z.number().int().nonnegative(),
+    legacyPlanVersions: z.number().int().nonnegative(), legacyTriggers: z.number().int().nonnegative(), digest }).strict().optional(),
+  resultState: z.object({ version: z.literal(1), records: z.number().int().nonnegative(), blobs: z.number().int().nonnegative(), blobBytes: z.number().int().nonnegative(),
+    artifacts: z.number().int().nonnegative(), memories: z.number().int().nonnegative(), edges: z.number().int().nonnegative(), legacyBindings: z.number().int().nonnegative(),
+    checks: z.number().int().nonnegative(), checkVersions: z.number().int().nonnegative(), runs: z.number().int().nonnegative(), successfulRuns: z.number().int().nonnegative(),
+    unsettledRuns: z.number().int().nonnegative(), reviews: z.number().int().nonnegative(), seals: z.number().int().nonnegative(), legacyReviewSeals: z.number().int().nonnegative(),
+    completions: z.number().int().nonnegative(), reflectionPromotions: z.number().int().nonnegative(), partialOutputs: z.number().int().nonnegative(), digest }).strict().optional(),
+  registryState: z.object({ version: z.literal(1), records: z.number().int().nonnegative(), personas: z.number().int().nonnegative(),
+    personaVersions: z.number().int().nonnegative(), personaCommands: z.number().int().nonnegative(), personaReferences: z.number().int().nonnegative(), unresolvedTemplateReferences: z.number().int().nonnegative(),
+    environments: z.number().int().nonnegative(), environmentEvents: z.number().int().nonnegative(), managedWorlds: z.number().int().nonnegative(),
+    opaqueCommandReceipts: z.number().int().nonnegative(), executions: z.number().int().nonnegative(), personaExecutions: z.number().int().nonnegative(),
+    historicalGrants: z.number().int().nonnegative(), legacyGrants: z.number().int().nonnegative(), sessions: z.number().int().nonnegative(),
+    personaPins: z.number().int().nonnegative(), worldPins: z.number().int().nonnegative(), pendingPins: z.number().int().nonnegative(),
+    legacySessionPins: z.number().int().nonnegative(), digest }).strict().optional(),
+  contextState: z.object({ version: z.literal(1), records: z.number().int().nonnegative(), recallConfigurations: z.number().int().nonnegative(),
+    recallAttempts: z.number().int().nonnegative(), reservedRecall: z.number().int().nonnegative(), failedRecall: z.number().int().nonnegative(),
+    recallOwners: z.number().int().nonnegative(), elapsedOverruns: z.number().int().nonnegative(), recallBytes: z.number().int().nonnegative(),
+    reflectionRuns: z.number().int().nonnegative(), snapshotBytes: z.number().int().nonnegative(), capturedMissions: z.number().int().nonnegative(),
+    capturedRecords: z.number().int().nonnegative(), proposals: z.number().int().nonnegative(), readOwners: z.number().int().nonnegative(),
+    readCalls: z.number().int().nonnegative(), readBytes: z.number().int().nonnegative(), legacySnapshots: z.number().int().nonnegative(),
+    legacyCommands: z.number().int().nonnegative(), digest }).strict().optional(),
+  budgetState: z.object({ version: z.literal(1), records: z.number().int().nonnegative(), usageConfigurations: z.number().int().nonnegative(),
+    calls: z.number().int().nonnegative(), pendingCalls: z.number().int().nonnegative(), unknownCalls: z.number().int().nonnegative(), reconciledCalls: z.number().int().nonnegative(),
+    usageBindings: z.number().int().nonnegative(), legacyAssignments: z.number().int().nonnegative(), missingSessionHeaders: z.number().int().nonnegative(),
+    tokens: z.number().int().nonnegative(), cost: z.number().int().nonnegative(), reservedTokens: z.number().int().nonnegative(), reservedCost: z.number().int().nonnegative(),
+    speculationConfigurations: z.number().int().nonnegative(), speculativeRuns: z.number().int().nonnegative(), heldAllocations: z.number().int().nonnegative(),
+    releasedAllocations: z.number().int().nonnegative(), promotedRuns: z.number().int().nonnegative(), approvedMessages: z.number().int().nonnegative(),
+    legacyPolicies: z.number().int().nonnegative(), legacyCommands: z.number().int().nonnegative(), digest }).strict().optional(),
+  publicationState: z.object({ version: z.literal(1), records: z.number().int().nonnegative(), artifacts: z.number().int().nonnegative(),
+    checkedArtifacts: z.number().int().nonnegative(), seals: z.number().int().nonnegative(), pullReviews: z.number().int().nonnegative(),
+    deliveryGrants: z.number().int().nonnegative(), revokedGrants: z.number().int().nonnegative(), deliveries: z.number().int().nonnegative(),
+    withdrawn: z.number().int().nonnegative(), receipts: z.number().int().nonnegative(), sent: z.number().int().nonnegative(),
+    unresolved: z.number().int().nonnegative(), missingOutbox: z.number().int().nonnegative(), legacyApprovals: z.number().int().nonnegative(),
+    legacyDestinations: z.number().int().nonnegative(), legacyGrantRequests: z.number().int().nonnegative(), legacyPlanBindings: z.number().int().nonnegative(),
+    legacyReviewSeals: z.number().int().nonnegative(), repositories: z.number().int().nonnegative().optional(), repositoryApprovals: z.number().int().nonnegative().optional(),
+    repositoryTransfers: z.number().int().nonnegative().optional(), repositoryReceipts: z.number().int().nonnegative().optional(),
+    repositoryUnresolved: z.number().int().nonnegative().optional(), digest }).strict().optional(),
+}).strict()
+export type ReceiptImage = z.infer<typeof ReceiptImage>
+const envelope = z.object({ manifest: ReceiptImage, mac: digest }).strict()
+const authenticate = (manifest: ReceiptImage, key: Buffer) => createHmac('sha256', key).update('dsh-receipt-image:1\n').update(JSON.stringify(manifest)).digest()
+export function sealReceiptImage(value: ReceiptImage, key: Buffer): string {
+  const manifest = ReceiptImage.parse(value)
+  return JSON.stringify({ manifest, mac: authenticate(manifest, key).toString('hex') })
+}
+export async function syncRecoveryPath(path: string): Promise<void> {
+  const file = await open(path, 'r'); try { await file.sync() } finally { await file.close() }
+}
+export async function recoveryFileDigest(path: string, signal: AbortSignal, maximum = 2 ** 40): Promise<{ bytes: number; sha256: string }> {
+  const hash = createHash('sha256'); let bytes = 0
+  for await (const chunk of privateInput(path, signal)) {
+    bytes += chunk.length; if (bytes > maximum) throw new Error('Prepared recovery member exceeds its recorded size')
+    hash.update(chunk)
+  }
+  return { bytes, sha256: hash.digest('hex') }
+}
+/** Verify the complete image and reject unlisted files, links and changed bytes before accepting an original-ID retry. */
+export async function verifyReceiptImage(path: string, keyFile: string, signal = new AbortController().signal): Promise<ReceiptImage> {
+  const stat = await lstat(path)
+  if (!stat.isDirectory() || stat.isSymbolicLink() || stat.uid !== process.getuid?.() || stat.mode & 0o077)
+    throw new Error('Prepared recovery image must be a private owned directory')
+  const root = await realpath(path), chunks: Buffer[] = []; let bytes = 0
+  for await (const chunk of privateInput(join(root, 'prepared.json'), signal)) {
+    bytes += chunk.length; if (bytes > 16_000_000) throw new Error('Prepared recovery manifest exceeds its bound')
+    chunks.push(Buffer.from(chunk))
+  }
+  const value = envelope.parse(JSON.parse(Buffer.concat(chunks).toString('utf8'))), key = recoveryKey(keyFile)
+  try { if (!timingSafeEqual(authenticate(value.manifest, key), Buffer.from(value.mac, 'hex'))) throw new Error('Prepared recovery manifest authentication failed') }
+  finally { key.fill(0) }
+  const expected = value.manifest.files.map(file => file.member)
+  if (new Set(expected).size !== expected.length || value.manifest.files.filter(file => file.kind === 'store' && file.member === 'orchestrator.sqlite').length !== 1
+    || JSON.stringify((await readdir(root)).sort()) !== JSON.stringify([...expected, 'prepared.json'].sort()))
+    throw new Error('Prepared recovery image member set differs from its manifest')
+  for (const file of value.manifest.files) {
+    const actual = await recoveryFileDigest(join(root, file.member), signal, file.bytes)
+    if (actual.bytes !== file.bytes || actual.sha256 !== file.sha256) throw new Error('Prepared recovery image member digest differs')
+  }
+  signal.throwIfAborted(); return value.manifest
+}

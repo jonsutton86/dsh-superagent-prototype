@@ -1,0 +1,833 @@
+{
+  "schemaVersion": 1,
+  "kind": "eight-hour-local-supervision-endurance-contract",
+  "capturedAt": "2026-11-10T21:36:19.924974+00:00",
+  "revision": "5efa7bd87dfca808bab1d84fb2f3b789cecfbc10",
+  "sourceState": "Project evidence captured via git show at exact baseline; concurrent worktree edits excluded. Official installed Harness package bytes captured as inert text.",
+  "scope": "Read-only evidence only: no inference, background job launch, app/default/profile mutation, credential reads, deployment or source edits.",
+  "pattern": {
+    "source": "danielmiessler/Fabric",
+    "revision": "de0b72766db0436b6c1887bb75768cb3960e67e5",
+    "path": "prompts/operations/fabric/review_design/system.md",
+    "wrapperVersion": 1,
+    "wrapper": "prompts/operations/EVIDENCE.md"
+  },
+  "sourceManifest": [
+    {
+      "id": "project/src/supervision/plugin.ts",
+      "origin": "git:5efa7bd87dfca808bab1d84fb2f3b789cecfbc10:src/supervision/plugin.ts",
+      "sha256": "6041febf0d33d2e403c79a4014996ad57857dfefc9a9edc819f4d424a32ccdcc",
+      "bytes": 13326
+    },
+    {
+      "id": "project/src/supervision/journal.ts",
+      "origin": "git:5efa7bd87dfca808bab1d84fb2f3b789cecfbc10:src/supervision/journal.ts",
+      "sha256": "1369ab6e17b928c18905dc35d9beb117b8fde586b8670d7ca61d761cee2d169f",
+      "bytes": 19899
+    },
+    {
+      "id": "project/src/supervision/monitor.ts",
+      "origin": "git:5efa7bd87dfca808bab1d84fb2f3b789cecfbc10:src/supervision/monitor.ts",
+      "sha256": "fbeab4e64f283aaf0ad66c5655dcbae628424db5bc7892bfdefc12d6af26e80e",
+      "bytes": 3865
+    },
+    {
+      "id": "project/src/supervision/service.ts",
+      "origin": "git:5efa7bd87dfca808bab1d84fb2f3b789cecfbc10:src/supervision/service.ts",
+      "sha256": "d0a4087c48eb5c215fb4c5d95a7e1881082f1b8c8b81c5a2b7fa345a53db3404",
+      "bytes": 8307
+    },
+    {
+      "id": "project/src/app/delivery.ts",
+      "origin": "git:5efa7bd87dfca808bab1d84fb2f3b789cecfbc10:src/app/delivery.ts",
+      "sha256": "c1a543a142e7c96244e949854b999c46923ac883f6f30f9619ce3222e6a07e32",
+      "bytes": 4588
+    },
+    {
+      "id": "project/src/app/runtime.ts",
+      "origin": "git:5efa7bd87dfca808bab1d84fb2f3b789cecfbc10:src/app/runtime.ts",
+      "sha256": "51a1f6a4a8c45e6da52585fea06895ebeaa0e4b63455381c16b638426e441b93",
+      "bytes": 37802
+    },
+    {
+      "id": "project/src/executor/dsh.ts",
+      "origin": "git:5efa7bd87dfca808bab1d84fb2f3b789cecfbc10:src/executor/dsh.ts",
+      "sha256": "05ddf03be05eb375b79a971449bafeb77caec41e9f5c51cee41a949cd9b98691",
+      "bytes": 62301
+    },
+    {
+      "id": "project/src/executor/evidence.ts",
+      "origin": "git:5efa7bd87dfca808bab1d84fb2f3b789cecfbc10:src/executor/evidence.ts",
+      "sha256": "4b7b23f9b156605cc2daf2bef93f5c07f1c8918de6faf5bf5c9d201cdf40a511",
+      "bytes": 5076
+    },
+    {
+      "id": "project/tests/watchdog-process-harness.spec.ts",
+      "origin": "git:5efa7bd87dfca808bab1d84fb2f3b789cecfbc10:tests/watchdog-process-harness.spec.ts",
+      "sha256": "33788b4b54a7331950fd421ae3de7cb7874ea4a8c001bb15d7211ac7d508a003",
+      "bytes": 13889
+    },
+    {
+      "id": "project/tests/fixtures/watchdog-scripted-provider.ts",
+      "origin": "git:5efa7bd87dfca808bab1d84fb2f3b789cecfbc10:tests/fixtures/watchdog-scripted-provider.ts",
+      "sha256": "e09eacd930577eb2cc0646fc2def62f7c27678f6473463e317e10e3894cfbc42",
+      "bytes": 6652
+    },
+    {
+      "id": "project/prompts/operations/EVIDENCE.md",
+      "origin": "git:5efa7bd87dfca808bab1d84fb2f3b789cecfbc10:prompts/operations/EVIDENCE.md",
+      "sha256": "614e03addb8855370da0c93b465cac69432cd47e579144ca13ac27ced9cfa989",
+      "bytes": 4077
+    },
+    {
+      "id": "project/prompts/operations/fabric/review_design/system.md",
+      "origin": "git:5efa7bd87dfca808bab1d84fb2f3b789cecfbc10:prompts/operations/fabric/review_design/system.md",
+      "sha256": "75ea9f2270321ccf56817a1aecc15f62ac2cbe9c486f064bfe227ad9f046550a",
+      "bytes": 3712
+    },
+    {
+      "id": "harness/dsh-tool-jobs/lib/index.js",
+      "origin": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-tool-jobs/lib/index.js",
+      "sha256": "de5707b43480ba37c8e141e6f67674978f3a46d87d58390c18eb1659bb17ec2f",
+      "bytes": 15427
+    },
+    {
+      "id": "harness/dsh-jobs-local/lib/index.js",
+      "origin": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-jobs-local/lib/index.js",
+      "sha256": "cecdc8a766f62b28999ffff574008d34a39e276d91c4cc648f10ccb18afbed34",
+      "bytes": 32296
+    },
+    {
+      "id": "harness/dsh-tool-bash/lib/index.js",
+      "origin": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-tool-bash/lib/index.js",
+      "sha256": "a1215d7bcaf82c0755be48321ef6bb45075f1cb33296d6263009e9d10fd596f6",
+      "bytes": 28064
+    },
+    {
+      "id": "harness/dsh-timeout/lib/index.js",
+      "origin": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-timeout/lib/index.js",
+      "sha256": "f9a79fd5194bb4d6321e6d2d5b5eb72f99c683452e1defbb75fad52f76aed667",
+      "bytes": 5772
+    },
+    {
+      "id": "harness/dsh-tool-call-timeout-policy/lib/index.js",
+      "origin": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-tool-call-timeout-policy/lib/index.js",
+      "sha256": "a0da3f028117f34570e0ab021a74974ea359f9b2cfa853d849c716b1d99cd60f",
+      "bytes": 4970
+    },
+    {
+      "id": "harness/dsh-agent-loop/lib/index.js",
+      "origin": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js",
+      "sha256": "cf57e3ecd487ac5c2553455aaa5cef2c6fb41e6bd61be5aa455675d1d7193033",
+      "bytes": 74599
+    },
+    {
+      "id": "harness/dsh-compaction-basic/lib/index.js",
+      "origin": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-compaction-basic/lib/index.js",
+      "sha256": "b7ac52f20a36430cf01a66b3a36f23a48ffdb22708d714dbe1fff541b5df4ec5",
+      "bytes": 49452
+    },
+    {
+      "id": "harness/dsh-session/lib/types/types.d.ts",
+      "origin": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-session/lib/types/types.d.ts",
+      "sha256": "8e3b1b7f54d504ca91d3496376f9ea619f99ce1afe2739d35d9c2f2f69320950",
+      "bytes": 25369
+    },
+    {
+      "id": "harness/dsh-jobs/lib/index.js",
+      "origin": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-jobs/lib/index.js",
+      "sha256": "7a7531c2fb1897603fdf0ec78ae9cef63f6a32688b1023168fbe9d8f782e2887",
+      "bytes": 5856
+    },
+    {
+      "id": "harness/dsh-jobs/lib/types/types.d.ts",
+      "origin": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-jobs/lib/types/types.d.ts",
+      "sha256": "dfa69379032dfb95461e9e06e1a88181f12be005129b3540f78eea015fe4dcb1",
+      "bytes": 13221
+    },
+    {
+      "id": "harness/dsh-tool-jobs/package.json",
+      "origin": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-tool-jobs/package.json",
+      "sha256": "e73795b2d627568ba48f0903a1f2af4cf209d3af6c9010e88579da59dd03626e",
+      "bytes": 1652
+    },
+    {
+      "id": "harness/dsh-jobs-local/package.json",
+      "origin": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-jobs-local/package.json",
+      "sha256": "c9e7a906b803f2360f11a1ac12edeff0421eccaa19c9053d109bab5647f8e531",
+      "bytes": 1584
+    },
+    {
+      "id": "harness/dsh-tool-bash/package.json",
+      "origin": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-tool-bash/package.json",
+      "sha256": "8dd9d1846fd3ce9deeeeb4e5152390b8cd23818d08ed345e5eaca10530b33e06",
+      "bytes": 2559
+    },
+    {
+      "id": "harness/dsh-timeout/package.json",
+      "origin": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-timeout/package.json",
+      "sha256": "cceb9481da2007c030739727b516a8c1f1454fbc26634169624576f7758e8960",
+      "bytes": 901
+    },
+    {
+      "id": "harness/dsh-tool-call-timeout-policy/package.json",
+      "origin": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-tool-call-timeout-policy/package.json",
+      "sha256": "3f6d0199b0c474f7a4af8f7bb6e4a3f3808fcb026af36fbfa910380cced8479f",
+      "bytes": 1246
+    },
+    {
+      "id": "harness/dsh-agent-loop/package.json",
+      "origin": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-agent-loop/package.json",
+      "sha256": "dfda3a973125f1ff946d292740d0bfad6333bbb81cd94f77c8c9ba8803f815a5",
+      "bytes": 1986
+    },
+    {
+      "id": "harness/dsh-compaction-basic/package.json",
+      "origin": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-compaction-basic/package.json",
+      "sha256": "dd119c41c93cbdc6380a154c7639ce638765a1a593bc1d4d2741f936ea2efc3a",
+      "bytes": 2289
+    },
+    {
+      "id": "harness/dsh-session/package.json",
+      "origin": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-session/package.json",
+      "sha256": "ac94962142eea00322f5d52370e1bd83a7f37a1de88b1b96e923427aa7dcebe6",
+      "bytes": 1576
+    },
+    {
+      "id": "harness/dsh-jobs/package.json",
+      "origin": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-jobs/package.json",
+      "sha256": "306cfe989afe99c1a7f4d84ab8368b0714097bf5c1f6bf6c5c37e3585d9e20f1",
+      "bytes": 1617
+    },
+    {
+      "id": "supplemental/node_modules/proper-lockfile/lib/lockfile.js",
+      "origin": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/node_modules/proper-lockfile/lib/lockfile.js",
+      "sha256": "c517a976f7a31c8b1768cb8e7ac9936aee70299ae762548495016a79d64a6434",
+      "bytes": 10845,
+      "reaSelected": false
+    },
+    {
+      "id": "supplemental/node_modules/proper-lockfile/package.json",
+      "origin": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/node_modules/proper-lockfile/package.json",
+      "sha256": "23888ecc7abd83a8e98e132da556eda2172792cc04c4e6d157b590667802bd2a",
+      "bytes": 1707,
+      "reaSelected": false
+    },
+    {
+      "id": "supplemental/harness/dsh-subprocess-local/lib/index.js",
+      "origin": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-subprocess-local/lib/index.js",
+      "sha256": "2964d94d6aa735f79e5cd5f54035a9d73b371e8060dda7e3bf666593428c04f4",
+      "bytes": 62333,
+      "reaSelected": false
+    },
+    {
+      "id": "supplemental/harness/dsh-subprocess-local/lib/runner-launch-B2zsQ1Dz.js",
+      "origin": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-subprocess-local/lib/runner-launch-B2zsQ1Dz.js",
+      "sha256": "6df08adc4a27f278878a5f4cde8b551b51e647b922ac7d6591fd62d272ced153",
+      "bytes": 57475,
+      "reaSelected": false
+    },
+    {
+      "id": "supplemental/harness/dsh-subprocess-local/package.json",
+      "origin": "/Users/jonathansutton/.local/share/dsh-agentic-os-qualification/node_modules/@deepseek-ai/dsh-subprocess-local/package.json",
+      "sha256": "d752f9edbe663eaf94f86ff4b53a1731f4ebbdfe125876e92ee619c2b6547ae2",
+      "bytes": 1726,
+      "reaSelected": false
+    },
+    {
+      "id": "supplemental/project/src/executor/background.ts",
+      "origin": "git:5efa7bd87dfca808bab1d84fb2f3b789cecfbc10:src/executor/background.ts",
+      "sha256": "60b98302d412426cda7df12ed69d750183f60fb00ac802a01ae2c963cfc79420",
+      "bytes": 9288,
+      "reaSelected": false
+    },
+    {
+      "id": "project/src/remote/presets.ts",
+      "origin": "git:5efa7bd87dfca808bab1d84fb2f3b789cecfbc10:src/remote/presets.ts",
+      "sha256": "452643b643effe162e15a404c700ab3aadd656b7e5b4b62083a34f9771ede884",
+      "bytes": 5038,
+      "capture": "supplemental direct source read; not part of sealed REA selection"
+    },
+    {
+      "id": "project/cordis.patch.yml",
+      "origin": "git:5efa7bd87dfca808bab1d84fb2f3b789cecfbc10:cordis.patch.yml",
+      "sha256": "4c6c8a326797d8943c67dfd6415fd12f1b5d19bf74ca309e181cf0d3a9cc3fbb",
+      "bytes": 6803,
+      "capture": "supplemental direct source read; not part of sealed REA selection"
+    },
+    {
+      "id": "project/prompts/work.md",
+      "origin": "git:5efa7bd87dfca808bab1d84fb2f3b789cecfbc10:prompts/work.md",
+      "sha256": "b36fbc7ed4cf2d6f91ef2981a31fd5a70e11e2f3304afb921ab94ba135c69a2e",
+      "bytes": 5885,
+      "capture": "supplemental direct source read; not part of sealed REA selection"
+    }
+  ],
+  "versions": {
+    "dsh-tool-jobs": "0.2.1-rc.3",
+    "dsh-jobs-local": "0.2.1-rc.3",
+    "dsh-tool-bash": "0.2.1-rc.3",
+    "dsh-timeout": "0.2.1-rc.3",
+    "dsh-tool-call-timeout-policy": "0.2.1-rc.3",
+    "dsh-agent-loop": "0.2.1-rc.3",
+    "dsh-compaction-basic": "0.2.1-rc.3",
+    "dsh-session": "0.2.1-rc.3",
+    "dsh-jobs": "0.2.1-rc.3",
+    "dsh-subprocess-local": "0.2.1-rc.3"
+  },
+  "codegraph": {
+    "query": "WatchdogJournal --limit 3 --json",
+    "artifact": "endurance-codegraph.json",
+    "sha256": "a6f5714fa5e88bc204c463e616a818fe859337e3742c546df51d572757b61a50",
+    "limitation": "Static symbol lookup, deliberately truncated at3; not runtime evidence."
+  },
+  "rea": {
+    "version": "6.8.0",
+    "parentEvidenceId": "ev_8056c5ceea22c8dfa4704ad5df7700bc91561662119da44136afd6e37a59ce2e",
+    "artifact": {
+      "path": "/Users/jonathansutton/Documents/Codex/dsh-superagent-prototype/.artifacts/increment-082/endurance-contract-input",
+      "sha256": "8bcb8d3382371c9bbfd9a46ae30376b161926934004264bfcdaa695e60d36fe8"
+    },
+    "bundle": "endurance-contract.rea.json",
+    "bundleSha256": "ce5a9ce0505eccdb974a3816b23084088b9213e95e081ee5cfce4d85211043e8",
+    "selectedPaths": [
+      "project/src/supervision/journal.ts",
+      "project/src/supervision/plugin.ts",
+      "harness/dsh-tool-jobs/lib/index.js",
+      "harness/dsh-jobs-local/lib/index.js",
+      "harness/dsh-tool-bash/lib/index.js",
+      "harness/dsh-agent-loop/lib/index.js",
+      "harness/dsh-compaction-basic/lib/index.js"
+    ],
+    "statistics": {
+      "relevant_files": 29,
+      "nested_asar_containers": 0,
+      "text_bytes_read": 233063,
+      "invalid_utf8_files": 0,
+      "parsed_javascript_files": 7,
+      "skipped_javascript_files": 0,
+      "visited_ast_nodes": 29327,
+      "findings": 237,
+      "modules": 0,
+      "parse_failures": 0
+    },
+    "coverage": {
+      "static_sources": {
+        "sources": 20,
+        "unmeasured_sources": 0,
+        "syntax": {
+          "complete": 7,
+          "recovered": 0,
+          "failed": 0,
+          "not-examined": 13
+        },
+        "semantics": {
+          "unknown_sources": 2,
+          "unexamined_sources": 13
+        },
+        "examination": {
+          "complete": 7,
+          "limited": 0,
+          "not-examined": 13
+        },
+        "electron_applicability": {
+          "observed": 0,
+          "unknown": 20
+        }
+      },
+      "application": {
+        "status": "partial",
+        "truncated": false,
+        "omitted_count": null,
+        "limits": []
+      },
+      "semantic": {
+        "status": "partial",
+        "truncated": false,
+        "omitted_nodes": null,
+        "omitted_relations": null,
+        "limits": [],
+        "families": [
+          {
+            "family": "boundary",
+            "status": "partial",
+            "retained_relations": 43,
+            "omitted_relations": null,
+            "unknown_count": 17
+          },
+          {
+            "family": "call-flow",
+            "status": "partial",
+            "retained_relations": 824,
+            "omitted_relations": null,
+            "unknown_count": 1735
+          },
+          {
+            "family": "child-process",
+            "status": "partial",
+            "retained_relations": 0,
+            "omitted_relations": null,
+            "unknown_count": 13
+          },
+          {
+            "family": "closure",
+            "status": "partial",
+            "retained_relations": 923,
+            "omitted_relations": null,
+            "unknown_count": 13
+          },
+          {
+            "family": "configuration",
+            "status": "partial",
+            "retained_relations": 1,
+            "omitted_relations": null,
+            "unknown_count": 14
+          },
+          {
+            "family": "data-flow",
+            "status": "partial",
+            "retained_relations": 11960,
+            "omitted_relations": null,
+            "unknown_count": 1816
+          },
+          {
+            "family": "event",
+            "status": "partial",
+            "retained_relations": 32,
+            "omitted_relations": null,
+            "unknown_count": 36
+          },
+          {
+            "family": "object-flow",
+            "status": "partial",
+            "retained_relations": 1881,
+            "omitted_relations": null,
+            "unknown_count": 3073
+          },
+          {
+            "family": "promise-ownership",
+            "status": "partial",
+            "retained_relations": 202,
+            "omitted_relations": null,
+            "unknown_count": 137
+          },
+          {
+            "family": "request",
+            "status": "partial",
+            "retained_relations": 0,
+            "omitted_relations": null,
+            "unknown_count": 13
+          },
+          {
+            "family": "resource-lifecycle",
+            "status": "partial",
+            "retained_relations": 0,
+            "omitted_relations": null,
+            "unknown_count": 13
+          },
+          {
+            "family": "timer",
+            "status": "partial",
+            "retained_relations": 3,
+            "omitted_relations": null,
+            "unknown_count": 15
+          }
+        ]
+      },
+      "application_unknowns": 22,
+      "semantic_unknowns": 6895
+    },
+    "limitations": [
+      "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+      "Caller-selected source analysis leaves 22 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+      "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+      "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+      "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+      "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+      "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+      "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+      "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+      "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+      "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+      "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+      "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+      "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+      "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+      "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+      "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+      "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+    ],
+    "unknowns": [
+      "22 application graph unknowns remain in the parent Evidence.",
+      "6895 semantic graph unknowns remain in the parent Evidence.",
+      "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+      "Caller-selected source analysis leaves 22 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+      "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+      "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+      "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+      "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+      "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+      "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+      "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+      "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+      "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+      "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+      "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+      "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+      "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+      "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+      "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+      "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code.",
+      "graph.coverage.status is partial",
+      "semantic_graph.coverage.status is partial"
+    ]
+  },
+  "facts": [
+    {
+      "id": "wait-default-and-cap",
+      "classification": "Observed",
+      "claim": "Installed tool-jobs defaults waitTimeoutMs=30000 and maxWaitTimeoutMs=600000. job_output with wait:true passes min(timeout_ms or default, cap) to jobs.wait, then consumes jobs.read. Configuration rejects default greater than cap.",
+      "sources": [
+        "harness/dsh-tool-jobs/lib/index.js:88-93",
+        "harness/dsh-tool-jobs/lib/index.js:223-229",
+        "harness/dsh-tool-jobs/lib/index.js:298-345"
+      ]
+    },
+    {
+      "id": "wait-expiration-not-job-kill",
+      "classification": "Observed",
+      "claim": "LocalJobRegistry.waitJob registers a settlement waiter and deadline. Own timeout removes waiter and resolves with current job view; caller cancellation rejects the wait. Neither path invokes job.cancel. Waiting ends early if producer settles.",
+      "sources": [
+        "harness/dsh-jobs-local/lib/index.js:656-692"
+      ]
+    },
+    {
+      "id": "wait-timer-upper-bound",
+      "classification": "Observed",
+      "claim": "Host can explicitly raise tool-jobs maxWaitTimeoutMs; its schema has minimum1 and no declared maximum. Underlying deadline uses assertTimerDelay: finite positive <=2147483647ms, avoiding Node timer overflow. Eight hours=28800000ms fits, but a larger deployment cap is a chosen configuration, not the installed default.",
+      "sources": [
+        "harness/dsh-tool-jobs/lib/index.js:88-93",
+        "harness/dsh-timeout/lib/index.js:25-32",
+        "harness/dsh-timeout/lib/index.js:57-77"
+      ]
+    },
+    {
+      "id": "no-extra-job-output-tool-deadline",
+      "classification": "Observed",
+      "claim": "The registered job_output definition has no timeoutMs field. Generic tool-call-timeout-policy only applies a deadline when the resolved tool definition supplies timeoutMs; otherwise delegates next.",
+      "sources": [
+        "harness/dsh-tool-jobs/lib/index.js:298-346",
+        "harness/dsh-tool-call-timeout-policy/lib/index.js:120-139"
+      ]
+    },
+    {
+      "id": "background-command-duration",
+      "classification": "Observed",
+      "claim": "bash enableRunInBackground defaults true. Explicit run_in_background:true resolves shell with onExpiry:none and starts a job immediately; model-facing description states no timeout. Job producer owns a separate AbortController and kills process when its cancel is invoked.",
+      "sources": [
+        "harness/dsh-tool-bash/lib/index.js:92-130",
+        "harness/dsh-tool-bash/lib/index.js:231-234",
+        "harness/dsh-tool-bash/lib/index.js:514-517",
+        "harness/dsh-tool-bash/lib/index.js:673-685"
+      ]
+    },
+    {
+      "id": "local-jobs-lifecycle",
+      "classification": "Observed",
+      "claim": "LocalJobRegistry stores active records/ring/cursors in process memory. Records bind exact owner Agent lifecycle. Owner disposal cancels, awaits terminal settlement and drops jobs; service teardown does same. Teardown cancel throwing can leave orphaned work while record is force-failed. Session job/registered and job/settled events are lifecycle evidence, not reconstructed live process handles.",
+      "sources": [
+        "harness/dsh-jobs-local/lib/index.js:270-277",
+        "harness/dsh-jobs-local/lib/index.js:351-390",
+        "harness/dsh-jobs-local/lib/index.js:604-631",
+        "harness/dsh-jobs-local/lib/index.js:806-868"
+      ]
+    },
+    {
+      "id": "bounded-live-output",
+      "classification": "Observed",
+      "claim": "Local job live ring default256KiB, settled retention16KiB, pull-source pump interval150ms. job_output advances model cursor and delivers terminal result once. readAt/metadata observations are distinct; ring loss is explicit. Output spill files and user-created artifacts require their own bounded fixture design.",
+      "sources": [
+        "harness/dsh-jobs-local/lib/index.js:341-361",
+        "harness/dsh-jobs-local/lib/index.js:632-642",
+        "project/src/executor/evidence.ts:1-48"
+      ]
+    },
+    {
+      "id": "completion-notices",
+      "classification": "Observed",
+      "claim": "tool-jobs default completionDelivery=wakeup. A settlement that released a waiting job_output caller is not separately notified; ownerless, teardown or model-killed settlements are also excluded. Otherwise idle owner receives followup subject to optional wake budget; active owner receives inject.",
+      "sources": [
+        "harness/dsh-tool-jobs/lib/index.js:88-93",
+        "harness/dsh-tool-jobs/lib/index.js:261-294"
+      ]
+    },
+    {
+      "id": "steps-and-context",
+      "classification": "Observed",
+      "claim": "Inspected core AgentLoop turn uses while(true) and ends from step results, cancellation or pre-step rejection. Its Config exposes maxParallelToolCalls and per-agent model/maxTokens, not maxSteps. This establishes no step-count cap in this inspected implementation, not a promise that every profile/plugin lacks additional limits.",
+      "sources": [
+        "harness/dsh-agent-loop/lib/index.js:940-1007",
+        "harness/dsh-agent-loop/lib/index.js:1553-1565"
+      ]
+    },
+    {
+      "id": "compaction-pressure",
+      "classification": "Observed",
+      "claim": "compaction-basic defaults auto=true, thresholdRatio=.8, retainRatio=.16, headroomTokens=65536, compactionRetries=1 and maxOverflowRetries=1. Between-step pressure also reserves effective model maxTokens; threshold is min(contextWindow*.8, contextWindow-reservedCompletion-headroom). When pressure requires it, compaction invokes an auxiliary LLM summarizer; missing capacity warns/continues for pressure.",
+      "sources": [
+        "harness/dsh-compaction-basic/lib/index.js:15-17",
+        "harness/dsh-compaction-basic/lib/index.js:59-85",
+        "harness/dsh-compaction-basic/lib/index.js:124-143",
+        "harness/dsh-compaction-basic/lib/index.js:830-850",
+        "harness/dsh-compaction-basic/lib/index.js:900-959"
+      ]
+    },
+    {
+      "id": "durable-watchdog-storage",
+      "classification": "Observed",
+      "claim": "Watchdog sqlite schema4 uses WAL+synchronousFULL. Incidents, monitor state, delivery reservations, acknowledgements and audit are stored in the same watchdog database; rebuilding the HarnessWatchdog on same stateDir reproduces its stable watchdog Session ID.",
+      "sources": [
+        "project/src/supervision/journal.ts:30-65",
+        "project/src/supervision/plugin.ts:72-86"
+      ]
+    },
+    {
+      "id": "watchdog-review-cycle",
+      "classification": "Observed",
+      "claim": "sameCycle requires open incident, unchanged main process instance, equal episodeRevision (fallback observation revision), and now-cycleAt<reviewEveryMs. Main episodeRevision hashes full Ticket; execution evidence adds a separate material observation hash. Material-only evidence changes retain cycleAt, attempts, original delivery payload and acknowledgement while making prior diagnosis historical.",
+      "sources": [
+        "project/src/supervision/journal.ts:118-141",
+        "project/src/supervision/service.ts:45-64"
+      ]
+    },
+    {
+      "id": "watchdog-bounded-delivery",
+      "classification": "Observed",
+      "claim": "Reservation refuses a current assessment, reuses an unsent delivery unchanged, and stops after3 attempts in same cycle. A sent delivery can reserve next attempt only after retryMs. Reservation stores original observation, incident revision and exact text before sending. AgentDelivery deduplicates against stored history and pending inbox, then flushes before acknowledgement.",
+      "sources": [
+        "project/src/supervision/journal.ts:149-167",
+        "project/src/app/delivery.ts:65-84"
+      ]
+    },
+    {
+      "id": "renewal-not-restart",
+      "classification": "Observed",
+      "claim": "Watchdog default reviewEveryMs=3600000, permitted range60000..86400000. At review expiry or changed task episode/main instance, reconcile creates a fresh cycle with attempts0; it retains previous acknowledgement as history but not automatic current-view acknowledgement. Thus hourly renewal over8h is expected behavior and must be distinguished from process-restart budget reset.",
+      "sources": [
+        "project/src/supervision/plugin.ts:34-39",
+        "project/src/supervision/journal.ts:124-141"
+      ]
+    },
+    {
+      "id": "model-deadline",
+      "classification": "Observed",
+      "claim": "Watchdog monitor continues observation polling while assessor busy. Busy deadline is process-local assessingSince; at assessmentTimeoutMs it cancels only assessor and latches a fixed model timeout. Restart reinitializes this deadline observation; persisted delivery attempts/cycle budget do not reset. Model setup/error is separate from main reachability.",
+      "sources": [
+        "project/src/supervision/monitor.ts:17-49",
+        "project/src/supervision/plugin.ts:103-121"
+      ]
+    },
+    {
+      "id": "watchdog-graceful-stop",
+      "classification": "Observed",
+      "claim": "Watchdog stop aborts own lifetime/timer, cancels assessor with keepInbox:true, waits poll/alerts/Agent idle, flushes Session persistence, removes listeners, closes sqlite then releases state lock. It has no worker shutdown authority.",
+      "sources": [
+        "project/src/supervision/plugin.ts:192-205"
+      ]
+    },
+    {
+      "id": "cold-resume-session-not-process",
+      "classification": "Observed",
+      "claim": "Installed AgentLoop cold resume opens stored Session, appends interrupted turn/step closers, prepares from original log and publishes Agent. New Agent starts idle with restored lastTurn and inbox projection. setupAndPublish does not itself request a wake; followup/steer wake while inject alone does not. The exact timing of a restored unclaimed inbox in the full profile remains a runtime probe, not assumed automatic work continuation.",
+      "sources": [
+        "harness/dsh-agent-loop/lib/index.js:775-816",
+        "harness/dsh-agent-loop/lib/index.js:1915-1951",
+        "harness/dsh-agent-loop/lib/index.js:1969-2013"
+      ]
+    },
+    {
+      "id": "main-stop-affects-productivity",
+      "classification": "Observed",
+      "claim": "Main Runtime shutdown cancels managed Agents, drains effects, invokes executor.shutdown to stop loaded workers background work/descendants, then flushes and closes Store before releasing lock. Therefore a mid-job main restart is not evidence of seamless continuation of the same local background job.",
+      "sources": [
+        "project/src/app/runtime.ts:459-502",
+        "project/src/executor/dsh.ts:499-515"
+      ]
+    },
+    {
+      "id": "crash-lock-window",
+      "classification": "Observed",
+      "claim": "Main Runtime and watchdog request proper-lockfile stale30000ms. Library default update=stale/2 (15000ms), strict stale test stat.mtime<now-stale; no retries unless configured. Graceful shutdown releases; after crash wait original process exit and stale mtime before reacquire, never delete a lock presumed stale.",
+      "sources": [
+        "project/src/app/runtime.ts:154",
+        "project/src/supervision/plugin.ts:75",
+        "supplemental/node_modules/proper-lockfile/lib/lockfile.js:85",
+        "supplemental/node_modules/proper-lockfile/lib/lockfile.js:204-222"
+      ]
+    },
+    {
+      "id": "bounded-coordinator-stop-not-quiescence-proof",
+      "classification": "Observed",
+      "claim": "Project killJobs starts10s waits, invokes jobs.kill, awaits results but does not assert terminal status. Executor.shutdown bounds its overall stop phase10s. Therefore completion of this bounded project method alone is not proof that every OS descendant has exited.",
+      "sources": [
+        "supplemental/project/src/executor/background.ts:21-25",
+        "supplemental/project/src/executor/background.ts:115-126",
+        "project/src/executor/dsh.ts:503-515"
+      ]
+    },
+    {
+      "id": "posix-detached-managed-range",
+      "classification": "Observed",
+      "claim": "Installed subprocess-local ordinary fallback spawn is detached on POSIX; job owns a separate process group. signalTree signals negative rootPID/PGID with directchild fallback. terminate starts managed-range observer, sendsTERM, thenKILL after spec.graceMs unless absence already confirmed. Root direct.done and managed waitForExit are different facts.",
+      "sources": [
+        "supplemental/harness/dsh-subprocess-local/lib/runner-launch-B2zsQ1Dz.js:737-756",
+        "supplemental/harness/dsh-subprocess-local/lib/runner-launch-B2zsQ1Dz.js:797-843",
+        "supplemental/harness/dsh-subprocess-local/lib/runner-launch-B2zsQ1Dz.js:916-950",
+        "supplemental/harness/dsh-subprocess-local/lib/runner-launch-B2zsQ1Dz.js:992-1011",
+        "supplemental/harness/dsh-subprocess-local/lib/runner-launch-B2zsQ1Dz.js:1020-1044"
+      ]
+    },
+    {
+      "id": "provider-graceful-teardown",
+      "classification": "Observed",
+      "claim": "Local subprocess provider retains handles until managed waitForExit, including after direct.done. Its teardown calls terminate and awaits both done and managed waitForExit. It registers a synchronous process exit hook that force-signals managed groups. A SIGKILL cannot execute that JS hook; main child exit alone does not prove detached workload absence.",
+      "sources": [
+        "supplemental/harness/dsh-subprocess-local/lib/index.js:1478-1520",
+        "supplemental/harness/dsh-subprocess-local/lib/index.js:1547-1575"
+      ],
+      "limitation": "Source-observed cleanup paths do not establish successful shutdown of a specific runtime process or arbitrary descendants that deliberately escape their group."
+    },
+    {
+      "id": "process-start-identity",
+      "classification": "Observed",
+      "claim": "Installed process inspector fences Linux PID identity with /proc stat start ticks and macOS PID identity with ps lstart. Process-group liveness uses negativePGID signal0; Linux additionally distinguishes zombie-only groups after direct exit. Exact original process birth identity is needed before external signal escalation; a reused PID is not the original job.",
+      "sources": [
+        "supplemental/harness/dsh-subprocess-local/lib/runner-launch-B2zsQ1Dz.js:338-379",
+        "supplemental/harness/dsh-subprocess-local/lib/runner-launch-B2zsQ1Dz.js:595-633",
+        "supplemental/harness/dsh-subprocess-local/lib/runner-launch-B2zsQ1Dz.js:797-843"
+      ]
+    },
+    {
+      "id": "managed-preset-effective-wait-cap",
+      "classification": "Observed",
+      "claim": "Production managed worker and child presets explicitly configure tool-jobs waitTimeoutMs=5000 and maxWaitTimeoutMs=5000. The installed package default600000 is not the effective cap for these presets. A request timeout_ms600000 is therefore capped to5000. This corrects the earlier proposed600000ms low-traffic guidance; installed fixture behavior independently confirmed the5s returns.",
+      "sources": [
+        "project/src/remote/presets.ts:49-65",
+        "harness/dsh-tool-jobs/lib/index.js:298-345"
+      ],
+      "discoveredBy": "ci_validation installed082 fixture and source follow-up",
+      "at": "2026-11-10T21:32:29.992747+00:00"
+    },
+    {
+      "id": "global-worker-effective-wait-cap",
+      "classification": "Observed",
+      "claim": "Global worker preset cordis.patch.yml also sets tool-jobs waitTimeoutMs=5000/maxWaitTimeoutMs=5000, with a comment that completion wakes the worker. Both intended global and managed worker configurations override the installed package default. No fixture or production override is needed for the chosen asynchronous flow.",
+      "sources": [
+        "project/cordis.patch.yml:72-77",
+        "project/src/remote/presets.ts:59"
+      ]
+    },
+    {
+      "id": "worker-asynchronous-job-instruction",
+      "classification": "Observed",
+      "claim": "Worker prompt says a long command continues as a background job: keep doing independent work or end the turn because completion wakes the worker, do not poll, and do not report ready while a necessary job runs. Jobs left after ready/blocked/failed/question are intentional handoff jobs and do not wake the worker. Progress reports are internal and preserve the continuing assignment.",
+      "sources": [
+        "project/prompts/work.md:40-41",
+        "project/src/executor/dsh.ts:773-787,790-813"
+      ]
+    },
+    {
+      "id": "idle-background-thirty-minute-cap",
+      "classification": "Observed",
+      "claim": "BACKGROUND_LIMIT_MS is30*60_000. A worker going idle without a handoff enters untilQuiet while holding its slot. A return to running aborts that look; the subsequent idle begins a new look. If known background jobs still run after30minutes from that idle, killJobs is requested and a waiting report/notice follows. This is a per-idle-background look cap, not an8h mission cap. A single8h job followed by idle is therefore not a valid production-preserving endurance plan.",
+      "sources": [
+        "project/src/executor/dsh.ts:40-41,518-521,680-688,790-858",
+        "project/src/executor/background.ts:93-105"
+      ]
+    },
+    {
+      "id": "completion-notice-wire-and-consumption",
+      "classification": "Observed",
+      "claim": "Untruncated native completion notice is one user-message text block: background job <id> (<kind>: <label>) finished <statusLine>. Read its output with job_output. statusLine is [status: <status>] or [status: <status>, <detail>]. Message source is {kind:tool-jobs,form:notice,summary:<bounded summary>}. It contains a completion reference, not the job result. job_output returns public job metadata + consumes unread stream/result; a terminal result is delivered at most once.",
+      "sources": [
+        "harness/dsh-tool-jobs/lib/index.js:29-48,156-180,214-221,269-294,324-345",
+        "harness/dsh-jobs-local/lib/index.js:632-642"
+      ]
+    },
+    {
+      "id": "completion-notice-bounds-and-fallback",
+      "classification": "Observed",
+      "claim": "fitCompletionNotice applies the producer outputLimitBytes cap. It preserves job identity plus a Done; job_output instruction when possible, or falls back to background job ended; use job_list for id., and ultimately bounded job_list. Labels may contain arbitrary job command text. Fixture should validate known chunk identity and consume actual job_output; do not treat label text, a guessed ID, or a wake itself as successful computation.",
+      "sources": [
+        "harness/dsh-tool-jobs/lib/index.js:163-180"
+      ]
+    },
+    {
+      "id": "completion-wake-exact-flow",
+      "classification": "Observed",
+      "claim": "jobs-local records first terminal settlement, releases current waiters, then emits settled with awaited=(releasedWaiters>0). tool-jobs skips notification for awaited, teardown, model-killed or ownerless events, and for absent owner. With default wakeup and idle owner it calls followup; active owner receives inject. AgentLoop followup appends to next-turn and wakes; inject appends next-step without wake. A timeout removes its waiter, so a later settlement remains eligible for a completion wake. Global/managed project presets do not configure maxConsecutiveWakes; runner must impose finite request/chunk bounds independently.",
+      "sources": [
+        "harness/dsh-jobs-local/lib/index.js:656-692,759-796",
+        "harness/dsh-tool-jobs/lib/index.js:88-93,223-235,261-294",
+        "harness/dsh-agent-loop/lib/index.js:800-814",
+        "project/cordis.patch.yml:72-77",
+        "project/src/remote/presets.ts:59"
+      ]
+    }
+  ],
+  "implementationGuidance": {
+    "classification": "Proposed",
+    "durationMs": 28800000,
+    "safeDefaultWaitMs": 5000,
+    "workerWaitCallsApproximate": 0,
+    "meaning": "Use native asynchronous completion, not repeated job_output waits: the5s wait cap remains unchanged. Launch a bounded20-minute background chunk, end the worker turn without a final/blocked/failed report, and respond to the native completion notice by reading its actual job_output and verifying the chunk proof. Roughly24 sequential chunks cover8h plus orchestration overhead; exact counts/duration are recorded, never inferred as a pass.",
+    "job": "One long-lived assignment executes sequential bounded productive Python chunks of at most20minutes each (1200000ms), below the30-minute per-idle background limit. Each chunk writes bounded progress and an exact indexed artifact/checksum. The next chunk starts only after the previous job actually settles and its terminal output/artifact validate. Preserve original task/assignment, record distinct original chunk job IDs, and never relaunch an unknown chunk. Stop once total actual productive duration reaches the requested8h and verify final aggregate artifacts. The end-to-end claim is an8h mission, not one8h shell process.",
+    "supervision": "Keep production one-hour review interval to exercise recurring assessments. Controlled watchdog restart at~45% duration must be verified within same captured main instance/episodeRevision/cycleAt; compare attempts/delivery and receipt history before/after. Legitimate hourly renewal is accounted separately. Preserve initial acknowledgement via its original request ID even when later view revision changes.",
+    "processes": "Keep main Harness alive across all active chunks and their completion transitions. Restart main only after all relevant jobs settle and final exact artifact verification. Controlled watchdog restart retains main/task/assignment and same captured reviewcycle budget; legitimate1h renewals accounted separately. After forced watchdog death await original PID termination and lockmtime age>30s plus margin.",
+    "traffic": "Scripted loopback provider only, no user model/key changes. Native completion-driven turns and one terminal job_output per chunk keep traffic low under the production5s wait cap; repeated wait polls are a fixture failure. Bound all requests, chunks, notices, logs and any actual auxiliary title/compaction traffic; count such calls explicitly. Approximate24chunk count is planning only, not a qualification result.",
+    "capture": "Copied immutable production build artifacts, actual Harness version, run/case IDs, source digests, durable in-flight intent, sampled process/job/incident counters and original receipts. Record exact same assignment through all chunks; distinct original job IDs, ordered artifact proofs, per-chunk elapsed time and total actual duration. Separate mission endurance, completed productive chunks, watchdog fault/recovery, legitimate review cycles and semantic-model-quality unknown.",
+    "operatorCancellation": {
+      "classification": "Proposed",
+      "graceful": "Signal the owned main Harness SIGINT and allow its explicit worker/job stop plus local subprocess-provider teardown. Record which phase actually completed.",
+      "fixtureIdentity": "Use controlled exec python startup without descendant detachment; atomically write private runUUID,PID,PGID and start/birth identity at job start. Independently verify identity from OS while live, and keep this record outside disposable runtime temp.",
+      "escalation": "If main must beSIGKILLed, never infer child absence. Inspect the captured original Python/group identity; signal only an identity-matched owned fixture range, with bounded TERM/KILL waits. Treat permission errors, missing birth proof, changed/ambiguous group ownership or unreadable process state as cleanup_unknown.",
+      "completion": "Only report cleanup verified and remove ephemeral runtime/workspace after original fixture process identity is absent and its expected managed range has no live members. Preserve private evidence/report whenever quiescence cannot be proven. A final heartbeat notchanging is insufficient; PID/group absence is independent evidence.",
+      "limitations": "This proves cleanup for the deliberately non-detaching fixture, not universal containment of arbitrary shell commands. Captured groups may need platform-specific handling; do not signal a reused PID orPGID."
+    },
+    "chunkDurationMs": 1200000,
+    "expectedChunksApproximate": 24,
+    "assignmentCount": 1,
+    "productionOverrides": false,
+    "claimBoundary": "No8h qualification is established by static evidence, the short fixture, or a launch; only the completed measured8h mission can establish that scope. This does not claim active-main-crash worker recovery or real-model quality."
+  },
+  "unknowns": [
+    "No8h run or subprocess test executed for this evidence task; real duration, resource growth and final outcome remain qualification work.",
+    "Static selected sources do not prove every installed profile/plugin limit or complete lifecycle behavior.",
+    "Full-profile cold resume of a still-unclaimed pending inbox was not runtime-tested here; fail/restart timing should be explicit.",
+    "A long task uses in-memory local job handles; abrupt main crash can orphan a subprocess and cannot be represented as seamless same-job restoration.",
+    "Model quality is not tested by scripted responses. Error/timeout/recovery boundaries and bounded bookkeeping can be qualified, not diagnostic intelligence.",
+    "Background shell output spill artifacts can grow beyond the registry ring; fixture must bound generated output/files independently.",
+    "Host sleep, process scheduling stalls, wall-clock changes and lock compromise can invalidate an uninterrupted8h claim; capture them as incomplete/failure rather than replaying work.",
+    "No operatorSIGINT/SIGKILL cancellation run was executed here. Normal Harness shutdown has managed-range teardown, but actual fixture quiescence must be observed and retained independently before deleting private evidence.",
+    {
+      "classification": "Unknown",
+      "claim": "Actual8h productive mission endurance and completion-notice wire behavior through the configured provider adapter require the installed run; static event-source proof alone does not validate completed duration or all live races."
+    }
+  ],
+  "corrections": [
+    {
+      "at": "2026-11-10T21:32:29.992747+00:00",
+      "reason": "Effective managed preset override omitted from initial source selection",
+      "supersedes": "Initial proposed safeDefaultWaitMs600000/approximately48calls; installed package default fact remains accurate only as package default"
+    },
+    {
+      "at": "2026-11-10T21:36:19.924974+00:00",
+      "reason": "Intended worker no-poll behavior and per-idle30min background limit added after effective preset review",
+      "supersedes": "Earlier hypothetical polling guidance (48 or5760 waits) and one8hjob plan. Chosen production-preserving plan is20min chunks in one assignment, driven by native completion."
+    }
+  ],
+  "originalCapture": {
+    "path": ".artifacts/increment-082/endurance-contract.json",
+    "sha256": "f2b71ce29761e117a6d1e4e4ef7e7b9f3f11442e7e3cd311e4eba7326411bcef"
+  }
+}

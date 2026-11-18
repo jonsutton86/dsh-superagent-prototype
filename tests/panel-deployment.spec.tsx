@@ -9,6 +9,27 @@ import { usePanel, mount, remount, settle, all, find, tab, click, type, text, fi
 import { server, problemOf, fakeForm } from './fixtures/panel-server.ts'
 
 usePanel()
+it('saves a local execution mode change through the Harness form and shows the restart state', async () => {
+  const { form, mutations } = fakeForm()
+  server.form = form
+  at({ page: 'settings', query: { group: 'deployment' } })
+  await mount()
+  await type(field<HTMLSelectElement>(zh.executionMode), 'local')
+  await click(zh.save)
+  expect(mutations).toEqual([{ revision: 1, ops: [{ op: 'set', path: ['executionMode'], value: 'local' }] }])
+  expect(text()).toContain(zh.savedRestarting)
+})
+
+it('shows local execution without fabricated accounts and keeps repository preparation disabled', async () => {
+  server.setup = { ...server.setup, executionMode: 'local', accounts: { repository: null, agent: null, feishu: null } }
+  at({ page: 'settings', query: { group: 'execution' } })
+  await mount()
+  expect(field<HTMLTextAreaElement>(zh.prepareCommand).disabled).toBe(true)
+  expect(find(zh.localPrepareHint, 'button')).toBeDefined()
+  expect(text()).not.toContain('@null')
+  expect(text()).not.toContain(zh.environmentPick)
+})
+
 it('saves this machine\'s settings in the Deployment settings through DSH\'s configuration form, without a restart', async () => {
   const { form: editable, mutations } = fakeForm()
   server.form = editable

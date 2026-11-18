@@ -7,7 +7,8 @@ import type { Assignment, ChannelRef, Evaluation, Follow, Mandate, PolicyEffect,
 import type { AssessmentOutcome } from './ports.ts'
 import { EnginePart, type EngineOptions } from './part.ts'
 import type { Replies } from './replies.ts'
-import { canRetry } from './stage.ts'
+import { canRetry, hasPendingFollowup } from './stage.ts'
+import { isAutomaticRestartInput } from './recovery.ts'
 
 const sameChannel = (a: ChannelRef, b: ChannelRef): boolean => JSON.stringify(a) === JSON.stringify(b)
 /** Whether an Input is a message no person wrote, such as CI's, a bot's, or the main Session's note. */
@@ -326,13 +327,17 @@ export class Tickets extends EnginePart {
     this.options.executor.start(ticket, assignment)
   }
   /**
-   * Put back, ahead of what waits, the Trigger Inputs delivered to `replaced` that no step of its worker took: a cancel may
+   * Put back, ahead of what waits, the Inputs delivered to `replaced` that no step of its worker took: a cancel may
    * have dropped them, or a step that claimed them was cut off, and the new Assignment's launch takes a copy still waiting
    * in the Session out, so its delivery is the only one. An earlier end let go of what earlier Assignments left.
+   * A settled interruption can keep automated inputs held while the worker waits for a person.
    */
-  private requeueUntaken(ticket: Ticket, replaced: Assignment): void {
-    const untaken = ticket.inputs.filter(input => input.kind === 'trigger' && input.readAt === null && input.deliveredTo === replaced.id
-      && !ticket.undelivered.includes(input.id))
+  requeueUntaken(ticket: Ticket, replaced: Assignment, holdAutomatic = false): void {
+    // Older failed reports may have left a host-generated recovery note queued as ordinary text. Its original record
+    // remains available for audit, but the failed handoff cannot release that automatic continuation on another boot.
+    if (holdAutomatic) ticket.undelivered = ticket.undelivered.filter(id => !isAutomaticRestartInput(ticket, id))
+    const untaken = ticket.inputs.filter(input => input.kind !== 'reopen' && input.readAt === null && input.deliveredTo === replaced.id
+      && !(holdAutomatic && (automatic(input) || isAutomaticRestartInput(ticket, input))) && !ticket.undelivered.includes(input.id))
     ticket.undelivered.unshift(...untaken.map(input => input.id))
   }
   /**
@@ -341,15 +346,18 @@ export class Tickets extends EnginePart {
    * the person's messages it decides that its worker did not read before its latest report or turn end, the report that
    * ends the ticket included (see `readBefore`), and neither acknowledged, answered nor handed back: one may have come while
    * the worker wrote the report that ends the ticket, or after its turn ended, and either way it can no longer hand it back.
+   * A human can also cancel a follow-up queued on an already-ended ticket; those explicitly cancelled inputs are not requeued.
    */
   end(ticketId: string, by: TicketEndBy, outcome: TicketOutcome, at = this.now(), reason?: string): void {
     const ticket = this.require(ticketId)
-    if (!liveTicket(ticket)) return
+    const cancelFollowup = by === 'human' && hasPendingFollowup(ticket)
+    if (!liveTicket(ticket) && !cancelFollowup) return
     const stopping = ticket.assignments.filter(assignment => assignment.state !== 'ended')
     const why = reason && reason !== outcome ? { reason } : {}
     const until = readUntil(ticket)
     const waiting = this.triggersOf(ticket, ticket.undelivered)
-    const left = this.untaken(ticket, ticket.inputs.flatMap(input => input.kind === 'trigger'
+    // A person's explicit cancellation of queued follow-ups must not dispatch those same messages to another worker.
+    const left = cancelFollowup ? [] : this.untaken(ticket, ticket.inputs.flatMap(input => input.kind === 'trigger'
       && (!readBefore(input, until) || ticket.undelivered.includes(input.id)) ? [input.id] : []))
     // An end dated earlier, such as a PR's merge, does not move the ticket's last change back.
     ticket.ended = { at, by, outcome, ...why }; ticket.undelivered = []; ticket.updatedAt = this.now()
@@ -379,7 +387,8 @@ export class Tickets extends EnginePart {
   }
   /** Add a pending Assignment; a failed delivery to the one before it no longer concerns the ticket. */
   private newAssignment(ticket: Ticket): Assignment {
-    const assignment: Assignment = { id: key('assignment', ticket.id, String(ticket.assignments.length)), state: 'pending', createdAt: this.now() }
+    const assignment: Assignment = { id: key('assignment', ticket.id, String(ticket.assignments.length)), state: 'pending', createdAt: this.now(),
+      ...(ticket.execution ? { execution: structuredClone({ directory: ticket.execution.directory, mode: ticket.execution.mode, environment: ticket.execution.environment }) } : {}) }
     ticket.assignments.push(assignment)
     delete ticket.delivery
     return assignment

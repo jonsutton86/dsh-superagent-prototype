@@ -13,11 +13,14 @@ import type { Sessions } from '../sessions.ts'
 import type { Settings } from '../settings.ts'
 import type { Store } from '../store.ts'
 import { AcknowledgementSchema, readTool, tool, type Tool } from './tool.ts'
+import type { Library } from '../../workspace/library.ts'
+import { libraryTools } from './library.ts'
 
 const RoutingNoteSchema = z.string().trim()
   .refine(text => wordCount(text) <= NOTE_WORDS, `Routing note must not exceed ${NOTE_WORDS} words (Chinese uses word segmentation). Shorten it; do not split it across deliveries.`)
   .describe(`Optional routing background or explicit human constraint, at most ${NOTE_WORDS} words. Never add implementation instructions or replace the original source.`)
 export interface MainToolsHost {
+  readonly library: Library
   readonly context: Context
   readonly engine: Pick<EngineForMainSession, 'decide' | 'attach' | 'reply' | 'requestStatus' | 'note'> & EngineForPeople
   readonly store: Pick<Store, 'tickets' | 'triggers' | 'threads' | 'atomic' | 'replyStatus' | 'settings'>
@@ -155,6 +158,7 @@ function routeTool(host: MainToolsHost): Tool {
 export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
   const resources: MainResourceHost = { ...host.resources, sessions: host.sessions, settings: host.settings }
   return [
+    ...libraryTools(host.library, { role: 'router' }),
     readTool('Read one page of a resource the resource parameter lists, such as the ticket list or a ticket. Follow next_offset, and next_resource where a page names one.',
       false, (resource, offset, limit, signal) => readResource(resources, resource, offset, limit, undefined, signal)),
     routeTool(host),
@@ -256,6 +260,11 @@ export function mainTools(host: MainToolsHost, agent: Agent): Tool[] {
       }).strict()
         .refine(args => (args.block === 'source') === (args.source !== undefined), 'source names the Source instance, with block source only'),
       execute: async args => {
+        // Some models send the block as JSON text. Parse it into the object the schema expects.
+        if (typeof args.value === 'string') {
+          try { args = { ...args, value: JSON.parse(args.value) } }
+          catch (error) { throw new Error(`value is not valid JSON: ${error instanceof Error ? error.message : String(error)}`) }
+        }
         if (args.block === 'pause') return host.settings.pause(z.object({ paused: z.boolean() }).parse(args.value).paused, 'tool')
         // Strip context_delivery since the main Session initiated the save itself.
         const { context_delivery: _delivery, ...saved } = await host.settings.save(args.block === 'source' ? `source:${args.source!}` : args.block,

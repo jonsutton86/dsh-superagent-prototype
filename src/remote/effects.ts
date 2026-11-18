@@ -1,0 +1,162 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
+import type { DatabaseSync } from 'node:sqlite'
+import { fingerprint, timestamp } from './journal.ts'
+import { EffectOwner, RemoteError, Rpc, type RpcInput, type RemoteJob, type RemoteOperation } from './protocol.ts'
+import { OwnershipError, OwnershipStamp } from '../ownership/protocol.ts'
+import { EXECUTION_EVIDENCE_LIMIT, emptyRemoteExecutionEvidence, type RemoteExecutionEvidence } from '../supervision/execution-evidence.ts'
+
+export interface ExecutionReceipt {
+  id: string; world: string; grantId: string; epoch: number; fingerprint: string; owner: EffectOwner
+  kind: 'command' | 'mutation'; operation: 'job.spawn' | 'fs.write' | 'fs.edit'; target: string; program?: string
+  phase: 'pending' | 'accepted' | 'started' | 'settled' | 'refused' | 'unknown'; quiescent: boolean | null
+  createdAt: string; updatedAt: string; observedAt?: string; problem?: string; recovered?: true
+  outcome?: RemoteJob['outcome']; reconciled?: { at: string; note: string }
+  ownership?: OwnershipStamp; ownershipCoordinatorId?: string
+}
+export interface ExecutionReceiptPage { items: ExecutionReceipt[]; total: number; nextOffset: number | null }
+type Authority = { world: string; grantId: string; epoch: number; ownershipCoordinatorId?: string }
+const effect = (request: RpcInput) => request.op === 'job.spawn' || request.op === 'fs.write' || request.op === 'fs.edit'
+const receiptId = (request: RpcInput): string | undefined => effect(request) && 'requestId' in request ? request.requestId
+  : ['job.get', 'job.cancel', 'job.reconcile', 'operation.get', 'operation.reconcile'].includes(request.op) && 'id' in request ? request.id : undefined
+
+/** Durable effect ownership before dispatch; recovery observes the original ID and never replays an effect automatically. */
+export class ExecutionEffects {
+  private readonly scope = new AsyncLocalStorage<{ owner: EffectOwner; authorize: () => void }>()
+  private closed = false
+  constructor(private readonly db: DatabaseSync) {
+    db.exec(`CREATE TABLE IF NOT EXISTS execution_effect (id TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS execution_effect_ticket ON execution_effect(json_extract(value, '$.owner.ticketId'));
+      CREATE INDEX IF NOT EXISTS execution_effect_time ON execution_effect(json_extract(value, '$.createdAt'));`)
+    for (const record of this.pending()) {
+      record.phase = 'unknown'; record.recovered = true; record.problem = 'Coordinator restarted before the effect was confirmed stopped'
+      this.save(record)
+    }
+  }
+  run<T>(owner: EffectOwner, authorize: () => void, operation: () => T): T {
+    const trusted = EffectOwner.parse(owner)
+    authorize()
+    return this.scope.run({ owner: trusted, authorize }, operation)
+  }
+  authorize(request: RpcInput): void { if (effect(request)) this.scope.getStore()?.authorize() }
+  get(id: string): ExecutionReceipt | undefined {
+    const row = this.db.prepare('SELECT value FROM execution_effect WHERE id=?').get(id)
+    return row ? JSON.parse(String(row.value)) as ExecutionReceipt : undefined
+  }
+  private save(value: ExecutionReceipt): void {
+    if (this.closed) return
+    value.updatedAt = timestamp()
+    this.db.prepare('INSERT INTO execution_effect VALUES (?,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value').run(value.id, JSON.stringify(value))
+  }
+  list(ticketId?: string, offset = 0, limit = 50): ExecutionReceiptPage {
+    if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new Error('Invalid receipt page')
+    const where = ticketId === undefined ? '' : " WHERE json_extract(value, '$.owner.ticketId')=?", args = ticketId === undefined ? [] : [ticketId]
+    const total = Number(this.db.prepare(`SELECT count(*) AS n FROM execution_effect${where}`).get(...args)!.n)
+    const items = this.db.prepare(`SELECT value FROM execution_effect${where} ORDER BY json_extract(value, '$.createdAt') DESC, id DESC LIMIT ? OFFSET ?`)
+      .all(...args, limit, offset).map(row => JSON.parse(String(row.value)) as ExecutionReceipt)
+    return { items, total, nextOffset: offset + items.length < total ? offset + items.length : null }
+  }
+  /** Fixed-size metadata from this existing journal; never observes or repeats a remote operation. */
+  executionEvidence(ticketId: string, assignmentId: string, world: string): RemoteExecutionEvidence {
+    if (this.closed) return emptyRemoteExecutionEvidence()
+    const rows = this.db.prepare(`SELECT id, json_extract(value, '$.phase') AS phase,
+      json_extract(value, '$.quiescent') AS quiescent, json_extract(value, '$.outcome.exitCode') AS exitCode,
+      json_type(value, '$.outcome.signal') AS signalType
+      FROM execution_effect WHERE json_extract(value, '$.owner.ticketId')=?
+      AND json_extract(value, '$.owner.kind')='assignment' AND json_extract(value, '$.owner.assignmentId')=?
+      AND json_extract(value, '$.world')=? ORDER BY id LIMIT ?`).all(ticketId, assignmentId, world, EXECUTION_EVIDENCE_LIMIT + 1)
+    const result = emptyRemoteExecutionEvidence(); result.availability = 'available'
+    result.coverage = rows.length > EXECUTION_EVIDENCE_LIMIT ? 'partial' : 'complete'
+    result.sampleRevision = fingerprint(rows.slice(0, EXECUTION_EVIDENCE_LIMIT))
+    for (const row of rows.slice(0, EXECUTION_EVIDENCE_LIMIT)) {
+      result.sampled++
+      const phase = row.phase
+      if (phase === 'pending' || phase === 'accepted' || phase === 'started' || phase === 'settled' || phase === 'refused' || phase === 'unknown') result.phases[phase]++
+      else result.phases.unknown++
+      result.quiescence[row.quiescent === 1 ? 'confirmed' : row.quiescent === 0 ? 'unconfirmed' : 'unknown']++
+      if (phase !== 'settled' || row.quiescent !== 1) result.outcomes.unknown++
+      else if (row.signalType === 'text') result.outcomes.signalled++
+      else if (row.exitCode === 0) result.outcomes.succeeded++
+      else if (typeof row.exitCode === 'number') result.outcomes.failed++
+      else result.outcomes.unknown++
+    }
+    return result
+  }
+  pending(limit?: number): ExecutionReceipt[] {
+    const sql = "SELECT value FROM execution_effect WHERE json_extract(value, '$.quiescent') IS NOT 1 ORDER BY coalesce(json_extract(value, '$.observedAt'), ''), id"
+    return (limit === undefined ? this.db.prepare(sql).all() : this.db.prepare(sql + ' LIMIT ?').all(limit)).map(row => JSON.parse(String(row.value)) as ExecutionReceipt)
+  }
+  blocked(): number {
+    return Number(this.db.prepare(`SELECT count(*) AS n FROM execution_effect WHERE json_extract(value, '$.quiescent') IS NOT 1
+      AND (json_extract(value, '$.phase')='unknown' OR json_extract(value, '$.recovered')=1)`).get()!.n)
+  }
+  /** Require an observed quiescent receipt for every ticket effect, independent of display pagination. */
+  quiescent(ticketId: string): boolean {
+    return !this.db.prepare("SELECT 1 FROM execution_effect WHERE json_extract(value,'$.owner.ticketId')=? AND json_extract(value,'$.quiescent') IS NOT 1 LIMIT 1").get(ticketId)
+  }
+  prepare<T extends RpcInput & { requestId: string }>(request: T, authority: Authority): T {
+    if (!effect(request)) return request
+    if (this.closed) throw new Error('Execution receipt journal is closed')
+    const scope = this.scope.getStore(); scope?.authorize()
+    if (this.blocked()) throw new RemoteError(409, 'effects_unresolved', 'Remote effects require observation or reconciliation before new execution')
+    const owner = scope?.owner ?? { kind: 'host' as const, purpose: 'profile-maintenance' }
+    // Caller arguments, environment variables and shell source cannot supply or override this ownership.
+    const prepared = Rpc.parse({ ...request, owner }) as T
+    const digest = fingerprint({ principal: { role: 'grant', id: authority.grantId, epoch: authority.epoch }, request: prepared })
+    const existing = this.get(request.requestId)
+    if (existing) {
+      if (existing.fingerprint !== digest || existing.world !== authority.world) throw new RemoteError(409, 'effect_conflict', 'Effect ID already belongs to another request or execution world')
+      return prepared
+    }
+    const at = timestamp(), operation = prepared as Extract<RpcInput, { op: 'job.spawn' | 'fs.write' | 'fs.edit' }>
+    this.save({ ...authority, id: request.requestId, fingerprint: digest, owner, kind: operation.op === 'job.spawn' ? 'command' : 'mutation',
+      operation: operation.op, target: operation.op === 'job.spawn' ? operation.cwd : operation.path,
+      ...(operation.op === 'job.spawn' ? { program: operation.argv[0] } : {}), phase: 'pending', quiescent: null, createdAt: at, updatedAt: at })
+    return prepared
+  }
+  observed(request: RpcInput, value: unknown): void {
+    if (this.closed) return
+    const id = receiptId(request), record = id && this.get(id)
+    if (!record) return // Never invent attribution for legacy/unowned endpoint work.
+    const remote = value as RemoteJob | RemoteOperation
+    const owner = record.kind === 'command' ? (remote as RemoteJob)?.request?.owner : (remote as RemoteOperation)?.owner
+    const ownership = remote?.ownership === undefined ? undefined : OwnershipStamp.safeParse(remote.ownership)
+    if (!remote || remote.id !== record.id || remote.grantId !== record.grantId || remote.epoch !== record.epoch
+      || remote.fingerprint !== record.fingerprint || !owner || fingerprint(owner) !== fingerprint(record.owner)
+      || record.ownershipCoordinatorId && (!ownership?.success || ownership.data.coordinatorId !== record.ownershipCoordinatorId)
+      || ownership && !ownership.success || record.ownership && (!ownership?.success || fingerprint(record.ownership) !== fingerprint(ownership.data))) {
+      record.phase = 'unknown'; record.quiescent = null; record.problem = 'Endpoint receipt does not match the saved effect ownership and request'
+      this.save(record); throw new RemoteError(409, 'receipt_mismatch', record.problem)
+    }
+    if (!['accepted', 'started', 'settled', 'unknown'].includes(remote.phase)) throw new Error('Invalid endpoint effect phase')
+    if (record.quiescent === true) return // A late in-flight observation cannot undo confirmed quiescence.
+    if (ownership?.success) record.ownership = ownership.data
+    record.phase = remote.phase; record.observedAt = timestamp(); record.reconciled = remote.reconciled
+    if (record.kind === 'command') {
+      const job = remote as RemoteJob
+      record.quiescent = job.quiescent; record.outcome = job.outcome; record.problem = job.error
+    } else {
+      const mutation = remote as RemoteOperation
+      record.quiescent = mutation.phase === 'settled' || !!mutation.reconciled; record.problem = mutation.error?.message
+    }
+    this.save(record)
+  }
+  failed(request: RpcInput, error: unknown, ambiguous: boolean): void {
+    if (this.closed) return
+    const id = receiptId(request), record = id && this.get(id)
+    if (!record || record.quiescent === true) return
+    const refused = !ambiguous && !record.recovered && record.phase === 'pending' && (error instanceof RemoteError || error instanceof OwnershipError)
+      && error.status < 500 && !['request_conflict', 'receipt_mismatch', 'endpoint_mismatch'].includes(error.code)
+    record.phase = refused ? 'refused' : 'unknown'; record.quiescent = refused ? true : null
+    record.observedAt = timestamp(); record.problem = (error instanceof Error ? error.message : String(error)).slice(0, 2000)
+    this.save(record)
+  }
+  /** An acknowledged, quiescent whole-grant revocation fences even a late request whose receipt cannot be located. */
+  revoked(): void {
+    for (const record of this.pending()) {
+      record.phase = 'unknown'; record.quiescent = true
+      record.problem = 'Grant revocation confirms execution stopped; this effect outcome remains unknown'
+      this.save(record)
+    }
+  }
+  close(): void { this.closed = true }
+}

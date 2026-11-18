@@ -2,6 +2,7 @@
 import { liveTicket, threadKey, ticketStage, type AcceptMode, type AdmissionCell, type MandateBasis, type Ticket,
   type TicketStage } from '../../core/index.ts'
 import { workerSessionId } from '../../executor/dsh.ts'
+import { heldTicketIds } from '../../executor/stop-view.ts'
 import type { Store } from '../store.ts'
 import { channelLink, decisionView, newestFirst, page, snapshot, threadSummary, ticketLine, type Snapshot,
   type ViewHost } from './records.ts'
@@ -35,8 +36,9 @@ export function basisFacts(basis: MandateBasis, rule: Snapshot['rule']): { facts
 export function ticketList(host: ViewHost, stage: 'open' | TicketStage['stage'], offset: number, limit: number) {
   const view = snapshot(host)
   const { store } = view
-  const shown = (ticket: Ticket) => stage === 'open' ? liveTicket(ticket) : ticketStage(ticket).stage === stage
-  const tickets = (stage === 'ended' ? store.tickets.list() : store.tickets.open()).filter(shown).sort(newestFirst)
+  const held = stage === 'open' ? new Set(heldTicketIds(store)) : new Set<string>()
+  const shown = (ticket: Ticket) => stage === 'open' ? liveTicket(ticket) || held.has(ticket.id) : ticketStage(ticket).stage === stage
+  const tickets = (stage === 'ended' || held.size ? store.tickets.list() : store.tickets.open()).filter(shown).sort(newestFirst)
   const result = page(tickets, offset, limit)
   return { ...result, items: result.items.map(ticket => ticketRow(view, ticket)) }
 }
@@ -73,6 +75,8 @@ export function ticketDetail(host: ViewHost, id: string) {
   const human = ticket.mandate.basis.via !== 'bot'
   return { ...ticketLine(view, ticket), mandate: { ...ticket.mandate, actor: view.actor(ticket.mandate.actor, human) },
     basis: basisFacts(ticket.mandate.basis, view.rule), paused: store.settings().paused,
+    ...ticket.execution?.environment ? { executionEnvironment: ticket.execution.environment } : {},
+    ...ticket.execution?.persona ? { executionPersona: ticket.execution.persona } : {},
     channels: ticket.channels.map(channel => channelLink(view, channel)),
     decision: decision ? decisionView(view, decision) : undefined,
     // Every started Assignment ran in the ticket's one worker Session. A running assignment whose worker reported a non-progress state has finished its turn unless a human response resumed the ticket.

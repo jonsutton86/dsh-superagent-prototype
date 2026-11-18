@@ -1,0 +1,175 @@
+{
+  "schemaVersion": 1,
+  "kind": "evaluation-limit-cause-race",
+  "capturedAt": "2026-11-10T22:03:35.739345+00:00",
+  "baseline": "6f41fda605eeeacdc5e7ec8e83b1d7be7eb4bdc4",
+  "scope": "Exact-baseline REA/source review plus controlled loopback regression evidence. No live provider traffic, credentials or user app changes.",
+  "method": {
+    "pattern": "prompts/operations/fabric/review_code/system.md",
+    "revision": "de0b72766db0436b6c1887bb75768cb3960e67e5",
+    "wrapper": "prompts/operations/EVIDENCE.md",
+    "wrapperVersion": 1
+  },
+  "sourceManifest": [
+    {
+      "path": "src/supervision/evaluation-runner.ts",
+      "revision": "6f41fda605eeeacdc5e7ec8e83b1d7be7eb4bdc4",
+      "sha256": "9440002004a4972980744d378bd07c0f80c4e72ffe0cea74cd099eff6158e0c9",
+      "bytes": 29388
+    },
+    {
+      "path": "src/supervision/evaluation-probe.ts",
+      "revision": "6f41fda605eeeacdc5e7ec8e83b1d7be7eb4bdc4",
+      "sha256": "9ed77035c8a1c55754635927d6861fa2be643af82ac63bc890a5421e6eec69eb",
+      "bytes": 5448
+    },
+    {
+      "path": "src/supervision/plugin.ts",
+      "revision": "6f41fda605eeeacdc5e7ec8e83b1d7be7eb4bdc4",
+      "sha256": "6041febf0d33d2e403c79a4014996ad57857dfefc9a9edc819f4d424a32ccdcc",
+      "bytes": 13326
+    }
+  ],
+  "qualificationObservation": {
+    "classification": "Observed supplied log",
+    "file": ".artifacts/increment-082/macos-first-attempt.log",
+    "sha256": "85f28eee9639946ad25a07b91275c75a0c4779a6a5ccf4d59de30e22e0dbaf8b",
+    "assertion": "oversized case expected response_limit but got provider_error; both assessment:null and modelAttempts:1 matched",
+    "counts": {
+      "failed": 1,
+      "passed": 2288,
+      "skipped": 25
+    },
+    "scope": "The log establishes misclassification, not event ordering by itself."
+  },
+  "sourceFacts": [
+    {
+      "source": "src/supervision/evaluation-probe.ts:24-30,43-47",
+      "classification": "Observed source",
+      "claim": "Probe synchronously appends and fsyncs stream_limit before throwing evaluation_stream_limit."
+    },
+    {
+      "source": "src/supervision/plugin.ts:103-107",
+      "classification": "Observed source",
+      "claim": "Exact active watchdog agent/error writes generic durable modelError visible on status HTTP."
+    },
+    {
+      "source": "src/supervision/evaluation-runner.ts:225-241",
+      "classification": "Observed source",
+      "claim": "Loop reads trace into events, then awaits readStatus. It tests limit events from that older snapshot before consulting the newly received monitor.modelError and may select provider_error."
+    },
+    {
+      "source": "src/supervision/evaluation-runner.ts:247-255",
+      "classification": "Observed source",
+      "claim": "Finally stops child and reads sealed trace, but baseline only rechecks contract verification; it never reconciles a stream_limit that arrived during the earlier status await."
+    }
+  ],
+  "race": {
+    "classification": "Inferred source schedule consistent with observed failure; parent red/green regression separately instruments it",
+    "steps": [
+      "Trace read completes before stream_limit append.",
+      "While status await is pending, probe fsyncs limit marker, throws, and active watchdog records modelError.",
+      "HTTP status returns with modelError, while local events still lacks limit. Loop selects provider_error.",
+      "Cleanup reads final trace containing stream_limit but baseline leaves provider_error unchanged."
+    ]
+  },
+  "reviewedProposedFix": {
+    "helper": "evaluationStatusFromFinalTrace",
+    "helperSha256": "8c96adecdc3e056b8bf4808544beeb12fbad033ffa504b43e0691adab9f9ffcb",
+    "classification": "Read-only review of parent working patch, not validation of uncommitted full source",
+    "precedence": [
+      "Cancelled remains cancelled regardless of later cleanup trace.",
+      "Missing expected contract verification or any contract/scope refusal => startup_error. This intentionally retains previous missing-contract handling of deadlines.",
+      "Deadline remains deadline once contract validity established.",
+      "Final stream_limit => response_limit; else final request_limit => request_limit.",
+      "Otherwise keep prior classification."
+    ],
+    "assessment": "No concrete production defect found in reviewed helper. It is applied only after sealed trace validation; malformed/unreadable final trace still throws and remains in-flight/unknown. Recorded assessment and usage remain intact, and cleanup agent/error or aborted turn/end does not overwrite causal limit.",
+    "testsNeeded": [
+      "provider_error plus final stream/request marker",
+      "real provider_error no limit unchanged",
+      "cancelled plus limit unchanged",
+      "verified deadline plus limit unchanged",
+      "missing/refused contract plus limit startup_error",
+      "assessment already recorded remains recorded but incomplete after limit/error"
+    ],
+    "initialRegressionCaveat": "Waiting for modelError inside a successful status response makes the race likely and can establish it via red run, but the hook alone does not prove the preceding trace lacked stream_limit if the first successful response already contains modelError. For fully deterministic construction, gate oversized provider emission until a status fetch has entered after the trace read, or assert the captured stale trace boundary.",
+    "caveatResolution": "Final fixture adds the provider emission gate described below; both limit misclassifications were separately observed with the baseline classifier, and the fixed gated acceptance passed."
+  },
+  "rea": {
+    "tool": "rea-agents6.8.0",
+    "parentEvidenceId": "ev_8df5a8e9dfd4e3af2d1f8077ffcea7af72b0909636e99c335ee904fb69d7fce3",
+    "inputSha256": "a3d174c896836fc220bc2a07e744a0cd319e9d660415d62065f978d193cdeade",
+    "artifact": "evaluation-limit-race.rea.json",
+    "summary": "evaluation-limit-race.rea-summary.json",
+    "selectedFiles": 3,
+    "parsedFiles": 3,
+    "textBytes": 48162,
+    "parseFailures": 0,
+    "applicationUnknowns": 20,
+    "semanticUnknowns": 2087,
+    "coverage": "Partial static application relationships, not dynamic proof or exhaustive semantics."
+  },
+  "originalCaptureSha256": "5148aac6935ce431052c3a4e0cc6844470af2f226d026274be0acb758e064173",
+  "controlledReproductions": {
+    "scope": "Changed acceptance fixture with baseline final classifier; no paid inference. Original reports retained privately; only metadata extracted.",
+    "reproductions": [
+      {
+        "case": "original-oversized",
+        "harnessVersion": "0.2.1-rc.3",
+        "status": "provider_error",
+        "modelAttempts": 1,
+        "sealedEventTypes": [
+          "contract_verified",
+          "turn/start",
+          "request",
+          "stream_limit",
+          "settled",
+          "agent/error",
+          "turn/end"
+        ],
+        "reportSha256": "7b78f6dd71c86a7a43d84044cf7d670287404b7201445a79fc9762c9816875c0",
+        "traceSha256": "625217a63c76a29935b065d738aad4a695ae6918a5bbf5a88dcb1091f163afc4",
+        "logSha256": "75d9a28dd3cdd0f17cdf33fb139545e3b8b26f50d29dee70e49f0ce4f7bd6888"
+      },
+      {
+        "case": "original-request-limit",
+        "harnessVersion": "0.2.1-rc.3",
+        "status": "provider_error",
+        "modelAttempts": 2,
+        "sealedEventTypes": [
+          "contract_verified",
+          "turn/start",
+          "request",
+          "settled",
+          "tool",
+          "request",
+          "settled",
+          "tool",
+          "request_limit",
+          "agent/error",
+          "turn/end"
+        ],
+        "reportSha256": "680b430a9ac9bdb36140e195fa8f2323a3525a3b95322103c5ed0d202da6dbe3",
+        "traceSha256": "21037c62fef5cad82a250f5732410988a8d1bf0b428545e5a38e5b79d19fcc15",
+        "logSha256": "7d258fd95cac12ecb026afc810da2038c19c5f9399cc14d68da92123b7f83bfe"
+      }
+    ]
+  },
+  "finalFixture": {
+    "ordering": "Oversized provider content is gated until a successful status fetch, after the preceding trace read. That status response is held until the recorded model error is observed.",
+    "sources": {
+      "src/supervision/evaluation-runner.ts": "33ec46be56451e7f85ce63256aae36cfe42437ab6ce6943d994c8d20043045d4",
+      "tests/fixtures/supervision-evaluation-provider.ts": "5d43e83e95a608497c6ea3eb4fb01d609ccf4ed1c07e827758845ad15615f0e5",
+      "tests/supervision-evaluation-harness.spec.ts": "40987203bd5438be6a5f306bf3153b2978e3e999be7efeff92f49b69d1af99d9"
+    },
+    "green": {
+      "passed": 5,
+      "failed": 0,
+      "seconds": 38.06,
+      "logSha256": "d6a7f04eee8d18de658ca755cc596a55f1f0d46d629763435526db423a56031c"
+    },
+    "qualification": "Focused working-tree regression; final commit/full qualification pending."
+  },
+  "originalCaptureScope": "Read-only source review; no source/test edits, builds, full tests, provider traffic or user app changes. REA parses inert exact-baseline source copies only."
+}
