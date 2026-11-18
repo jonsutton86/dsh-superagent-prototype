@@ -10,6 +10,7 @@ import { errorText } from './text.ts'
 import { Hint, KeyValues, Section, When } from './widgets.tsx'
 import { voiceBrowserSupport } from './voice-qualification.ts'
 import { AssistantActions } from './assistant.tsx'
+import { AdminToken } from './access-token.tsx'
 
 const usd = (value: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 6 })
   .format(value / 1e6)
@@ -227,6 +228,7 @@ export function JarvisPage() {
   return <>
     <p className="dt-hint">{t('jarvis.intro')}</p>
     <AssistantActions paused={!!state?.paused} masterId={state?.masterId} onChanged={reload} />
+    <AdminToken onChanged={reload} />
     <OverviewSection />
     <MemorySection />
     <AgentsSection />

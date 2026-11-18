@@ -11,6 +11,9 @@ layout and documents the supported install path. No native SwiftUI app, offline 
 3. Share → **Add to Home Screen**. DSH's `manifest.webmanifest` supplies the app name, icon and fullscreen display.
 4. Enter the panel, open the **JARVIS** tab; its action bar provides New task, New mission, Open main Session and
    confirmed Pause/Resume.
+5. When the remote management API returns `401`, enter the administrator token into the JARVIS **Administration token**
+   field. It is stored only in this Safari origin's localStorage and sent as a bearer on management requests; clear it
+   when using a shared device. The token is not placed in a URL or logged.
 5. For voice, follow `docs/097`; microphone access requires HTTPS (Tailscale Serve provides it) and a physical run.
 
 ## What the mobile layout changes

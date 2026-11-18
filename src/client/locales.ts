@@ -976,6 +976,12 @@ const TEXT = {
   // JARVIS dashboard: read-only sections over the existing management views
   'jarvis.intro': ['只读仪表板：只读取现有的只读管理接口，不修改任何内容，也不验证任何状态。', 'Read-only dashboard: reads existing read-only management endpoints only, changes nothing, and verifies nothing.'],
   'jarvis.unavailable': ['不可用：{error}', 'Unavailable: {error}'],
+  'access.adminToken': ['管理令牌', 'Administration token'],
+  'access.tokenHint': ['只保存在此浏览器的 localStorage 中，用于远程管理请求；不会写入日志、URL 或服务器。远程访问还要求 DSH 以受信任源和管理员令牌启动。', 'Stored only in this browser origin’s localStorage for remote management requests; never logged, placed in URLs or sent to the server. Remote access also requires DSH to be started with the trusted origin and administrator token.'],
+  'access.configured': ['已在此浏览器中配置管理员令牌。', 'Administration token is configured in this browser.'],
+  'access.notConfigured': ['尚未在此浏览器中配置管理员令牌。', 'No administration token is configured in this browser.'],
+  'access.save': ['保存令牌', 'Save token'],
+  'access.clear': ['清除令牌', 'Clear token'],
   'jarvis.section.overview': ['概览', 'Overview'],
   'jarvis.section.memory': ['记忆', 'Memory'],
   'jarvis.section.agents': ['智能体', 'Agents'],

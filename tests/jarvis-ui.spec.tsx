@@ -119,3 +119,23 @@ it('renders records when the existing views return them, still without showing c
   expect(text()).toContain(zh['jarvis.notVerified'])
 })
 
+
+it('stores, reports and clears the administration token in this browser only', async () => {
+  const store = new Map<string, string>()
+  vi.stubGlobal('localStorage', { getItem: (key: string) => store.get(key) ?? null, setItem: (key: string, value: string) => { store.set(key, value) }, removeItem: (key: string) => { store.delete(key) } })
+  at({ page: 'jarvis' })
+  await mount()
+  const input = all('input[type="password"]')[0]!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'test-admin-token')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  const save = all('button').find(button => button.textContent === zh['access.save'])!
+  await act(async () => { save.click() })
+  expect(localStorage.getItem('dsh-admin-token')).toBe('test-admin-token')
+  expect(text()).toContain(zh['access.configured'])
+  const clear = all('button').find(button => button.textContent === zh['access.clear'])!
+  await act(async () => { clear.click() })
+  expect(localStorage.getItem('dsh-admin-token')).toBeNull()
+  expect(text()).toContain(zh['access.notConfigured'])
+})

@@ -576,6 +576,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/client/overview.tsx` | The overview |
 | `src/client/jarvis.tsx` | The read-only JARVIS dashboard: Overview, Memory, Agents, Goals, Connections, Analytics and Voice sections over existing management views, with navigation to full pages, an analytics period selector, live speech activity, and no verification claim |
 | `src/client/assistant.tsx` | JARVIS action bar: Inbox compose, Missions, master Session deep link and confirmed pause/resume with state reload |
+| `src/client/access-token.tsx` | Browser-only administration-token entry; stores the bearer in this origin's localStorage and never displays or logs it |
 | `src/client/voice-qualification.ts` | Browser-only voice capability probe: recorder/mime/microphone/audio/secure-context availability, never permission or device verification |
 | `src/client/source.tsx`, `trigger.tsx`, `eval.tsx`, `execution.tsx` | One file per stage: its status, and its settings where it has some |
 | `src/client/thread.tsx`, `ticket.tsx` | The record pages: a Thread with its timeline, and a Ticket with its authorization, Inputs and Assignments |
