@@ -9,6 +9,7 @@ import { usePanel, usePanelData } from './provider.tsx'
 import { errorText } from './text.ts'
 import { Hint, KeyValues, Section, When } from './widgets.tsx'
 import { voiceBrowserSupport } from './voice-qualification.ts'
+import { AssistantActions } from './assistant.tsx'
 
 const usd = (value: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 6 })
   .format(value / 1e6)
@@ -222,9 +223,10 @@ function VoiceSection() {
 
 /** The JARVIS tab: seven read-only sections, each read from an existing management endpoint. */
 export function JarvisPage() {
-  const { t } = usePanel()
+  const { t } = usePanel(), { state, reload } = usePanelData()
   return <>
     <p className="dt-hint">{t('jarvis.intro')}</p>
+    <AssistantActions paused={!!state?.paused} masterId={state?.masterId} onChanged={reload} />
     <OverviewSection />
     <MemorySection />
     <AgentsSection />

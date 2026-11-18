@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 // The read-only JARVIS dashboard.
+import { act } from 'react'
 import { expect, it, vi } from 'vitest'
 import { zh } from '../src/client/locales.ts'
 import { parseRoute } from '../src/client/route.ts'
@@ -20,6 +21,11 @@ it('renders the seven read-only sections on the JARVIS tab from the existing vie
   expect(all('.dt-section-name').map(name => name.textContent)).toEqual(titles)
   expect(all('[data-jarvis]').map(area => area.getAttribute('data-jarvis'))).toEqual([...SECTIONS])
   expect(text()).toContain(zh['jarvis.intro'])
+  const actions = all('[data-assistant-actions] button').map(button => button.textContent)
+  expect(actions).toEqual([zh['inbox.new'], zh['mission.new'], zh['openMaster'], zh['pauseProcessing']])
+  const pause = all('[data-assistant-actions] button').find(button => button.textContent === zh['pauseProcessing'])!
+  await act(async () => { pause.click() })
+  expect(text()).toContain(zh['pauseProcessingConfirm'])
   // The overview shows the host's own counts, taken from the overview endpoint.
   expect(all('[data-jarvis="overview"] .dt-stat').map(stat => stat.textContent)).toEqual([
     `${zh.pendingTickets}2`, `${zh.problems}2`, `${zh.executingLabel}2 / 3`, `${zh.queuedLabel}0`,
