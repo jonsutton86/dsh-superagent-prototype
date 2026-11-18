@@ -483,6 +483,7 @@ Some generic modules still refer directly to GitHub or Feishu:
 | `src/app/views/briefing.ts` | Read-only operator briefing composed from the existing overview and schedule summaries; no external call or delivery |
 | `src/security/audit.ts` | Append-only operator audit log with SHA-256 hash chaining, secret-shaped detail redaction, bounded pages and tamper verification |
 | `src/security/access.ts` | Optional bearer-token administration boundary, role/capability matrix and explicit deny-by-default connector grants |
+| `src/security/trusted-origin.ts` | Exact canonical Tailscale HTTPS origin configuration; rejects wildcard hosts, credentials, ports, paths and non-HTTPS schemes |
 | `src/security/credentials.ts` | Confined 0600 credential vault: atomic writes, names-only listing, traversal and symlink refusal |
 | `src/security/providers.ts` | Validated provider endpoints/models from the environment and a redacted view that never claims live verification |
 | `src/security/model-routing.ts` | Pure deterministic provider/model selection from configured providers with explicit budget ceilings and refusal reasons |

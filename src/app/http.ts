@@ -1,4 +1,5 @@
-/** Loopback-only management HTTP routes with same-origin enforcement for the web panel. */
+/** Loopback listener with same-origin enforcement and optional authenticated Tailscale ingress. */
+import { readTrustedOrigin } from '../security/trusted-origin.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -150,8 +151,13 @@ async function readBody(req: IncomingMessage, maxBytes = 128 * 1024): Promise<un
 function json(res: ServerResponse, status: number, value: unknown): void {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(value))
 }
-export function sameOrigin(req: Pick<IncomingMessage, 'headers'>, port: number): boolean {
+export function sameOrigin(req: Pick<IncomingMessage, 'headers'>, port: number, trustedOrigin?: string): boolean {
   const host = req.headers.host
+  if (trustedOrigin && host === trustedOrigin.slice('https://'.length)) {
+    // Browsers may omit Origin on same-origin GET/HEAD. Fetch Metadata supplies that provenance.
+    return req.headers['x-orchestrator-request'] === '1'
+      && (req.headers.origin === trustedOrigin || req.headers.origin === undefined && req.headers['sec-fetch-site'] === 'same-origin')
+  }
   if (host !== `127.0.0.1:${port}` && host !== `localhost:${port}`) return false
   return req.headers['x-orchestrator-request'] === '1' && (req.headers.origin === undefined || req.headers.origin === `http://${host}`)
 }
@@ -699,6 +705,8 @@ function speechAudioResponse(req: IncomingMessage, res: ServerResponse, audio: B
 
 export function registerHttp(ctx: Context, runtime: HttpHost): () => void {
   if (ctx.webServer.host !== '127.0.0.1') throw new Error('Orchestrator management requires a loopback Web server')
+  const trustedOrigin = readTrustedOrigin()
+  if (trustedOrigin && !runtime.access?.required()) throw new Error('Tailscale ingress requires configured administration bearer authentication')
   const table = routes(runtime)
   const disposers = [
     ctx.webServer.register({ kind: 'prefix', path: '/orchestrator', handler: async (req, res) => {
@@ -712,10 +720,13 @@ export function registerHttp(ctx: Context, runtime: HttpHost): () => void {
         if (!runtime.voice?.authorizeAudio(media[1]!, url.searchParams.get('token') ?? undefined)) { res.writeHead(403); res.end(); return }
         speechAudioResponse(req, res, runtime.voice.audio(media[1]!)); return
       }
-      if (!sameOrigin(req, ctx.webServer.port)) { json(res, 403, { error: 'Same-origin management request required' }); return }
+      if (!sameOrigin(req, ctx.webServer.port, trustedOrigin)) { json(res, 403, { error: 'Same-origin management request required' }); return }
+      const remote = trustedOrigin !== undefined && req.headers.host === trustedOrigin.slice('https://'.length)
+      // Even supervision requires the administration boundary through the remote ingress.
+      // Its separate watchdog credential is still required below; neither credential replaces the other.
       // Independent supervision keeps its own bearer authentication and must stay observable during startup.
       const supervisionPath = url.pathname === '/orchestrator/api/supervision' || url.pathname.startsWith('/orchestrator/api/supervision/')
-      if (!supervisionPath && runtime.access) {
+      if ((!supervisionPath || remote) && runtime.access) {
         const authenticated = runtime.access.authenticate(req.headers.authorization)
         if (!authenticated.ok) {
           try { runtime.audit?.append({ actor: 'unauthenticated', action: 'access.authenticate', resource: url.pathname, outcome: 'denied', detail: { reason: authenticated.reason } }) } catch { /* Response remains authoritative. */ }

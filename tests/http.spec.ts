@@ -1,4 +1,6 @@
-import { expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
+import { Access } from '../src/security/access.ts'
+import { readTrustedOrigin } from '../src/security/trusted-origin.ts'
 import { z } from 'zod'
 import { registerHttp } from '../src/app/http.ts'
 import { PromptConflict } from '../src/app/prompts.ts'
@@ -9,6 +11,7 @@ import { SetupError } from '../src/setup.ts'
 
 type Handler = (req: unknown, res: unknown) => Promise<void>
 type Headers = Record<string, string | undefined>
+afterEach(() => vi.unstubAllEnvs())
 /** Mount management HTTP routes on a fake web server and return a request helper that includes default panel headers. */
 function serve(runtime: Partial<Record<keyof HttpHost, unknown>>, host = '127.0.0.1') {
   let handler: Handler = async () => {}
@@ -95,4 +98,59 @@ it('answers a prompt save that lost a race with 409, and a settings body over 12
   expect(await call('PUT', 'settings/executor', { value, revision: 0 })).toEqual({ status: 400,
     body: { error: `Request exceeds ${128 * 1024} bytes` } })
   expect(saves).toEqual([])
+})
+
+const trustedOrigin = 'https://mac.example-tailnet.ts.net'
+const adminToken = 'test-only-tailscale-administrator-credential'
+const remoteHeaders = { host: 'mac.example-tailnet.ts.net', origin: trustedOrigin, authorization: `Bearer ${adminToken}` }
+const remoteRuntime = () => ({ access: new Access({ token: adminToken, role: 'owner', connectors: {} }),
+  sessions: { delivery: async () => 'injected' }, engine: { unsubscribe: () => true } })
+
+it('requires an explicitly configured canonical Tailscale origin and bearer authentication at startup', () => {
+  expect(readTrustedOrigin({})).toBeUndefined()
+  expect(readTrustedOrigin({ DSH_ORCHESTRATOR_TRUSTED_ORIGIN: trustedOrigin })).toBe(trustedOrigin)
+  vi.stubEnv('DSH_ORCHESTRATOR_TRUSTED_ORIGIN', trustedOrigin)
+  expect(() => serve({})).toThrow('requires configured administration bearer authentication')
+  expect(() => serve({ access: new Access({ role: 'owner', connectors: {} }) })).toThrow('requires configured administration bearer authentication')
+})
+
+it.each(['', 'http://mac.example-tailnet.ts.net', trustedOrigin + ':443', trustedOrigin + ':8443', trustedOrigin + '/',
+  trustedOrigin + '?token=not-a-secret', trustedOrigin + '#fragment', 'https://user:pass@mac.example-tailnet.ts.net',
+  'https://mac.example-tailnet.ts.net.evil.test', 'https://*.example-tailnet.ts.net', 'https://MAC.example-tailnet.ts.net'])
+('rejects noncanonical trusted-origin configuration %s', value => {
+  expect(() => readTrustedOrigin({ DSH_ORCHESTRATOR_TRUSTED_ORIGIN: value })).toThrow('canonical HTTPS Tailscale origin')
+})
+
+it('accepts only the exact trusted host/origin with the existing marker and valid bearer', async () => {
+  vi.stubEnv('DSH_ORCHESTRATOR_TRUSTED_ORIGIN', trustedOrigin)
+  const call = serve(remoteRuntime())
+  const post = (headers: Headers) => call('POST', 'threads/github%3A1/unsubscribe', undefined, headers)
+  expect((await post(remoteHeaders)).status).toBe(200)
+  for (const headers of [
+    { ...remoteHeaders, host: 'mac.example-tailnet.ts.net.evil.test' },
+    { ...remoteHeaders, host: 'mac.example-tailnet.ts.net:443' },
+    { ...remoteHeaders, host: 'mac.example-tailnet.ts.net:8443' },
+    { ...remoteHeaders, origin: 'http://mac.example-tailnet.ts.net' },
+    { ...remoteHeaders, origin: trustedOrigin + ':443' },
+    { ...remoteHeaders, origin: 'https://other.example-tailnet.ts.net' },
+    { ...remoteHeaders, 'x-orchestrator-request': undefined },
+    { ...remoteHeaders, origin: undefined },
+    { ...remoteHeaders, origin: undefined, 'sec-fetch-site': 'cross-site' },
+    { ...remoteHeaders, host: 'evil.test', 'x-forwarded-host': remoteHeaders.host, 'x-forwarded-proto': 'https' },
+  ]) expect((await post(headers)).status).toBe(403)
+  for (const authorization of [undefined, 'Bearer wrong']) expect((await post({ ...remoteHeaders, authorization })).status).toBe(401)
+  // Ordinary same-origin browser GETs may have Fetch Metadata instead of Origin.
+  expect((await call('GET', 'nothing', undefined, { ...remoteHeaders, origin: undefined, 'sec-fetch-site': 'same-origin' })).status).toBe(404)
+  // Loopback behavior and the configured bearer requirement are unchanged.
+  expect((await post({ authorization: `Bearer ${adminToken}` })).status).toBe(200)
+  expect((await post({})).status).toBe(401)
+})
+
+it('keeps remote supervision and media behind authentication instead of widening capability URL access', async () => {
+  vi.stubEnv('DSH_ORCHESTRATOR_TRUSTED_ORIGIN', trustedOrigin)
+  const call = serve(remoteRuntime())
+  expect((await call('GET', 'supervision', undefined, { ...remoteHeaders, authorization: undefined })).status).toBe(401)
+  expect((await call('GET', 'supervision', undefined, remoteHeaders)).status).toBe(403)
+  expect((await call('GET', 'voice/00000000-0000-0000-0000-000000000000/audio', undefined,
+    { ...remoteHeaders, authorization: undefined })).status).toBe(401)
 })
