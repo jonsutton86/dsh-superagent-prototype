@@ -473,3 +473,30 @@ a.dt-btn, a.dt-btn:hover { text-decoration: none; }
 .dt-guide-actions { display: flex; gap: .5rem; flex-wrap: wrap; margin: .75rem 0; }
 .dt-guide-path, .dt-guide-models p, .dt-guide-missions { overflow-wrap: anywhere; }
 .dt-guide-intro { margin-bottom: 1rem; }
+
+@media (max-width: 640px) {
+  .dt-page { padding: 16px 12px 0; padding-bottom: calc(24px + env(safe-area-inset-bottom)); scroll-padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  .dt-page > .dt-column { gap: 16px; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+  .dt-head { gap: 8px; }
+  .dt-head-title { flex: 1 1 100%; }
+  .dt-toolbar { width: 100%; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+  .dt-search { width: 100%; order: -1; }
+  .dt-tabs { gap: 8px; padding-bottom: 2px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+  .dt-tabs > * { scroll-snap-align: start; white-space: nowrap; }
+  .dt-row { padding: 12px 8px; }
+  .dt-row-main { flex: 1 1 100%; }
+  .dt-row-meta { width: 100%; flex-wrap: wrap; }
+  .dt-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dt-section { gap: 12px; }
+  .dt-btn { min-height: 44px; }
+  .dt-open { white-space: normal; }
+  .dt-inbox-message-person { margin-left: 0; }
+  .dt-inbox-search { align-items: stretch; }
+  .dt-inbox-search input, .dt-textarea, .dt-select, .dt-field input, .dt-field textarea { font-size: 16px; }
+  .dt-inbox-composer textarea { min-height: 120px; }
+}
+
+@media (max-width: 380px) {
+  .dt-stats { grid-template-columns: minmax(0, 1fr); }
+  .dt-page { padding-left: 8px; padding-right: 8px; }
+}
